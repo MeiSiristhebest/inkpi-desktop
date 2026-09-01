@@ -69,4 +69,88 @@ describe('AiAssistantPanel Component', () => {
     expect(screen.getByText('InkPi 正在思考…')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('离线模式：无法调用 AI')).toBeInTheDocument()
   })
+
+  it('should NOT send on Enter while IME composing (prevents mid-pinyin submit)', () => {
+    const onSend = vi.fn()
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input="续"
+        busy={false}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={onSend}
+        onClose={vi.fn()}
+      />
+    )
+    const input = screen.getByPlaceholderText('向 InkPi 下达写作指令…')
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('should send when the 发送 button is clicked', () => {
+    const onSend = vi.fn()
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input="续写下一段"
+        busy={false}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={onSend}
+        onClose={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByText('发送'))
+    expect(onSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('should disable input + send button when offline', () => {
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input=""
+        busy={false}
+        connected={false}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    const input = screen.getByPlaceholderText('离线模式：无法调用 AI') as HTMLInputElement
+    expect(input.disabled).toBe(true)
+    expect((screen.getByText('发送') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('should disable input + send button while busy', () => {
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input="续写下一段"
+        busy={true}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    const input = screen.getByPlaceholderText('向 InkPi 下达写作指令…') as HTMLInputElement
+    expect(input.disabled).toBe(true)
+    expect((screen.getByText('发送') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('should disable the send button when input is only whitespace', () => {
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input="   "
+        busy={false}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    expect((screen.getByText('发送') as HTMLButtonElement).disabled).toBe(true)
+  })
 })

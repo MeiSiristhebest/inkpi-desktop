@@ -101,4 +101,32 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(await screen.findByText('活体世界观实体图谱')).toBeInTheDocument()
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
   })
+
+  it('keeps the custom rightPanel collapsed by default, then opens it via the info toggle', () => {
+    render(
+      <Engine
+        projectId="p1"
+        rightPanel={<div>自定义AI面板</div>}
+      />,
+    )
+    // 传入 rightPanel 时默认不展开：默认统计与自定义面板都应隐藏
+    expect(screen.queryByText('文档信息')).not.toBeInTheDocument()
+    expect(screen.queryByText('自定义AI面板')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTitle('折叠/展开信息栏'))
+    expect(screen.getByText('自定义AI面板')).toBeInTheDocument()
+  })
+
+  it('wires onOpenAssistant into the WriterDesk toolbar AI button', () => {
+    const onOpenAssistant = vi.fn()
+    render(<Engine projectId="p1" onOpenAssistant={onOpenAssistant} />)
+    expect(screen.getByText('AI 助手')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('AI 助手'))
+    expect(onOpenAssistant).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render the AI button when onOpenAssistant is omitted', () => {
+    render(<Engine projectId="p1" />)
+    expect(screen.queryByText('AI 助手')).not.toBeInTheDocument()
+  })
 })

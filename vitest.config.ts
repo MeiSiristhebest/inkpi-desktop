@@ -13,6 +13,7 @@ export default defineConfig({
       include: [
         'src/db/**/*.ts',
         'src/components/editor/WriterDesk.tsx',
+        'src/components/ai/**/*.tsx',
         'src/core/**/*.tsx',
         'src/plugins/living-codex/engine/**/*.ts',
       ],
