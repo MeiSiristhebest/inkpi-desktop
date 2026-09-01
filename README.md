@@ -17,12 +17,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MeiSiristhebest/inkpi-desktop/actions"><img src="https://img.shields.io/badge/CI-passing-green.svg?style=flat" alt="CI Status" /></a>
+  <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-blue.svg?style=flat" alt="Tauri v2" /></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61dafb.svg?style=flat" alt="React 19" /></a>
+  <a href="https://tiptap.dev/"><img src="https://img.shields.io/badge/Tiptap-Novel-black.svg?style=flat" alt="Tiptap Novel" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat" alt="License: MIT" /></a>
 </p>
 
 <p align="center">
-  <em>A native desktop creative writing workstation combining Tauri 2 (Rust), Vite + React 19, Tiptap / Novel rich text editor, Living Codex Aho-Corasick knowledge graph engine, offline-first IndexedDB persistence, and an embedded Bun single-file InkPi Daemon sidecar.</em>
+  <em>A modular, industrial-grade desktop workstation shell providing creative writers and developers with discrete engineering primitives: Tauri 2 (Rust) host, React 19 + Tiptap / Novel rich text editor, Living Codex Aho-Corasick knowledge graph engine, offline-first IndexedDB persistence, and an embedded Bun single-file InkPi Daemon sidecar.</em>
 </p>
 
 ---
@@ -48,7 +50,7 @@
 - [🛡️ The 5 Absolute Engineering Invariants](#️-the-5-absolute-engineering-invariants)
 - [🤝 Contributing](#-contributing)
 - [📜 License](#-license)
-- [⭐ Star & Support](#-star--support)
+- [⭐ Star & Support](#star-history)
 
 ---
 
