@@ -1,0 +1,281 @@
+@import "tailwindcss";
+
+/*
+ * InkPi Desktop 设计令牌
+ *
+ * 风格取向：Notion 的克制布局 + Apple 的精致质感。
+ *   - 色板取 Notion 的中性石墨灰阶，唯一强调色为系统蓝（接近 Apple 的 #007aff）。
+ *   - 界面层（侧栏 / 顶栏 / 面板）使用系统无衬线字体（-apple-system / SF Pro / 苹方）。
+ *   - 正文层默认中文衬线，保留「书卷气」，可在设置面板切换。
+ *   - 默认跟随系统外观；设置 data-theme="light" / "dark" 可手动覆盖。
+ *
+ * 组件一律通过 var(--ink-*) 取色，禁止再硬编码颜色值，
+ * 这样浅/深两套主题只需在此处维护。
+ */
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* 表面 */
+    --ink-bg: #ffffff;
+    --ink-bg-sidebar: #f7f7f5;
+    --ink-bg-panel: #fbfbfa;
+    --ink-bg-elevated: #ffffff;
+    --ink-bg-hover: #efefee;
+    --ink-bg-active: #e9e9e7;
+
+    /* 文字 */
+    --ink-text: #37352f;
+    --ink-text-muted: #787774;
+    --ink-text-faint: #9b9a97;
+
+    /* 分隔与描边 */
+    --ink-border: #e9e9e7;
+    --ink-border-strong: #dfdfdd;
+
+    /* 强调色：系统蓝 */
+    --ink-accent: #2383e2;
+    --ink-accent-hover: #1a6fc4;
+    --ink-accent-soft: #e8f2fb;
+
+    /* 语义色 */
+    --ink-success: #0f6e56;
+    --ink-danger: #c4544a;
+    --ink-warning: #9a6700;
+
+    /* Ghost Text 内联续写建议 */
+    --ink-ghost: #b4b2a9;
+
+    /* 层次 */
+    --ink-shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.05);
+    --ink-shadow: 0 1px 2px rgba(15, 15, 15, 0.06), 0 4px 12px rgba(15, 15, 15, 0.05);
+    --ink-shadow-lg: 0 4px 16px rgba(15, 15, 15, 0.08), 0 12px 32px rgba(15, 15, 15, 0.06);
+
+    /* 字体：界面用系统无衬线，正文用中文衬线 */
+    --ink-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+      "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    --ink-font-serif: "Songti SC", "SimSun", "Source Han Serif SC", "Noto Serif CJK SC",
+      Georgia, "Times New Roman", serif;
+    --ink-font-mono: "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+
+    /* 缓动：Apple 的标准曲线 */
+    --ink-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* 深色外观：未显式指定 data-theme="light" 时跟随系统 */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+
+      --ink-bg: #191919;
+      --ink-bg-sidebar: #202020;
+      --ink-bg-panel: #1f1f1f;
+      --ink-bg-elevated: #2a2a2a;
+      --ink-bg-hover: #2f2f2f;
+      --ink-bg-active: #373737;
+
+      --ink-text: #e9e9e7;
+      --ink-text-muted: #9b9a97;
+      --ink-text-faint: #6b6b6b;
+
+      --ink-border: #2f2f2f;
+      --ink-border-strong: #3f3f3f;
+
+      --ink-accent: #529cca;
+      --ink-accent-hover: #6bb0da;
+      --ink-accent-soft: #1e3444;
+
+      --ink-success: #5dcaa5;
+      --ink-danger: #e07a70;
+      --ink-warning: #d9a441;
+
+      --ink-ghost: #5a5a58;
+
+      --ink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --ink-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.24);
+      --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.36), 0 12px 32px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  /* 手动强制深色 */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --ink-bg: #191919;
+    --ink-bg-sidebar: #202020;
+    --ink-bg-panel: #1f1f1f;
+    --ink-bg-elevated: #2a2a2a;
+    --ink-bg-hover: #2f2f2f;
+    --ink-bg-active: #373737;
+
+    --ink-text: #e9e9e7;
+    --ink-text-muted: #9b9a97;
+    --ink-text-faint: #6b6b6b;
+
+    --ink-border: #2f2f2f;
+    --ink-border-strong: #3f3f3f;
+
+    --ink-accent: #529cca;
+    --ink-accent-hover: #6bb0da;
+    --ink-accent-soft: #1e3444;
+
+    --ink-success: #5dcaa5;
+    --ink-danger: #e07a70;
+    --ink-warning: #d9a441;
+
+    --ink-ghost: #5a5a58;
+
+    --ink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --ink-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.24);
+    --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.36), 0 12px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: var(--ink-bg);
+    color: var(--ink-text);
+    font-family: var(--ink-font-sans);
+    font-size: 13px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 细滚动条（Apple 风格） */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--ink-border-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-text-faint);
+    background-clip: content-box;
+  }
+
+  /* 键盘焦点环：仅键盘导航时出现 */
+  :focus-visible {
+    outline: 2px solid var(--ink-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* ── 编辑器排版 ───────────────────────────────────────────── */
+
+.ink-editor .ProseMirror {
+  outline: none;
+  min-height: 420px;
+  caret-color: var(--ink-accent);
+}
+
+.ink-editor .ProseMirror > * + * {
+  margin-top: 0.75em;
+}
+
+.ink-editor .ProseMirror p {
+  margin: 0;
+}
+
+.ink-editor .ProseMirror h1,
+.ink-editor .ProseMirror h2,
+.ink-editor .ProseMirror h3 {
+  font-weight: 500;
+  line-height: 1.4;
+  margin-top: 1.4em;
+}
+
+.ink-editor .ProseMirror h1 {
+  font-size: 1.5em;
+}
+.ink-editor .ProseMirror h2 {
+  font-size: 1.3em;
+}
+.ink-editor .ProseMirror h3 {
+  font-size: 1.15em;
+}
+
+.ink-editor .ProseMirror blockquote {
+  border-left: 2px solid var(--ink-border-strong);
+  padding-left: 0.9em;
+  color: var(--ink-text-muted);
+}
+
+.ink-editor .ProseMirror code {
+  font-family: var(--ink-font-mono);
+  font-size: 0.88em;
+  background: var(--ink-bg-hover);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+.ink-editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--ink-border);
+  margin: 1.6em 0;
+}
+
+.ink-editor .ProseMirror ::selection {
+  background: var(--ink-accent-soft);
+}
+
+/* 占位提示 */
+.ink-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--ink-text-faint);
+}
+
+/* ── Ghost Text 内联续写建议 ──────────────────────────────── */
+/* 以浅灰文字跟随光标显示，不进入文档内容、不参与选区与拼写检查 */
+
+.ink-ghost-inline {
+  color: var(--ink-ghost);
+  opacity: 0.9;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre-wrap;
+}
+
+/* ── 划词气泡菜单 ─────────────────────────────────────────── */
+
+.ink-bubble {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--ink-bg-elevated);
+  border: 1px solid var(--ink-border);
+  box-shadow: var(--ink-shadow-lg);
+}
+
+/* ── 转场 ─────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

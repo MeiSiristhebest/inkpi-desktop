@@ -1,0 +1,6 @@
+# 本机没有 MSVC 工具链，使用 scoop 提供的 MinGW-w64 16.2.0 (seh) 编译 windows-gnu 目标。
+# 注意：Rust 1.98 的 windows-gnu std 以 SEH unwind 构建，必须搭配 seh 版 MinGW（8.1.0 的 sjlj 会链失败）。
+# 用绝对路径，避免 PATH 在子进程（tauri build → cargo）中被重置导致 linker 找不到。
+[target.x86_64-pc-windows-gnu]
+linker = "D:/Scoop/apps/mingw/16.2.0-rt_v14-rev1/bin/x86_64-w64-mingw32-gcc-16.2.0.exe"
+ar = "D:/Scoop/apps/mingw/16.2.0-rt_v14-rev1/bin/x86_64-w64-mingw32-gcc-ar.exe"

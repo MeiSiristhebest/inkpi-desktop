@@ -1,0 +1,83 @@
+{
+  "name": "inkpi-desktop",
+  "version": "0.1.0",
+  "description": "InkPi Desktop - Cross-Platform AI-Powered Creative Writing Workstation",
+  "type": "module",
+  "private": true,
+  "author": "InkPi Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MeiSiristhebest/inkpi-desktop.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MeiSiristhebest/inkpi-desktop/issues"
+  },
+  "homepage": "https://github.com/MeiSiristhebest/inkpi-desktop#readme",
+  "keywords": [
+    "inkpi",
+    "desktop",
+    "tauri",
+    "tiptap",
+    "react",
+    "creative-writing",
+    "ai-agent",
+    "workstation"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage",
+    "check": "tsc -b && oxlint",
+    "tauri": "tauri",
+    "tauri:dev": "npm run copy-daemon-sidecar && tauri dev",
+    "copy-daemon-sidecar": "node scripts/copy-daemon-sidecar.mjs",
+    "tauri:build": "npm run copy-daemon-sidecar && tauri build --target x86_64-pc-windows-gnu"
+  },
+  "dependencies": {
+    "@inkpi/client": "file:../inkpi/packages/client",
+    "@inkpi/protocol": "file:../inkpi/packages/protocol",
+    "@tauri-apps/api": "^2.5.0",
+    "@tiptap/extension-bubble-menu": "^2.27.2",
+    "@tiptap/extension-character-count": "^2.27.2",
+    "@tiptap/extension-placeholder": "^2.27.2",
+    "@tiptap/pm": "^2.27.2",
+    "@tiptap/react": "^2.27.2",
+    "@tiptap/starter-kit": "^2.27.2",
+    "novel": "^1.0.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.5.0",
+    "@tauri-apps/plugin-shell": "^2.2.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.6",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "clsx": "^2.1.1",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
+    "lucide-react": "^1.38.0",
+    "oxlint": "^1.79.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
