@@ -208,9 +208,9 @@ Distributed under the [MIT License](./LICENSE). Copyright (c) 2026 InkPi Contrib
 
 <a href="https://www.star-history.com/?repos=MeiSiristhebest%2Finkpi-desktop&type=date&legend=bottom-right">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MeiSiristhebest/inkpi-desktop&type=date&theme=dark&legend=bottom-right" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MeiSiristhebest/inkpi-desktop&type=date&legend=bottom-right" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MeiSiristhebest/inkpi-desktop&type=date&legend=bottom-right" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MeiSiristhebest/inkpi-desktop&type=date&theme=dark&legend=bottom-right&sealed_token=fw4uQNigmISCXcdUHho6rq5smpyrxKbwy5S1ZECqDTgTqst9KXiETBJ9kH5YB-ZJJUUJSsFrdft2TQjQA8w-5khguCk8CzjEwNmr1dzKLvM7sltFy2jWfA" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MeiSiristhebest/inkpi-desktop&type=date&legend=bottom-right&sealed_token=fw4uQNigmISCXcdUHho6rq5smpyrxKbwy5S1ZECqDTgTqst9KXiETBJ9kH5YB-ZJJUUJSsFrdft2TQjQA8w-5khguCk8CzjEwNmr1dzKLvM7sltFy2jWfA" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MeiSiristhebest/inkpi-desktop&type=date&legend=bottom-right&sealed_token=fw4uQNigmISCXcdUHho6rq5smpyrxKbwy5S1ZECqDTgTqst9KXiETBJ9kH5YB-ZJJUUJSsFrdft2TQjQA8w-5khguCk8CzjEwNmr1dzKLvM7sltFy2jWfA" />
  </picture>
 </a>
 
