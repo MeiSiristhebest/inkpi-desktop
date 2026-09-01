@@ -9,6 +9,7 @@ import {
   BookOpen,
   AlignLeft,
   Layers,
+  Sparkles,
 } from 'lucide-react'
 import { CodexWriterDrawer } from '../../plugins/living-codex/components/CodexWriterDrawer'
 
@@ -16,6 +17,7 @@ interface WriterDeskProps {
   projectId: string
   isTypewriter?: boolean
   onStats?: (stats: { title?: string; wordCount: number; updatedAt?: number }) => void
+  onOpenAssistant?: () => void
 }
 
 const FONT_MIN = 12
@@ -35,7 +37,7 @@ export const formatChineseParagraphs = (content: string): string =>
     .join('\n\n')
 
 // 纯正文写作台：分卷/章节目录树 + 排版控制 + 实时字数 + 生命周期/存盘 + 状态栏
-export const WriterDesk: FC<WriterDeskProps> = ({ projectId, isTypewriter = false, onStats }) => {
+export const WriterDesk: FC<WriterDeskProps> = ({ projectId, isTypewriter = false, onStats, onOpenAssistant }) => {
   const [volumes, setVolumes] = useState<VolumeRecord[]>([])
   const [chapters, setChapters] = useState<ChapterRecord[]>([])
   const [activeChapterId, setActiveChapterId] = useState<string>('')
@@ -316,6 +318,16 @@ export const WriterDesk: FC<WriterDeskProps> = ({ projectId, isTypewriter = fals
             >
               <Save className="w-3 h-3" /> 保存
             </button>
+
+            {onOpenAssistant && (
+              <button
+                onClick={onOpenAssistant}
+                title="打开 AI 创作副驾驶"
+                className="px-2 py-1 rounded-md text-[11px] border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-accent)] flex items-center gap-1 transition-colors"
+              >
+                <Sparkles className="w-3 h-3 text-[var(--ink-accent)]" /> AI 助手
+              </button>
+            )}
 
             <button
               onClick={() => setDrawerOpen((o) => !o)}

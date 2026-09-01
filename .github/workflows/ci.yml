@@ -16,22 +16,46 @@ jobs:
         node-version: [22.x]
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Desktop Repository
         uses: actions/checkout@v4
+        with:
+          path: inkpi-desktop
+
+      - name: Checkout Upstream InkPi Monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: MeiSiristhebest/inkpi
+          path: inkpi
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Install Dependencies
-        run: npm ci --ignore-scripts || npm install --ignore-scripts
+      - name: Enable Corepack & Setup pnpm
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+
+      - name: Build InkPi Monorepo Packages
+        working-directory: inkpi
+        run: |
+          pnpm install --no-frozen-lockfile --ignore-scripts
+          pnpm run build
+
+      - name: Install Desktop Dependencies
+        working-directory: inkpi-desktop
+        run: npm install --ignore-scripts
 
       - name: Lint Check
+        working-directory: inkpi-desktop
         run: npm run lint
 
       - name: Typecheck & Build
+        working-directory: inkpi-desktop
         run: npm run build
 
       - name: Run Test Coverage & Thresholds
+        working-directory: inkpi-desktop
         run: npm run test:coverage

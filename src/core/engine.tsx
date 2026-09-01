@@ -1,4 +1,4 @@
-import { useState, type FC, type ComponentType } from 'react'
+import { useState, type FC, type ComponentType, type ReactNode } from 'react'
 import {
   PanelLeft,
   PanelRight,
@@ -23,6 +23,10 @@ type ViewType = 'editor' | 'form' | 'table' | string
 interface EngineProps {
   projectId: string
   onBack?: () => void
+  /** 自定义右侧面板（例如 AI 副驾驶），传入时右侧信息栏显示该面板而非默认统计 */
+  rightPanel?: ReactNode
+  /** 写作台工具栏中「打开 AI 副驾驶」的回调 */
+  onOpenAssistant?: () => void
 }
 
 interface Stats {
@@ -45,10 +49,11 @@ const BUILTIN_NAV: { type: ViewType; label: string; icon: ComponentType<{ classN
   { type: 'table', label: '表格视图', icon: Table2 },
 ]
 
-export const Engine: FC<EngineProps> = ({ projectId, onBack }) => {
+export const Engine: FC<EngineProps> = ({ projectId, onBack, rightPanel, onOpenAssistant }) => {
   const [view, setView] = useState<ViewType>('editor')
   const [leftOpen, setLeftOpen] = useState(true)
-  const [rightOpen, setRightOpen] = useState(true)
+  // 传入自定义右侧面板时，默认先收起，避免一打开就挤占写作区
+  const [rightOpen, setRightOpen] = useState(rightPanel ? false : true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isTypewriter, setIsTypewriter] = useState(false)
   const [stats, setStats] = useState<Stats>({ wordCount: 0 })
@@ -168,7 +173,12 @@ export const Engine: FC<EngineProps> = ({ projectId, onBack }) => {
         <div className="flex-1 flex min-h-0">
           <div className="flex-1 min-w-0">
             {view === 'editor' && (
-              <WriterDesk projectId={projectId} isTypewriter={isTypewriter} onStats={setStats} />
+              <WriterDesk
+                projectId={projectId}
+                isTypewriter={isTypewriter}
+                onStats={setStats}
+                onOpenAssistant={onOpenAssistant}
+              />
             )}
             {view === 'form' && (
               <Placeholder icon={FileText} title="表单视图" desc="结构化表单容器（建设中）" />
@@ -186,29 +196,37 @@ export const Engine: FC<EngineProps> = ({ projectId, onBack }) => {
             )}
           </div>
 
-          {/* 右侧信息栏：折叠/展开 */}
+          {/* 右侧信息栏：折叠/展开；传入 rightPanel 时渲染自定义面板，否则显示默认统计 */}
           {rightOpen && !isFullscreen && (
-            <aside className="w-[220px] shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto">
-              <div className="p-3 space-y-3 text-[12px]">
-                <div className="text-[11px] font-medium text-[var(--ink-text-faint)]">文档信息</div>
-                <Row label="当前章节" value={stats.title || '—'} />
-                <Row label="正文字数" value={`${stats.wordCount} 字`} />
-                <Row
-                  label="最后更新"
-                  value={
-                    stats.updatedAt
-                      ? new Date(stats.updatedAt).toLocaleTimeString('zh-CN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })
-                      : '—'
-                  }
-                />
-                <div className="pt-2 border-t border-[var(--ink-border)] text-[11px] leading-relaxed text-[var(--ink-text-faint)]">
-                  快捷键：⌘S 保存 · ⌘B 折叠导航 · ⌘\ 全屏
+            <aside
+              className={`shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto ${
+                rightPanel ? 'w-[300px]' : 'w-[220px]'
+              }`}
+            >
+              {rightPanel ? (
+                <div className="h-full">{rightPanel}</div>
+              ) : (
+                <div className="p-3 space-y-3 text-[12px]">
+                  <div className="text-[11px] font-medium text-[var(--ink-text-faint)]">文档信息</div>
+                  <Row label="当前章节" value={stats.title || '—'} />
+                  <Row label="正文字数" value={`${stats.wordCount} 字`} />
+                  <Row
+                    label="最后更新"
+                    value={
+                      stats.updatedAt
+                        ? new Date(stats.updatedAt).toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })
+                        : '—'
+                    }
+                  />
+                  <div className="pt-2 border-t border-[var(--ink-border)] text-[11px] leading-relaxed text-[var(--ink-text-faint)]">
+                    快捷键：⌘S 保存 · ⌘B 折叠导航 · ⌘\ 全屏
+                  </div>
                 </div>
-              </div>
+              )}
             </aside>
           )}
         </div>

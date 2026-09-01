@@ -244,7 +244,7 @@ export const App: React.FC = () => {
               sessionId,
               text: tail,
             })
-            .then((res) => {
+            .then((res: any) => {
               const suggestion = res?.text || res?.ghostText
               if (suggestion) {
                 setGhostText(suggestion)
