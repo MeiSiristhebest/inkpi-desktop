@@ -25,6 +25,8 @@ import { DeleteChapterDialog } from './organisms/DeleteChapterDialog'
 import { RenameVolumeDialog } from './organisms/RenameVolumeDialog'
 import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
+import { DrawerDock } from './organisms/DrawerDock'
+import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
 
 export interface RichEditorProps {
   projectId: string
@@ -290,7 +292,19 @@ export const RichEditor: FC<RichEditorProps> = ({
 
   /* ── 渲染 ──────────────────────────────────────────────── */
   return (
-    <div className="flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+    <DesktopPluginHostProvider
+      projectId={projectId}
+      activeChapter={activeChapter}
+      volumes={model.volumes}
+      chapters={model.chapters}
+      onChapterUpdate={(updated) => {
+        const ed = editorRef.current
+        if (ed && !ed.isDestroyed && updated.content !== undefined && ed.getText() !== updated.content) {
+          ed.commands.setContent(updated.content)
+        }
+      }}
+    >
+      <div className="flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
       {!effectiveZen && model.isSidebarOpen && (
         <ChapterTree
           model={model}
@@ -331,16 +345,22 @@ export const RichEditor: FC<RichEditorProps> = ({
           </div>
         )}
 
-        <EditorCanvas
-          model={model}
-          editor={editor}
-          canvasRef={canvasRef}
-          effectiveZen={effectiveZen}
-          effectiveTypewriter={effectiveTypewriter}
-          projectId={projectId}
-          onAiPrompt={onAiPrompt}
-          onOpenAssistant={onOpenAssistant}
-        />
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
+          <EditorCanvas
+            model={model}
+            editor={editor}
+            canvasRef={canvasRef}
+            effectiveZen={effectiveZen}
+            effectiveTypewriter={effectiveTypewriter}
+            projectId={projectId}
+            onAiPrompt={onAiPrompt}
+            onOpenAssistant={onOpenAssistant}
+          />
+          <DrawerDock
+            projectId={projectId}
+            currentText={activeChapter?.content || ''}
+          />
+        </div>
 
         {!effectiveZen && model.showStatsBar && (
           <StatusFooter
@@ -408,6 +428,7 @@ export const RichEditor: FC<RichEditorProps> = ({
       {renamingVolume && <RenameVolumeDialog model={model} />}
       {deletingVolume && <DeleteVolumeDialog model={model} />}
     </div>
+    </DesktopPluginHostProvider>
   )
 }
 

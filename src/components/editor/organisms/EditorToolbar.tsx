@@ -28,11 +28,14 @@ import {
   Maximize2,
   Minimize2,
   PanelRight,
+  Puzzle,
 } from 'lucide-react'
 import { STATUS_OPTIONS } from '../editorUi'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { ChapterStatus } from '../../../types'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { useOptionalPluginRegistry } from '../../../core/pluginRegistry'
 
 interface EditorToolbarProps {
   model: EditorModel
@@ -78,6 +81,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
   const [activeMenu, setActiveMenu] = useState<'format' | 'proof' | 'tools' | 'export' | null>(null)
   const toolbarRef = useRef<HTMLDivElement | null>(null)
+  const host = useOptionalPluginHostContext()
+  const registry = useOptionalPluginRegistry()
 
   // 点击外部收起打开的下拉菜单
   useEffect(() => {
@@ -685,7 +690,6 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 )}
               </IconButton>
             )}
-
             {onToggleRightPanel && (
               <IconButton
                 onClick={onToggleRightPanel}
@@ -706,6 +710,26 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                   <PanelRight className="w-3.5 h-3.5" />
                 )}
               </IconButton>
+            )}
+
+            {host && (
+              <div className="relative">
+                <IconButton
+                  onClick={() => {
+                    if (host.activeDrawerPluginId) {
+                      host.closeDrawer()
+                    } else {
+                      // 默认打开活体世界书或第一个具备抽屉的插件
+                      const firstDrawer = registry?.allPlugins.find((p) => Boolean(p.drawerSnippetView))
+                      if (firstDrawer) host.openDrawer(firstDrawer.id)
+                    }
+                  }}
+                  title={host.activeDrawerPluginId ? `关闭插件抽屉 (${host.activeDrawerPluginId})` : '打开随动插件抽屉'}
+                  className={host.activeDrawerPluginId ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''}
+                >
+                  <Puzzle className="w-3.5 h-3.5" />
+                </IconButton>
+              </div>
             )}
           </div>
         )}
