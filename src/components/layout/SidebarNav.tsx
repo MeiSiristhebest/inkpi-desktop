@@ -1,5 +1,4 @@
-import React from 'react'
-import { TAB_DEFINITIONS as tabDefinitions } from '../../config/tabDefinitions'
+import React, { useState, useMemo } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -10,9 +9,15 @@ import {
   FileSpreadsheet,
   Settings as SettingsIcon,
   PanelLeftClose,
+  Search,
+  X,
+  Compass,
+  Zap,
+  Palette,
 } from 'lucide-react'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
+import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
 
 interface SidebarNavProps {
   activeTabId: string
@@ -23,6 +28,29 @@ interface SidebarNavProps {
   onClose: () => void
 }
 
+const CATEGORY_META: Record<
+  DesktopPluginCategory,
+  { label: string; icon: React.FC<{ className?: string }> }
+> = {
+  lore: { label: '设定与世界书', icon: BookOpen },
+  plot: { label: '大纲与因果', icon: Compass },
+  rhythm: { label: '网文节奏', icon: Zap },
+  craft: { label: '修辞与调色', icon: Palette },
+  review: { label: '质检与门禁', icon: ShieldAlert },
+  flow: { label: '心流与竞技', icon: Sparkles },
+  tools: { label: '辅助与工具', icon: FileSpreadsheet },
+}
+
+const CATEGORY_ORDER: DesktopPluginCategory[] = [
+  'lore',
+  'plot',
+  'rhythm',
+  'craft',
+  'review',
+  'flow',
+  'tools',
+]
+
 export const SidebarNav: React.FC<SidebarNavProps> = ({
   activeTabId,
   onSelectTab,
@@ -30,12 +58,17 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   onOpenSettings,
   onClose,
 }) => {
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({
-    世界构建: true,
-    创作管理: true,
-    运营维护: true,
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({
+    lore: false, // 默认展开第一个核心世界书分类
+    plot: true,
+    rhythm: true,
+    craft: true,
+    review: true,
+    flow: true,
+    tools: true,
   })
-  const [showLegacyModules, setShowLegacyModules] = React.useState<boolean>(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
   const pluginCtx = useOptionalPluginRegistry()
   const activePlugins = pluginCtx?.activePlugins ?? ALL_AVAILABLE_PLUGINS
 
@@ -48,32 +81,42 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     direction: 'left',
   })
 
-  // Group tabs by group name
-  const groups: Record<string, typeof tabDefinitions> = {}
-  for (const tab of tabDefinitions) {
-    const g = tab.group || '其他模块'
-    if (!groups[g]) groups[g] = []
-    groups[g].push(tab)
+  const toggleCategory = (catId: string) => {
+    setCollapsedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }))
   }
 
-  const toggleGroup = (groupName: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }))
-  }
+  // 过滤并归类插件
+  const groupedCategories = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    const filtered = q
+      ? activePlugins.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.description?.toLowerCase().includes(q) ||
+            p.id.toLowerCase().includes(q),
+        )
+      : activePlugins
 
-  const getGroupIcon = (groupName: string) => {
-    switch (groupName) {
-      case '工作面板':
-        return <LayoutDashboard className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-      case '大纲规划':
-        return <BookOpen className="w-3.5 h-3.5 text-blue-500" />
-      case '灵感工具':
-        return <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-      case '运营维护':
-        return <ShieldAlert className="w-3.5 h-3.5 text-emerald-500" />
-      default:
-        return <FileSpreadsheet className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
+    const map = new Map<DesktopPluginCategory, DesktopPlugin[]>()
+    for (const cat of CATEGORY_ORDER) {
+      map.set(cat, [])
     }
-  }
+    for (const p of filtered) {
+      const cat = (p.category || 'tools') as DesktopPluginCategory
+      if (map.has(cat)) {
+        map.get(cat)!.push(p)
+      } else {
+        map.get('tools')!.push(p)
+      }
+    }
+
+    return CATEGORY_ORDER.map((cat) => ({
+      category: cat,
+      label: CATEGORY_META[cat]?.label || cat,
+      icon: CATEGORY_META[cat]?.icon || Sparkles,
+      plugins: map.get(cat) || [],
+    })).filter((group) => group.plugins.length > 0)
+  }, [activePlugins, searchQuery])
 
   return (
     <aside
@@ -146,114 +189,101 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           </button>
         </div>
 
-        {/* 已启用插件套件快速直达 */}
+        {/* 插件搜索栏 */}
         {activePlugins.length > 0 && (
-          <div className="p-2 border-b border-[var(--ink-border)]/50 space-y-0.5">
-            <div className="px-2.5 py-1 text-[10px] font-semibold text-[var(--ink-text-muted)] flex items-center justify-between">
-              <span>插件套件</span>
-              <span className="text-[9px] opacity-70">({activePlugins.length})</span>
-            </div>
-            {activePlugins.map((p) => {
-              const Icon = p.icon || Sparkles
-              const isActive = activeTabId === p.id
-              return (
+          <div className="px-2 py-1.5 border-b border-[var(--ink-border)]/50">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--ink-text-faint)]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索插件…"
+                className="w-full pl-6 pr-6 py-1 text-[11px] rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] focus:outline-none focus:border-[var(--ink-accent)]"
+              />
+              {searchQuery && (
                 <button
-                  key={p.id}
-                  onClick={() => onSelectTab(p.id)}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
-                    isActive
-                      ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-                      : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-                  }`}
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--ink-text-faint)] hover:text-[var(--ink-text)] cursor-pointer"
                 >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{p.name}</span>
+                  <X className="w-3 h-3" />
                 </button>
-              )
-            })}
+              )}
+            </div>
           </div>
         )}
 
-        {/* 插件拓展与预留模块列表（默认全部隐藏，仅保留作架构参考） */}
-        {showLegacyModules ? (
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-[var(--ink-text-faint)]">
-              <span>预留插件功能模块（已停用）</span>
-              <button
-                onClick={() => setShowLegacyModules(false)}
-                className="hover:text-[var(--ink-text)] transition-colors underline"
-              >
-                隐藏
-              </button>
+        {/* 插件分类折叠列表 */}
+        <div className="flex-1 overflow-y-auto">
+          {activePlugins.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-4 text-center h-full">
+              <p className="text-[11px] text-[var(--ink-text-faint)] leading-relaxed">
+                当前未启用附加插件
+              </p>
+              <p className="text-[10px] text-[var(--ink-text-faint)] mt-0.5 opacity-70">
+                纯粹专注正文创作
+              </p>
             </div>
-            {Object.entries(groups).map(([groupName, tabs]) => {
-              const isCollapsed = collapsedGroups[groupName]
-              return (
-                <div key={groupName} className="mb-1">
-                  <div
-                    onClick={() => toggleGroup(groupName)}
-                    className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] cursor-pointer rounded hover:bg-[var(--ink-bg-hover)]/50"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      {getGroupIcon(groupName)}
-                      <span>{groupName}</span>
-                      <span className="text-[10px] opacity-70">({tabs.length})</span>
-                    </div>
-                    {isCollapsed ? (
-                      <ChevronRight className="w-3 h-3" />
-                    ) : (
-                      <ChevronDown className="w-3 h-3" />
-                    )}
-                  </div>
+          ) : groupedCategories.length === 0 ? (
+            <div className="px-4 py-6 text-center text-[11px] text-[var(--ink-text-faint)]">
+              未找到匹配「{searchQuery}」的插件
+            </div>
+          ) : (
+            <div className="p-2 space-y-0.5">
+              {groupedCategories.map(({ category, label, icon: CatIcon, plugins }) => {
+                const isCollapsed = collapsedCategories[category] ?? false
+                return (
+                  <div key={category} className="mb-0.5">
+                    {/* 分类头部 */}
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(category)}
+                      className="w-full flex items-center justify-between px-2 py-1 text-[10.5px] font-semibold text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] cursor-pointer rounded hover:bg-[var(--ink-bg-hover)]/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CatIcon className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{label}</span>
+                        <span className="text-[9px] opacity-70 tabular-nums shrink-0">
+                          ({plugins.length})
+                        </span>
+                      </div>
+                      {isCollapsed ? (
+                        <ChevronRight className="w-3 h-3 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 shrink-0" />
+                      )}
+                    </button>
 
-                  {!isCollapsed && (
-                    <div className="pl-2 space-y-0.5 mt-0.5 border-l border-[var(--ink-border)]/50 ml-2">
-                      {tabs
-                        .filter((t) => t.id !== 'dashboard')
-                        .map((t) => {
-                          const isActive = activeTabId === t.id
+                    {/* 分类内插件列表 */}
+                    {!isCollapsed && (
+                      <div className="pl-2 mt-0.5 ml-2 border-l border-[var(--ink-border)]/40 space-y-px">
+                        {plugins.map((p) => {
+                          const Icon = p.icon || Sparkles
+                          const isActive = activeTabId === p.id
                           return (
                             <button
-                              key={t.id}
-                              onClick={() => onSelectTab(t.id)}
-                              className={`w-full text-left px-2 py-1 rounded-md text-xs font-medium flex items-center justify-between transition-colors ${
+                              key={p.id}
+                              onClick={() => onSelectTab(p.id)}
+                              className={`w-full text-left px-2 py-1 rounded-md text-[11.5px] font-medium flex items-center gap-1.5 transition-colors ${
                                 isActive
                                   ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-                                  : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                                  : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
                               }`}
                             >
-                              <span className="truncate">{t.name}</span>
-                              {t.minimal && (
-                                <span className="text-[9px] opacity-70 border border-current px-1 rounded scale-90">
-                                  核心
-                                </span>
-                              )}
+                              <Icon className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{p.name}</span>
                             </button>
                           )
                         })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
-            <p className="text-[11px] text-[var(--ink-text-faint)] leading-relaxed">
-              当前未启用附加插件
-            </p>
-            <p className="text-[10px] text-[var(--ink-text-faint)] mt-0.5 opacity-70">
-              纯粹专注正文创作
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowLegacyModules(true)}
-              className="mt-3 text-[10px] text-[var(--ink-text-faint)] hover:text-[var(--ink-text-muted)] border border-dashed border-[var(--ink-border)] rounded-md px-2 py-1 hover:border-[var(--ink-border-strong)] transition-all cursor-pointer"
-            >
-              查看预留插件模块参考
-            </button>
-          </div>
-        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Bottom Settings Switcher */}

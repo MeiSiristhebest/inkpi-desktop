@@ -54,16 +54,14 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
-  it('switches to form/table views and isolates the editor when reference is expanded', () => {
+  it('switches to plugin category views and isolates the editor when navigating away', () => {
     render(<Engine projectId="p1" />)
-    fireEvent.click(screen.getByText('查看预留插件模块参考'))
-    fireEvent.click(screen.getByText('作品定位'))
-    expect(screen.getAllByText('作品定位').length).toBeGreaterThanOrEqual(1)
+    // 新版侧栏：分类折叠面板展示插件
+    expect(screen.getByPlaceholderText('搜索插件…')).toBeInTheDocument()
+    // 点击「写作面板」切回工作台视图
+    fireEvent.click(screen.getByText('写作面板'))
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('世界设定'))
-    expect(screen.getAllByText('世界设定').length).toBeGreaterThanOrEqual(1)
-
+    // 点击「正文写作」回到编辑器
     fireEvent.click(screen.getAllByText('正文写作')[0])
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
@@ -188,15 +186,18 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.getByText('InkPi')).toBeInTheDocument()
   })
 
-  it('renders card view when a card-type tab is active', () => {
+  it('renders plugin cards when a plugin tab is active', () => {
     render(<Engine projectId="p1" />)
-    fireEvent.click(screen.getByText('查看预留插件模块参考'))
-    // 寻找角色卡/组织势力等卡片类型
-    const cardTab = screen.queryByText('重要角色') || screen.queryByText('主要人物')
-    if (cardTab) {
-      fireEvent.click(cardTab)
-      expect(screen.getByText(/卡片/)).toBeInTheDocument()
+    // 在分类列表中查找并点击任意活跃插件
+    const firstPlugin = screen.queryByText(/活体世界观|伏笔账本|时空大纲/)
+    if (firstPlugin) {
+      fireEvent.click(firstPlugin)
+      // 切换到插件视图后，章节目录应该隐藏
+      expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     }
+    // 点击正文写作恢复
+    fireEvent.click(screen.getByText('正文写作'))
+    expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
   it('handles onOpenSettings and focus mode exit button', () => {
@@ -213,26 +214,37 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.queryByText(/退出聚焦/)).not.toBeInTheDocument()
   })
 
-  it('renders table view when table tab is selected', () => {
+  it('renders plugin data table when a table-type plugin is selected', () => {
     render(<Engine projectId="p1" />)
-    fireEvent.click(screen.getByText('查看预留插件模块参考'))
-    const tab = screen.queryByText('势力分立') || screen.queryByText('台账')
-    if (tab) {
-      fireEvent.click(tab)
+    // 新版侧栏：通过搜索找到台账类插件
+    const searchInput = screen.getByPlaceholderText('搜索插件…')
+    fireEvent.change(searchInput, { target: { value: '台账' } })
+    const tablePlugin = screen.queryByText(/台账|势力分立/)
+    if (tablePlugin) {
+      fireEvent.click(tablePlugin)
       expect(screen.getByText(/新增行记录/)).toBeInTheDocument()
     }
+    // 恢复
+    fireEvent.change(searchInput, { target: { value: '' } })
+    fireEvent.click(screen.getByText('正文写作'))
   })
 
-  it('handles material, check, inspire, fallback, and generic views directly', () => {
+  it('handles guide, material, check, inspire, fallback views via plugin search', () => {
     render(<Engine projectId="p1" />)
+    const searchInput = screen.getByPlaceholderText('搜索插件…')
 
-    // guide view
-    fireEvent.click(screen.getByText('查看预留插件模块参考'))
+    // 搜索「创作指南」类插件
+    fireEvent.change(searchInput, { target: { value: '指南' } })
     const guideBtn = screen.queryByText('创作指南') || screen.queryByText('新手指南')
     if (guideBtn) fireEvent.click(guideBtn)
 
-    // 直接切到 table 别名
+    // 搜索「势力分立」类插件
+    fireEvent.change(searchInput, { target: { value: '势力' } })
     const tableBtn = screen.queryByText('势力分立')
     if (tableBtn) fireEvent.click(tableBtn)
+
+    // 清空搜索，回到编辑器
+    fireEvent.change(searchInput, { target: { value: '' } })
+    fireEvent.click(screen.getByText('正文写作'))
   })
 })
