@@ -7,6 +7,7 @@ import { useSettings, SettingsProvider } from './core/settings'
 import { ThemeController } from './core/ThemeController'
 import { useAiConversation } from './hooks/useAiConversation'
 import { useProjectLibrary } from './hooks/useProjectLibrary'
+import { PluginProvider } from './core/pluginRegistry'
 
 /**
  * 应用根组件（组合根）：只负责 Provider 装配（SettingsProvider / ThemeController），
@@ -99,7 +100,7 @@ const AppShell: FC = () => {
     </ErrorBoundary>
   )
 
-  return content
+  return <PluginProvider>{content}</PluginProvider>
 }
 
 export default App
