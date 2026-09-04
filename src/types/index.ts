@@ -35,11 +35,15 @@ export interface ChapterRecord {
   order: number
   /** 章节状态：草稿 / 审阅中 / 已发布 / 已归档 */
   status?: ChapterStatus
+  /** CAS 乐观并发控制修订版本号 */
+  revision?: number
   createdAt: number
   updatedAt: number
 }
 
 export interface FormDataRecord {
+  id?: string
+  projectId?: string
   tabId: string
   data: Record<string, any>
 }

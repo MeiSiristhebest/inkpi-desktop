@@ -9,8 +9,9 @@ export class IndexedDbFormDataRepository implements FormDataRepository {
     return rec?.data || {}
   }
 
-  async saveFormData(_projectId: string, tabId: string, data: Record<string, any>): Promise<void> {
-    const record: FormDataRecord = { tabId, data }
+  async saveFormData(projectId: string, tabId: string, data: Record<string, any>): Promise<void> {
+    const fullKey = `${projectId}::${tabId}`
+    const record: FormDataRecord = { id: fullKey, projectId, tabId, data }
     await db.put('formData', record)
   }
 }
