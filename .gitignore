@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+.agents/
+generate_ui_files.js
 
 # Build and Distribution Outputs
 dist/
