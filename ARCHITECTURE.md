@@ -64,8 +64,31 @@ InkPi Desktop is structured as a dual-process architecture combining a lightweig
 
 ---
 
-## 🛡️ 3. Quality Invariants
+## 🧩 3. Frontend Layering (Hexagonal / Ports & Adapters)
+
+The React SPA follows a hexagonal architecture so that business logic never depends on infrastructure.
+
+- **`src/ports/`** — abstract ports (interfaces) the application depends on: `IdGenerator`, `Clock`, `RandomSource`, `KeyValueStore`, `ConfirmDialog`, `ClipboardWriter`, `FileDownloader`, `AiGateway` (connection) + `AiAssistant` (semantic RPC: `openSession` / `suggestContinuation` / `prompt`), and the repository ports (`ProjectRepository` with per-project queries `getVolumesByProject` / `getChaptersByProject`, `ChapterRepository`, `CardRecordRepository`, `TableRecordRepository`, `FormDataRepository`, `CodexEntityRepository`, `SettingsRepository`).
+- **`src/adapters/`** — the only layer permitted to touch infrastructure: the `db` IndexedDB singleton, `localStorage`, `navigator.clipboard`, `window.confirm`, `URL.createObjectURL`, and HTML rendering. Concrete implementations include `indexedDbProjectRepository`, `indexedDbCodexEntityRepository`, `indexedDbKeyValueStore`, `indexedDbSettingsRepository`, `idGenerator`, `clock`, `randomSource`, `clipboardWriter`, `confirmDialog`, `blobFileDownloader`, `inkpiDaemonGateway`, `daemonAiAssistant`, `htmlChapterRenderer`.
+- **Dependency direction (enforced by `src/architecture.test.ts`)**: `components/`, `domain/`, `core/`, `hooks/`, `plugins/**/components/` may import from `ports/` and `adapters/` only. They must **never** import `db/indexedDB`, nor call `window.confirm`, `navigator.clipboard`, `URL.createObjectURL`, `Date.now()`, or `Math.random()` directly. Non-determinism is injected via `Clock` / `IdGenerator` / `RandomSource` ports.
+
+### Editor decomposition (passive view + atomic design)
+`RichEditor` is a passive view that owns no business state. Its former 32 `useState` calls are collapsed into a single `useReducer` inside `src/components/editor/hooks/useChapterEditorModel.ts`; the autosave timer is isolated in `useChapterAutosave`; the component only consumes `state` and dispatches `actions`. The large presentational blocks are extracted into `src/components/editor/organisms/` (`ChapterTree`, `EditorToolbar`, `FindReplaceBar`, `StatusFooter`, `EditorCanvas`, `GlobalSearchPopup`, `ChapterContextMenu`, `RenameChapterDialog`, `DeleteChapterDialog`), and shared modal chrome into `src/components/ui/molecules/Modal.tsx`. The component is ~334 lines (down from 1128).
+
+### Seed data (no hardcoded IDs)
+`domain/seed.ts` derives volume/chapter IDs from the injected `IdGenerator` and timestamps from `Clock`; it never hardcodes `'vol-1'` / `'ch-1'`. `RichEditor` threads the first seeded volume id into `buildSeedChapters` so every chapter always attaches to its volume.
+
+### Domain rules live in `domain/` (not in components)
+Business rules are kept as pure, environment-free functions so they are unit-testable without jsdom/IndexedDB:
+- `domain/moderation/healthCheck.ts` — `findDuplicateCodes` / `findMissingDisplayNames` (extracted from `CheckTools`, review §2.3).
+- `domain/chapter/chapterNaming.ts` (`composeChapterTitle`) + `domain/chapter/blankContent.ts` (`blankChapterContent`) — chapter defaults (review §1.6).
+- `domain/project/projectDefaults.ts` (`defaultGenreFor`) — project genre default (review §1.6).
+- `plugins/living-codex/engine/Adapters.ts` — `CodexAdapters` class replaced by pure functions; category mapping and summary formatting are now table-driven (`TAB_CATEGORY_MAP` / `SUMMARIZERS`) instead of `switch` chains (review §3.2).
+
+## 🛡️ 4. Quality Invariants
 
 - **Zero Node.js Runtime Requirement**: The end-user installer packages everything required.
 - **High Test Coverage**: Core state logic and components maintain $\ge 85\%$ line coverage and $\ge 80\%$ branch coverage.
 - **Strict Error Handling**: UI gracefully recovers if daemon is offline, falling back to local editing with IndexedDB persistence.
+- **Unified Check Gate**: `npm run check` runs `tsc -b && oxlint && vitest run` in one command; CI also runs `test:coverage`. Prettier (`.prettierrc.json`) standardizes formatting via `npm run format`.
+- **Architecture Guard**: `src/architecture.test.ts` fails the build on any forbidden-layer import of `db/indexedDB`, `window.confirm`, `navigator.clipboard`, `URL.createObjectURL`, `Date.now()`, or `Math.random()`.

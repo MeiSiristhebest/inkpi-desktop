@@ -103,6 +103,9 @@ InkPi Desktop 是 **InkPi** 的官方桌面工作台客户端。它将高性能�
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
+> [!NOTE]
+> **前端分层（端口与适配器）**：React SPA 采用六边形架构——`components/`、`domain/`、`core/`、`hooks/`、`plugins/**/components/` 仅依赖 `src/ports/` 抽象端口与 `src/adapters/` 适配器，绝不直接 `import` `db`、`window.confirm`、`navigator.clipboard` 或 `URL.createObjectURL`；该依赖方向由 `src/architecture.test.ts` 在构建期强制守卫。`RichEditor` 已重构为被动视图（`useChapterEditorModel` + `useChapterAutosave`），种子数据 ID 不再硬编码。详见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+
 ---
 
 ## ✨ 核心特性

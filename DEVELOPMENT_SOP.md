@@ -18,6 +18,12 @@ This document establishes the engineering standards, architectural invariants, a
 4. **Quality Gate Thresholds**:
    - Component and core engine test coverage must strictly satisfy: Lines $\ge 85\%$, Branches $\ge 80\%$.
    - Every bug fix or feature must include dedicated Vitest unit/integration tests with `@testing-library/react`.
+5. **Frontend Ports & Adapters Isolation**:
+   - `components/`, `domain/`, `core/`, `hooks/`, and `plugins/**/components/` depend only on abstract ports in `src/ports/` and concrete adapters in `src/adapters/`.
+   - They must **never** import `db/indexedDB`, nor call `window.confirm`, `navigator.clipboard`, `URL.createObjectURL`, `Date.now()`, or `Math.random()` directly. `src/adapters/` is the sole infrastructure boundary; non-determinism is injected via the `Clock` / `IdGenerator` / `RandomSource` ports.
+   - This rule is enforced at build time by `src/architecture.test.ts` (forbidden-pattern scan).
+   - Repositories expose **per-project** queries (`getVolumesByProject` / `getChaptersByProject`); callers must not fetch the global store and filter by `projectId` in memory (multi-project correctness, §5.2 of the review).
+   - The AI layer uses the semantic `AiAssistant` port (`openSession` / `suggestContinuation` / `prompt`); never hand-write `'session.*'` RPC method strings in `components/` / `App.tsx`.
 
 ---
 
@@ -35,7 +41,18 @@ npm run build
 
 ### 3. Verification & Coverage Check
 ```bash
+# Single gate: typecheck + lint + tests
+npm run check
+# Coverage report (also runs in CI)
 npm run test:coverage
+```
+
+### 4. Formatting
+```bash
+# Apply Prettier (config in .prettierrc.json)
+npm run format
+# Verify formatting without writing
+npm run format:check
 ```
 
 ### 4. Desktop Development Harness
@@ -57,5 +74,8 @@ npm run tauri:build
 - `src/components/editor/`: Tiptap / Novel rich-text editor components and action bars.
 - `src/plugins/living-codex/`: Entity graph engine, Aho-Corasick automaton keyword matcher, and drawer UI.
 - `src/db/`: Offline-first IndexedDB storage driver with transactional integrity.
+- `src/ports/`: Abstract ports (interfaces) for ID generation, clock, random source, persistence repositories (with per-project queries), clipboard, confirm dialog, file download, and the semantic `AiAssistant` RPC.
+- `src/adapters/`: Infrastructure adapters implementing the ports (IndexedDB repositories, `idGenerator`, `clock`, `randomSource`, `clipboardWriter`, `confirmDialog`, `blobFileDownloader`, `inkpiDaemonGateway`, `daemonAiAssistant`, `htmlChapterRenderer`).
+- `src/components/editor/organisms/`: Presentational blocks extracted from `RichEditor` (passive view); `src/components/ui/molecules/` holds shared chrome (e.g. `Modal`).
 - `src-tauri/`: Tauri 2 Rust desktop wrapper, sidecar lifecycle management, and window configuration.
 - `scripts/`: Build tooling, sidecar synchronization, and packaging scripts.

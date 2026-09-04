@@ -103,6 +103,9 @@ InkPi Desktop is the native desktop workstation client for **InkPi**. It package
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
+> [!NOTE]
+> **Frontend layering (Ports & Adapters)**: The React SPA follows a hexagonal architecture — `components/`, `domain/`, `core/`, `hooks/`, `plugins/**/components/` depend only on abstract ports in `src/ports/` and concrete adapters in `src/adapters/`; they never import `db`, call `window.confirm`, `navigator.clipboard`, or `URL.createObjectURL` directly. This dependency direction is enforced at build time by `src/architecture.test.ts`. `RichEditor` is refactored into a passive view (`useChapterEditorModel` + `useChapterAutosave`), and seed IDs are no longer hardcoded. See [ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ---
 
 ## ✨ Key Capabilities
