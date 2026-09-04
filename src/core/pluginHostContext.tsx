@@ -1,11 +1,24 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type FC, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type FC,
+  type ReactNode,
+} from 'react'
 import type { ChapterRecord, VolumeRecord } from '../types'
 import type { CodexEntity } from '../plugins/living-codex/types'
 import { pluginEventBus } from './pluginEventBus'
 import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
 import { indexedDbCodexEntityRepository } from '../adapters/indexedDbCodexEntityRepository'
 import { clock } from '../adapters/clock'
-import type { ChapterMutationPatch, ChapterMutationResult, DesktopPluginHostContextValue } from '../types/pluginHost'
+import type {
+  ChapterMutationPatch,
+  ChapterMutationResult,
+  DesktopPluginHostContextValue,
+} from '../types/pluginHost'
 
 export const DesktopPluginHostContext = createContext<DesktopPluginHostContextValue | null>(null)
 
@@ -122,11 +135,14 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         updatedContent,
       }
     },
-    [activeChapter, internalRevision, onChapterUpdate]
+    [activeChapter, internalRevision, onChapterUpdate],
   )
 
   const mutateCodexEntity = useCallback(
-    async (entityId: string, mutation: (prev: CodexEntity) => Partial<CodexEntity>): Promise<void> => {
+    async (
+      entityId: string,
+      mutation: (prev: CodexEntity) => Partial<CodexEntity>,
+    ): Promise<void> => {
       const allEntities = await indexedDbCodexEntityRepository.getAll()
       const existing = allEntities.find((e) => e.id === entityId)
       if (!existing) {
@@ -147,7 +163,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         category: merged.category || 'entity',
       })
     },
-    [projectId, scopedBus]
+    [projectId, scopedBus],
   )
 
   const contextValue: DesktopPluginHostContextValue = useMemo(
@@ -185,7 +201,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       closeDrawer,
       toggleDrawer,
       scopedBus,
-    ]
+    ],
   )
 
   return (

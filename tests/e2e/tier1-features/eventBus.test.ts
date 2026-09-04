@@ -143,11 +143,21 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
 
     const captured: Record<string, unknown> = {}
 
-    bus.on('TIMELINE_EVENT_REGISTERED', (p) => { captured.timeline = p })
-    bus.on('POWER_BREACH_DETECTED', (p) => { captured.power = p })
-    bus.on('FORESHADOW_PLANTED', (p) => { captured.foreshadow = p })
-    bus.on('CODEX_ENTITY_TOUCHED', (p) => { captured.codex = p })
-    bus.on('CHAPTER_CONTENT_AUDITED', (p) => { captured.audit = p })
+    bus.on('TIMELINE_EVENT_REGISTERED', (p) => {
+      captured.timeline = p
+    })
+    bus.on('POWER_BREACH_DETECTED', (p) => {
+      captured.power = p
+    })
+    bus.on('FORESHADOW_PLANTED', (p) => {
+      captured.foreshadow = p
+    })
+    bus.on('CODEX_ENTITY_TOUCHED', (p) => {
+      captured.codex = p
+    })
+    bus.on('CHAPTER_CONTENT_AUDITED', (p) => {
+      captured.audit = p
+    })
 
     bus.emit('TIMELINE_EVENT_REGISTERED', {
       projectId,

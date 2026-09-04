@@ -1,21 +1,25 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { DiffReviewerEngine } from "../engine/DiffReviewerEngine"
-import type { ReviewHunkView, HunkResolution } from "../types"
-import { GitCompare, Check, X, Layers, Save } from "lucide-react"
-import { clock } from "../../../adapters/clock"
-import { useOptionalPluginHostContext } from "../../../core/pluginHostContext"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { DiffReviewerEngine } from '../engine/DiffReviewerEngine'
+import type { ReviewHunkView, HunkResolution } from '../types'
+import { GitCompare, Check, X, Layers, Save } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 
 export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const host = useOptionalPluginHostContext()
-  const [sourceText, setSourceText] = useState("林凡紧握着铁剑，站在狂风暴雨之中。\n对面的敌人冷冷一笑。")
-  const [proposedText, setProposedText] = useState("林凡紧握着断剑，伫立在倾盆暴雨之中。\n前方的刺客阴森一笑。")
+  const [sourceText, setSourceText] = useState(
+    '林凡紧握着铁剑，站在狂风暴雨之中。\n对面的敌人冷冷一笑。',
+  )
+  const [proposedText, setProposedText] = useState(
+    '林凡紧握着断剑，伫立在倾盆暴雨之中。\n前方的刺客阴森一笑。',
+  )
   const [hunks, setHunks] = useState<ReviewHunkView[]>([])
-  const [mergedResult, setMergedResult] = useState("")
+  const [mergedResult, setMergedResult] = useState('')
 
   useEffect(() => {
     onStats?.({
-      title: "双栏审校与合稿器",
+      title: '双栏审校与合稿器',
       wordCount: mergedResult.length || sourceText.length,
       updatedAt: clock.now(),
     })
@@ -35,13 +39,13 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
   }
 
   const applyAll = () => {
-    const nextHunks = hunks.map((h) => ({ ...h, resolution: "applied" as HunkResolution }))
+    const nextHunks = hunks.map((h) => ({ ...h, resolution: 'applied' as HunkResolution }))
     setHunks(nextHunks)
     setMergedResult(DiffReviewerEngine.applyHunks(sourceText, nextHunks))
   }
 
   const rejectAll = () => {
-    const nextHunks = hunks.map((h) => ({ ...h, resolution: "rejected" as HunkResolution }))
+    const nextHunks = hunks.map((h) => ({ ...h, resolution: 'rejected' as HunkResolution }))
     setHunks(nextHunks)
     setMergedResult(DiffReviewerEngine.applyHunks(sourceText, nextHunks))
   }
@@ -67,7 +71,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
                   await host.mutateActiveChapter({
                     chapterId: host.activeChapter.id,
                     expectedRevision: host.revision,
-                    type: "full_replace",
+                    type: 'full_replace',
                     content: targetText,
                   })
                 }
@@ -95,7 +99,9 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">原稿文本 (Original):</label>
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            原稿文本 (Original):
+          </label>
           <textarea
             className="w-full h-40 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 leading-relaxed"
             value={sourceText}
@@ -103,7 +109,9 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">AI / 审校修订提案 (Proposed):</label>
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            AI / 审校修订提案 (Proposed):
+          </label>
           <textarea
             className="w-full h-40 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 leading-relaxed"
             value={proposedText}
@@ -136,23 +144,25 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
                   Hunk #{idx + 1} (L{hunk.oldStartLine} ➔ L{hunk.newStartLine})
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded font-bold ${
-                    hunk.resolution === "applied"
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                      : hunk.resolution === "rejected"
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
-                      : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                  }`}>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded font-bold ${
+                      hunk.resolution === 'applied'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                        : hunk.resolution === 'rejected'
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+                    }`}
+                  >
                     {hunk.resolution.toUpperCase()}
                   </span>
                   <button
-                    onClick={() => setHunkResolution(hunk.id, "applied")}
+                    onClick={() => setHunkResolution(hunk.id, 'applied')}
                     className="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 transition"
                   >
                     采纳
                   </button>
                   <button
-                    onClick={() => setHunkResolution(hunk.id, "rejected")}
+                    onClick={() => setHunkResolution(hunk.id, 'rejected')}
                     className="px-2 py-1 bg-rose-600 text-white rounded text-xs hover:bg-rose-700 transition"
                   >
                     放弃
@@ -165,35 +175,33 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
                   <div
                     key={lIdx}
                     className={`flex items-start px-2 py-0.5 rounded ${
-                      lc.type === "added"
-                        ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
-                        : lc.type === "removed"
-                        ? "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300"
-                        : "text-slate-600 dark:text-slate-400"
+                      lc.type === 'added'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300'
+                        : lc.type === 'removed'
+                          ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300'
+                          : 'text-slate-600 dark:text-slate-400'
                     }`}
                   >
                     <span className="w-6 font-bold select-none text-slate-400">
-                      {lc.type === "added" ? "+" : lc.type === "removed" ? "-" : " "}
+                      {lc.type === 'added' ? '+' : lc.type === 'removed' ? '-' : ' '}
                     </span>
                     <span className="flex-1">
-                      {lc.wordTokens ? (
-                        lc.wordTokens.map((token, tIdx) => (
-                          <span
-                            key={tIdx}
-                            className={
-                              token.type === "added"
-                                ? "bg-emerald-200 dark:bg-emerald-800/60 font-bold"
-                                : token.type === "removed"
-                                ? "bg-rose-200 dark:bg-rose-800/60 line-through"
-                                : ""
-                            }
-                          >
-                            {token.value}
-                          </span>
-                        ))
-                      ) : (
-                        lc.content
-                      )}
+                      {lc.wordTokens
+                        ? lc.wordTokens.map((token, tIdx) => (
+                            <span
+                              key={tIdx}
+                              className={
+                                token.type === 'added'
+                                  ? 'bg-emerald-200 dark:bg-emerald-800/60 font-bold'
+                                  : token.type === 'removed'
+                                    ? 'bg-rose-200 dark:bg-rose-800/60 line-through'
+                                    : ''
+                              }
+                            >
+                              {token.value}
+                            </span>
+                          ))
+                        : lc.content}
                     </span>
                   </div>
                 ))}

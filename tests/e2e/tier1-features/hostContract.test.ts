@@ -1,10 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  TestHostHarness,
-  checkSourceFileExists,
-  type ChapterMutationPatch,
-} from '../harness'
+import { TestHostHarness, checkSourceFileExists, type ChapterMutationPatch } from '../harness'
 import type { ChapterRecord, VolumeRecord } from '../../../src/types'
 
 describe('Tier 1: F1 - DesktopPluginHostContext & CAS Writeback', () => {
@@ -132,7 +128,7 @@ describe('Tier 1: F1 - DesktopPluginHostContext & CAS Writeback', () => {
       // Diagnostic escalation assertion for M1 implementers
       expect(
         hostContextExists,
-        'M1 Deliverable Notice: DesktopPluginHostContext will be provided by src/core/pluginHostContext.tsx per PROJECT.md § M1'
+        'M1 Deliverable Notice: DesktopPluginHostContext will be provided by src/core/pluginHostContext.tsx per PROJECT.md § M1',
       ).toBe(false)
     } else {
       expect(hostContextExists).toBe(true)

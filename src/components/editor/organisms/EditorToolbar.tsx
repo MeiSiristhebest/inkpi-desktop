@@ -720,12 +720,22 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                       host.closeDrawer()
                     } else {
                       // 默认打开活体世界书或第一个具备抽屉的插件
-                      const firstDrawer = registry?.allPlugins.find((p) => Boolean(p.drawerSnippetView))
+                      const firstDrawer = registry?.allPlugins.find((p) =>
+                        Boolean(p.drawerSnippetView),
+                      )
                       if (firstDrawer) host.openDrawer(firstDrawer.id)
                     }
                   }}
-                  title={host.activeDrawerPluginId ? `关闭插件抽屉 (${host.activeDrawerPluginId})` : '打开随动插件抽屉'}
-                  className={host.activeDrawerPluginId ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''}
+                  title={
+                    host.activeDrawerPluginId
+                      ? `关闭插件抽屉 (${host.activeDrawerPluginId})`
+                      : '打开随动插件抽屉'
+                  }
+                  className={
+                    host.activeDrawerPluginId
+                      ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]'
+                      : ''
+                  }
                 >
                   <Puzzle className="w-3.5 h-3.5" />
                 </IconButton>

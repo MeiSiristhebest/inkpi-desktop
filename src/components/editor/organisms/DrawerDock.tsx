@@ -47,10 +47,7 @@ export const DrawerDock: FC<DrawerDockProps> = ({ projectId, currentText }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0">
-        <DrawerComponent
-          projectId={projectId}
-          currentText={currentText}
-        />
+        <DrawerComponent projectId={projectId} currentText={currentText} />
       </div>
     </aside>
   )
