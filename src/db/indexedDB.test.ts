@@ -229,4 +229,194 @@ describe('indexedDB — 错误韧性（onerror 分支）', () => {
     await db.delete('promiseLedger', 'p1')
     expect(await db.get('promiseLedger', 'p1')).toBeUndefined()
   })
+
+  it('supports CRUD operations on stores: readerHooks, clueMatrices, waterAuditSnapshots', async () => {
+    await db.put('readerHooks', { id: 'rh1', chapterId: 'ch1', type: 'crisis' })
+    expect(await db.get('readerHooks', 'rh1')).toEqual({ id: 'rh1', chapterId: 'ch1', type: 'crisis' })
+
+    await db.put('clueMatrices', { id: 'cm1', clueId: 'clue-1', characterId: 'hero' })
+    expect(await db.get('clueMatrices', 'cm1')).toEqual({ id: 'cm1', clueId: 'clue-1', characterId: 'hero' })
+
+    await db.put('waterAuditSnapshots', { id: 'ws1', chapterId: 'ch1', waterScore: 12 })
+    expect(await db.get('waterAuditSnapshots', 'ws1')).toEqual({ id: 'ws1', chapterId: 'ch1', waterScore: 12 })
+
+    await db.delete('readerHooks', 'rh1')
+    expect(await db.get('readerHooks', 'rh1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: volumeArcs, dialogueVoiceprints, factionDiplomacies', async () => {
+    await db.put('volumeArcs', { id: 'va1', volumeId: 'v1', targetWordCount: 200000 })
+    expect(await db.get('volumeArcs', 'va1')).toEqual({ id: 'va1', volumeId: 'v1', targetWordCount: 200000 })
+
+    await db.put('dialogueVoiceprints', { id: 'dv1', characterName: '陆沉', asl: 12.5 })
+    expect(await db.get('dialogueVoiceprints', 'dv1')).toEqual({ id: 'dv1', characterName: '陆沉', asl: 12.5 })
+
+    await db.put('factionDiplomacies', { id: 'fd1', factionAId: 'f1', factionBId: 'f2', stance: 'allied' })
+    expect(await db.get('factionDiplomacies', 'fd1')).toEqual({ id: 'fd1', factionAId: 'f1', factionBId: 'f2', stance: 'allied' })
+
+    await db.delete('volumeArcs', 'va1')
+    expect(await db.get('volumeArcs', 'va1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: paywallAudits, memoryPalaceSnapshots, pressExportConfigs', async () => {
+    await db.put('paywallAudits', { id: 'pa1', chapterId: 'ch-vip-1', ppiScore: 88 })
+    expect(await db.get('paywallAudits', 'pa1')).toEqual({ id: 'pa1', chapterId: 'ch-vip-1', ppiScore: 88 })
+
+    await db.put('memoryPalaceSnapshots', { id: 'mp1', entityId: 'ent-1', entityName: '九霄玄铁' })
+    expect(await db.get('memoryPalaceSnapshots', 'mp1')).toEqual({ id: 'mp1', entityId: 'ent-1', entityName: '九霄玄铁' })
+
+    await db.put('pressExportConfigs', { projectId: 'p1', presetId: 'qidian-standard', fontSizePt: 10.5 })
+    expect(await db.get('pressExportConfigs', 'p1')).toEqual({ projectId: 'p1', presetId: 'qidian-standard', fontSizePt: 10.5 })
+
+    await db.delete('paywallAudits', 'pa1')
+    expect(await db.get('paywallAudits', 'pa1')).toBeUndefined()
+    await db.delete('pressExportConfigs', 'p1')
+    expect(await db.get('pressExportConfigs', 'p1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: emotionAudits, subPlotStrands, brainstormSparks', async () => {
+    await db.put('emotionAudits', { id: 'ea1', chapterId: 'ch-1', netPolarity: 45 })
+    expect(await db.get('emotionAudits', 'ea1')).toEqual({ id: 'ea1', chapterId: 'ch-1', netPolarity: 45 })
+
+    await db.put('subPlotStrands', { id: 'sp1', title: '魔教暗子调查', status: 'active' })
+    expect(await db.get('subPlotStrands', 'sp1')).toEqual({ id: 'sp1', title: '魔教暗子调查', status: 'active' })
+
+    await db.put('brainstormSparks', { id: 'bs1', dilemmaType: 'dead_end', coreProblem: '死局解脱' })
+    expect(await db.get('brainstormSparks', 'bs1')).toEqual({ id: 'bs1', dilemmaType: 'dead_end', coreProblem: '死局解脱' })
+
+    await db.delete('emotionAudits', 'ea1')
+    expect(await db.get('emotionAudits', 'ea1')).toBeUndefined()
+    await db.delete('subPlotStrands', 'sp1')
+    expect(await db.get('subPlotStrands', 'sp1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: readerSimulations, chekhovGuns, rhythmCadences', async () => {
+    await db.put('readerSimulations', { id: 'rs1', chapterId: 'ch-1', toxicityIndex: 12 })
+    expect(await db.get('readerSimulations', 'rs1')).toEqual({ id: 'rs1', chapterId: 'ch-1', toxicityIndex: 12 })
+
+    await db.put('chekhovGuns', { id: 'cg1', gunName: '生锈的铁剑', status: 'dormant' })
+    expect(await db.get('chekhovGuns', 'cg1')).toEqual({ id: 'cg1', gunName: '生锈的铁剑', status: 'dormant' })
+
+    await db.put('rhythmCadences', { projectId: 'p1', currentMicroStep: 2, currentMesoStep: 14 })
+    expect(await db.get('rhythmCadences', 'p1')).toEqual({ projectId: 'p1', currentMicroStep: 2, currentMesoStep: 14 })
+
+    await db.delete('readerSimulations', 'rs1')
+    expect(await db.get('readerSimulations', 'rs1')).toBeUndefined()
+    await db.delete('rhythmCadences', 'p1')
+    expect(await db.get('rhythmCadences', 'p1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: geoMapGrids, combatDuels, multiCalendars', async () => {
+    await db.put('geoMapGrids', { id: 'map1', locationId: 'loc-1', scaleKmPerCell: 10 })
+    expect(await db.get('geoMapGrids', 'map1')).toEqual({ id: 'map1', locationId: 'loc-1', scaleKmPerCell: 10 })
+
+    await db.put('combatDuels', { id: 'duel1', protagonistTier: '金丹初期', enemyTier: '金丹后期' })
+    expect(await db.get('combatDuels', 'duel1')).toEqual({ id: 'duel1', protagonistTier: '金丹初期', enemyTier: '金丹后期' })
+
+    await db.put('multiCalendars', { id: 'cal1', projectId: 'p1', calendarName: '大炎天历' })
+    expect(await db.get('multiCalendars', 'cal1')).toEqual({ id: 'cal1', projectId: 'p1', calendarName: '大炎天历' })
+
+    await db.delete('geoMapGrids', 'map1')
+    expect(await db.get('geoMapGrids', 'map1')).toBeUndefined()
+    await db.delete('combatDuels', 'duel1')
+    expect(await db.get('combatDuels', 'duel1')).toBeUndefined()
+    await db.delete('multiCalendars', 'cal1')
+    expect(await db.get('multiCalendars', 'cal1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: povSnapshots, linterRulesConfigs, diffReviews', async () => {
+    await db.put('povSnapshots', { id: 'pov1', projectId: 'p1', currentPovCharacter: '林凡' })
+    expect(await db.get('povSnapshots', 'pov1')).toEqual({ id: 'pov1', projectId: 'p1', currentPovCharacter: '林凡' })
+
+    await db.put('linterRulesConfigs', { projectId: 'p1', enabledRuleIds: ['RULE_HEAD_HOPPING'] })
+    expect(await db.get('linterRulesConfigs', 'p1')).toEqual({ projectId: 'p1', enabledRuleIds: ['RULE_HEAD_HOPPING'] })
+
+    await db.put('diffReviews', { id: 'diff1', projectId: 'p1', title: 'Chapter 1 revision' })
+    expect(await db.get('diffReviews', 'diff1')).toEqual({ id: 'diff1', projectId: 'p1', title: 'Chapter 1 revision' })
+
+    await db.delete('povSnapshots', 'pov1')
+    expect(await db.get('povSnapshots', 'pov1')).toBeUndefined()
+    await db.delete('linterRulesConfigs', 'p1')
+    expect(await db.get('linterRulesConfigs', 'p1')).toBeUndefined()
+    await db.delete('diffReviews', 'diff1')
+    expect(await db.get('diffReviews', 'diff1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: ironChamberRecords, soundscapeConfigs, scrapbookFragments', async () => {
+    await db.put('ironChamberRecords', { id: 'ic1', projectId: 'p1', mode: 'words', targetWords: 3000, status: 'locked' })
+    expect(await db.get('ironChamberRecords', 'ic1')).toEqual({ id: 'ic1', projectId: 'p1', mode: 'words', targetWords: 3000, status: 'locked' })
+
+    await db.put('soundscapeConfigs', { projectId: 'p1', switchType: 'blue', backgroundAmbience: 'rain', enabled: true })
+    expect(await db.get('soundscapeConfigs', 'p1')).toEqual({ projectId: 'p1', switchType: 'blue', backgroundAmbience: 'rain', enabled: true })
+
+    await db.put('scrapbookFragments', { id: 'sf1', projectId: 'p1', snippet: '一段被删减的精彩打斗废稿', wordCount: 15 })
+    expect(await db.get('scrapbookFragments', 'sf1')).toEqual({ id: 'sf1', projectId: 'p1', snippet: '一段被删减的精彩打斗废稿', wordCount: 15 })
+
+    await db.delete('ironChamberRecords', 'ic1')
+    expect(await db.get('ironChamberRecords', 'ic1')).toBeUndefined()
+    await db.delete('soundscapeConfigs', 'p1')
+    expect(await db.get('soundscapeConfigs', 'p1')).toBeUndefined()
+    await db.delete('scrapbookFragments', 'sf1')
+    expect(await db.get('scrapbookFragments', 'sf1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: aftermathPatches, subtextDialogues, narrativeArchetypes, rhythmRadarReports', async () => {
+    await db.put('aftermathPatches', { id: 'ap1', projectId: 'p1', entityId: 'ent1', changeType: 'attribute_update' })
+    expect(await db.get('aftermathPatches', 'ap1')).toEqual({ id: 'ap1', projectId: 'p1', entityId: 'ent1', changeType: 'attribute_update' })
+
+    await db.put('subtextDialogues', { id: 'sd1', projectId: 'p1', spoken: '我很好', subtext: '内心极度痛苦' })
+    expect(await db.get('subtextDialogues', 'sd1')).toEqual({ id: 'sd1', projectId: 'p1', spoken: '我很好', subtext: '内心极度痛苦' })
+
+    await db.put('narrativeArchetypes', { id: 'na1', name: '反叛者', category: 'character_archetype_36' })
+    expect(await db.get('narrativeArchetypes', 'na1')).toEqual({ id: 'na1', name: '反叛者', category: 'character_archetype_36' })
+
+    await db.put('rhythmRadarReports', { id: 'rr1', projectId: 'p1', tensionScore: 0.85, pacingStatus: 'optimal' })
+    expect(await db.get('rhythmRadarReports', 'rr1')).toEqual({ id: 'rr1', projectId: 'p1', tensionScore: 0.85, pacingStatus: 'optimal' })
+
+    await db.delete('aftermathPatches', 'ap1')
+    expect(await db.get('aftermathPatches', 'ap1')).toBeUndefined()
+    await db.delete('subtextDialogues', 'sd1')
+    expect(await db.get('subtextDialogues', 'sd1')).toBeUndefined()
+    await db.delete('narrativeArchetypes', 'na1')
+    expect(await db.get('narrativeArchetypes', 'na1')).toBeUndefined()
+    await db.delete('rhythmRadarReports', 'rr1')
+    expect(await db.get('rhythmRadarReports', 'rr1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: goldChapterEvals, shadowDanmakus, authorOpsProfiles', async () => {
+    await db.put('goldChapterEvals', { id: 'ge1', projectId: 'p1', score: 88, isQualified: true })
+    expect(await db.get('goldChapterEvals', 'ge1')).toEqual({ id: 'ge1', projectId: 'p1', score: 88, isQualified: true })
+
+    await db.put('shadowDanmakus', { id: 'sdm1', projectId: 'p1', chapterId: 'ch1', personaType: 'critical_toxic', content: '这也太毒了' })
+    expect(await db.get('shadowDanmakus', 'sdm1')).toEqual({ id: 'sdm1', projectId: 'p1', chapterId: 'ch1', personaType: 'critical_toxic', content: '这也太毒了' })
+
+    await db.put('authorOpsProfiles', { projectId: 'p1', authorName: '天蚕土豆' })
+    expect(await db.get('authorOpsProfiles', 'p1')).toEqual({ projectId: 'p1', authorName: '天蚕土豆' })
+
+    await db.delete('goldChapterEvals', 'ge1')
+    expect(await db.get('goldChapterEvals', 'ge1')).toBeUndefined()
+    await db.delete('shadowDanmakus', 'sdm1')
+    expect(await db.get('shadowDanmakus', 'sdm1')).toBeUndefined()
+    await db.delete('authorOpsProfiles', 'p1')
+    expect(await db.get('authorOpsProfiles', 'p1')).toBeUndefined()
+  })
+
+  it('supports CRUD operations on stores: multiverseBranches, voiceScriptCasts, storyboardScenes', async () => {
+    await db.put('multiverseBranches', { id: 'mb1', projectId: 'p1', forkChapterIndex: 15, name: '未救女配线' })
+    expect(await db.get('multiverseBranches', 'mb1')).toEqual({ id: 'mb1', projectId: 'p1', forkChapterIndex: 15, name: '未救女配线' })
+
+    await db.put('voiceScriptCasts', { id: 'vsc1', projectId: 'p1', characterId: 'c1', characterName: '林凡', pitch: 1.0 })
+    expect(await db.get('voiceScriptCasts', 'vsc1')).toEqual({ id: 'vsc1', projectId: 'p1', characterId: 'c1', characterName: '林凡', pitch: 1.0 })
+
+    await db.put('storyboardScenes', { id: 'sb1', projectId: 'p1', chapterId: 'ch1', sceneTitle: '退婚之辱' })
+    expect(await db.get('storyboardScenes', 'sb1')).toEqual({ id: 'sb1', projectId: 'p1', chapterId: 'ch1', sceneTitle: '退婚之辱' })
+
+    await db.delete('multiverseBranches', 'mb1')
+    expect(await db.get('multiverseBranches', 'mb1')).toBeUndefined()
+    await db.delete('voiceScriptCasts', 'vsc1')
+    expect(await db.get('voiceScriptCasts', 'vsc1')).toBeUndefined()
+    await db.delete('storyboardScenes', 'sb1')
+    expect(await db.get('storyboardScenes', 'sb1')).toBeUndefined()
+  })
 })
+

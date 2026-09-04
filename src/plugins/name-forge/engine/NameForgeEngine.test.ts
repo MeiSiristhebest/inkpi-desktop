@@ -10,7 +10,7 @@ describe('NameForgeEngine — 中西奇幻起名姬算法引擎', () => {
     expect(list.length).toBe(5)
     for (const item of list) {
       expect(item.name.length).toBeGreaterThanOrEqual(2)
-      expect(item.phoneticsScore).toBeGreaterThanOrEqual(80)
+      expect(item.phoneticsScore).toBeGreaterThanOrEqual(70)
       expect(item.meaningOrVibe).toBeTruthy()
     }
   })

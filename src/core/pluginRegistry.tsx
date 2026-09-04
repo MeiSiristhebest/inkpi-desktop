@@ -18,6 +18,40 @@ import { NameForgePlugin } from '../plugins/name-forge'
 import { ExpectationEnginePlugin } from '../plugins/expectation-engine'
 import { ConsistencySentinelPlugin } from '../plugins/consistency-sentinel'
 import { SprintArenaPlugin } from '../plugins/sprint-arena'
+import { ReaderHookPlugin } from '../plugins/reader-hook'
+import { ClueWeaverPlugin } from '../plugins/clue-weaver'
+import { WaterMeterPlugin } from '../plugins/water-meter'
+import { VolumeMasterPlugin } from '../plugins/volume-master'
+import { DialogueDistillerPlugin } from '../plugins/dialogue-distiller'
+import { FactionMatrixPlugin } from '../plugins/faction-matrix'
+import { PaywallSentryPlugin } from '../plugins/paywall-sentry'
+import { MemoryPalacePlugin } from '../plugins/memory-palace'
+import { PressForgePlugin } from '../plugins/press-forge'
+import { EmotionCurvePlugin } from '../plugins/emotion-curve'
+import { SubPlotBraidPlugin } from '../plugins/sub-plot-braid'
+import { BrainstormSparkPlugin } from '../plugins/brainstorm-spark'
+import { ReaderSimulatorPlugin } from '../plugins/reader-simulator'
+import { ChekhovRadarPlugin } from '../plugins/chekhov-radar'
+import { RhythmMetronomePlugin } from '../plugins/rhythm-metronome'
+import { GeographyMapPlugin } from '../plugins/geography-map'
+import { CombatSandboxPlugin } from '../plugins/combat-sandbox'
+import { MultiCalendarPlugin } from '../plugins/multi-calendar'
+import { PovGuardPlugin } from '../plugins/pov-guard'
+import { NarrativeLinterPlugin } from '../plugins/narrative-linter'
+import { DiffReviewerPlugin } from '../plugins/diff-reviewer'
+import { IronChamberPlugin } from '../plugins/iron-chamber'
+import { SoundscapePlugin } from '../plugins/soundscape'
+import { ScrapbookRecyclerPlugin } from '../plugins/scrapbook-recycler'
+import { AftermathSyncPlugin } from '../plugins/aftermath-sync'
+import { SubtextCompilerPlugin } from '../plugins/subtext-compiler'
+import { ArchetypeCardsPlugin } from '../plugins/archetype-cards'
+import { RhythmRadarPlugin } from '../plugins/rhythm-radar'
+import { GoldChaptersEvalPlugin } from '../plugins/gold-chapters-eval'
+import { ShadowReaderPlugin } from '../plugins/shadow-reader'
+import { AuthorOpsPlugin } from '../plugins/author-ops'
+import { MultiverseWhatIfPlugin } from '../plugins/multiverse-whatif'
+import { VoicePreviewPlugin } from '../plugins/voice-preview'
+import { StoryboardGenPlugin } from '../plugins/storyboard-gen'
 import { indexedDbKeyValueStore } from '../adapters/indexedDbKeyValueStore'
 import { localStorageKeyValueStore } from '../adapters/localStorageKeyValueStore'
 
@@ -35,7 +69,42 @@ export const ALL_AVAILABLE_PLUGINS: DesktopPlugin[] = [
   ExpectationEnginePlugin,
   ConsistencySentinelPlugin,
   SprintArenaPlugin,
+  ReaderHookPlugin,
+  ClueWeaverPlugin,
+  WaterMeterPlugin,
+  VolumeMasterPlugin,
+  DialogueDistillerPlugin,
+  FactionMatrixPlugin,
+  PaywallSentryPlugin,
+  MemoryPalacePlugin,
+  PressForgePlugin,
+  EmotionCurvePlugin,
+  SubPlotBraidPlugin,
+  BrainstormSparkPlugin,
+  ReaderSimulatorPlugin,
+  ChekhovRadarPlugin,
+  RhythmMetronomePlugin,
+  GeographyMapPlugin,
+  CombatSandboxPlugin,
+  MultiCalendarPlugin,
+  PovGuardPlugin,
+  NarrativeLinterPlugin,
+  DiffReviewerPlugin,
+  IronChamberPlugin,
+  SoundscapePlugin,
+  ScrapbookRecyclerPlugin,
+  AftermathSyncPlugin,
+  SubtextCompilerPlugin,
+  ArchetypeCardsPlugin,
+  RhythmRadarPlugin,
+  GoldChaptersEvalPlugin,
+  ShadowReaderPlugin,
+  AuthorOpsPlugin,
+  MultiverseWhatIfPlugin,
+  VoicePreviewPlugin,
+  StoryboardGenPlugin,
 ]
+
 
 export const PLUGIN_CATEGORIES: { id: DesktopPluginCategory | 'all'; label: string }[] = [
   { id: 'all', label: '全部插件' },
