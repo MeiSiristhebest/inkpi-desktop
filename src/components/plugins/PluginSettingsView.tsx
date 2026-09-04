@@ -4,16 +4,55 @@ import {
   Search,
   Layers,
   Inbox,
+  ChevronDown,
+  ChevronRight,
+  BookOpen,
+  Compass,
+  Zap,
+  Palette,
+  ShieldAlert,
 } from 'lucide-react'
 import {
   usePluginRegistry,
 } from '../../core/pluginRegistry'
-import type { DesktopPlugin } from '../../types/plugin'
+import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
+
+const CATEGORY_META: Record<
+  DesktopPluginCategory,
+  { label: string; icon: React.FC<{ className?: string }> }
+> = {
+  lore: { label: '设定与世界书', icon: BookOpen },
+  plot: { label: '大纲与因果', icon: Compass },
+  rhythm: { label: '网文节奏', icon: Zap },
+  craft: { label: '修辞与调色', icon: Palette },
+  review: { label: '质检与门禁', icon: ShieldAlert },
+  flow: { label: '心流与竞技', icon: Puzzle },
+  tools: { label: '辅助与工具', icon: Layers },
+}
+
+const CATEGORY_ORDER: DesktopPluginCategory[] = [
+  'lore',
+  'plot',
+  'rhythm',
+  'craft',
+  'review',
+  'flow',
+  'tools',
+]
 
 export const PluginSettingsView: FC = () => {
   const { allPlugins, enabledIds, togglePlugin } = usePluginRegistry()
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedPlugin, setSelectedPlugin] = useState<DesktopPlugin | null>(allPlugins[0] || null)
+  const [selectedPluginId, setSelectedPluginId] = useState<string | null>(allPlugins[0]?.id ?? null)
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({
+    lore: false,
+    plot: true,
+    rhythm: true,
+    craft: true,
+    review: true,
+    flow: true,
+    tools: true,
+  })
 
   const filteredPlugins = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
@@ -26,8 +65,29 @@ export const PluginSettingsView: FC = () => {
     )
   }, [allPlugins, searchQuery])
 
-  const effectivePlugin =
-    filteredPlugins.find((p) => p.id === selectedPlugin?.id) || filteredPlugins[0] || null
+  const groupedPlugins = useMemo(() => {
+    const map = new Map<DesktopPluginCategory, DesktopPlugin[]>()
+    for (const cat of CATEGORY_ORDER) map.set(cat, [])
+    for (const p of filteredPlugins) {
+      const cat = (p.category || 'tools') as DesktopPluginCategory
+      ;(map.get(cat) ?? map.get('tools')!).push(p)
+    }
+    return CATEGORY_ORDER.map((cat) => ({
+      category: cat,
+      label: CATEGORY_META[cat]?.label || cat,
+      icon: CATEGORY_META[cat]?.icon || Layers,
+      plugins: map.get(cat) || [],
+    })).filter((g) => g.plugins.length > 0)
+  }, [filteredPlugins])
+
+  const effectivePlugin = useMemo(
+    () => allPlugins.find((p) => p.id === selectedPluginId) ?? null,
+    [allPlugins, selectedPluginId],
+  )
+
+  const toggleCategory = (cat: string) => {
+    setCollapsedCategories((prev) => ({ ...prev, [cat]: !prev[cat] }))
+  }
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-xl text-[var(--ink-text)] overflow-hidden">
@@ -66,61 +126,90 @@ export const PluginSettingsView: FC = () => {
                 <span className="text-[10px] text-[var(--ink-text-faint)]">按需开启，未启用时不产生任何干扰</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-2.5">
-                {filteredPlugins.map((plugin) => {
-                  const Icon = plugin.icon || Layers
-                  const isEnabled = enabledIds.has(plugin.id)
-                  const isSelected = selectedPlugin?.id === plugin.id
-
-                  return (
-                    <div
-                      key={plugin.id}
-                      onClick={() => setSelectedPlugin(plugin)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-[var(--ink-bg-elevated)] border-[var(--ink-accent)] shadow-2xs'
-                          : 'bg-[var(--ink-bg-elevated)] border-[var(--ink-border)] hover:border-[var(--ink-border-strong)]'
-                      }`}
+              {groupedPlugins.map(({ category, label, icon: CatIcon, plugins }) => {
+                const isCollapsed = collapsedCategories[category] ?? false
+                return (
+                  <div key={category}>
+                    {/* 分类标题 */}
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(category)}
+                      className="flex items-center justify-between w-full px-1 py-1 text-[11px] font-semibold text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] cursor-pointer rounded hover:bg-[var(--ink-bg-hover)]/50 transition-colors"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] flex items-center justify-center shrink-0">
-                            <Icon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 font-medium text-[13px]">
-                              <span className="truncate">{plugin.name}</span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] shrink-0">
-                                v{plugin.version}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-[var(--ink-text-faint)] truncate mt-0.5">
-                              {plugin.description}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* 开关 */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            togglePlugin(plugin.id)
-                          }}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            isEnabled ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                              isEnabled ? 'translate-x-4' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                      <div className="flex items-center gap-1.5">
+                        <CatIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>{label}</span>
+                        <span className="text-[10px] opacity-70 tabular-nums">({plugins.length})</span>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
+                      {isCollapsed ? (
+                        <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                    </button>
+
+                    {/* 分类内插件卡片 */}
+                    {!isCollapsed && (
+                      <div className="mt-1 ml-3 space-y-2.5 border-l-2 border-[var(--ink-border)] pl-3">
+                        {plugins.map((plugin) => {
+                          const Icon = plugin.icon || Layers
+                          const isEnabled = enabledIds.has(plugin.id)
+                          const isSelected = selectedPluginId === plugin.id
+
+                          return (
+                            <div
+                              key={plugin.id}
+                              onClick={() => setSelectedPluginId(plugin.id)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[var(--ink-bg-elevated)] border-[var(--ink-accent)] shadow-2xs'
+                                  : 'bg-[var(--ink-bg-elevated)] border-[var(--ink-border)] hover:border-[var(--ink-border-strong)]'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] flex items-center justify-center shrink-0">
+                                    <Icon className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 font-medium text-[13px]">
+                                      <span className="truncate">{plugin.name}</span>
+                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] shrink-0">
+                                        v{plugin.version}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-[var(--ink-text-faint)] truncate mt-0.5">
+                                      {plugin.description}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* 开关 */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    togglePlugin(plugin.id)
+                                  }}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    isEnabled ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'
+                                  }`}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                      isEnabled ? 'translate-x-4' : 'translate-x-0'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
