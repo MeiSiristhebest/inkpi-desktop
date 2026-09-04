@@ -12,9 +12,7 @@ import {
   Palette,
   ShieldAlert,
 } from 'lucide-react'
-import {
-  usePluginRegistry,
-} from '../../core/pluginRegistry'
+import { usePluginRegistry } from '../../core/pluginRegistry'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
 
 const CATEGORY_META: Record<
@@ -123,7 +121,9 @@ export const PluginSettingsView: FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-[11px] text-[var(--ink-text-muted)]">
                 <span>已安装插件 ({filteredPlugins.length})</span>
-                <span className="text-[10px] text-[var(--ink-text-faint)]">按需开启，未启用时不产生任何干扰</span>
+                <span className="text-[10px] text-[var(--ink-text-faint)]">
+                  按需开启，未启用时不产生任何干扰
+                </span>
               </div>
 
               {groupedPlugins.map(({ category, label, icon: CatIcon, plugins }) => {
@@ -139,7 +139,9 @@ export const PluginSettingsView: FC = () => {
                       <div className="flex items-center gap-1.5">
                         <CatIcon className="w-3.5 h-3.5 shrink-0" />
                         <span>{label}</span>
-                        <span className="text-[10px] opacity-70 tabular-nums">({plugins.length})</span>
+                        <span className="text-[10px] opacity-70 tabular-nums">
+                          ({plugins.length})
+                        </span>
                       </div>
                       {isCollapsed ? (
                         <ChevronRight className="w-3.5 h-3.5 shrink-0" />
@@ -192,7 +194,9 @@ export const PluginSettingsView: FC = () => {
                                     togglePlugin(plugin.id)
                                   }}
                                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    isEnabled ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'
+                                    isEnabled
+                                      ? 'bg-[var(--ink-accent)]'
+                                      : 'bg-[var(--ink-border-strong)]'
                                   }`}
                                 >
                                   <span
