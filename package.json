@@ -34,10 +34,13 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "coverage": "vitest run --coverage",
-    "check": "tsc -b && oxlint",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "check": "tsc -b && oxlint && vitest run",
     "tauri": "tauri",
     "tauri:dev": "npm run copy-daemon-sidecar && tauri dev",
     "copy-daemon-sidecar": "node scripts/copy-daemon-sidecar.mjs",
+    "daemon": "node scripts/run-daemon.mjs",
     "tauri:build": "npm run copy-daemon-sidecar && tauri build --target x86_64-pc-windows-gnu"
   },
   "dependencies": {
@@ -50,6 +53,8 @@
     "@tiptap/pm": "^2.27.2",
     "@tiptap/react": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
+    "@types/diff": "^7.0.2",
+    "diff": "^9.0.0",
     "novel": "^1.0.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
@@ -71,6 +76,7 @@
     "jsdom": "^30.0.1",
     "lucide-react": "^1.38.0",
     "oxlint": "^1.79.0",
+    "prettier": "^3.9.6",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",

@@ -23,4 +23,17 @@ export default defineConfig({
       '@inkpi/protocol': path.resolve(inkpiRoot, 'packages/protocol/src/index.ts'),
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // 代码分割：把体积大的第三方依赖拆成独立 chunk，消除 500KB 单包体积警告
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react-vendor'
+          if (/[\\/]node_modules[\\/]@?tiptap|[\\/]node_modules[\\/]prosemirror-|[\\/]node_modules[\\/]tippy/.test(id)) return 'editor-vendor'
+          return 'vendor'
+        },
+      },
+    },
+  },
 })
