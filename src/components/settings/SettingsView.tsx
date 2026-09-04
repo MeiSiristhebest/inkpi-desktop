@@ -30,7 +30,6 @@ import {
   Check,
 } from 'lucide-react'
 import { PluginSettingsView } from '../plugins/PluginSettingsView'
-import { PluginProvider } from '../../core/pluginRegistry'
 import { clock } from '../../adapters/clock'
 import {
   useSettings,
@@ -470,11 +469,7 @@ export const SettingsView: FC<SettingsViewProps> = ({ open, onClose }) => {
             >
               {tab === 'appearance' && <AppearanceTab settings={settings} update={update} />}
               {tab === 'editor' && <EditorTab settings={settings} update={update} />}
-              {tab === 'plugins' && (
-                <PluginProvider>
-                  <PluginSettingsView />
-                </PluginProvider>
-              )}
+              {tab === 'plugins' && <PluginSettingsView />}
               {tab === 'ai' && <AiTab settings={settings} update={update} />}
               {tab === 'connection' && <ConnectionTab settings={settings} update={update} />}
               {tab === 'about' && <AboutTab />}
