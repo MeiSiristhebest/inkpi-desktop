@@ -19,7 +19,7 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
     }).catch(() => {})
 
     indexedDbCodexEntityRepository.getAll().then((all) => {
-      const filtered = all.filter((e) => !e.projectId || e.projectId === projectId)
+      const filtered = all.filter((e) => e.projectId === projectId)
       setEntities(
         filtered.map((e) => ({
           name: e.name,

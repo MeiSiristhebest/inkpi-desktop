@@ -60,34 +60,87 @@ export class CodexGraphStore {
       }
     }
 
-    // 3. 按最终激活能量降序排序
-    const sortedCandidates = Array.from(activatedEnergy.entries())
-      .map(([id, score]) => ({ entity: this.entities.get(id)!, score }))
-      .filter((item) => Boolean(item.entity))
-      .sort((a, b) => b.score - a.score)
+    // 3. 准备候选实体及其代价（Tokens）与价值（激活能量 / 重要性权值）
+    const candidateItems = Array.from(activatedEnergy.entries())
+      .map(([id, score]) => {
+        const entity = this.entities.get(id)
+        if (!entity) return null
+        const line = this.formatEntityLine(entity)
+        const estTokens = Math.ceil(line.length * 0.7) + 4
+        return {
+          entity,
+          line,
+          cost: estTokens,
+          value: score,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
 
-    // 4. 0-1 背包贪心组装标准化 XML 切片
-    const selected: CodexEntity[] = []
-    const xmlLines: string[] = ['<living_codex_context>']
-    let currentTokens = 20 // 标签预估开销
+    const baseTagTokens = 20 // 标签预估开销 <living_codex_context> ... </living_codex_context>
+    const availableBudget = tokenBudget - baseTagTokens
 
-    for (const { entity } of sortedCandidates) {
-      const line = this.formatEntityLine(entity)
-      // 汉字与符号预估 Token 系数约 0.7
-      const estTokens = Math.ceil(line.length * 0.7) + 4
+    if (availableBudget <= 0 || candidateItems.length === 0) {
+      return { matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 }
+    }
 
-      if (currentTokens + estTokens <= tokenBudget) {
-        selected.push(entity)
-        xmlLines.push(`  ${line}`)
-        currentTokens += estTokens
+    // 4. 标准 0-1 背包动态规划算法 (0-1 Knapsack DP)
+    // 状态定义：dp[i][w] 表示在前 i 个候选实体中选取，总 Token 代价不超过 w 时的最大激活能量
+    const n = candidateItems.length
+    const W = availableBudget
+
+    // 二维 DP 表用于追踪并精准回溯最佳选取方案
+    // 使用 Float64Array 节省内存与提升性能
+    const dp: Float64Array[] = Array.from({ length: n + 1 }, () => new Float64Array(W + 1))
+
+    for (let i = 1; i <= n; i++) {
+      const item = candidateItems[i - 1]
+      const prevRow = dp[i - 1]
+      const currRow = dp[i]
+      for (let w = 0; w <= W; w++) {
+        if (item.cost <= w) {
+          const withItem = prevRow[w - item.cost] + item.value
+          const withoutItem = prevRow[w]
+          currRow[w] = withItem > withoutItem ? withItem : withoutItem
+        } else {
+          currRow[w] = prevRow[w]
+        }
       }
+    }
+
+    // 回溯找出被选中的实体集合
+    const selected: typeof candidateItems = []
+    let remainingW = W
+    for (let i = n; i >= 1; i--) {
+      // 若 dp[i][remainingW] !== dp[i-1][remainingW]，说明选取了第 i 个候选（candidateItems[i-1]）
+      if (dp[i][remainingW] !== dp[i - 1][remainingW]) {
+        const item = candidateItems[i - 1]
+        selected.push(item)
+        remainingW -= item.cost
+      }
+    }
+
+    // 按照候选权重或原始顺序由高到低呈现
+    selected.sort((a, b) => b.value - a.value)
+
+    if (selected.length === 0) {
+      return { matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 }
+    }
+
+    const xmlLines: string[] = ['<living_codex_context>']
+    let totalTokens = baseTagTokens
+    const selectedEntities: CodexEntity[] = []
+
+    for (const item of selected) {
+      selectedEntities.push(item.entity)
+      xmlLines.push(`  ${item.line}`)
+      totalTokens += item.cost
     }
     xmlLines.push('</living_codex_context>')
 
     return {
-      matchedEntities: selected,
-      xmlContext: selected.length > 0 ? xmlLines.join('\n') : '',
-      totalEstimatedTokens: selected.length > 0 ? currentTokens : 0,
+      matchedEntities: selectedEntities,
+      xmlContext: xmlLines.join('\n'),
+      totalEstimatedTokens: totalTokens,
     }
   }
 

@@ -36,7 +36,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     try {
       setLoading(true)
       const all = await indexedDbExpectationRepository.getAll()
-      const filtered = all.filter((c) => !c.projectId || c.projectId === projectId)
+      const filtered = all.filter((c) => c.projectId === projectId)
       setContracts(filtered)
     } catch (e) {
       console.error('Failed to load expectation contracts:', e)

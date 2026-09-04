@@ -63,4 +63,85 @@ describe('ConsistencyEngine — 战力阶梯与设定巡检哨兵引擎', () => 
 
     expect(violations.length).toBe(0)
   })
+
+  describe('Poset DAG 与 Warshall 传递闭包算法', () => {
+    it('computes transitive closure accurately with Warshall algorithm', () => {
+      // 分支体系：练气 -> 筑基 -> 金丹/魔丹 -> 元婴
+      const tiers = ['练气', '筑基', '金丹', '魔丹', '元婴']
+      const relations = [
+        { lowerTier: '练气', higherTier: '筑基' },
+        { lowerTier: '筑基', higherTier: '金丹' },
+        { lowerTier: '筑基', higherTier: '魔丹' },
+        { lowerTier: '金丹', higherTier: '元婴' },
+        { lowerTier: '魔丹', higherTier: '元婴' },
+      ]
+
+      const closure = engine.buildTransitiveClosure(tiers, relations)
+
+      // 练气通过传递闭包可达元婴
+      expect(closure.get('练气')?.has('筑基')).toBe(true)
+      expect(closure.get('练气')?.has('金丹')).toBe(true)
+      expect(closure.get('练气')?.has('魔丹')).toBe(true)
+      expect(closure.get('练气')?.has('元婴')).toBe(true)
+
+      // 金丹与魔丹并列不可达
+      expect(closure.get('金丹')?.has('魔丹')).toBe(false)
+      expect(closure.get('魔丹')?.has('金丹')).toBe(false)
+
+      const branchSystem: PowerTierSystem = {
+        projectId: 'p2',
+        systemName: '仙魔双修',
+        tiers,
+        specialModifiers: [],
+        updatedAt: 100,
+      }
+
+      // 金丹与魔丹并列，不可比返回 NaN
+      expect(Number.isNaN(engine.compareTiers('金丹', '魔丹', branchSystem, relations))).toBe(true)
+      // 练气严格低于元婴
+      expect(engine.compareTiers('练气', '元婴', branchSystem, relations)).toBeLessThan(0)
+      // 元婴严格高于筑基
+      expect(engine.compareTiers('元婴', '筑基', branchSystem, relations)).toBeGreaterThan(0)
+    })
+
+    it('detects cycles and returns validation failure for circular power hierarchies', () => {
+      // 循环闭环：A < B < C < A
+      const cyclicTiers = ['黄阶', '玄阶', '地阶']
+      const cyclicRelations = [
+        { lowerTier: '黄阶', higherTier: '玄阶' },
+        { lowerTier: '玄阶', higherTier: '地阶' },
+        { lowerTier: '地阶', higherTier: '黄阶' },
+      ]
+
+      const validation = engine.validatePosetDAG(cyclicTiers, cyclicRelations)
+      expect(validation.isAcyclic).toBe(false)
+      expect(validation.cycles.length).toBeGreaterThan(0)
+
+      const cyclicSystem: PowerTierSystem = {
+        projectId: 'p3',
+        systemName: '矛盾体系',
+        tiers: cyclicTiers,
+        specialModifiers: [],
+        updatedAt: 100,
+      }
+
+      const violations = engine.scanPowerHierarchyCycles(cyclicSystem, cyclicRelations)
+      expect(violations.length).toBeGreaterThan(0)
+      expect(violations[0].type).toBe('power_hierarchy_cycle')
+      expect(violations[0].severity).toBe('critical')
+      expect(violations[0].snippet).toContain('黄阶')
+    })
+
+    it('validates acyclic Poset DAG correctly when no cycles exist', () => {
+      const tiers = ['凡人', '修士', '真仙']
+      const relations = [
+        { lowerTier: '凡人', higherTier: '修士' },
+        { lowerTier: '修士', higherTier: '真仙' },
+      ]
+
+      const validation = engine.validatePosetDAG(tiers, relations)
+      expect(validation.isAcyclic).toBe(true)
+      expect(validation.cycles.length).toBe(0)
+    })
+  })
 })

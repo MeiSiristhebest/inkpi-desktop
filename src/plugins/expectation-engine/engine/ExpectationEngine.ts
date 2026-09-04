@@ -1,6 +1,3 @@
-// 爽点与期待感曲线调度器引擎
-// 压抑-爆发比率（SPR）、黄金三章质检与爽点契约闭环模型
-
 import type {
   ChapterEmotionalScore,
   GoldenThreeDiagnostic,
@@ -9,25 +6,61 @@ import type {
 
 const SUPPRESSION_CUES = [
   '打压', '屈辱', '嘲讽', '绝境', '吐血', '危机', '围攻', '压制',
-  '命悬一线', '退婚', '冷笑', '蝼蚁', '残废', '夺骨', '废物', '羞辱',
+  '命悬一线', '退婚', '冷笑', '蝼蚁', '残废', '夺骨', '废物', '羞辱', '重伤', '被困'
 ]
 
 const PAYOFF_CUES = [
   '突破', '斩杀', '震惊', '目瞪口呆', '悔恨', '暴毙', '臣服', '奉上',
-  '神通大成', '打脸', '秒杀', '骇然', '不可思议', '狂喜', '倒吸一口凉气', '横扫',
+  '神通大成', '打脸', '秒杀', '骇然', '不可思议', '狂喜', '倒吸一口凉气', '横扫', '翻盘'
 ]
 
 const GOLDEN_FINGER_CUES = [
   '系统', '造化', '金手指', '古玉', '传承', '觉醒', '残魂', '神尊',
-  '至尊骨', '重生', '异鼎', '戒指', '识海', '重修', '至宝',
+  '至尊骨', '重生', '异鼎', '戒指', '识海', '重修', '至宝', '至尊'
 ]
 
 const HOOK_CUES = [
   '三年之约', '大比', '宗门', '秘境', '生死战', '黑手', '大劫',
-  '迷雾', '杀父之仇', '深渊', '未解之谜', '誓杀', '惊天阴谋',
+  '迷雾', '杀父之仇', '深渊', '未解之谜', '誓杀', '惊天阴谋'
 ]
 
 export class ExpectationEngine {
+  /**
+   * 连续张力梯度积分分析 (Continuous Tension Gradient Integral)：
+   * 将长文本划分为 N 个段落分块 (Chunk)，计算情感正负梯度累积量。
+   */
+  public computeTensionIntegral(text: string): { suppressionArea: number; payoffArea: number; dynamicSpr: number } {
+    if (!text || text.length < 50) return { suppressionArea: 0, payoffArea: 0, dynamicSpr: 1.0 }
+
+    const paragraphs = text.split(/\n+/).map((p) => p.trim()).filter((p) => p.length > 5)
+    if (paragraphs.length === 0) return { suppressionArea: 0, payoffArea: 0, dynamicSpr: 1.0 }
+
+    let suppArea = 0
+    let payArea = 0
+
+    for (const p of paragraphs) {
+      let suppWeight = 0
+      let payWeight = 0
+
+      for (const cue of SUPPRESSION_CUES) {
+        if (p.includes(cue)) suppWeight += 1.0
+      }
+      for (const cue of PAYOFF_CUES) {
+        if (p.includes(cue)) payWeight += 1.0
+      }
+
+      suppArea += suppWeight
+      payArea += payWeight
+    }
+
+    const dynamicSpr = payArea > 0 ? Number((suppArea / payArea).toFixed(2)) : suppArea > 0 ? suppArea : 1.0
+    return {
+      suppressionArea: Math.round(suppArea * 10) / 10,
+      payoffArea: Math.round(payArea * 10) / 10,
+      dynamicSpr,
+    }
+  }
+
   /**
    * 计算压抑-释放比率 (SPR: Suppression to Payoff Ratio)
    */

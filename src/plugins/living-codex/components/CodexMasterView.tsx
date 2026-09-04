@@ -70,7 +70,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
     setLoadError(null)
     try {
       const all = await indexedDbCodexEntityRepository.getAll()
-      const projEntities = all.filter((e) => !e.projectId || e.projectId === projectId)
+      const projEntities = all.filter((e) => e.projectId === projectId)
       setEntities(projEntities)
     } catch (err) {
       // 兜底：IndexedDB 读取失败不应导致整页白屏，而是展示可读错误与重试

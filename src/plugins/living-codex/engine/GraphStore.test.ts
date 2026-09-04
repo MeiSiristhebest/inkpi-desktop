@@ -123,4 +123,77 @@ describe('CodexGraphStore Topology & Context Slicing', () => {
     expect(slice.matchedEntities).toHaveLength(1)
     expect(slice.xmlContext).toContain('无名之物: 暂无描述')
   })
+
+  it('should maximize total activation value using 0-1 Knapsack DP rather than naive greedy', () => {
+    // 构造经典 0-1 背包反例：
+    // Item 1: cost 20, value 11 (单位价值 0.55) -> 贪心会优先选 Item 1，若容量 30，则只能选 Item 1 (总价值 11)
+    // Item 2: cost 15, value 10 (单位价值 0.66)
+    // Item 3: cost 15, value 10 (单位价值 0.66)
+    // DP 在容量 30 时会选 Item 2 + Item 3 (总价值 20 > 11)
+    const store = new CodexGraphStore()
+    const knapsackEntities: CodexEntity[] = [
+      {
+        id: 'greedy-trap',
+        projectId: 'p1',
+        name: '贪心陷阱实体',
+        category: 'term',
+        attributes: {},
+        relations: [],
+        summary: '一段较长的描述使该实体的 Token 代价较大以构建背包测试',
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+      {
+        id: 'optimal-a',
+        projectId: 'p1',
+        name: '优选实体甲',
+        category: 'term',
+        attributes: {},
+        relations: [],
+        summary: '简短描述A',
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+      {
+        id: 'optimal-b',
+        projectId: 'p1',
+        name: '优选实体乙',
+        category: 'term',
+        attributes: {},
+        relations: [],
+        summary: '简短描述B',
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+    ]
+    store.updateDataset(knapsackEntities)
+
+    // 计算三个候选各自的 cost
+    // greedy-trap: 命中 keyword 长度 6 -> weight = max(1.0, 6*0.4) = 2.4
+    // optimal-a: 命中 keyword 长度 5 -> weight = max(1.0, 5*0.4) = 2.0
+    // optimal-b: 命中 keyword 长度 5 -> weight = max(1.0, 5*0.4) = 2.0
+    // 输入文本同时包含三者：
+    const text = '贪心陷阱实体 优选实体甲 优选实体乙'
+    
+    // 我们找到一个 tokenBudget 恰好容纳 optimal-a + optimal-b，但容纳不下 greedy-trap + 任意一个
+    // 查询各自 cost：
+    // baseTagTokens = 20
+    // optimal-a line: "[TERM] 优选实体甲: 简短描述A" (长度 17) -> Math.ceil(17 * 0.7) + 4 = 12 + 4 = 16 tokens
+    // optimal-b line: "[TERM] 优选实体乙: 简短描述B" (长度 17) -> 16 tokens
+    // optimal-a + optimal-b cost = 32 tokens
+    // greedy-trap line: "[TERM] 贪心陷阱实体: 一段较长的描述使该实体的 Token 代价较大以构建背包测试" (长度 43) -> Math.ceil(43 * 0.7) + 4 = 31 + 4 = 35 tokens
+    // greedy-trap 单独分数 2.4 (若按最高分数降序贪心，greedy-trap 分数 2.4 高于 2.0，贪心先选 greedy-trap，消耗 35 tokens，剩下 budget 不够选其他，总分 2.4)
+    // 若 tokenBudget = 20 (base) + 33 = 53
+    // greedy-trap: line len 45 -> tokens 36. score = 2.4.
+    // optimal-a: line len 19 -> tokens 18. score = 2.0.
+    // optimal-b: line len 19 -> tokens 18. score = 2.0.
+    // optimal-a + optimal-b cost = 36 tokens, total value = 4.0.
+    // 若 availableBudget = 36 (即 tokenBudget = 20 + 36 = 56)：
+    // 贪心策略：按分数降序先选 greedy-trap (score 2.4, cost 36)，占满 36 tokens，无法再选其他，贪心总价值 2.4；
+    // 0-1 背包 DP：选择 optimal-a (cost 18) + optimal-b (cost 18) = cost 36，总价值 2.0 + 2.0 = 4.0 > 2.4！
+    const slice = store.resolveContextSlice(text, 20 + 36)
+
+    expect(slice.matchedEntities.map((e) => e.id).sort()).toEqual(['optimal-a', 'optimal-b'])
+    expect(slice.totalEstimatedTokens).toBeLessThanOrEqual(56)
+  })
 })

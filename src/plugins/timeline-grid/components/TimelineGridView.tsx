@@ -90,10 +90,10 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       ])
 
       const projThreads = allThreads
-        .filter((t) => !t.projectId || t.projectId === projectId)
+        .filter((t) => t.projectId === projectId)
         .sort((a, b) => a.order - b.order)
 
-      const projNodes = allNodes.filter((n) => !n.projectId || n.projectId === projectId)
+      const projNodes = allNodes.filter((n) => n.projectId === projectId)
 
       setThreads(projThreads)
       setNodes(projNodes)
@@ -187,6 +187,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           <button
             onClick={() =>
               setEditingNode({
+                projectId,
                 threadId: threads[0]?.id || 'thread-main',
                 chapterOrder: 1,
                 status: 'planned',

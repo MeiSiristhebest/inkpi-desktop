@@ -13,7 +13,7 @@ export const ExpectationDrawer: FC<DesktopPluginDrawerProps> = ({
 
   useEffect(() => {
     indexedDbExpectationRepository.getAll().then((all) => {
-      setContracts(all.filter((c) => !c.projectId || c.projectId === projectId))
+      setContracts(all.filter((c) => c.projectId === projectId))
     }).catch(() => {})
   }, [projectId])
 

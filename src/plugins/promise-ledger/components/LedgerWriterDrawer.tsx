@@ -23,7 +23,7 @@ export const LedgerWriterDrawer: FC<DesktopPluginDrawerProps> = ({
   const loadEntries = async () => {
     try {
       const all = await indexedDbPromiseLedgerRepository.getAll()
-      const projectEntries = all.filter((e) => !e.projectId || e.projectId === projectId)
+      const projectEntries = all.filter((e) => e.projectId === projectId)
       setEntries(projectEntries)
     } catch (e) {
       console.error('Failed to load promises in drawer:', e)

@@ -76,7 +76,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     try {
       setLoading(true)
       const all = await indexedDbPromiseLedgerRepository.getAll()
-      const projectEntries = all.filter((e) => !e.projectId || e.projectId === projectId)
+      const projectEntries = all.filter((e) => e.projectId === projectId)
       setEntries(projectEntries.sort((a, b) => a.plantChapter - b.plantChapter))
     } catch (e) {
       console.error('Failed to load promise ledger entries:', e)

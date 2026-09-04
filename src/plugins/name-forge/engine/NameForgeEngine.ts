@@ -10,6 +10,7 @@ import lexicons from '../data/lexicons.json'
 import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource as defaultRandomSource } from '../../../adapters/randomSource'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { PhoneticsEvaluator } from './PhoneticsEvaluator'
 
 export class NameForgeEngine {
   private randomSource: RandomSource
@@ -117,14 +118,14 @@ export class NameForgeEngine {
     }
 
     const fullName = `${surname}${givenName}`
-    const phoneticsScore = Math.floor(88 + rng.next() * 11) // 88 ~ 98
+    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
 
-    let vibe = '意蕴深远，声韵平仄协调'
-    if (style === 'cold_sharp') vibe = '冷峻孤绝，如寒芒出匣，适合独行剑客或孤高道子'
-    else if (style === 'domineering') vibe = '气势磅礴，威压四海，适合一方宗主或天命皇尊'
-    else if (style === 'ethereal') vibe = '清灵出尘，飘逸洒脱，适合不染凡尘的羽化修士'
-    else if (style === 'demonic') vibe = '邪魅桀骜，深不可测，适合魔道巨擘或宿命枭雄'
-    else if (style === 'elegant') vibe = '古雅端庄，文质彬彬，适合书院儒侠或名门望族'
+    let vibe = `【${evalResult.pattern}】${evalResult.toneVibe}`
+    if (style === 'cold_sharp') vibe += '。冷峻孤绝，如寒芒出匣，适合独行剑客或孤高道子'
+    else if (style === 'domineering') vibe += '。气势磅礴，威压四海，适合一方宗主或天命皇尊'
+    else if (style === 'ethereal') vibe += '。清灵出尘，飘逸洒脱，适合不染凡尘的羽化修士'
+    else if (style === 'demonic') vibe += '。邪魅桀骜，深不可测，适合魔道巨擘或宿命枭雄'
+    else if (style === 'elegant') vibe += '。古雅端庄，文质彬彬，适合书院儒侠或名门望族'
 
     return {
       id,
@@ -132,7 +133,7 @@ export class NameForgeEngine {
       category: 'character_cn',
       style,
       parts: { prefix: surname, core: givenName },
-      phoneticsScore,
+      phoneticsScore: evalResult.score,
       meaningOrVibe: vibe,
     }
   }
@@ -157,13 +158,18 @@ export class NameForgeEngine {
     const last = options.fixedPrefix || this.pickOne(lexicons.surnames_western, rng)
     const fullName = `${first}·${last}`
 
+    // 西方音律：音节对称度与轻重读步频（长名轻读、短名重读）
+    const totalSyllables = first.length + last.length
+    const cadenceRatio = Math.min(first.length, last.length) / Math.max(first.length, last.length)
+    const phoneticsScore = Math.min(98, Math.max(65, Math.round(75 + cadenceRatio * 15 + (totalSyllables % 3) * 3)))
+
     return {
       id,
       name: fullName,
       category: 'character_western',
       style,
       parts: { prefix: first, core: last },
-      phoneticsScore: Math.floor(86 + rng.next() * 12),
+      phoneticsScore,
       meaningOrVibe: '具备古典西方奇幻韵味，带有贵族氏族或古老魔法传承质感',
     }
   }
@@ -178,6 +184,7 @@ export class NameForgeEngine {
     const core = options.fixedKern || this.pickOne(lexicons.sect_cores, rng)
     const suffix = this.pickOne(lexicons.sect_suffixes, rng)
     const fullName = `${prefix}${core}${suffix}`
+    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
 
     return {
       id,
@@ -185,8 +192,8 @@ export class NameForgeEngine {
       category: 'sect_faction',
       style,
       parts: { prefix, core, suffix },
-      phoneticsScore: Math.floor(90 + rng.next() * 9),
-      meaningOrVibe: `传承久远的古老势力，擅御【${core}】道，名震八方修真界`,
+      phoneticsScore: evalResult.score,
+      meaningOrVibe: `传承久远的古老势力（${evalResult.pattern}），擅御【${core}】道，名震八方修真界`,
     }
   }
 
@@ -200,6 +207,7 @@ export class NameForgeEngine {
     const core = options.fixedKern || this.pickOne(lexicons.technique_cores, rng)
     const suffix = this.pickOne(lexicons.technique_suffixes, rng)
     const fullName = `${prefix}${core}${suffix}`
+    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
 
     return {
       id,
@@ -207,8 +215,8 @@ export class NameForgeEngine {
       category: 'technique_spell',
       style,
       parts: { prefix, core, suffix },
-      phoneticsScore: Math.floor(91 + rng.next() * 8),
-      meaningOrVibe: `威震寰宇的玄奥法门，修至圆满可借【${core}】之力逆天改命`,
+      phoneticsScore: evalResult.score,
+      meaningOrVibe: `威震寰宇的玄奥法门（${evalResult.pattern}），修至圆满可借【${core}】之力逆天改命`,
     }
   }
 
@@ -221,6 +229,7 @@ export class NameForgeEngine {
     const prefix = options.fixedPrefix || this.pickOne(lexicons.artifact_prefixes, rng)
     const form = options.fixedKern || this.pickOne(lexicons.artifact_forms, rng)
     const fullName = `${prefix}${form}`
+    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
 
     return {
       id,
@@ -228,8 +237,8 @@ export class NameForgeEngine {
       category: 'item_artifact',
       style,
       parts: { prefix, core: form },
-      phoneticsScore: Math.floor(89 + rng.next() * 10),
-      meaningOrVibe: `采九天神料由大能修士淬炼而成的至宝神兵，攻守莫测`,
+      phoneticsScore: evalResult.score,
+      meaningOrVibe: `采九天神料由大能修士淬炼而成的至宝神兵（${evalResult.pattern}），攻守莫测`,
     }
   }
 
@@ -242,6 +251,7 @@ export class NameForgeEngine {
     const prefix = options.fixedPrefix || this.pickOne(lexicons.location_prefixes, rng)
     const form = options.fixedKern || this.pickOne(lexicons.location_forms, rng)
     const fullName = `${prefix}${form}`
+    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
 
     return {
       id,
@@ -249,8 +259,8 @@ export class NameForgeEngine {
       category: 'location_realm',
       style,
       parts: { prefix, core: form },
-      phoneticsScore: Math.floor(90 + rng.next() * 9),
-      meaningOrVibe: `传闻有上古仙魔陨落于此，步步机锋凶险，伴随逆天机缘`,
+      phoneticsScore: evalResult.score,
+      meaningOrVibe: `传闻有上古仙魔陨落于此（${evalResult.pattern}），步步机锋凶险，伴随逆天机缘`,
     }
   }
 }

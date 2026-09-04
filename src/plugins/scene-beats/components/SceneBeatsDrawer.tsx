@@ -22,7 +22,7 @@ export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({
   const loadPlans = async () => {
     try {
       const all = await indexedDbSceneBeatRepository.getAll()
-      const projectPlans = all.filter((p) => !p.projectId || p.projectId === projectId)
+      const projectPlans = all.filter((p) => p.projectId === projectId)
       setPlans(projectPlans)
       if (projectPlans.length > 0 && !selectedPlanId) {
         setSelectedPlanId(projectPlans[0].id)

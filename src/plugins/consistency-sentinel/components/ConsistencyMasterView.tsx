@@ -39,7 +39,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       }
 
       const allCodex = await indexedDbCodexEntityRepository.getAll()
-      const projectEntities = allCodex.filter((e) => !e.projectId || e.projectId === projectId)
+      const projectEntities = allCodex.filter((e) => e.projectId === projectId)
       setEntityCount(projectEntities.length)
     } catch (e) {
       console.error('Failed to load consistency data:', e)
@@ -91,7 +91,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       return
     }
     const allCodex = await indexedDbCodexEntityRepository.getAll()
-    const projectEntities = allCodex.filter((e) => !e.projectId || e.projectId === projectId)
+    const projectEntities = allCodex.filter((e) => e.projectId === projectId)
 
     // 提取实体与境界
     const entitiesForPower = projectEntities.map((e) => ({

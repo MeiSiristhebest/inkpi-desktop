@@ -20,7 +20,7 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       setLoading(true)
       const all = await indexedDbSprintRepository.getAll()
       const filtered = all
-        .filter((r) => !r.projectId || r.projectId === projectId)
+        .filter((r) => r.projectId === projectId)
         .sort((a, b) => b.completedAt - a.completedAt)
       setRecords(filtered)
     } catch (e) {

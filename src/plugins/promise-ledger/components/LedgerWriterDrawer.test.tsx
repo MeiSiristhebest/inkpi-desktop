@@ -74,7 +74,9 @@ describe('LedgerWriterDrawer — 写作台伏笔随动感知抽屉', () => {
     await waitFor(() => expect(screen.getByText(/债务告警/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByText(/债务告警/))
-    expect(screen.getByText('九渊魔鼎')).toBeInTheDocument()
-    expect(screen.getByText('已超期')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('九渊魔鼎')).toBeInTheDocument()
+      expect(screen.getByText('已超期')).toBeInTheDocument()
+    })
   })
 })

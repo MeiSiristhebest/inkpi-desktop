@@ -47,7 +47,7 @@ export const CodexWriterDrawer: FC<CodexWriterDrawerProps> = ({
   const loadGraphData = async () => {
     try {
       const all = await indexedDbCodexEntityRepository.getAll()
-      const projEntities = all.filter((e) => !e.projectId || e.projectId === projectId)
+      const projEntities = all.filter((e) => e.projectId === projectId)
       graphStore.current.updateDataset(projEntities)
       // 立即执行一次扫描
       runScan(currentText)
