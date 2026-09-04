@@ -1,0 +1,182 @@
+[
+  {
+    "id": "snip-sight-01",
+    "primarySense": "sight",
+    "genre": "xianxia",
+    "category": "法术对决",
+    "keywords": ["剑芒", "青芒", "刺目", "雷火"],
+    "text": "青白色的剑芒如一线冷月撕裂长夜，所过之处空气泛起水波般的扭曲纹理，耀目得令人眼球生疼。",
+    "exampleContext": "李青云拔剑出鞘，剑芒骤亮，天地为之一暗。",
+    "tags": ["剑气", "光影", "威压"]
+  },
+  {
+    "id": "snip-sight-02",
+    "primarySense": "sight",
+    "genre": "fantasy",
+    "category": "场景环境",
+    "keywords": ["落日", "熔金", "残垣", "暮色"],
+    "text": "残阳如熔融的赤金在重峦叠嶂间缓缓沉落，将古旧城堡的断壁残垣拉出狭长如巨兽肋骨般的阴影。",
+    "exampleContext": "佣兵团翻过隘口时，整座废弃王都正沐浴在血色晚照中。",
+    "tags": ["暮色", "废墟", "宏大"]
+  },
+  {
+    "id": "snip-sight-03",
+    "primarySense": "sight",
+    "genre": "scifi",
+    "category": "星际视界",
+    "keywords": ["霓虹", "全息", "深空", "幽蓝"],
+    "text": "万千缕幽蓝与品红的脉冲光瀑在轨道环形城上方织成光幕，深空背景下星舰的钛合金外壳反照着冷冽死寂的星光。",
+    "exampleContext": "飞行器俯冲穿过大气防护层，全息广告光流扑面而来。",
+    "tags": ["赛博", "科幻", "冷光"]
+  },
+  {
+    "id": "snip-sound-01",
+    "primarySense": "sound",
+    "genre": "xianxia",
+    "category": "雷劫交战",
+    "keywords": ["轰鸣", "雷霆", "炸裂", "耳鸣"],
+    "text": "九天重劫轰然炸响，沉闷的音浪先于狂风碾压而过，耳骨内爆发出高频尖锐的轰鸣，连胸膛肋骨都在随着声波共振发麻。",
+    "exampleContext": "第一道劫雷劈入大阵，整座悬空主峰都在低沉呻吟。",
+    "tags": ["巨响", "压迫", "雷音"]
+  },
+  {
+    "id": "snip-sound-02",
+    "primarySense": "sound",
+    "genre": "wuxia",
+    "category": "近身兵刃",
+    "keywords": ["金铁", "铮然", "龙吟", "轻颤"],
+    "text": "短兵相接，刀锋沿着剑脊滑擦出一串刺耳的火星，发出如鹤唳龙吟般的铮然颤音，经久不绝。",
+    "exampleContext": "黑衣刺客欺身而上，三尺青锋在间不容发之际架住了月牙弯刀。",
+    "tags": ["兵刃", "交锋", "清越"]
+  },
+  {
+    "id": "snip-sound-03",
+    "primarySense": "sound",
+    "genre": "horror",
+    "category": "惊悚悬疑",
+    "keywords": ["刮擦", "死寂", "低语", "心跳"],
+    "text": "四下死寂得只剩下自己擂鼓般的心跳声，紧接着，头顶逼仄的横梁上传来指甲抠刮木板的干涩声响，极轻，极缓。",
+    "exampleContext": "烛火被阴风吹灭的瞬间，黑暗中有什么东西缓缓挪移了位置。",
+    "tags": ["悬疑", "惊悚", "细微"]
+  },
+  {
+    "id": "snip-scent-01",
+    "primarySense": "scent",
+    "genre": "xianxia",
+    "category": "战后焦土",
+    "keywords": ["血腥", "焦糊", "铁锈", "焦土"],
+    "text": "空气中弥漫着刺鼻的焦糊味与浓得化不开的腥甜，那是雷火高温将血肉与岩石一并熔化后的沉重铁锈气息。",
+    "exampleContext": "硝烟散去，焦黑的深坑边缘还冒着青烟。",
+    "tags": ["血腥", "战场", "残酷"]
+  },
+  {
+    "id": "snip-scent-02",
+    "primarySense": "scent",
+    "genre": "urban",
+    "category": "市井雨夜",
+    "keywords": ["泥土", "雨水", "潮湿", "青草"],
+    "text": "暴雨初歇，水泥路面上蒸腾起一股混合着汽车尾气、尘土与被暴雨打碎的湿冷青草香气。",
+    "exampleContext": "他裹紧风衣走出便利店，夜风吹来微凉的雨意。",
+    "tags": ["都市", "雨季", "清新"]
+  },
+  {
+    "id": "snip-scent-03",
+    "primarySense": "scent",
+    "genre": "fantasy",
+    "category": "神秘炼金",
+    "keywords": ["苦杏仁", "硫磺", "冷香", "药草"],
+    "text": "坩埚上方翻滚着淡紫色的烟雾，一股微苦的杏仁味与刺鼻的硫磺气息交织，吸入肺腑泛起微麻的凉意。",
+    "exampleContext": "炼金术士小心翼翼地揭开封盖，确认药剂的成熟度。",
+    "tags": ["炼金", "魔药", "刺激"]
+  },
+  {
+    "id": "snip-taste-01",
+    "primarySense": "taste",
+    "genre": "wuxia",
+    "category": "烈酒与行者",
+    "keywords": ["烈酒", "火线", "辛辣", "甘冽"],
+    "text": "一口烧刀子顺着喉管滚落，烈如滚油入火，呛得人五脏六腑泛起一股灼热的痛快，随后舌根才泛起一丝粗粝的麦香回甘。",
+    "exampleContext": "风雪满天，刀客在荒野草棚里拍开泥封猛灌了一大口。",
+    "tags": ["烈酒", "江湖", "豪迈"]
+  },
+  {
+    "id": "snip-taste-02",
+    "primarySense": "taste",
+    "genre": "xianxia",
+    "category": "重创受损",
+    "keywords": ["腥咸", "铜锈", "喉头", "逆血"],
+    "text": "强行压下翻涌的真元，一股温热的腥咸如铁锈般直冲喉头，满嘴都是苦涩发麻的血腥味。",
+    "exampleContext": "硬接化神老怪一掌，白衣染血，嘴角渗出一缕触目的殷红。",
+    "tags": ["受创", "绝境", "苦涩"]
+  },
+  {
+    "id": "snip-taste-03",
+    "primarySense": "taste",
+    "genre": "urban",
+    "category": "生活细节",
+    "keywords": ["微苦", "咖啡", "冷涩", "回香"],
+    "text": "冷萃咖啡划过舌尖，清澈的柑橘果酸迅速被坚实的黑巧克力苦味包裹，在舌后根留下一抹悠长的焦糖余韵。",
+    "exampleContext": "清晨的写字楼落地窗前，他抿了一口手中的纸杯。",
+    "tags": ["现代", "清苦", "静谧"]
+  },
+  {
+    "id": "snip-touch-01",
+    "primarySense": "touch",
+    "genre": "xianxia",
+    "category": "寒冰煞气",
+    "keywords": ["刺骨", "针扎", "冻结", "僵硬"],
+    "text": "极寒的玄冥煞气贴着毛孔渗入，经脉仿佛被无数细密的冰针同时穿刺，指节僵硬如枯木，连每一次吸气都像是在吞咽碎冰。",
+    "exampleContext": "步入万年寒潭深处，护体灵光瞬间凝结成霜。",
+    "tags": ["冰寒", "痛苦", "体感"]
+  },
+  {
+    "id": "snip-touch-02",
+    "primarySense": "touch",
+    "genre": "wuxia",
+    "category": "兵刃触感",
+    "keywords": ["温润", "沉重", "凹凸", "握柄"],
+    "text": "剑柄上缠绕的生丝被掌心冷汗浸得微涩，剑身沉甸甸地下坠，剑首铜镡顶着虎口，带来踏实而冷酷的质感。",
+    "exampleContext": "生死一瞬，他反手扣紧剑柄，指节因用力而微微泛白。",
+    "tags": ["兵器", "紧绷", "质感"]
+  },
+  {
+    "id": "snip-touch-03",
+    "primarySense": "touch",
+    "genre": "fantasy",
+    "category": "狂暴气浪",
+    "keywords": ["冲击波", "灼热", "掀飞", "推背"],
+    "text": "龙息爆炸引发的爆风如一堵无形坚墙迎面拍来，狂暴的气浪将披风撕扯得猎猎狂舞，灼热的空气烫得面颊如被铁水洗过。",
+    "exampleContext": "巨龙吐息撞击在城墙上，冲击波横扫城头整列守军。",
+    "tags": ["风压", "高温", "震荡"]
+  },
+  {
+    "id": "snip-metaphor-01",
+    "primarySense": "metaphor",
+    "genre": "xianxia",
+    "category": "天道与意境",
+    "keywords": ["时间", "泥沼", "倒悬", "沧海"],
+    "text": "在那尊古神漠然垂目的瞬间，时间变得如深海沥青般粘稠凝滞，整座人间仿佛化为一页悬在深渊边缘随时被撕碎的单薄残卷。",
+    "exampleContext": "他抬头直视苍穹上的巨大天眼，渺小如芥子面对浩瀚太虚。",
+    "tags": ["宏大", "通感", "哲学"]
+  },
+  {
+    "id": "snip-metaphor-02",
+    "primarySense": "metaphor",
+    "genre": "wuxia",
+    "category": "杀气与心理",
+    "keywords": ["杀气", "蛛网", "蛛丝", "窒息"],
+    "text": "整间客栈里的空气仿佛被无形的蛛丝密密麻麻地缠紧，杀意不是实质的刀枪，而是一张浸满冰水、贴在脸颊上的湿皮纸，让人窒息。",
+    "exampleContext": "门外蓑衣客尚未跨过门槛，堂内饮酒者已尽皆噤若寒蝉。",
+    "tags": ["杀气", "紧绷", "通感"]
+  },
+  {
+    "id": "snip-metaphor-03",
+    "primarySense": "metaphor",
+    "genre": "scifi",
+    "category": "虚无与意识",
+    "keywords": ["星辰", "代码", "沉溺", "洪流"],
+    "text": "意识脱离肉躯坠入数据深渊，那不是跌落，而是如同在一场无休止的暴风雪中逆向飞升，亿万星辰般的数据流将自我冲刷得千疮百孔。",
+    "exampleContext": "神经连接器完全过载，思维矩阵开始解体。",
+    "tags": ["虚无", "神游", "科幻"]
+  }
+]

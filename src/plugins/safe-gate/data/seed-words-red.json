@@ -1,0 +1,42 @@
+[
+  {
+    "id": "red-001",
+    "word": "反党",
+    "level": "red",
+    "category": "涉政红线",
+    "literaryAlternatives": [
+      { "replacement": "叛逆朝纲", "genre": ["historical", "xianxia"], "confidence": 0.95 },
+      { "replacement": "离经叛道", "genre": ["neutral", "urban"], "confidence": 0.9 }
+    ]
+  },
+  {
+    "id": "red-002",
+    "word": "政变",
+    "level": "red",
+    "category": "涉政红线",
+    "literaryAlternatives": [
+      { "replacement": "宫闱之变", "genre": ["historical", "fantasy"], "confidence": 0.95 },
+      { "replacement": "宗权更迭", "genre": ["xianxia"], "confidence": 0.9 }
+    ]
+  },
+  {
+    "id": "red-003",
+    "word": "邪教",
+    "level": "red",
+    "category": "涉政违法",
+    "literaryAlternatives": [
+      { "replacement": "魔道外道", "genre": ["xianxia"], "confidence": 0.98 },
+      { "replacement": "异端密社", "genre": ["fantasy", "urban"], "confidence": 0.92 }
+    ]
+  },
+  {
+    "id": "red-004",
+    "word": "毒品",
+    "level": "red",
+    "category": "违禁品",
+    "literaryAlternatives": [
+      { "replacement": "蚀魂散", "genre": ["xianxia"], "confidence": 0.95 },
+      { "replacement": "迷幻致幻剂", "genre": ["urban", "sci_fi"], "confidence": 0.9 }
+    ]
+  }
+]

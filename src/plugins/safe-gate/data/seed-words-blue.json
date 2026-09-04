@@ -1,0 +1,46 @@
+[
+  {
+    "id": "blue-001",
+    "word": "政府",
+    "level": "blue",
+    "category": "现代表述出戏",
+    "literaryAlternatives": [
+      { "replacement": "朝廷", "genre": ["historical"], "confidence": 0.98 },
+      { "replacement": "仙盟执事堂", "genre": ["xianxia"], "confidence": 0.95 },
+      { "replacement": "帝国元老院", "genre": ["fantasy"], "confidence": 0.9 },
+      { "replacement": "枢密总署", "genre": ["sci_fi"], "confidence": 0.88 }
+    ]
+  },
+  {
+    "id": "blue-002",
+    "word": "公安局",
+    "level": "blue",
+    "category": "现代建制出戏",
+    "literaryAlternatives": [
+      { "replacement": "刑狱司", "genre": ["xianxia", "historical"], "confidence": 0.98 },
+      { "replacement": "治安巡防署", "genre": ["fantasy", "sci_fi"], "confidence": 0.92 }
+    ]
+  },
+  {
+    "id": "blue-003",
+    "word": "屌丝",
+    "level": "blue",
+    "category": "网络低俗俚语",
+    "literaryAlternatives": [
+      { "replacement": "草莽散修", "genre": ["xianxia"], "confidence": 0.95 },
+      { "replacement": "布衣寒士", "genre": ["historical"], "confidence": 0.92 },
+      { "replacement": "微末之流", "genre": ["neutral"], "confidence": 0.9 }
+    ]
+  },
+  {
+    "id": "blue-004",
+    "word": "牛逼",
+    "level": "blue",
+    "category": "口语粗鄙",
+    "literaryAlternatives": [
+      { "replacement": "神乎其技", "genre": ["xianxia", "historical"], "confidence": 0.95 },
+      { "replacement": "超绝凡俗", "genre": ["xianxia"], "confidence": 0.92 },
+      { "replacement": "名不虚传", "genre": ["neutral"], "confidence": 0.9 }
+    ]
+  }
+]

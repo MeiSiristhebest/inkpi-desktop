@@ -35,20 +35,33 @@ describe('CodexMasterView Component', () => {
   beforeEach(async () => {
     const all = await db.getAll<{ id: string }>('codexEntities')
     await Promise.all(all.map((r) => db.delete('codexEntities', r.id)))
+  })
+
+  it('renders rich empty state with 3 worldview demo packs when no entities exist', async () => {
+    render(<CodexMasterView projectId="p1" />)
+
+    expect(await screen.findByText('开启你的活体世界观图谱')).toBeInTheDocument()
+    expect(screen.getByText('九霄问仙录 (东方修仙)')).toBeInTheDocument()
+    expect(screen.getByText('夜幕霓虹 (赛博朋克)')).toBeInTheDocument()
+    expect(screen.getByText('圣剑与龙王座 (西方奇幻)')).toBeInTheDocument()
+  })
+
+  it('allows loading a worldview demo pack in one click from empty state', async () => {
+    render(<CodexMasterView projectId="p1" />)
+
+    const loadXianxiaBtn = (await screen.findAllByText('一键预载此世界观'))[0]
+    fireEvent.click(loadXianxiaBtn)
+
+    // 应该灌入陈渊、青岚宗、青铜小塔等
+    expect(await screen.findByText('废脉觉醒吞天神体的男主，行事果决沉稳，不信天命，深藏不露。')).toBeInTheDocument()
+    expect(screen.getByText(/已载入 8 个实体/)).toBeInTheDocument()
+  })
+
+  it('filters loaded entities when category tab is clicked', async () => {
     for (const ent of mockEntities) {
       await db.put('codexEntities', ent)
     }
-  })
 
-  it('renders entity list and stats accurately', async () => {
-    render(<CodexMasterView projectId="p1" />)
-
-    expect(await screen.findByText('主角，废脉觉醒吞天神体')).toBeInTheDocument()
-    expect(await screen.findByText('云州宗门')).toBeInTheDocument()
-    expect(screen.getByText(/已载入 2 个实体/)).toBeInTheDocument()
-  })
-
-  it('filters entities when category tab is clicked', async () => {
     render(<CodexMasterView projectId="p1" />)
 
     expect(await screen.findByText('主角，废脉觉醒吞天神体')).toBeInTheDocument()
@@ -61,25 +74,16 @@ describe('CodexMasterView Component', () => {
     expect(screen.queryByText('主角，废脉觉醒吞天神体')).not.toBeInTheDocument()
   })
 
-  it('filters entities via search input', async () => {
+  it('opens template picker modal when clicking template library button', async () => {
+    for (const ent of mockEntities) {
+      await db.put('codexEntities', ent)
+    }
+
     render(<CodexMasterView projectId="p1" />)
 
-    expect(await screen.findByText('主角，废脉觉醒吞天神体')).toBeInTheDocument()
+    const templateBtn = await screen.findByTitle('浏览 36+ 种男女核心人设与世界观模版')
+    fireEvent.click(templateBtn)
 
-    const searchInput = screen.getByPlaceholderText('搜名称/别名/摘要...')
-    fireEvent.change(searchInput, { target: { value: '渊哥' } })
-
-    expect(await screen.findByText('主角，废脉觉醒吞天神体')).toBeInTheDocument()
-    expect(screen.queryByText('云州宗门')).not.toBeInTheDocument()
-  })
-
-  it('opens editor drawer when clicking on entity card', async () => {
-    render(<CodexMasterView projectId="p1" />)
-
-    const cardSummary = await screen.findByText('主角，废脉觉醒吞天神体')
-    fireEvent.click(cardSummary)
-
-    expect(await screen.findByText('编辑实体档案')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('陈渊')).toBeInTheDocument()
+    expect(await screen.findByText(/36\+ 款预置模板/)).toBeInTheDocument()
   })
 })

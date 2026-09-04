@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CodexAdapters } from './Adapters'
+import { cardRecordToCodexEntity, tableRowToCodexEntity } from './Adapters'
 
 describe('CodexAdapters Heterogeneous Form Mapping', () => {
   it('should accurately convert character CardRecord into CodexEntity', () => {
@@ -24,7 +24,7 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
       { personA: '林清寒', personB: '陈渊', relType: '同盟', status: '生死与共' },
     ]
 
-    const entity = CodexAdapters.fromCardRecord(card, relations)
+    const entity = cardRecordToCodexEntity(card, relations)
 
     expect(entity.id).toBe('card-1')
     expect(entity.name).toBe('陈渊')
@@ -61,14 +61,14 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
       name: '神秘人',
       data: {},
     }
-    const entity = CodexAdapters.fromCardRecord(card, [])
+    const entity = cardRecordToCodexEntity(card, [])
     expect(entity.summary).toBe('神秘人 角色档案')
     expect(entity.aliases).toEqual([])
   })
 
   it('should accurately convert TableRowRecord across all tab categories', () => {
     // faction (nations)
-    const nation = CodexAdapters.fromTableRow({
+    const nation = tableRowToCodexEntity({
       id: 'nation-1',
       projectId: 'p1',
       tabId: 'nations',
@@ -84,7 +84,7 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
     expect(nation.summary).toContain('宗门 · 二流 · 核心:青岚剑诀')
 
     // location (geography)
-    const geo = CodexAdapters.fromTableRow({
+    const geo = tableRowToCodexEntity({
       id: 'geo-1',
       projectId: 'p1',
       tabId: 'geography',
@@ -107,7 +107,7 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
     })
 
     // item (items)
-    const item = CodexAdapters.fromTableRow({
+    const item = tableRowToCodexEntity({
       id: 'item-1',
       projectId: 'p1',
       tabId: 'items',
@@ -125,7 +125,7 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
     expect(item.relations).toHaveLength(2)
 
     // race (races)
-    const race = CodexAdapters.fromTableRow({
+    const race = tableRowToCodexEntity({
       id: 'race-1',
       projectId: 'p1',
       tabId: 'races',
@@ -140,7 +140,7 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
     expect(race.summary).toContain('域外生灵 · 威胁:灭世级 · 特性:魔气侵蚀')
 
     // history (history)
-    const history = CodexAdapters.fromTableRow({
+    const history = tableRowToCodexEntity({
       id: 'hist-1',
       projectId: 'p1',
       tabId: 'history',
@@ -155,7 +155,7 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
     expect(history.summary).toContain('时间:太元前五百年 · 真相:上古魔神封印破碎')
 
     // terms (terms)
-    const term = CodexAdapters.fromTableRow({
+    const term = tableRowToCodexEntity({
       id: 'term-1',
       projectId: 'p1',
       tabId: 'terms',
@@ -170,7 +170,7 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
     expect(term.summary).toContain('心境法则 · 定义:修士破境时心魔所化之执念')
 
     // unknown tabId fallback (defaults to term category)
-    const custom = CodexAdapters.fromTableRow({
+    const custom = tableRowToCodexEntity({
       id: 'custom-1',
       projectId: 'p1',
       tabId: 'other',

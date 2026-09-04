@@ -1,6 +1,9 @@
 import { useState, useEffect, type FC } from 'react'
 import type { CodexEntity, CodexCategory, EntityRelation } from '../types'
-import { Save, Trash2, X, Plus } from 'lucide-react'
+import { Save, Trash2, X, Plus, Sparkles } from 'lucide-react'
+import { TemplatePickerModal } from './TemplatePickerModal'
+import { idGenerator } from '../../../adapters/idGenerator'
+import { clock } from '../../../adapters/clock'
 
 interface CodexEntityEditorProps {
   entity: Partial<CodexEntity> | null
@@ -35,6 +38,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
   const [detailMarkdown, setDetailMarkdown] = useState('')
   const [relations, setRelations] = useState<EntityRelation[]>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
 
   // 关系编辑行状态
   const [newRelTarget, setNewRelTarget] = useState('')
@@ -79,7 +83,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
       .filter((s) => s.length > 0)
 
     const updated: CodexEntity = {
-      id: entity?.id || `ent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      id: entity?.id || idGenerator.generate('ent'),
       projectId: entity?.projectId || 'inkpi-default',
       name: name.trim(),
       aliases,
@@ -89,8 +93,8 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
       relations,
       summary: summary.trim() || `${name} (${category})`,
       detailMarkdown,
-      createdAt: entity?.createdAt || Date.now(),
-      updatedAt: Date.now(),
+      createdAt: entity?.createdAt || clock.now(),
+      updatedAt: clock.now(),
     }
 
     await onSave(updated)
@@ -105,6 +109,14 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
           {entity?.id ? '编辑实体档案' : '新建实体'}
         </span>
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setIsTemplateModalOpen(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-accent)] border border-[var(--ink-accent)]/20 text-[11px] font-medium hover:bg-[var(--ink-accent)]/10"
+            title="从 36+ 种人设与世界观模版库挑选"
+          >
+            <Sparkles className="w-3 h-3" />
+            <span>模版库</span>
+          </button>
           {entity?.id && onDelete && (
             <button
               onClick={() => onDelete(entity.id!)}
@@ -127,6 +139,17 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
           </button>
         </div>
       </div>
+
+      <TemplatePickerModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        onSelect={(preset) => {
+          if (preset.summary) setSummary(preset.summary)
+          if (preset.detailMarkdown) setDetailMarkdown(preset.detailMarkdown)
+          if (preset.category) setCategory(preset.category)
+          if (preset.name) setName(preset.name)
+        }}
+      />
 
       {/* 表单内容区 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-[13px]">

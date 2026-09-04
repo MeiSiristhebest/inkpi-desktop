@@ -1,0 +1,33 @@
+[
+  {
+    "id": "regex-001",
+    "pattern": "河[\\s\\W_]*蟹",
+    "flags": "gi",
+    "level": "yellow",
+    "category": "谐音违规",
+    "literaryAlternatives": [
+      { "replacement": "平息纷争", "genre": ["neutral"], "confidence": 0.9 }
+    ]
+  },
+  {
+    "id": "regex-002",
+    "pattern": "草[\\s\\W_]*泥[\\s\\W_]*马",
+    "flags": "gi",
+    "level": "yellow",
+    "category": "粗俗脏话",
+    "literaryAlternatives": [
+      { "replacement": "狂徒休得猖狂", "genre": ["xianxia", "historical"], "confidence": 0.95 }
+    ]
+  },
+  {
+    "id": "regex-003",
+    "pattern": "(加|联系)[\\s\\W_]*(微|V|v)[\\s\\W_]*(信|信|x|X)",
+    "flags": "gi",
+    "level": "blue",
+    "category": "引流违禁",
+    "literaryAlternatives": [
+      { "replacement": "传音飞剑寄信", "genre": ["xianxia"], "confidence": 0.95 },
+      { "replacement": "鸿雁传书", "genre": ["historical"], "confidence": 0.95 }
+    ]
+  }
+]

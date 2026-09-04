@@ -1,0 +1,262 @@
+// 三级敏感词审查与文学平替核心算法引擎
+// AC 自动机极速匹配 + 正则模式分层 + 逆序无损批量平替
+
+import type {
+  SensitiveWord,
+  RegexRule,
+  SafeGateViolation,
+  SafeGateScanResult,
+  GenreStyle,
+  LiteraryAlternative,
+} from '../types'
+
+interface ACTrieNode {
+  children: Map<string, ACTrieNode>
+  fail: ACTrieNode | null
+  outputs: SensitiveWord[]
+}
+
+export class SafeGateEngine {
+  private root: ACTrieNode = { children: new Map(), fail: null, outputs: [] }
+  private regexList: { rule: RegexRule; regex: RegExp }[] = []
+  private wordMap = new Map<string, SensitiveWord>()
+
+  /**
+   * 初始化引擎：构建 AC 自动机树与编译正则
+   */
+  public build(words: SensitiveWord[], regexRules: RegexRule[]): void {
+    this.root = { children: new Map(), fail: null, outputs: [] }
+    this.wordMap.clear()
+    this.regexList = []
+
+    // 1. 插入所有敏感词至 Trie
+    for (const w of words) {
+      this.wordMap.set(w.id, w)
+      let curr = this.root
+      for (const char of w.word) {
+        if (!curr.children.has(char)) {
+          curr.children.set(char, { children: new Map(), fail: null, outputs: [] })
+        }
+        curr = curr.children.get(char)!
+      }
+      curr.outputs.push(w)
+    }
+
+    // 2. BFS 构建 Fail 指针
+    const queue: ACTrieNode[] = []
+    for (const child of this.root.children.values()) {
+      child.fail = this.root
+      queue.push(child)
+    }
+
+    while (queue.length > 0) {
+      const curr = queue.shift()!
+      for (const [char, child] of curr.children.entries()) {
+        let fail = curr.fail
+        while (fail !== null && !fail.children.has(char)) {
+          fail = fail.fail
+        }
+        child.fail = fail ? fail.children.get(char)! : this.root
+
+        if (child.fail.outputs.length > 0) {
+          child.outputs.push(...child.fail.outputs)
+        }
+        queue.push(child)
+      }
+    }
+
+    // 3. 预编译正则表达式
+    for (const rule of regexRules) {
+      try {
+        const flags = rule.flags.includes('g') ? rule.flags : `${rule.flags}g`
+        this.regexList.push({
+          rule,
+          regex: new RegExp(rule.pattern, flags),
+        })
+      } catch (e) {
+        console.warn(`Invalid regex pattern in safe-gate rule ${rule.id}:`, e)
+      }
+    }
+  }
+
+  /**
+   * 对正文执行分层扫描
+   */
+  public scan(text: string, genre: GenreStyle = 'xianxia'): SafeGateScanResult {
+    if (!text || text.length === 0) {
+      return { violations: [], redCount: 0, yellowCount: 0, blueCount: 0, isClean: true }
+    }
+
+    const violations: SafeGateViolation[] = []
+    let curr = this.root
+
+    // 阶段 1：AC 自动机精确扫描
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i]
+      while (curr !== this.root && !curr.children.has(char)) {
+        curr = curr.fail || this.root
+      }
+      curr = curr.children.get(char) || this.root
+
+      if (curr.outputs.length > 0) {
+        for (const word of curr.outputs) {
+          const startIndex = i - word.word.length + 1
+          const endIndex = i + 1
+          violations.push({
+            id: `v-ac-${startIndex}-${endIndex}`,
+            ruleType: 'ac_exact',
+            wordId: word.id,
+            matchedText: word.word,
+            startIndex,
+            endIndex,
+            level: word.level,
+            category: word.category,
+            suggestions: this.sortSuggestions(word.literaryAlternatives, genre),
+          })
+        }
+      }
+    }
+
+    // 阶段 2：正则表达式模糊规则扫描
+    for (const { rule, regex } of this.regexList) {
+      regex.lastIndex = 0
+      let match: RegExpExecArray | null
+      while ((match = regex.exec(text)) !== null) {
+        const startIndex = match.index
+        const endIndex = startIndex + match[0].length
+        violations.push({
+          id: `v-reg-${startIndex}-${endIndex}`,
+          ruleType: 'regex',
+          regexRuleId: rule.id,
+          matchedText: match[0],
+          startIndex,
+          endIndex,
+          level: rule.level,
+          category: rule.category,
+          suggestions: this.sortSuggestions(rule.literaryAlternatives, genre),
+        })
+      }
+    }
+
+    // 阶段 3：区间去重与排序（按 startIndex 升序）
+    const deduplicated = this.deduplicateViolations(violations)
+
+    let redCount = 0
+    let yellowCount = 0
+    let blueCount = 0
+
+    for (const v of deduplicated) {
+      if (v.level === 'red') redCount++
+      else if (v.level === 'yellow') yellowCount++
+      else if (v.level === 'blue') blueCount++
+    }
+
+    return {
+      violations: deduplicated,
+      redCount,
+      yellowCount,
+      blueCount,
+      isClean: deduplicated.length === 0,
+    }
+  }
+
+  /**
+   * 单项精准替换
+   */
+  public applyReplacement(
+    text: string,
+    violation: SafeGateViolation,
+    chosenAlternative: LiteraryAlternative,
+  ): string {
+    if (violation.startIndex < 0 || violation.endIndex > text.length) return text
+    return (
+      text.slice(0, violation.startIndex) +
+      chosenAlternative.replacement +
+      text.slice(violation.endIndex)
+    )
+  }
+
+  /**
+   * 批量一键平替（数学关键：从后向前逆序替换）
+   * 逆序操作可确保前方的 startIndex / endIndex 绝对偏移量不发生漂移！
+   */
+  public applyAllAuto(
+    text: string,
+    result: SafeGateScanResult,
+    genre: GenreStyle = 'xianxia',
+  ): string {
+    if (!result.violations || result.violations.length === 0) return text
+
+    // 按 startIndex 从大到小降序排列
+    const sorted = [...result.violations].sort((a, b) => b.startIndex - a.startIndex)
+
+    let modified = text
+    for (const v of sorted) {
+      if (!v.suggestions || v.suggestions.length === 0) continue
+      const sortedSuggestions = this.sortSuggestions(v.suggestions, genre)
+      const best = sortedSuggestions[0]
+      if (!best) continue
+      modified =
+        modified.slice(0, v.startIndex) +
+        best.replacement +
+        modified.slice(v.endIndex)
+    }
+
+    return modified
+  }
+
+  /**
+   * 根据当前作品文风，将最贴合的平替词排在最前
+   */
+  private sortSuggestions(
+    suggestions: LiteraryAlternative[],
+    genre: GenreStyle,
+  ): LiteraryAlternative[] {
+    return [...suggestions].sort((a, b) => {
+      const aMatches = a.genre.includes(genre) || a.genre.includes('neutral')
+      const bMatches = b.genre.includes(genre) || b.genre.includes('neutral')
+      if (aMatches && !bMatches) return -1
+      if (!aMatches && bMatches) return 1
+      return b.confidence - a.confidence
+    })
+  }
+
+  /**
+   * 移除重叠命中，优先保留高危害等级 (red > yellow > blue) 或更长区间
+   */
+  private deduplicateViolations(violations: SafeGateViolation[]): SafeGateViolation[] {
+    if (violations.length <= 1) return violations
+
+    // 优先级权重：red: 3, yellow: 2, blue: 1
+    const levelWeight = { red: 3, yellow: 2, blue: 1 }
+
+    // 先按 startIndex 升序，同起点按权重降序、长度降序
+    const sorted = [...violations].sort((a, b) => {
+      if (a.startIndex !== b.startIndex) return a.startIndex - b.startIndex
+      const wDiff = levelWeight[b.level] - levelWeight[a.level]
+      if (wDiff !== 0) return wDiff
+      return (b.endIndex - b.startIndex) - (a.endIndex - a.startIndex)
+    })
+
+    const results: SafeGateViolation[] = []
+    let lastEnd = -1
+
+    for (const v of sorted) {
+      if (v.startIndex >= lastEnd) {
+        results.push(v)
+        lastEnd = v.endIndex
+      } else {
+        // 重叠场景：如果当前项级别严格高于已入选的上一项，替换上一项
+        const prev = results[results.length - 1]
+        if (prev && levelWeight[v.level] > levelWeight[prev.level]) {
+          results[results.length - 1] = v
+          lastEnd = Math.max(prev.endIndex, v.endIndex)
+        }
+      }
+    }
+
+    return results
+  }
+}
+
+export const safeGateEngine = new SafeGateEngine()
