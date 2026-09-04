@@ -43,7 +43,11 @@ const ch = (over: Partial<ChapterRecord> = {}): ChapterRecord => ({
   ...over,
 })
 
-const setupMockStore = (volumes: VolumeRecord[] = [], chapters: ChapterRecord[] = [], codex: any[] = []) => {
+const setupMockStore = (
+  volumes: VolumeRecord[] = [],
+  chapters: ChapterRecord[] = [],
+  codex: any[] = [],
+) => {
   mocked.getAll.mockImplementation((store: string) => {
     if (store === 'volumes') return Promise.resolve(volumes)
     if (store === 'chapters') return Promise.resolve(chapters)
@@ -91,7 +95,7 @@ describe('WriterDesk — 卷章树导航', () => {
   it('renders volumes/chapters and filters out other projects', async () => {
     setupMockStore(
       [vol(), vol({ id: 'v2', projectId: 'p2', title: '别的卷' })],
-      [ch(), ch({ id: 'c2', projectId: 'p2', volumeId: 'v2', title: '外卷章节' })]
+      [ch(), ch({ id: 'c2', projectId: 'p2', volumeId: 'v2', title: '外卷章节' })],
     )
     render(<WriterDesk projectId="p1" />)
     await waitFor(() => expect(screen.getByText('第一卷')).toBeInTheDocument())
@@ -145,14 +149,11 @@ describe('WriterDesk — 卷章树导航', () => {
 
   it('sorts volumes and chapters by ascending order', async () => {
     setupMockStore(
-      [
-        vol({ id: 'vB', order: 5, title: '第五卷' }),
-        vol({ id: 'vA', order: 0, title: '第零卷' }),
-      ],
+      [vol({ id: 'vB', order: 5, title: '第五卷' }), vol({ id: 'vA', order: 0, title: '第零卷' })],
       [
         ch({ id: 'cB', order: 9, title: '第009章 后' }),
         ch({ id: 'cA', order: 0, title: '第000章 前' }),
-      ]
+      ],
     )
     render(<WriterDesk projectId="p1" />)
     const zero = await screen.findByText('第零卷')
@@ -166,7 +167,9 @@ describe('WriterDesk — 编辑、排版、字号、行距、存盘与随动感�
   it('updates word count and dirty flag on input', async () => {
     setupMockStore([vol()], [ch()])
     render(<WriterDesk projectId="p1" />)
-    fireEvent.change(await screen.findByPlaceholderText(/挥洒你的灵感/), { target: { value: '字 字 字' } })
+    fireEvent.change(await screen.findByPlaceholderText(/挥洒你的灵感/), {
+      target: { value: '字 字 字' },
+    })
     expect(screen.getByText('字数：3 字')).toBeInTheDocument()
     expect(screen.getByText('未保存')).toBeInTheDocument()
   })
@@ -178,9 +181,7 @@ describe('WriterDesk — 编辑、排版、字号、行距、存盘与随动感�
       target: { value: '第一段\n第二段' },
     })
     fireEvent.click(screen.getByText('排版'))
-    await waitFor(() =>
-      expect(ta().value).toBe('　　第一段\n\n　　第二段'),
-    )
+    await waitFor(() => expect(ta().value).toBe('　　第一段\n\n　　第二段'))
   })
 
   it('clamps font size between 12 and 24', async () => {
@@ -227,7 +228,9 @@ describe('WriterDesk — 编辑、排版、字号、行距、存盘与随动感�
 
   it('runs the typewriter viewport effect (incl. line-height fallback) without crashing', async () => {
     // jsdom 默认返回可解析的 lineHeight，这里强制为空以覆盖 `||` 回退分支
-    const spy = vi.spyOn(window, 'getComputedStyle').mockReturnValue({ lineHeight: '' } as unknown as CSSStyleDeclaration)
+    const spy = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockReturnValue({ lineHeight: '' } as unknown as CSSStyleDeclaration)
     setupMockStore([vol()], [ch({ content: 'abc' })])
     render(<WriterDesk projectId="p1" isTypewriter />)
     const area = await screen.findByPlaceholderText(/挥洒你的灵感/)
