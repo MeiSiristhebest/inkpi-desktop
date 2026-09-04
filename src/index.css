@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /*
  * InkPi Desktop 设计令牌
@@ -19,6 +19,7 @@
 
     /* 表面 */
     --ink-bg: #ffffff;
+    --ink-bg-card: #ffffff;
     --ink-bg-sidebar: #f7f7f5;
     --ink-bg-panel: #fbfbfa;
     --ink-bg-elevated: #ffffff;
@@ -52,12 +53,20 @@
     --ink-shadow: 0 1px 2px rgba(15, 15, 15, 0.06), 0 4px 12px rgba(15, 15, 15, 0.05);
     --ink-shadow-lg: 0 4px 16px rgba(15, 15, 15, 0.08), 0 12px 32px rgba(15, 15, 15, 0.06);
 
-    /* 字体：界面用系统无衬线，正文用中文衬线 */
-    --ink-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-      "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-    --ink-font-serif: "Songti SC", "SimSun", "Source Han Serif SC", "Noto Serif CJK SC",
-      Georgia, "Times New Roman", serif;
-    --ink-font-mono: "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    /* 字体：界面用系统无衬线，正文支持多款优质中文阅读字体 */
+    --ink-font-sans:
+      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue',
+      'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+    --ink-font-serif:
+      'Songti SC', 'SimSun', 'Source Han Serif SC', 'Noto Serif CJK SC', Georgia, 'Times New Roman',
+      serif;
+    --ink-font-wenkai:
+      'LXGW WenKai Screen', 'LXGW WenKai', '霞鹜文楷', 'KaiTi', 'STKaiti', serif;
+    --ink-font-kaiti:
+      'STKaiti', 'KaiTi', '楷体', 'BiauKai', serif;
+    --ink-font-fangsong:
+      'STFangsong', 'FangSong', '仿宋', serif;
+    --ink-font-mono: 'SF Mono', SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace;
 
     /* 缓动：Apple 的标准曲线 */
     --ink-ease: cubic-bezier(0.32, 0.72, 0, 1);
@@ -65,10 +74,11 @@
 
   /* 深色外观：未显式指定 data-theme="light" 时跟随系统 */
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root:not([data-theme='light']) {
       color-scheme: dark;
 
       --ink-bg: #191919;
+      --ink-bg-card: #202020;
       --ink-bg-sidebar: #202020;
       --ink-bg-panel: #1f1f1f;
       --ink-bg-elevated: #2a2a2a;
@@ -99,10 +109,11 @@
   }
 
   /* 手动强制深色 */
-  :root[data-theme="dark"] {
+  :root[data-theme='dark'] {
     color-scheme: dark;
 
     --ink-bg: #191919;
+    --ink-bg-card: #202020;
     --ink-bg-sidebar: #202020;
     --ink-bg-panel: #1f1f1f;
     --ink-bg-elevated: #2a2a2a;
@@ -129,6 +140,95 @@
     --ink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --ink-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.24);
     --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.36), 0 12px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* ── 专业写作阅读皮肤主题（基于 Ulysses、Kindle 与眼科护眼色彩科学） ── */
+
+  /* 护眼茶白 (Clear Sage)：520nm 波长柔光，减轻眼部睫状肌疲劳，极佳护眼 */
+  :root[data-skin='youth'] {
+    --ink-bg: #f1f6ef;
+    --ink-bg-sidebar: #e6eee3;
+    --ink-bg-panel: #f6faf4;
+    --ink-bg-elevated: #fafdf9;
+    --ink-bg-hover: #dbe6d7;
+    --ink-bg-active: #cfdec9;
+
+    --ink-text: #213324;
+    --ink-text-muted: #536b58;
+    --ink-text-faint: #7f9984;
+
+    --ink-border: #cad8c5;
+    --ink-border-strong: #b5c7af;
+
+    --ink-accent: #15803d;
+    --ink-accent-hover: #166534;
+    --ink-accent-soft: #dcfce7;
+
+    --ink-success: #15803d;
+    --ink-danger: #c4544a;
+    --ink-warning: #9a6700;
+
+    --ink-ghost: #8ca391;
+  }
+
+  /* 羊皮暖纸 (Sepia Paper / 水墨)：过滤 85% 蓝光，还原复古纸书温润质感，长篇阅读金牌配色 */
+  :root[data-skin='ink'] {
+    --ink-bg: #f9f5eb;
+    --ink-bg-sidebar: #f2ece0;
+    --ink-bg-panel: #fcf9f2;
+    --ink-bg-elevated: #fffdf9;
+    --ink-bg-hover: #eae2d2;
+    --ink-bg-active: #dfd5c2;
+
+    --ink-text: #342e28;
+    --ink-text-muted: #73685c;
+    --ink-text-faint: #9c9082;
+
+    --ink-border: #ded4c1;
+    --ink-border-strong: #ccbfab;
+
+    --ink-accent: #b45309;
+    --ink-accent-hover: #92400e;
+    --ink-accent-soft: #f4e8d3;
+
+    --ink-success: #52795d;
+    --ink-danger: #b91c1c;
+    --ink-warning: #b45309;
+
+    --ink-ghost: #b0a596;
+  }
+
+  /* 暗夜松柏 (Nightfall Pine / 森夜)：柔和亚光深林绿夜景，消除纯黑眩光 */
+  :root[data-skin='forest'] {
+    color-scheme: dark;
+
+    --ink-bg: #141a16;
+    --ink-bg-sidebar: #1b231e;
+    --ink-bg-panel: #18201b;
+    --ink-bg-elevated: #222b25;
+    --ink-bg-hover: #2a352e;
+    --ink-bg-active: #334037;
+
+    --ink-text: #e2ede5;
+    --ink-text-muted: #8ca393;
+    --ink-text-faint: #5e7365;
+
+    --ink-border: #28342c;
+    --ink-border-strong: #37473d;
+
+    --ink-accent: #e5a93b;
+    --ink-accent-hover: #f59e0b;
+    --ink-accent-soft: #2d261a;
+
+    --ink-success: #6dbb8a;
+    --ink-danger: #e07a70;
+    --ink-warning: #e5a93b;
+
+    --ink-ghost: #5a7a64;
+
+    --ink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --ink-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.32);
+    --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.48), 0 12px 32px rgba(0, 0, 0, 0.4);
   }
 
   html,
@@ -186,12 +286,19 @@
   caret-color: var(--ink-accent);
 }
 
-.ink-editor .ProseMirror > * + * {
-  margin-top: 0.75em;
+.ink-editor .ProseMirror p {
+  margin-top: 0;
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: var(--ink-paragraph-spacing, 0.6em);
 }
 
-.ink-editor .ProseMirror p {
-  margin: 0;
+.ink-editor .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+.ink-editor .ProseMirror > * + * {
+  margin-top: var(--ink-paragraph-spacing, 0.6em);
 }
 
 .ink-editor .ProseMirror h1,
@@ -243,6 +350,13 @@
   height: 0;
   pointer-events: none;
   color: var(--ink-text-faint);
+}
+
+/* 引用高亮：成对引号内文本的柔和背景 */
+.ink-editor .ink-quote-highlight {
+  background: var(--ink-accent-soft);
+  border-radius: 2px;
+  padding: 0.05em 0;
 }
 
 /* ── Ghost Text 内联续写建议 ──────────────────────────────── */
