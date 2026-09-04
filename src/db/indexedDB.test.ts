@@ -215,4 +215,18 @@ describe('indexedDB — 错误韧性（onerror 分支）', () => {
     expect(await g.get('chapters', 'x')).toBeUndefined()
     vi.unstubAllGlobals()
   })
+
+  it('supports CRUD operations on new stores: promiseLedger, timelineNodes, narrativeThreads', async () => {
+    await db.put('promiseLedger', { id: 'p1', clueName: 'Test Promise' })
+    expect(await db.get('promiseLedger', 'p1')).toEqual({ id: 'p1', clueName: 'Test Promise' })
+
+    await db.put('timelineNodes', { id: 'n1', eventTitle: 'Test Node' })
+    expect(await db.get('timelineNodes', 'n1')).toEqual({ id: 'n1', eventTitle: 'Test Node' })
+
+    await db.put('narrativeThreads', { id: 't1', name: 'Main Thread' })
+    expect(await db.get('narrativeThreads', 't1')).toEqual({ id: 't1', name: 'Main Thread' })
+
+    await db.delete('promiseLedger', 'p1')
+    expect(await db.get('promiseLedger', 'p1')).toBeUndefined()
+  })
 })

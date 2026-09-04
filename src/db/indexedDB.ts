@@ -1,16 +1,36 @@
 // 底层实体存储封装
 //
-// 仅负责 volumes（分卷）与 chapters（章节）两张数据表的读写：
+// 负责 volumes（分卷）/ chapters（章节）/ codexEntities（世界观实体）/
+// pluginSettings（插件开关状态）/ settings（统一应用设置）五张数据表的读写：
 //   - 章节记录字段：id / title / order / wordCount / content / 时间戳(createdAt, updatedAt)
 //   - 通过 IndexedDB 在本地持久化，离线可用。
 //
 // 对外暴露通用 CRUD（getAll / get / put / delete）+ 一个轻量 uid 生成器，
-// 供上层组件（WriterDesk / Engine）调用，不直接参与业务编排。
+// 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 2
+export const DB_VERSION = 9
 
-export const STORES = ['volumes', 'chapters', 'codexEntities'] as const
+export const STORES = [
+  'projects',
+  'volumes',
+  'chapters',
+  'codexEntities',
+  'pluginSettings',
+  'settings',
+  'formData',
+  'tableRows',
+  'cardRecords',
+  'dailyStats',
+  'settingsKV',
+  'promiseLedger',
+  'timelineNodes',
+  'narrativeThreads',
+  'sceneBeats',
+  'expectationContracts',
+  'powerTierSystems',
+  'sprintRecords',
+] as const
 export type StoreName = (typeof STORES)[number]
 
 class InkStudioDB {
@@ -26,10 +46,48 @@ class InkStudioDB {
         const db = request.result
         for (const name of STORES) {
           if (!db.objectStoreNames.contains(name)) {
-            const store = db.createObjectStore(name, { keyPath: 'id' })
+            const keyPath =
+              name === 'formData'
+                ? 'tabId'
+                : name === 'dailyStats' || name === 'settingsKV'
+                  ? 'key'
+                  : name === 'powerTierSystems'
+                    ? 'projectId'
+                    : 'id'
+            const store = db.createObjectStore(name, { keyPath })
             if (name === 'codexEntities' && typeof store.createIndex === 'function') {
               store.createIndex('projectId', 'projectId', { unique: false })
               store.createIndex('category', 'category', { unique: false })
+            }
+            if ((name === 'tableRows' || name === 'cardRecords') && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
+              store.createIndex('tabId', 'tabId', { unique: false })
+            }
+            if (name === 'promiseLedger' && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
+              store.createIndex('status', 'status', { unique: false })
+              store.createIndex('plantChapter', 'plantChapter', { unique: false })
+            }
+            if (name === 'timelineNodes' && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
+              store.createIndex('threadId', 'threadId', { unique: false })
+              store.createIndex('chapterOrder', 'chapterOrder', { unique: false })
+            }
+            if (name === 'narrativeThreads' && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
+            }
+            if (name === 'sceneBeats' && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
+              store.createIndex('chapterId', 'chapterId', { unique: false })
+            }
+            if (name === 'expectationContracts' && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
+              store.createIndex('status', 'status', { unique: false })
+              store.createIndex('chapterId', 'chapterId', { unique: false })
+            }
+            if (name === 'sprintRecords' && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
+              store.createIndex('completedAt', 'completedAt', { unique: false })
             }
           }
         }
