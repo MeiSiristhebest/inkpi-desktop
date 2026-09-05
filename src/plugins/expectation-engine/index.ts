@@ -20,6 +20,8 @@ export const ExpectationEnginePlugin: DesktopPlugin = {
 }
 
 export * from './types'
+export { GoldChaptersEngine } from '../gold-chapters-eval/engine/GoldChaptersEngine'
+export type { GoldChaptersEvaluation, GoldChapterEvalRecord } from '../gold-chapters-eval/types'
 export * from './engine/ExpectationEngine'
 export * from './components/ExpectationMasterView'
 export * from './components/ExpectationDrawer'

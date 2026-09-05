@@ -49,6 +49,8 @@ export const LivingCodexPlugin: DesktopPlugin = {
 }
 
 export * from './types'
+export { MemoryPalaceEngine } from '../memory-palace/engine/MemoryPalaceEngine'
+export type { EntitySearchResult } from '../memory-palace/types'
 export * from './engine/AcAutomaton'
 export * from './engine/GraphStore'
 export * from './engine/Adapters'

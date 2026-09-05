@@ -18,6 +18,8 @@ export const PressForgePlugin: DesktopPlugin = {
 }
 
 export * from './types'
+export { AuthorOpsEngine } from '../author-ops/engine/AuthorOpsEngine'
+export type { AuthorOpsProfileRecord, RetentionDropAnalysis } from '../author-ops/types'
 export * from './engine/PressForgeEngine'
 export * from './components/PressForgeMasterView'
 export * from './components/PressForgeDrawer'

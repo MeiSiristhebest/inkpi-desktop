@@ -18,6 +18,8 @@ export const TimelineGridPlugin: DesktopPlugin = {
 }
 
 export * from './types'
+export { SubPlotBraidEngine } from '../sub-plot-braid/engine/SubPlotBraidEngine'
+export type { SubPlotStrand, ThreadHealthMetric } from '../sub-plot-braid/types'
 export * from './engine/CausalEngine'
 export * from './components/TimelineGridView'
 export * from './components/TimelineNodeCard'
