@@ -6,14 +6,6 @@ import type {
 
 export type { VolumeArcRecord, ActStage, VolumeArcRepository }
 
-export interface OlsQuadraticResult {
-  beta0: number
-  beta1: number
-  beta2: number
-  r2: number
-  apexRatio: number
-}
-
 export interface VolumeStat {
   volumeId: string
   title: string
@@ -25,7 +17,6 @@ export interface VolumeStat {
   status: 'on_track' | 'lagging_water' | 'rushed_climax' | 'completed'
   currentAct: ActStage
   advice: string
-  arcRegression?: OlsQuadraticResult
 }
 
 export interface TotalBookMetrics {

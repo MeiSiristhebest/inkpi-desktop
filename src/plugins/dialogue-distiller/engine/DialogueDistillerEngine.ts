@@ -100,13 +100,8 @@ export class DialogueDistillerEngine {
    */
   computeVoiceprint(
     characterName: string,
-    quotes: string[],
-    projectId: string = ''
+    quotes: string[]
   ): CharacterVoiceprint & { vector: VoiceprintVector } {
-    const compositeId = projectId
-      ? `${projectId}::vp::${encodeURIComponent(characterName)}`
-      : `vp-${characterName}`
-
     if (quotes.length === 0) {
       const defaultVec: VoiceprintVector = {
         asl: 12,
@@ -116,8 +111,8 @@ export class DialogueDistillerEngine {
         colloquialRatio: 0.05,
       }
       return {
-        id: compositeId,
-        projectId,
+        id: `vp-${characterName}`,
+        projectId: '',
         characterName,
         sampleDialogueCount: 0,
         averageSentenceLength: 12,
@@ -186,8 +181,8 @@ export class DialogueDistillerEngine {
     }
 
     return {
-      id: compositeId,
-      projectId,
+      id: `vp-${characterName}`,
+      projectId: '',
       characterName,
       sampleDialogueCount: quotes.length,
       averageSentenceLength: asl,
