@@ -19,7 +19,11 @@ export const BrainstormSparkPlugin: DesktopPlugin = {
 
 export * from './types'
 export { ArchetypeEngine } from '../archetype-cards/engine/ArchetypeEngine'
-export type { ChemistryResult, ArchetypeCategory, NarrativeArchetypeRecord } from '../archetype-cards/types'
+export type {
+  ChemistryResult,
+  ArchetypeCategory,
+  NarrativeArchetypeRecord,
+} from '../archetype-cards/types'
 export * from './engine/BrainstormSparkEngine'
 export * from './components/BrainstormSparkMasterView'
 export * from './components/BrainstormSparkDrawer'
