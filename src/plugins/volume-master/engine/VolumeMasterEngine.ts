@@ -1,9 +1,4 @@
-import type {
-  VolumeStat,
-  TotalBookMetrics,
-  VolumeArcRecord,
-  ActStage,
-} from '../types'
+import type { VolumeStat, TotalBookMetrics, VolumeArcRecord, ActStage } from '../types'
 
 export class VolumeMasterEngine {
   /**
@@ -25,8 +20,13 @@ export class VolumeMasterEngine {
     }
 
     let s0 = n
-    let s1 = 0, s2 = 0, s3 = 0, s4 = 0
-    let t0 = 0, t1 = 0, t2 = 0
+    let s1 = 0,
+      s2 = 0,
+      s3 = 0,
+      s4 = 0
+    let t0 = 0,
+      t1 = 0,
+      t2 = 0
 
     for (const p of points) {
       const x = p.x
@@ -43,29 +43,17 @@ export class VolumeMasterEngine {
     }
 
     // 3x3 行列式 Det(X^T * X)
-    const det =
-      s0 * (s2 * s4 - s3 * s3) -
-      s1 * (s1 * s4 - s2 * s3) +
-      s2 * (s1 * s3 - s2 * s2)
+    const det = s0 * (s2 * s4 - s3 * s3) - s1 * (s1 * s4 - s2 * s3) + s2 * (s1 * s3 - s2 * s2)
 
     if (Math.abs(det) < 1e-12) {
       return { beta0: 0, beta1: 0, beta2: 0, r2: 0, apexRatio: 0 }
     }
 
-    const det0 =
-      t0 * (s2 * s4 - s3 * s3) -
-      s1 * (t1 * s4 - t2 * s3) +
-      s2 * (t1 * s3 - t2 * s2)
+    const det0 = t0 * (s2 * s4 - s3 * s3) - s1 * (t1 * s4 - t2 * s3) + s2 * (t1 * s3 - t2 * s2)
 
-    const det1 =
-      s0 * (t1 * s4 - t2 * s3) -
-      t0 * (s1 * s4 - s2 * s3) +
-      s2 * (s1 * t2 - s2 * t1)
+    const det1 = s0 * (t1 * s4 - t2 * s3) - t0 * (s1 * s4 - s2 * s3) + s2 * (s1 * t2 - s2 * t1)
 
-    const det2 =
-      s0 * (s2 * t2 - s3 * t1) -
-      s1 * (s1 * t2 - s2 * t1) +
-      t0 * (s1 * s3 - s2 * s2)
+    const det2 = s0 * (s2 * t2 - s3 * t1) - s1 * (s1 * t2 - s2 * t1) + t0 * (s1 * s3 - s2 * s2)
 
     const beta0 = det0 / det
     const beta1 = det1 / det
@@ -124,7 +112,7 @@ export class VolumeMasterEngine {
   calculateVolumeStat(
     volume: { id: string; title: string; order: number },
     chapters: Array<{ volumeId?: string; wordCount?: number; tension?: number }>,
-    arcRecord?: VolumeArcRecord
+    arcRecord?: VolumeArcRecord,
   ): VolumeStat {
     const volChapters = chapters.filter((c) => c.volumeId === volume.id)
     const actualWordCount = volChapters.reduce((acc, c) => acc + (c.wordCount || 0), 0)
@@ -145,13 +133,12 @@ export class VolumeMasterEngine {
 
     // 计算分卷章节张力回归弧线（若有张力点）
     let arcRegression: VolumeStat['arcRegression'] = undefined
-    const tensionPoints: number[] = volChapters
-      .map((c, idx) => {
-        if (typeof c.tension === 'number') return c.tension
-        // 若未显式录入章节张力，根据章节位次按理论三幕阶段赋予张力基线 (0.2 ~ 0.9)
-        const progress = volChapters.length > 1 ? idx / (volChapters.length - 1) : 0.5
-        return Math.sin(progress * Math.PI) * 0.7 + 0.2
-      })
+    const tensionPoints: number[] = volChapters.map((c, idx) => {
+      if (typeof c.tension === 'number') return c.tension
+      // 若未显式录入章节张力，根据章节位次按理论三幕阶段赋予张力基线 (0.2 ~ 0.9)
+      const progress = volChapters.length > 1 ? idx / (volChapters.length - 1) : 0.5
+      return Math.sin(progress * Math.PI) * 0.7 + 0.2
+    })
 
     if (tensionPoints.length >= 3) {
       const regressionPoints = tensionPoints.map((y, i) => ({
@@ -170,15 +157,18 @@ export class VolumeMasterEngine {
 
     if (burnRate > 115 && (currentAct === 'act1_intro' || currentAct === 'act2_rising')) {
       status = 'lagging_water'
-      advice = '警告：字数已超标消耗但剧情仍停留在铺垫期，存在节奏拖沓或灌水风险，需尽快引发核心矛盾！'
+      advice =
+        '警告：字数已超标消耗但剧情仍停留在铺垫期，存在节奏拖沓或灌水风险，需尽快引发核心矛盾！'
     } else if (burnRate < 45 && currentAct === 'act3_climax') {
       status = 'rushed_climax'
-      advice = '警告：铺垫字数不足便强行进入卷大高潮，高潮缺乏情绪蓄势与压抑释放差，易变成“干瘪推进”。'
+      advice =
+        '警告：铺垫字数不足便强行进入卷大高潮，高潮缺乏情绪蓄势与压抑释放差，易变成“干瘪推进”。'
     } else if (burnRate >= 100 && currentAct === 'act4_fallout') {
       status = 'completed'
       advice = '本卷戏剧弧已圆满闭环，请做好跨卷大悬念（Cliffhanger），准备引出下一卷崭新大地图。'
     } else if (arcRegression && arcRegression.r2 < 0.25 && volChapters.length >= 5) {
-      advice = '提示：当前分卷戏剧张力波动与标准戏剧弧相关度较低（R²偏低），建议检查中段是否缺乏危机蓄势或高潮拱顶。'
+      advice =
+        '提示：当前分卷戏剧张力波动与标准戏剧弧相关度较低（R²偏低），建议检查中段是否缺乏危机蓄势或高潮拱顶。'
     }
 
     return {
@@ -199,7 +189,7 @@ export class VolumeMasterEngine {
   aggregateBookMetrics(
     volumes: Array<{ id: string; title: string; order: number }>,
     chapters: Array<{ volumeId?: string; wordCount?: number }>,
-    arcs: VolumeArcRecord[]
+    arcs: VolumeArcRecord[],
   ): TotalBookMetrics {
     const totalVolumes = volumes.length
     const totalChapters = chapters.length
@@ -215,7 +205,7 @@ export class VolumeMasterEngine {
       const stat = this.calculateVolumeStat(
         v,
         chapters,
-        arcs.find((a) => a.volumeId === v.id)
+        arcs.find((a) => a.volumeId === v.id),
       )
       return stat.status === 'lagging_water'
     }).length
