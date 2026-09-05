@@ -39,7 +39,7 @@ describe('Cross-Plugin EventBus Reactive Dataflow', () => {
         gunName: '玄天残卷',
         plantChapterOrder: 3,
         category: 'item',
-      })
+      }),
     )
   })
 
@@ -59,7 +59,7 @@ describe('Cross-Plugin EventBus Reactive Dataflow', () => {
       expect.objectContaining({
         projectId: 'proj-88',
         chapterId: 'ch-12',
-      })
+      }),
     )
   })
 })

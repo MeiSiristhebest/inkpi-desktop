@@ -43,8 +43,8 @@ export class ChapterQualityEvaluator {
     // 综合打分：张力 35% + 悬念 35% + 卡点势能 30%
     const compositeScore = Math.round(
       0.35 * (rhythmRes.tensionScore * 100) +
-      0.35 * hookRes.tensionScore +
-      0.30 * paywallRes.ppiScore
+        0.35 * hookRes.tensionScore +
+        0.3 * paywallRes.ppiScore,
     )
 
     const summaryAdvice: string[] = [

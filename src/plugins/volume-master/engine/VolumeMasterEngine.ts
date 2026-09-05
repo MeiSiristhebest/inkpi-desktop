@@ -83,7 +83,9 @@ export class VolumeMasterEngine {
     }
 
     const r2 = ssTot === 0 ? 1.0 : Math.max(0, 1 - ssRes / ssTot)
-    const apexRatio = beta2 !== 0 ? -beta1 / (2 * beta2) : 0
+    // 严谨数学判断：仅当抛物线开口向下 (beta2 < 0) 时，驻点才是真正的极大值高潮顶点；
+    // 当 beta2 >= 0 时，抛物线开口向上（驻点为极小值低谷）或退化为直线，此时不存在抛物线极大高潮顶点，设为 -1 (表示无顶点/单调)
+    const apexRatio = beta2 < 0 ? -beta1 / (2 * beta2) : -1
 
     return {
       beta0,
@@ -101,7 +103,7 @@ export class VolumeMasterEngine {
    */
   fitNarrativeArcR2(chapterTensionPoints: number[]): { r2: number; apexPositionRatio: number } {
     const n = chapterTensionPoints.length
-    if (n < 3) return { r2: 1.0, apexPositionRatio: 0.75 }
+    if (n < 3) return { r2: 0, apexPositionRatio: 0 }
 
     const points = chapterTensionPoints.map((y, i) => ({
       x: i / (n - 1),
@@ -110,8 +112,8 @@ export class VolumeMasterEngine {
 
     const ols = this.computeOlsQuadratic(points)
 
-    // 顶点位置归一化夹紧于 [0, 1]
-    const clampedApex = Math.max(0, Math.min(1.0, ols.apexRatio))
+    // 顶点位置归一化夹紧于 [0, 1]，若为负数说明无单峰极大值
+    const clampedApex = ols.apexRatio >= 0 ? Math.max(0, Math.min(1.0, ols.apexRatio)) : 0
 
     return {
       r2: Math.round(ols.r2 * 1000) / 1000,

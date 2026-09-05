@@ -32,14 +32,26 @@ describe('MultiCalendarEngine', () => {
         chapterId: 'ch1',
         chapterOrder: 1,
         chapterTitle: '离开新手村',
-        timePoint: { calendarId: 'cal_ancient', year: 100, month: 1, day: 1, absoluteDayIndex: 10000 },
+        timePoint: {
+          calendarId: 'cal_ancient',
+          year: 100,
+          month: 1,
+          day: 1,
+          absoluteDayIndex: 10000,
+        },
         eventSummary: '启程',
       },
       {
         chapterId: 'ch2',
         chapterOrder: 2,
         chapterTitle: '抵达皇城',
-        timePoint: { calendarId: 'cal_ancient', year: 99, month: 5, day: 1, absoluteDayIndex: 9000 },
+        timePoint: {
+          calendarId: 'cal_ancient',
+          year: 99,
+          month: 5,
+          day: 1,
+          absoluteDayIndex: 9000,
+        },
         eventSummary: '入城',
       },
     ]

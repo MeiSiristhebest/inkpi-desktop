@@ -8,12 +8,11 @@ import { clock } from '../../../adapters/clock'
 import { pluginEventBus } from '../../../core/pluginEventBus'
 import { ShieldAlert, CheckCircle2 } from 'lucide-react'
 
-export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
-  projectId,
-  currentText,
-}) => {
+export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [system, setSystem] = useState<PowerTierSystem>(() => consistencyEngine.getDefaultSystem())
-  const [entities, setEntities] = useState<{ name: string; realm?: string; isDeceased?: boolean }[]>([])
+  const [entities, setEntities] = useState<
+    { name: string; realm?: string; isDeceased?: boolean }[]
+  >([])
   const [externalBreaches, setExternalBreaches] = useState<ConsistencyViolation[]>([])
 
   // 订阅系统 EventBus 的 POWER_BREACH_DETECTED 事件（来自 combat-sandbox）
@@ -22,7 +21,12 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
       if (payload.projectId !== projectId) return
       setExternalBreaches((prev) => {
         const id = `breach-${payload.protagonistName}-${payload.enemyName}-${clock.now()}`
-        if (prev.some((b) => b.snippet.includes(payload.protagonistName) && b.snippet.includes(payload.enemyName))) {
+        if (
+          prev.some(
+            (b) =>
+              b.snippet.includes(payload.protagonistName) && b.snippet.includes(payload.enemyName),
+          )
+        ) {
           return prev
         }
         return [
@@ -32,7 +36,8 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
             severity: payload.riskLevel === 'CRITICAL_COLLAPSE' ? 'critical' : 'warning',
             snippet: `${payload.protagonistName} vs ${payload.enemyName} (阶差: ${payload.tierDiff})`,
             explanation: `[战力沙盘预警] ${payload.diagnostic}`,
-            suggestedAction: '请在沙盘中补全对等代偿资产（如仙宝大阵、天劫反噬等），或降低敌方战力能级。',
+            suggestedAction:
+              '请在沙盘中补全对等代偿资产（如仙宝大阵、天劫反噬等），或降低敌方战力能级。',
           },
           ...prev,
         ]
@@ -45,27 +50,35 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
   }, [projectId])
 
   useEffect(() => {
-    indexedDbPowerTierRepository.get(projectId).then((sys) => {
-      if (sys) setSystem(sys)
-    }).catch(() => {})
+    indexedDbPowerTierRepository
+      .get(projectId)
+      .then((sys) => {
+        if (sys) setSystem(sys)
+      })
+      .catch(() => {})
 
-    indexedDbCodexEntityRepository.getAll().then((all) => {
-      const filtered = all.filter((e) => e.projectId === projectId)
-      setEntities(
-        filtered.map((e) => ({
-          name: e.name,
-          realm: (e.attributes?.realm as string) || (e.attributes?.境界 as string),
-          isDeceased: e.attributes?.status === 'deceased' || e.attributes?.状态 === '已故',
-        })),
-      )
-    }).catch(() => {})
+    indexedDbCodexEntityRepository
+      .getAll()
+      .then((all) => {
+        const filtered = all.filter((e) => e.projectId === projectId)
+        setEntities(
+          filtered.map((e) => ({
+            name: e.name,
+            realm: (e.attributes?.realm as string) || (e.attributes?.境界 as string),
+            isDeceased: e.attributes?.status === 'deceased' || e.attributes?.状态 === '已故',
+          })),
+        )
+      })
+      .catch(() => {})
   }, [projectId])
 
   const violations: ConsistencyViolation[] = useMemo(() => {
     if (!currentText || currentText.trim().length < 5) return []
 
     const powerEntities = entities.filter((e) => e.realm)
-    const deceasedEntities = entities.filter((e) => e.isDeceased).map((e) => ({ id: e.name, name: e.name }))
+    const deceasedEntities = entities
+      .filter((e) => e.isDeceased)
+      .map((e) => ({ id: e.name, name: e.name }))
 
     const pViolations = consistencyEngine.scanTextForInversions(currentText, powerEntities, system)
     const dViolations = consistencyEngine.scanTextForDeceased(currentText, deceasedEntities)
@@ -119,7 +132,9 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
             >
               <div className="flex items-center justify-between text-[11px] font-bold text-rose-500">
                 <span>{v.type === 'power_tier_inversion' ? '越阶战力失真' : '死者复生矛盾'}</span>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-rose-500/20 font-normal">警告</span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-rose-500/20 font-normal">
+                  警告
+                </span>
               </div>
               <p className="text-[10px] font-mono bg-[var(--ink-bg-canvas)] p-1 rounded border border-[var(--ink-border)] line-clamp-1 text-[var(--ink-text)]">
                 “{v.snippet}”

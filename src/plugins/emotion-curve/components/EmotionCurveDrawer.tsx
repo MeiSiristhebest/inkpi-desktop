@@ -7,7 +7,9 @@ import { Activity } from 'lucide-react'
 
 export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [inputText, setInputText] = useState('')
-  const [auditNotice, setAuditNotice] = useState<{ waterScore?: number; wordCount: number } | null>(null)
+  const [auditNotice, setAuditNotice] = useState<{ waterScore?: number; wordCount: number } | null>(
+    null,
+  )
 
   // 订阅 CHAPTER_CONTENT_AUDITED 事件，联动展示水分审计结果
   useEffect(() => {
@@ -76,14 +78,18 @@ export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
               evalResult.netPolarity > 0 ? 'text-emerald-500' : 'text-rose-500'
             }`}
           >
-            {evalResult.netPolarity > 0 ? `+${evalResult.netPolarity} (扬升)` : `${evalResult.netPolarity} (蓄势)`}
+            {evalResult.netPolarity > 0
+              ? `+${evalResult.netPolarity} (扬升)`
+              : `${evalResult.netPolarity} (蓄势)`}
           </span>
         </div>
 
         <div className="space-y-1 text-[11px] text-[var(--ink-text-muted)]">
           <div className="flex justify-between">
             <span>代入共鸣深度:</span>
-            <span className="font-semibold text-[var(--ink-text)]">{evalResult.resonanceScore} / 100</span>
+            <span className="font-semibold text-[var(--ink-text)]">
+              {evalResult.resonanceScore} / 100
+            </span>
           </div>
           <div className="flex justify-between">
             <span>主导情绪基调:</span>
@@ -93,7 +99,9 @@ export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
       </div>
 
       <div className="space-y-1.5 bg-[var(--ink-bg-canvas)] p-2.5 rounded-lg border border-[var(--ink-border)]">
-        <div className="font-medium text-[11px] text-[var(--ink-text)] mb-1">六维情绪光谱分解：</div>
+        <div className="font-medium text-[11px] text-[var(--ink-text)] mb-1">
+          六维情绪光谱分解：
+        </div>
         <div className="flex justify-between text-[11px]">
           <span className="text-amber-500">爽感释放 (Catharsis):</span>
           <span className="font-semibold">{evalResult.vector.catharsis}</span>
@@ -124,7 +132,10 @@ export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
         <div className="space-y-1 text-[11px] text-[var(--ink-text-muted)]">
           <div className="font-medium text-[var(--ink-text)]">情绪张弛优化建议：</div>
           {evalResult.suggestions.map((s, idx) => (
-            <div key={idx} className="p-1.5 bg-[var(--ink-bg-elevated)] rounded border border-[var(--ink-border)]">
+            <div
+              key={idx}
+              className="p-1.5 bg-[var(--ink-bg-elevated)] rounded border border-[var(--ink-border)]"
+            >
               {s}
             </div>
           ))}

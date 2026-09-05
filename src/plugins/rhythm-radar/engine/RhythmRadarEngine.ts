@@ -1,8 +1,4 @@
-import type {
-  CliffhangerType,
-  PacingStatus,
-  CliffhangerSuggestion,
-} from "../types"
+import type { CliffhangerType, PacingStatus, CliffhangerSuggestion } from '../types'
 
 /**
  * RhythmRadarEngine (剧情节奏与断章雷达引擎)
@@ -18,7 +14,7 @@ export class RhythmRadarEngine {
   public static analyzeChapter(
     text: string,
     _chapterId: string,
-    _chapterOrder: number
+    _chapterOrder: number,
   ): {
     tensionScore: number
     pacingStatus: PacingStatus
@@ -29,12 +25,12 @@ export class RhythmRadarEngine {
     if (!text || text.trim().length === 0) {
       return {
         tensionScore: 0.3,
-        pacingStatus: "optimal",
+        pacingStatus: 'optimal',
         cliffhanger: {
-          type: "emotional_climax",
-          recommendedCutSnippet: "",
-          hookPrompt: "正文过短，建议补充冲突与转折后断章。",
-          punchline: "留白等待起笔",
+          type: 'emotional_climax',
+          recommendedCutSnippet: '',
+          hookPrompt: '正文过短，建议补充冲突与转折后断章。',
+          punchline: '留白等待起笔',
         },
         actionDensity: 0.2,
         sentimentValence: 0.0,
@@ -43,7 +39,11 @@ export class RhythmRadarEngine {
 
     // 1. 动词与冲突密度统计 (Action & Conflict Density)
     // 扩展多字词与广泛冲突表征（对峙、逼近、博弈、暗杀、生死存亡等）
-    const combatWords = (text.match(/(杀|斩|破|轰|死|血|剑|刀|爆|灭|震|撕|雷|对峙|突袭|搏杀|危机|生死|博弈|决绝|绝境)/g) || []).length
+    const combatWords = (
+      text.match(
+        /(杀|斩|破|轰|死|血|剑|刀|爆|灭|震|撕|雷|对峙|突袭|搏杀|危机|生死|博弈|决绝|绝境)/g,
+      ) || []
+    ).length
     const actionDensity = Math.min(1.0, combatWords / (text.length / 100))
 
     // 2. 情感极性词汇 (Sentiment Valence)
@@ -54,28 +54,43 @@ export class RhythmRadarEngine {
     // 3. 复合张力指数 T = 0.55 * Action + 0.45 * Valence
     const tensionScore = Math.round((0.55 * actionDensity + 0.45 * sentimentValence) * 100) / 100
 
-    let pacingStatus: PacingStatus = "optimal"
-    if (tensionScore < 0.2) pacingStatus = "dragged"
-    else if (tensionScore > 0.8) pacingStatus = "fatiguing"
+    let pacingStatus: PacingStatus = 'optimal'
+    if (tensionScore < 0.2) pacingStatus = 'dragged'
+    else if (tensionScore > 0.8) pacingStatus = 'fatiguing'
 
     // 4. 章末 200 字区域断章切口识别
     const tailSnippet = text.slice(-250)
-    let type: CliffhangerType = "life_and_death"
-    let hookPrompt = "在致命一击落下、悬念未决的极值时刻骤然截断！"
-    let punchline = "剑锋距离咽喉仅剩半寸..."
+    let type: CliffhangerType = 'life_and_death'
+    let hookPrompt = '在致命一击落下、悬念未决的极值时刻骤然截断！'
+    let punchline = '剑锋距离咽喉仅剩半寸...'
 
-    if (tailSnippet.includes("冷笑") || tailSnippet.includes("原来") || tailSnippet.includes("真相") || tailSnippet.includes("竟是")) {
-      type = "info_twist"
-      hookPrompt = "核心情报刚刚揭晓冰山一角，彻底颠覆读者固有认知，引发疯狂追读！"
-      punchline = "门后的黑影转过身来，赫然是..."
-    } else if (tailSnippet.includes("誓") || tailSnippet.includes("天地") || tailSnippet.includes("苍生") || tailSnippet.includes("吼")) {
-      type = "emotional_climax"
-      hookPrompt = "人物内心执念在此刻彻底爆发，立下不可逆的誓言，情绪推至最高潮！"
-      punchline = "今日我若不死，必叫这诸天神佛尽皆俯首！"
-    } else if (tailSnippet.includes("规则") || tailSnippet.includes("天道") || tailSnippet.includes("天道崩塌") || tailSnippet.includes("破碎")) {
-      type = "world_shatter"
-      hookPrompt = "底层世界观法则发生根本性崩坏，既有秩序荡然无存！"
-      punchline = "天穹裂开了一道无法愈合的深渊巨口..."
+    if (
+      tailSnippet.includes('冷笑') ||
+      tailSnippet.includes('原来') ||
+      tailSnippet.includes('真相') ||
+      tailSnippet.includes('竟是')
+    ) {
+      type = 'info_twist'
+      hookPrompt = '核心情报刚刚揭晓冰山一角，彻底颠覆读者固有认知，引发疯狂追读！'
+      punchline = '门后的黑影转过身来，赫然是...'
+    } else if (
+      tailSnippet.includes('誓') ||
+      tailSnippet.includes('天地') ||
+      tailSnippet.includes('苍生') ||
+      tailSnippet.includes('吼')
+    ) {
+      type = 'emotional_climax'
+      hookPrompt = '人物内心执念在此刻彻底爆发，立下不可逆的誓言，情绪推至最高潮！'
+      punchline = '今日我若不死，必叫这诸天神佛尽皆俯首！'
+    } else if (
+      tailSnippet.includes('规则') ||
+      tailSnippet.includes('天道') ||
+      tailSnippet.includes('天道崩塌') ||
+      tailSnippet.includes('破碎')
+    ) {
+      type = 'world_shatter'
+      hookPrompt = '底层世界观法则发生根本性崩坏，既有秩序荡然无存！'
+      punchline = '天穹裂开了一道无法愈合的深渊巨口...'
     }
 
     return {

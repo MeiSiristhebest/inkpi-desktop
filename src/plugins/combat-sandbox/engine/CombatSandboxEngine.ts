@@ -1,8 +1,4 @@
-import type {
-  CombatActionBeat,
-  PowerBreachAlert,
-  CombatDuelTemplate,
-} from '../types'
+import type { CombatActionBeat, PowerBreachAlert, CombatDuelTemplate } from '../types'
 import { pluginEventBus } from '../../../core/pluginEventBus'
 
 export class CombatSandboxEngine {
@@ -29,15 +25,23 @@ export class CombatSandboxEngine {
    * 当 deltaLogE = 0 时，双方势均力敌，压制率为 0.5。
    */
   static calculateSuppressionRate(protagonistRank: number, enemyRank: number): number {
-    const pTier = this.DEFAULT_TIERS.find((t) => t.rankValue === protagonistRank) || { energyLog10: protagonistRank * 0.2 }
-    const eTier = this.DEFAULT_TIERS.find((t) => t.rankValue === enemyRank) || { energyLog10: enemyRank * 0.2 }
+    // 统一线性到对数映射标度：rankValue=1 -> 1.0, rankValue=10 -> 3.0, rankValue=70 -> 15.0
+    // 线性插值斜率: (15 - 1) / (70 - 1) = 14 / 69 ≈ 0.203
+    const getEnergy = (rank: number) => {
+      const found = this.DEFAULT_TIERS.find((t) => t.rankValue === rank)
+      if (found) return found.energyLog10
+      return 1.0 + (rank - 1) * (14 / 69)
+    }
 
-    const deltaLogE = eTier.energyLog10 - pTier.energyLog10
+    const pEnergy = getEnergy(protagonistRank)
+    const eEnergy = getEnergy(enemyRank)
+
+    const deltaLogE = eEnergy - pEnergy
     if (deltaLogE === 0) return 0.5
 
     const k = 1.2
-    // 当 deltaLogE > 0 (敌强我弱)，rate > 0.5
-    // 当 deltaLogE < 0 (我强敌弱)，rate < 0.5
+    // 当 deltaLogE > 0 (敌强我弱)，rate > 0.5；
+    // 当 deltaLogE < 0 (我强敌弱)，rate < 0.5；
     const rate = 1 / (1 + Math.exp(-k * deltaLogE))
     return Math.round(rate * 1000) / 1000
   }
@@ -65,7 +69,14 @@ export class CombatSandboxEngine {
     protagonistName?: string
     enemyName?: string
   }): PowerBreachAlert {
-    const { protagonistRank, enemyRank, compensatoryAssets, projectId, protagonistName, enemyName } = params
+    const {
+      protagonistRank,
+      enemyRank,
+      compensatoryAssets,
+      projectId,
+      protagonistName,
+      enemyName,
+    } = params
     const diff = enemyRank - protagonistRank
 
     if (diff <= 0) {
@@ -81,7 +92,7 @@ export class CombatSandboxEngine {
     const suppressionRate = this.calculateSuppressionRate(protagonistRank, enemyRank)
     const totalCompensatoryPower = compensatoryAssets.reduce(
       (sum, item) => sum + this.evaluateAssetWeight(item),
-      0
+      0,
     )
 
     // 能级赤字计算：Deficit = (diff * 0.2) - CompensatoryPower
@@ -97,7 +108,7 @@ export class CombatSandboxEngine {
         compensatoryFactorsNeeded.push(
           '本源至宝/天阶仙器绝对法则克制 (代偿系数 >= 1.5)',
           '敌方身负天道反噬/大阵地脉压制 (代偿系数 >= 1.2)',
-          '主角寿元/极道禁术自残换取瞬时爆发 (代偿系数 >= 1.0)'
+          '主角寿元/极道禁术自残换取瞬时爆发 (代偿系数 >= 1.0)',
         )
       } else if (netDeficit > 0.4) {
         riskLevel = 'WARNING'
@@ -108,7 +119,7 @@ export class CombatSandboxEngine {
         compensatoryFactorsNeeded.push(
           '五行/功法法则属性绝对克制',
           '消耗型符宝或一次性保命杀招',
-          '主场大阵或借由高人法力遗泽'
+          '主场大阵或借由高人法力遗泽',
         )
       }
     }
@@ -119,8 +130,8 @@ export class CombatSandboxEngine {
       riskLevel === 'CRITICAL_COLLAPSE'
         ? `🚨 战力体系严重崩塌！高阶压制率高达 ${suppressionPct}% (净能级赤字 ${netDeficit.toFixed(1)})，当前破局底牌不足以抵消境界壁垒，读者代入感极易崩解！`
         : riskLevel === 'WARNING'
-        ? `⚠️ 越级挑战预警：面对高阶对手 (${suppressionPct}% 压制)，需铺垫足额代价要素 (当前补偿 ${totalCompensatoryPower.toFixed(1)} / 所需 ${baseDeficit.toFixed(1)})。`
-        : `战力体系严密平稳：已配备 ${totalCompensatoryPower.toFixed(1)} 能级代偿资产，合理抹平跨阶压制。`
+          ? `⚠️ 越级挑战预警：面对高阶对手 (${suppressionPct}% 压制)，需铺垫足额代价要素 (当前补偿 ${totalCompensatoryPower.toFixed(1)} / 所需 ${baseDeficit.toFixed(1)})。`
+          : `战力体系严密平稳：已配备 ${totalCompensatoryPower.toFixed(1)} 能级代偿资产，合理抹平跨阶压制。`
 
     // 如果发生越级风险，自动向全系统广播 POWER_BREACH_DETECTED 事件
     if (isBreached && riskLevel !== 'SAFE') {
@@ -156,7 +167,7 @@ export class CombatSandboxEngine {
     options?: {
       protagonistTechnique?: string
       enemyTechnique?: string
-    }
+    },
   ): CombatDuelTemplate {
     const pTech = options?.protagonistTechnique || '九霄雷印法'
     const eTech = options?.enemyTechnique || '幽冥蚀骨罡'

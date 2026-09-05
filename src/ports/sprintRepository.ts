@@ -9,7 +9,7 @@ export interface SprintRecord {
 }
 
 export interface SprintRepository {
-  getAll(): Promise<SprintRecord[]>
+  getAll(projectId?: string): Promise<SprintRecord[]>
   save(record: SprintRecord): Promise<void>
   delete(id: string): Promise<void>
 }

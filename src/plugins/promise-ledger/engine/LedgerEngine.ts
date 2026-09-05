@@ -1,12 +1,7 @@
 // 3P 伏笔与债务账本核心算法引擎
 // 契诃夫之枪生命周期监测、记忆衰减模型、债务超期告警与叙事健康度评估
 
-import type {
-  PromiseLedgerEntry,
-  DebtSnapshot,
-  PayoffCandidate,
-  PromiseTier,
-} from '../types'
+import type { PromiseLedgerEntry, DebtSnapshot, PayoffCandidate, PromiseTier } from '../types'
 
 export const TIER_WEIGHTS: Record<PromiseTier, number> = {
   main_plot: 5.0,
@@ -104,16 +99,11 @@ export class LedgerEngine {
   /**
    * 自动探测正文中的可能兑现信号（关键词命中）
    */
-  public detectPayoffCandidates(
-    text: string,
-    entries: PromiseLedgerEntry[],
-  ): PayoffCandidate[] {
+  public detectPayoffCandidates(text: string, entries: PromiseLedgerEntry[]): PayoffCandidate[] {
     if (!text || text.trim().length === 0) return []
 
     const candidates: PayoffCandidate[] = []
-    const openEntries = entries.filter(
-      (e) => e.status === 'planted' || e.status === 'progressing',
-    )
+    const openEntries = entries.filter((e) => e.status === 'planted' || e.status === 'progressing')
 
     for (const entry of openEntries) {
       const clue = entry.clueName.trim()
@@ -128,9 +118,7 @@ export class LedgerEngine {
         })
       } else {
         // 分词提取（长度 >= 2 的核心词）
-        const subWords = clue
-          .split(/[\s,，、。:：;；—\-()（）]+/)
-          .filter((w) => w.length >= 2)
+        const subWords = clue.split(/[\s,，、。:：;；—\-()（）]+/).filter((w) => w.length >= 2)
 
         for (const word of subWords) {
           if (text.includes(word)) {

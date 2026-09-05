@@ -1,11 +1,7 @@
 // 中西奇幻起名姬核心引擎
 // 基于上下文无关文法（CFG）与平仄声韵和谐度采样的智能命名系统
 
-import type {
-  NameStyle,
-  NameGenerateOptions,
-  GeneratedNameItem,
-} from '../types'
+import type { NameStyle, NameGenerateOptions, GeneratedNameItem } from '../types'
 import lexicons from '../data/lexicons.json'
 import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource as defaultRandomSource } from '../../../adapters/randomSource'
@@ -36,10 +32,7 @@ export class NameForgeEngine {
   /**
    * 生成指定类别与风格的名称候选列表
    */
-  public generateNames(
-    options: NameGenerateOptions,
-    random?: RandomSource,
-  ): GeneratedNameItem[] {
+  public generateNames(options: NameGenerateOptions, random?: RandomSource): GeneratedNameItem[] {
     const rng = random || this.randomSource
     const count = options.count && options.count > 0 ? options.count : 10
     const style = options.style || 'balanced'
@@ -153,10 +146,7 @@ export class NameForgeEngine {
     style: NameStyle,
     rng: RandomSource,
   ): GeneratedNameItem {
-    let firstNames = [
-      ...lexicons.firstnames_western_male,
-      ...lexicons.firstnames_western_female,
-    ]
+    let firstNames = [...lexicons.firstnames_western_male, ...lexicons.firstnames_western_female]
     if (options.gender === 'male') {
       firstNames = lexicons.firstnames_western_male
     } else if (options.gender === 'female') {
@@ -170,7 +160,10 @@ export class NameForgeEngine {
     // 西方音律：音节对称度与轻重读步频（长名轻读、短名重读）
     const totalSyllables = first.length + last.length
     const cadenceRatio = Math.min(first.length, last.length) / Math.max(first.length, last.length)
-    const phoneticsScore = Math.min(98, Math.max(65, Math.round(75 + cadenceRatio * 15 + (totalSyllables % 3) * 3)))
+    const phoneticsScore = Math.min(
+      98,
+      Math.max(65, Math.round(75 + cadenceRatio * 15 + (totalSyllables % 3) * 3)),
+    )
 
     return {
       id,

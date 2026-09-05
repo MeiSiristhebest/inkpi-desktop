@@ -7,13 +7,7 @@ import { ConflictPanel } from './ConflictPanel'
 import { indexedDbTimelineRepository } from '../../../adapters/indexedDbTimelineRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import {
-  Plus,
-  GitBranch,
-  X,
-  Check,
-  Trash2,
-} from 'lucide-react'
+import { Plus, GitBranch, X, Check, Trash2 } from 'lucide-react'
 
 export const DEFAULT_THREADS: Omit<NarrativeThread, 'projectId'>[] = [
   { id: 'thread-main', name: '主线 / 逆天修仙', color: '#3b82f6', characterIds: [], order: 0 },
@@ -117,7 +111,12 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       await indexedDbTimelineRepository.saveThread({ ...t, projectId })
     }
     for (const n of DEMO_NODES) {
-      await indexedDbTimelineRepository.saveNode({ ...n, projectId, createdAt: now, updatedAt: now })
+      await indexedDbTimelineRepository.saveNode({
+        ...n,
+        projectId,
+        createdAt: now,
+        updatedAt: now,
+      })
     }
     await loadData()
   }
@@ -146,10 +145,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }, [conflicts])
 
   // 章节列列表 (1 .. maxChapter)
-  const chapters = useMemo(
-    () => Array.from({ length: maxChapter }, (_, i) => i + 1),
-    [maxChapter],
-  )
+  const chapters = useMemo(() => Array.from({ length: maxChapter }, (_, i) => i + 1), [maxChapter])
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
@@ -213,9 +209,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           <div className="flex-1 flex items-center justify-center p-8">
             <div className="max-w-md p-8 border border-dashed border-[var(--ink-border)] rounded-2xl text-center bg-[var(--ink-bg-panel)]">
               <GitBranch className="w-8 h-8 mx-auto text-[var(--ink-accent)] mb-3 opacity-80" />
-              <h3 className="font-medium text-sm text-[var(--ink-text)] mb-1">
-                尚无时空大纲网格
-              </h3>
+              <h3 className="font-medium text-sm text-[var(--ink-text)] mb-1">尚无时空大纲网格</h3>
               <p className="text-xs text-[var(--ink-text-muted)] mb-5 leading-relaxed">
                 为你的作品建立多线叙事坐标。主线、支线与暗线交织演进，实时杜绝因果死锁与逻辑吃书。
               </p>
@@ -386,7 +380,10 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
           <h3 className="font-semibold text-sm text-[var(--ink-text)]">
             {node.id ? '编辑时空大纲事件' : '新建大纲事件节点'}
           </h3>
-          <button onClick={onCancel} className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]">
+          <button
+            onClick={onCancel}
+            className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -434,7 +431,9 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">事件摘要 (供 AI 提取情境)</label>
+            <label className="block text-[var(--ink-text-muted)] mb-1">
+              事件摘要 (供 AI 提取情境)
+            </label>
             <textarea
               rows={2}
               value={summary}
@@ -456,7 +455,9 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">情感张力 (-1.0 ~ +1.0)</label>
+              <label className="block text-[var(--ink-text-muted)] mb-1">
+                情感张力 (-1.0 ~ +1.0)
+              </label>
               <input
                 type="number"
                 step="0.1"
@@ -470,10 +471,14 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">前置依赖事件 (DAG 因果约束)</label>
+            <label className="block text-[var(--ink-text-muted)] mb-1">
+              前置依赖事件 (DAG 因果约束)
+            </label>
             <div className="max-h-28 overflow-y-auto border border-[var(--ink-border)] rounded bg-[var(--ink-bg-canvas)] p-1.5 space-y-1">
               {availablePreNodes.length === 0 ? (
-                <div className="text-[var(--ink-text-faint)] py-2 text-center">暂无其他可选节点</div>
+                <div className="text-[var(--ink-text-faint)] py-2 text-center">
+                  暂无其他可选节点
+                </div>
               ) : (
                 availablePreNodes.map((pn) => {
                   const checked = prerequisites.includes(pn.id)
@@ -512,7 +517,9 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
               >
                 <Trash2 className="w-3.5 h-3.5" /> 删除
               </button>
-            ) : <div />}
+            ) : (
+              <div />
+            )}
 
             <div className="flex items-center gap-2">
               <button

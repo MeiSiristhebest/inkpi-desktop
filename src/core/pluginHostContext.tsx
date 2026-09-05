@@ -29,6 +29,7 @@ export interface DesktopPluginHostProviderProps {
   volumes?: VolumeRecord[]
   chapters?: ChapterRecord[]
   onChapterUpdate?: (updated: ChapterRecord) => void
+  onRefreshHierarchy?: () => Promise<void>
   children: ReactNode
 }
 
@@ -39,6 +40,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
   volumes = [],
   chapters = [],
   onChapterUpdate,
+  onRefreshHierarchy,
   children,
 }) => {
   const [activeDrawerPluginId, setActiveDrawerPluginId] = useState<string | null>(null)
@@ -67,8 +69,10 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
   }, [])
 
   const refreshBookHierarchy = useCallback(async () => {
-    // Hierarchical state is synchronized via props/reactive hooks
-  }, [])
+    if (onRefreshHierarchy) {
+      await onRefreshHierarchy()
+    }
+  }, [onRefreshHierarchy])
 
   const mutateActiveChapter = useCallback(
     async (patch: ChapterMutationPatch): Promise<ChapterMutationResult> => {

@@ -213,7 +213,11 @@ export class CausalEngine {
     for (let c = minCh; c <= maxCh; c++) {
       let sum = 0
       let count = 0
-      for (let w = Math.max(minCh, c - Math.floor(windowSize / 2)); w <= Math.min(maxCh, c + Math.floor(windowSize / 2)); w++) {
+      for (
+        let w = Math.max(minCh, c - Math.floor(windowSize / 2));
+        w <= Math.min(maxCh, c + Math.floor(windowSize / 2));
+        w++
+      ) {
         const vals = chapterPolarities.get(w)
         if (vals && vals.length > 0) {
           sum += vals.reduce((a, b) => a + b, 0)

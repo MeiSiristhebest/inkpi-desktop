@@ -33,7 +33,10 @@ export const LivingCodexPlugin: DesktopPlugin = {
         if (matchedEntities.length === 0) return ''
 
         const entitySnippets = matchedEntities
-          .map((e) => `【${e.name}】(${e.category}): ${e.summary || (e.attributes ? JSON.stringify(e.attributes) : '无详细设定')}`)
+          .map(
+            (e) =>
+              `【${e.name}】(${e.category}): ${e.summary || (e.attributes ? JSON.stringify(e.attributes) : '无详细设定')}`,
+          )
           .join('\n')
 
         return `\n### 活体世界观实体设定注入\n当前章节涉及以下世界观实体，续写与交互请严格遵循其设定：\n${entitySnippets}\n`

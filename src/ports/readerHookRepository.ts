@@ -20,7 +20,7 @@ export interface ReaderHookRecord {
 }
 
 export interface ReaderHookRepository {
-  getAll(): Promise<ReaderHookRecord[]>
+  getAll(projectId?: string): Promise<ReaderHookRecord[]>
   save(record: ReaderHookRecord): Promise<void>
   delete(id: string): Promise<void>
 }

@@ -1,11 +1,11 @@
-import * as Diff from "diff"
+import * as Diff from 'diff'
 import type {
   DiffComputeResult,
   ReviewHunkView,
   DiffLineChange,
   DiffWordToken,
   HunkResolution,
-} from "../types"
+} from '../types'
 
 /**
  * DiffReviewerEngine
@@ -21,15 +21,9 @@ export class DiffReviewerEngine {
    * 对两段文本进行分块 Diff 分析并拆解为可独立审校的 Hunk
    */
   public static computeDiff(oldText: string, newText: string): DiffComputeResult {
-    const patch = Diff.structuredPatch(
-      "original.txt",
-      "proposed.txt",
-      oldText,
-      newText,
-      "",
-      "",
-      { context: 2 }
-    )
+    const patch = Diff.structuredPatch('original.txt', 'proposed.txt', oldText, newText, '', '', {
+      context: 2,
+    })
 
     let additions = 0
     let deletions = 0
@@ -45,24 +39,24 @@ export class DiffReviewerEngine {
         const marker = line[0]
         const content = line.slice(1)
 
-        if (marker === "+") {
+        if (marker === '+') {
           additions++
           lineChanges.push({
-            type: "added",
+            type: 'added',
             newLineNumber: newCur++,
             content,
           })
-        } else if (marker === "-") {
+        } else if (marker === '-') {
           deletions++
           lineChanges.push({
-            type: "removed",
+            type: 'removed',
             oldLineNumber: oldCur++,
             content,
           })
         } else {
           unmodified++
           lineChanges.push({
-            type: "unchanged",
+            type: 'unchanged',
             oldLineNumber: oldCur++,
             newLineNumber: newCur++,
             content,
@@ -80,7 +74,7 @@ export class DiffReviewerEngine {
         newStartLine: rawHunk.newStart,
         newLineCount: rawHunk.newLines,
         lines: rawHunk.lines,
-        resolution: "pending" as HunkResolution,
+        resolution: 'pending' as HunkResolution,
         lineChanges,
       }
     })
@@ -100,8 +94,8 @@ export class DiffReviewerEngine {
     const addedIndices: number[] = []
 
     lineChanges.forEach((lc, idx) => {
-      if (lc.type === "removed") removedIndices.push(idx)
-      else if (lc.type === "added") addedIndices.push(idx)
+      if (lc.type === 'removed') removedIndices.push(idx)
+      else if (lc.type === 'added') addedIndices.push(idx)
     })
 
     const pairCount = Math.min(removedIndices.length, addedIndices.length)
@@ -115,12 +109,12 @@ export class DiffReviewerEngine {
 
       wordDiff.forEach((part) => {
         if (part.added) {
-          newTokens.push({ type: "added", value: part.value })
+          newTokens.push({ type: 'added', value: part.value })
         } else if (part.removed) {
-          oldTokens.push({ type: "removed", value: part.value })
+          oldTokens.push({ type: 'removed', value: part.value })
         } else {
-          oldTokens.push({ type: "unchanged", value: part.value })
-          newTokens.push({ type: "unchanged", value: part.value })
+          oldTokens.push({ type: 'unchanged', value: part.value })
+          newTokens.push({ type: 'unchanged', value: part.value })
         }
       })
 
@@ -141,17 +135,17 @@ export class DiffReviewerEngine {
    */
   public static applyHunks(
     oldText: string,
-    hunks: Array<{ lines: string[]; resolution: HunkResolution; oldStartLine?: number }>
+    hunks: Array<{ lines: string[]; resolution: HunkResolution; oldStartLine?: number }>,
   ): string {
     // 筛选出所有状态为 applied 的 hunks 并组装 unified patch 进行精准应用
-    const appliedHunks = hunks.filter((h) => h.resolution === "applied")
+    const appliedHunks = hunks.filter((h) => h.resolution === 'applied')
     if (appliedHunks.length === 0) {
       return oldText
     }
 
     // 动态嗅探原始换行符（CRLF vs LF），确保 Windows 桌面端合稿保真
-    const isCrlf = oldText.includes("\r\n")
-    const eol = isCrlf ? "\r\n" : "\n"
+    const isCrlf = oldText.includes('\r\n')
+    const eol = isCrlf ? '\r\n' : '\n'
 
     // 简单高效且确定的重组策略：将 oldText 按行切分，依 hunk 行范围做状态机替换
     const oldLines = oldText.split(/\r?\n/)
@@ -166,12 +160,12 @@ export class DiffReviewerEngine {
       for (const line of hunk.lines) {
         const marker = line[0]
         const content = line.slice(1)
-        if (marker === " ") {
+        if (marker === ' ') {
           hunkOldLines.push(content)
           hunkNewLines.push(content)
-        } else if (marker === "-") {
+        } else if (marker === '-') {
           hunkOldLines.push(content)
-        } else if (marker === "+") {
+        } else if (marker === '+') {
           hunkNewLines.push(content)
         }
       }
@@ -191,7 +185,7 @@ export class DiffReviewerEngine {
       }
 
       // 阶段 1：行号锚定优先 (Line-number anchored matching)
-      if (typeof hunk.oldStartLine === "number" && hunk.oldStartLine > 0) {
+      if (typeof hunk.oldStartLine === 'number' && hunk.oldStartLine > 0) {
         const expectedZeroIdx = hunk.oldStartLine - 1
         const windowSize = 5
         if (checkMatchAt(expectedZeroIdx)) {
@@ -230,7 +224,7 @@ export class DiffReviewerEngine {
         }
 
         // 根据 resolution 决定写入 hunkNewLines 还是 hunkOldLines
-        if (hunk.resolution === "applied") {
+        if (hunk.resolution === 'applied') {
           resultLines.push(...hunkNewLines)
         } else {
           resultLines.push(...hunkOldLines)
@@ -239,7 +233,9 @@ export class DiffReviewerEngine {
         cursor = matchIdx + hunkOldLines.length
       } else {
         // Hunk 匹配失败时发出控制台警告以追踪，避免静默失败
-        console.warn(`[DiffReviewerEngine] Hunk at line ${hunk.oldStartLine} failed to match oldText anchor.`)
+        console.warn(
+          `[DiffReviewerEngine] Hunk at line ${hunk.oldStartLine} failed to match oldText anchor.`,
+        )
       }
     }
 

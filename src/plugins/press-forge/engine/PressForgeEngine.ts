@@ -65,11 +65,17 @@ export class PressForgeEngine {
    */
   static readonly SENSITIVE_WORDS: string[] = Array.from(
     new Set([
-      '中南海', '领导人', '暴动', '分裂', '毒品', '邪教', '违禁药品',
+      '中南海',
+      '领导人',
+      '暴动',
+      '分裂',
+      '毒品',
+      '邪教',
+      '违禁药品',
       ...(Array.isArray(redWords)
         ? redWords.map((item: any) => (typeof item === 'string' ? item : item.word)).filter(Boolean)
         : []),
-    ])
+    ]),
   )
 
   /**
@@ -107,7 +113,10 @@ export class PressForgeEngine {
     }
 
     // 4. 段落拆分与缩进处理
-    const rawParagraphs = text.split('\n').map((p) => p.trim()).filter((p) => p.length > 0)
+    const rawParagraphs = text
+      .split('\n')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0)
     const indentStr = '　'.repeat(options.indentSpaces)
 
     const formattedParagraphs = rawParagraphs.map((p) => `${indentStr}${p}`)

@@ -1,16 +1,50 @@
-import {
-  lazy,
-  type ComponentType,
-} from 'react'
+import { lazy, type ComponentType } from 'react'
 import type { DesktopPlugin, DesktopPluginCategory } from '../types/plugin'
 import {
-  Layers, BookOpen, Clock, ShieldCheck, Heart, Palette, Sparkles,
-  Award, Gauge, Flame, Anchor, GitBranch, Droplet, BookMarked,
-  MessageSquare, Users, DollarSign, Castle, Printer, TrendingUp,
-  GitMerge, Lightbulb, UserCheck, Crosshair, Music, MapPin,
-  Swords, Calendar, Eye, AlertCircle, GitCompare, Lock,
-  Headphones, Recycle, RefreshCw, EyeOff, Radio, Activity,
-  Star, UserX, Cpu, Split, Mic, Film
+  Layers,
+  BookOpen,
+  Clock,
+  ShieldCheck,
+  Heart,
+  Palette,
+  Sparkles,
+  Award,
+  Gauge,
+  Flame,
+  Anchor,
+  GitBranch,
+  Droplet,
+  BookMarked,
+  MessageSquare,
+  Users,
+  DollarSign,
+  Castle,
+  Printer,
+  TrendingUp,
+  GitMerge,
+  Lightbulb,
+  UserCheck,
+  Crosshair,
+  Music,
+  MapPin,
+  Swords,
+  Calendar,
+  Eye,
+  AlertCircle,
+  GitCompare,
+  Lock,
+  Headphones,
+  Recycle,
+  RefreshCw,
+  EyeOff,
+  Radio,
+  Activity,
+  Star,
+  UserX,
+  Cpu,
+  Split,
+  Mic,
+  Film,
 } from 'lucide-react'
 
 export interface PluginStaticDefinition {
@@ -39,8 +73,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['世界书', '实体图谱', 'AC扫描', '智能提示'],
     enabledByDefault: true,
     icon: Layers,
-    loadMainView: () => import('../plugins/living-codex').then(m => ({ default: m.CodexMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/living-codex').then(m => ({ default: m.CodexWriterDrawer })),
+    loadMainView: () =>
+      import('../plugins/living-codex').then((m) => ({ default: m.CodexMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/living-codex').then((m) => ({ default: m.CodexWriterDrawer })),
   },
   {
     id: 'promise-ledger',
@@ -51,8 +87,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['伏笔', '债务', '记忆衰减', '契诃夫之枪'],
     enabledByDefault: true,
     icon: BookOpen,
-    loadMainView: () => import('../plugins/promise-ledger').then(m => ({ default: m.LedgerMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/promise-ledger').then(m => ({ default: m.LedgerWriterDrawer })),
+    loadMainView: () =>
+      import('../plugins/promise-ledger').then((m) => ({ default: m.LedgerMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/promise-ledger').then((m) => ({ default: m.LedgerWriterDrawer })),
   },
   {
     id: 'timeline-grid',
@@ -63,7 +101,8 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['时间线', '因果律', '拓扑排序', '冲突预警'],
     enabledByDefault: true,
     icon: Clock,
-    loadMainView: () => import('../plugins/timeline-grid').then(m => ({ default: m.TimelineGridView })),
+    loadMainView: () =>
+      import('../plugins/timeline-grid').then((m) => ({ default: m.TimelineGridView })),
   },
   {
     id: 'safe-gate',
@@ -74,8 +113,9 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['合规', '敏感词', '文学平替', 'AC自动机'],
     enabledByDefault: true,
     icon: ShieldCheck,
-    loadMainView: () => import('../plugins/safe-gate').then(m => ({ default: m.SafeGateView })),
-    loadDrawerSnippetView: () => import('../plugins/safe-gate').then(m => ({ default: m.SafeGateDrawer })),
+    loadMainView: () => import('../plugins/safe-gate').then((m) => ({ default: m.SafeGateView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/safe-gate').then((m) => ({ default: m.SafeGateDrawer })),
   },
   {
     id: 'scene-beats',
@@ -86,8 +126,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['节拍', '张力', '情绪反转', '戏剧弧'],
     enabledByDefault: true,
     icon: Heart,
-    loadMainView: () => import('../plugins/scene-beats').then(m => ({ default: m.SceneBeatsMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/scene-beats').then(m => ({ default: m.SceneBeatsDrawer })),
+    loadMainView: () =>
+      import('../plugins/scene-beats').then((m) => ({ default: m.SceneBeatsMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/scene-beats').then((m) => ({ default: m.SceneBeatsDrawer })),
   },
   {
     id: 'describe-palette',
@@ -98,8 +140,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['五感', '修辞', '词库', '通感'],
     enabledByDefault: true,
     icon: Palette,
-    loadMainView: () => import('../plugins/describe-palette').then(m => ({ default: m.DescribePaletteView })),
-    loadDrawerSnippetView: () => import('../plugins/describe-palette').then(m => ({ default: m.DescribePaletteDrawer })),
+    loadMainView: () =>
+      import('../plugins/describe-palette').then((m) => ({ default: m.DescribePaletteView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/describe-palette').then((m) => ({ default: m.DescribePaletteDrawer })),
   },
   {
     id: 'name-forge',
@@ -110,8 +154,9 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['起名', '音律', '平仄', '宗门'],
     enabledByDefault: true,
     icon: Sparkles,
-    loadMainView: () => import('../plugins/name-forge').then(m => ({ default: m.NameForgeView })),
-    loadDrawerSnippetView: () => import('../plugins/name-forge').then(m => ({ default: m.NameForgeDrawer })),
+    loadMainView: () => import('../plugins/name-forge').then((m) => ({ default: m.NameForgeView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/name-forge').then((m) => ({ default: m.NameForgeDrawer })),
   },
   {
     id: 'expectation-engine',
@@ -122,8 +167,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['期待感', '情绪释放', '爽点', '先抑后扬'],
     enabledByDefault: true,
     icon: Award,
-    loadMainView: () => import('../plugins/expectation-engine').then(m => ({ default: m.ExpectationMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/expectation-engine').then(m => ({ default: m.ExpectationDrawer })),
+    loadMainView: () =>
+      import('../plugins/expectation-engine').then((m) => ({ default: m.ExpectationMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/expectation-engine').then((m) => ({ default: m.ExpectationDrawer })),
   },
   {
     id: 'consistency-sentinel',
@@ -134,8 +181,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['境界体系', '一致性', '偏序闭包', '战力崩坏'],
     enabledByDefault: true,
     icon: Gauge,
-    loadMainView: () => import('../plugins/consistency-sentinel').then(m => ({ default: m.ConsistencyMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/consistency-sentinel').then(m => ({ default: m.ConsistencyDrawer })),
+    loadMainView: () =>
+      import('../plugins/consistency-sentinel').then((m) => ({ default: m.ConsistencyMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/consistency-sentinel').then((m) => ({ default: m.ConsistencyDrawer })),
   },
   {
     id: 'sprint-arena',
@@ -146,8 +195,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['WPM', '码字速度', '心流', '专注模式'],
     enabledByDefault: true,
     icon: Flame,
-    loadMainView: () => import('../plugins/sprint-arena').then(m => ({ default: m.SprintArenaMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/sprint-arena').then(m => ({ default: m.SprintArenaDrawer })),
+    loadMainView: () =>
+      import('../plugins/sprint-arena').then((m) => ({ default: m.SprintArenaMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/sprint-arena').then((m) => ({ default: m.SprintArenaDrawer })),
   },
   {
     id: 'reader-hook',
@@ -158,8 +209,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['断章', '钩子', '黄金三章', '留存转化'],
     enabledByDefault: true,
     icon: Anchor,
-    loadMainView: () => import('../plugins/reader-hook').then(m => ({ default: m.ReaderHookMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/reader-hook').then(m => ({ default: m.ReaderHookDrawer })),
+    loadMainView: () =>
+      import('../plugins/reader-hook').then((m) => ({ default: m.ReaderHookMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/reader-hook').then((m) => ({ default: m.ReaderHookDrawer })),
   },
   {
     id: 'clue-weaver',
@@ -170,8 +223,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['悬疑', '红鲱鱼', '信息差', '线索链'],
     enabledByDefault: true,
     icon: GitBranch,
-    loadMainView: () => import('../plugins/clue-weaver').then(m => ({ default: m.ClueWeaverMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/clue-weaver').then(m => ({ default: m.ClueWeaverDrawer })),
+    loadMainView: () =>
+      import('../plugins/clue-weaver').then((m) => ({ default: m.ClueWeaverMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/clue-weaver').then((m) => ({ default: m.ClueWeaverDrawer })),
   },
   {
     id: 'water-meter',
@@ -182,8 +237,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['信息熵', '水文分析', '精简', '动词密度'],
     enabledByDefault: true,
     icon: Droplet,
-    loadMainView: () => import('../plugins/water-meter').then(m => ({ default: m.WaterMeterMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/water-meter').then(m => ({ default: m.WaterMeterDrawer })),
+    loadMainView: () =>
+      import('../plugins/water-meter').then((m) => ({ default: m.WaterMeterMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/water-meter').then((m) => ({ default: m.WaterMeterDrawer })),
   },
   {
     id: 'volume-master',
@@ -194,8 +251,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['分卷', '戏剧弧', '燃尽率', '三幕剧'],
     enabledByDefault: true,
     icon: BookMarked,
-    loadMainView: () => import('../plugins/volume-master').then(m => ({ default: m.VolumeMasterMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/volume-master').then(m => ({ default: m.VolumeMasterDrawer })),
+    loadMainView: () =>
+      import('../plugins/volume-master').then((m) => ({ default: m.VolumeMasterMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/volume-master').then((m) => ({ default: m.VolumeMasterDrawer })),
   },
   {
     id: 'dialogue-distiller',
@@ -206,8 +265,12 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['对白', '声纹', '废话率', '人物口癖'],
     enabledByDefault: true,
     icon: MessageSquare,
-    loadMainView: () => import('../plugins/dialogue-distiller').then(m => ({ default: m.DialogueDistillerMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/dialogue-distiller').then(m => ({ default: m.DialogueDistillerDrawer })),
+    loadMainView: () =>
+      import('../plugins/dialogue-distiller').then((m) => ({
+        default: m.DialogueDistillerMasterView,
+      })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/dialogue-distiller').then((m) => ({ default: m.DialogueDistillerDrawer })),
   },
   {
     id: 'faction-matrix',
@@ -218,8 +281,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['门派', '好感度', '外交', '天下大势'],
     enabledByDefault: true,
     icon: Users,
-    loadMainView: () => import('../plugins/faction-matrix').then(m => ({ default: m.FactionMatrixMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/faction-matrix').then(m => ({ default: m.FactionMatrixDrawer })),
+    loadMainView: () =>
+      import('../plugins/faction-matrix').then((m) => ({ default: m.FactionMatrixMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/faction-matrix').then((m) => ({ default: m.FactionMatrixDrawer })),
   },
   {
     id: 'paywall-sentry',
@@ -230,8 +295,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['首订', '上架卡点', '悬念留白', '防流失'],
     enabledByDefault: true,
     icon: DollarSign,
-    loadMainView: () => import('../plugins/paywall-sentry').then(m => ({ default: m.PaywallSentryMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/paywall-sentry').then(m => ({ default: m.PaywallSentryDrawer })),
+    loadMainView: () =>
+      import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryDrawer })),
   },
   {
     id: 'memory-palace',
@@ -242,8 +309,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['空间', '场景', '地图', '空间层次'],
     enabledByDefault: true,
     icon: Castle,
-    loadMainView: () => import('../plugins/memory-palace').then(m => ({ default: m.MemoryPalaceMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/memory-palace').then(m => ({ default: m.MemoryPalaceDrawer })),
+    loadMainView: () =>
+      import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceDrawer })),
   },
   {
     id: 'press-forge',
@@ -254,8 +323,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['出版', '排版', '开本', '版权页'],
     enabledByDefault: true,
     icon: Printer,
-    loadMainView: () => import('../plugins/press-forge').then(m => ({ default: m.PressForgeMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/press-forge').then(m => ({ default: m.PressForgeDrawer })),
+    loadMainView: () =>
+      import('../plugins/press-forge').then((m) => ({ default: m.PressForgeMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/press-forge').then((m) => ({ default: m.PressForgeDrawer })),
   },
   {
     id: 'emotion-curve',
@@ -266,8 +337,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['情绪流', '心跳线', '起伏', '折线图'],
     enabledByDefault: true,
     icon: TrendingUp,
-    loadMainView: () => import('../plugins/emotion-curve').then(m => ({ default: m.EmotionCurveMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/emotion-curve').then(m => ({ default: m.EmotionCurveDrawer })),
+    loadMainView: () =>
+      import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveDrawer })),
   },
   {
     id: 'sub-plot-braid',
@@ -278,8 +351,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['支线', '多线交错', '编织', '群像'],
     enabledByDefault: true,
     icon: GitMerge,
-    loadMainView: () => import('../plugins/sub-plot-braid').then(m => ({ default: m.SubPlotBraidMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/sub-plot-braid').then(m => ({ default: m.SubPlotBraidDrawer })),
+    loadMainView: () =>
+      import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidDrawer })),
   },
   {
     id: 'brainstorm-spark',
@@ -290,8 +365,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['灵感', '卡文破局', 'SCAMPER', '脑洞'],
     enabledByDefault: true,
     icon: Lightbulb,
-    loadMainView: () => import('../plugins/brainstorm-spark').then(m => ({ default: m.BrainstormSparkMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/brainstorm-spark').then(m => ({ default: m.BrainstormSparkDrawer })),
+    loadMainView: () =>
+      import('../plugins/brainstorm-spark').then((m) => ({ default: m.BrainstormSparkMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/brainstorm-spark').then((m) => ({ default: m.BrainstormSparkDrawer })),
   },
   {
     id: 'reader-simulator',
@@ -302,8 +379,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['读者视角', '吐槽', '毒点排查', '用户画像'],
     enabledByDefault: true,
     icon: UserCheck,
-    loadMainView: () => import('../plugins/reader-simulator').then(m => ({ default: m.ReaderSimulatorMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/reader-simulator').then(m => ({ default: m.ReaderSimulatorDrawer })),
+    loadMainView: () =>
+      import('../plugins/reader-simulator').then((m) => ({ default: m.ReaderSimulatorMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/reader-simulator').then((m) => ({ default: m.ReaderSimulatorDrawer })),
   },
   {
     id: 'chekhov-radar',
@@ -314,8 +393,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['契诃夫之枪', '伏笔预警', '锈蚀率', '闭环率'],
     enabledByDefault: true,
     icon: Crosshair,
-    loadMainView: () => import('../plugins/chekhov-radar').then(m => ({ default: m.ChekhovRadarMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/chekhov-radar').then(m => ({ default: m.ChekhovRadarDrawer })),
+    loadMainView: () =>
+      import('../plugins/chekhov-radar').then((m) => ({ default: m.ChekhovRadarMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/chekhov-radar').then((m) => ({ default: m.ChekhovRadarDrawer })),
   },
   {
     id: 'rhythm-metronome',
@@ -326,8 +407,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['句式长短', '韵律', '节奏感', '波长'],
     enabledByDefault: true,
     icon: Music,
-    loadMainView: () => import('../plugins/rhythm-metronome').then(m => ({ default: m.RhythmMetronomeMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/rhythm-metronome').then(m => ({ default: m.RhythmMetronomeDrawer })),
+    loadMainView: () =>
+      import('../plugins/rhythm-metronome').then((m) => ({ default: m.RhythmMetronomeMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/rhythm-metronome').then((m) => ({ default: m.RhythmMetronomeDrawer })),
   },
   {
     id: 'geography-map',
@@ -338,8 +421,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['地图', '坐标', '行军日程', '地理空间'],
     enabledByDefault: true,
     icon: MapPin,
-    loadMainView: () => import('../plugins/geography-map').then(m => ({ default: m.GeographyMapMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/geography-map').then(m => ({ default: m.GeographyMapDrawer })),
+    loadMainView: () =>
+      import('../plugins/geography-map').then((m) => ({ default: m.GeographyMapMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/geography-map').then((m) => ({ default: m.GeographyMapDrawer })),
   },
   {
     id: 'combat-sandbox',
@@ -350,8 +435,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['战力', '越级战斗', '数值平衡', '胜率推演'],
     enabledByDefault: true,
     icon: Swords,
-    loadMainView: () => import('../plugins/combat-sandbox').then(m => ({ default: m.CombatSandboxMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/combat-sandbox').then(m => ({ default: m.CombatSandboxDrawer })),
+    loadMainView: () =>
+      import('../plugins/combat-sandbox').then((m) => ({ default: m.CombatSandboxMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/combat-sandbox').then((m) => ({ default: m.CombatSandboxDrawer })),
   },
   {
     id: 'multi-calendar',
@@ -362,8 +449,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['历法', '纪元', '时间线', '换算'],
     enabledByDefault: true,
     icon: Calendar,
-    loadMainView: () => import('../plugins/multi-calendar').then(m => ({ default: m.MultiCalendarMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/multi-calendar').then(m => ({ default: m.MultiCalendarDrawer })),
+    loadMainView: () =>
+      import('../plugins/multi-calendar').then((m) => ({ default: m.MultiCalendarMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/multi-calendar').then((m) => ({ default: m.MultiCalendarDrawer })),
   },
   {
     id: 'pov-guard',
@@ -374,8 +463,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['视角', 'POV', '乱视角', '人称'],
     enabledByDefault: true,
     icon: Eye,
-    loadMainView: () => import('../plugins/pov-guard').then(m => ({ default: m.PovGuardMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/pov-guard').then(m => ({ default: m.PovGuardDrawer })),
+    loadMainView: () =>
+      import('../plugins/pov-guard').then((m) => ({ default: m.PovGuardMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/pov-guard').then((m) => ({ default: m.PovGuardDrawer })),
   },
   {
     id: 'narrative-linter',
@@ -386,8 +477,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['语病', 'Linter', '修辞瑕疵', '质检'],
     enabledByDefault: true,
     icon: AlertCircle,
-    loadMainView: () => import('../plugins/narrative-linter').then(m => ({ default: m.NarrativeLinterMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/narrative-linter').then(m => ({ default: m.NarrativeLinterDrawer })),
+    loadMainView: () =>
+      import('../plugins/narrative-linter').then((m) => ({ default: m.NarrativeLinterMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/narrative-linter').then((m) => ({ default: m.NarrativeLinterDrawer })),
   },
   {
     id: 'diff-reviewer',
@@ -398,8 +491,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['Diff', '版本对比', '合稿', '审校'],
     enabledByDefault: true,
     icon: GitCompare,
-    loadMainView: () => import('../plugins/diff-reviewer').then(m => ({ default: m.DiffReviewerMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/diff-reviewer').then(m => ({ default: m.DiffReviewerDrawer })),
+    loadMainView: () =>
+      import('../plugins/diff-reviewer').then((m) => ({ default: m.DiffReviewerMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/diff-reviewer').then((m) => ({ default: m.DiffReviewerDrawer })),
   },
   {
     id: 'iron-chamber',
@@ -410,8 +505,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['公理', '降智排查', '逻辑自洽', '反噬'],
     enabledByDefault: true,
     icon: Lock,
-    loadMainView: () => import('../plugins/iron-chamber').then(m => ({ default: m.IronChamberMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/iron-chamber').then(m => ({ default: m.IronChamberDrawer })),
+    loadMainView: () =>
+      import('../plugins/iron-chamber').then((m) => ({ default: m.IronChamberMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/iron-chamber').then((m) => ({ default: m.IronChamberDrawer })),
   },
   {
     id: 'soundscape',
@@ -422,8 +519,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['机械键盘', '白噪音', '沉浸音效', '心流'],
     enabledByDefault: true,
     icon: Headphones,
-    loadMainView: () => import('../plugins/soundscape').then(m => ({ default: m.SoundscapeMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/soundscape').then(m => ({ default: m.SoundscapeDrawer })),
+    loadMainView: () =>
+      import('../plugins/soundscape').then((m) => ({ default: m.SoundscapeMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/soundscape').then((m) => ({ default: m.SoundscapeDrawer })),
   },
   {
     id: 'scrapbook-recycler',
@@ -434,8 +533,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['废稿', '碎屑回收', '草稿箱', '资产复用'],
     enabledByDefault: true,
     icon: Recycle,
-    loadMainView: () => import('../plugins/scrapbook-recycler').then(m => ({ default: m.ScrapbookMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/scrapbook-recycler').then(m => ({ default: m.ScrapbookDrawer })),
+    loadMainView: () =>
+      import('../plugins/scrapbook-recycler').then((m) => ({ default: m.ScrapbookMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/scrapbook-recycler').then((m) => ({ default: m.ScrapbookDrawer })),
   },
   {
     id: 'aftermath-sync',
@@ -446,8 +547,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['战后清点', '伤残同步', '底蕴损耗', '级联更新'],
     enabledByDefault: true,
     icon: RefreshCw,
-    loadMainView: () => import('../plugins/aftermath-sync').then(m => ({ default: m.AftermathMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/aftermath-sync').then(m => ({ default: m.AftermathDrawer })),
+    loadMainView: () =>
+      import('../plugins/aftermath-sync').then((m) => ({ default: m.AftermathMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/aftermath-sync').then((m) => ({ default: m.AftermathDrawer })),
   },
   {
     id: 'subtext-compiler',
@@ -458,8 +561,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['潜台词', '微表情', '心理对白', '戏剧反差'],
     enabledByDefault: true,
     icon: EyeOff,
-    loadMainView: () => import('../plugins/subtext-compiler').then(m => ({ default: m.SubtextMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/subtext-compiler').then(m => ({ default: m.SubtextDrawer })),
+    loadMainView: () =>
+      import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextDrawer })),
   },
   {
     id: 'archetype-cards',
@@ -470,8 +575,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['人物卡', '原型', '动机', '立体人物'],
     enabledByDefault: true,
     icon: Radio,
-    loadMainView: () => import('../plugins/archetype-cards').then(m => ({ default: m.ArchetypeMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/archetype-cards').then(m => ({ default: m.ArchetypeDrawer })),
+    loadMainView: () =>
+      import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeDrawer })),
   },
   {
     id: 'rhythm-radar',
@@ -482,8 +589,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['断章', '张力指数', '生死反转', '追更率'],
     enabledByDefault: true,
     icon: Activity,
-    loadMainView: () => import('../plugins/rhythm-radar').then(m => ({ default: m.RhythmRadarMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/rhythm-radar').then(m => ({ default: m.RhythmRadarDrawer })),
+    loadMainView: () =>
+      import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarDrawer })),
   },
   {
     id: 'gold-chapters-eval',
@@ -494,8 +603,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['黄金三章', '签约评估', '留存测试', '前瞻诊断'],
     enabledByDefault: true,
     icon: Star,
-    loadMainView: () => import('../plugins/gold-chapters-eval').then(m => ({ default: m.GoldChaptersMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/gold-chapters-eval').then(m => ({ default: m.GoldChaptersDrawer })),
+    loadMainView: () =>
+      import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersDrawer })),
   },
   {
     id: 'shadow-reader',
@@ -506,8 +617,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['信息差', '读者视角', '盲审', '伏笔接收度'],
     enabledByDefault: true,
     icon: UserX,
-    loadMainView: () => import('../plugins/shadow-reader').then(m => ({ default: m.ShadowReaderMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/shadow-reader').then(m => ({ default: m.ShadowReaderDrawer })),
+    loadMainView: () =>
+      import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderDrawer })),
   },
   {
     id: 'author-ops',
@@ -518,8 +631,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['看板', '战报', '连载日历', '写作效率'],
     enabledByDefault: true,
     icon: Cpu,
-    loadMainView: () => import('../plugins/author-ops').then(m => ({ default: m.AuthorOpsMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/author-ops').then(m => ({ default: m.AuthorOpsDrawer })),
+    loadMainView: () =>
+      import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsDrawer })),
   },
   {
     id: 'multiverse-whatif',
@@ -530,8 +645,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['What-If', '分叉推演', '命运线', '蝴蝶效应'],
     enabledByDefault: true,
     icon: Split,
-    loadMainView: () => import('../plugins/multiverse-whatif').then(m => ({ default: m.MultiverseMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/multiverse-whatif').then(m => ({ default: m.MultiverseDrawer })),
+    loadMainView: () =>
+      import('../plugins/multiverse-whatif').then((m) => ({ default: m.MultiverseMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/multiverse-whatif').then((m) => ({ default: m.MultiverseDrawer })),
   },
   {
     id: 'voice-preview',
@@ -542,8 +659,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['TTS', '语音试听', '角色对白', '有声预览'],
     enabledByDefault: true,
     icon: Mic,
-    loadMainView: () => import('../plugins/voice-preview').then(m => ({ default: m.VoicePreviewMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/voice-preview').then(m => ({ default: m.VoicePreviewDrawer })),
+    loadMainView: () =>
+      import('../plugins/voice-preview').then((m) => ({ default: m.VoicePreviewMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/voice-preview').then((m) => ({ default: m.VoicePreviewDrawer })),
   },
   {
     id: 'storyboard-gen',
@@ -554,8 +673,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['分镜', '画面感', '九宫格', '景别机位'],
     enabledByDefault: true,
     icon: Film,
-    loadMainView: () => import('../plugins/storyboard-gen').then(m => ({ default: m.StoryboardMasterView })),
-    loadDrawerSnippetView: () => import('../plugins/storyboard-gen').then(m => ({ default: m.StoryboardDrawer })),
+    loadMainView: () =>
+      import('../plugins/storyboard-gen').then((m) => ({ default: m.StoryboardMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/storyboard-gen').then((m) => ({ default: m.StoryboardDrawer })),
   },
 ]
 

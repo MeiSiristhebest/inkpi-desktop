@@ -13,12 +13,149 @@ import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource as defaultRandomSource } from '../../../adapters/randomSource'
 
 const SENSORY_DICTIONARY: Record<SenseType, string[]> = {
-  sight: ['见', '望', '视', '瞧', '光', '影', '芒', '色', '暗', '红', '青', '蓝', '白', '黑', '耀', '照', '闪', '瞳', '眸', '亮', '阴', '璀璨', '模糊', '清澈', '幽暗', '斑驳', '绚丽'],
-  sound: ['听', '闻', '响', '声', '音', '鸣', '啸', '雷', '轰', '碎', '静', '震', '呼', '吟', '嘶', '吼', '铿', '锵', '哗', '沉闷', '尖锐', '呼啸', '寂静', '轰鸣', '低语'],
-  scent: ['嗅', '香', '臭', '腥', '气味', '芳', '焦', '馥', '芬', '气息', '膻', '刺鼻', '泥土', '腐朽', '血腥', '清香', '硝烟', '焦糊', '冷香'],
-  taste: ['尝', '甜', '苦', '辣', '咸', '酸', '甘', '涩', '醇', '嚼', '吞', '咽', '酒', '舌', '甘甜', '辛辣', '焦苦', '回甘', '生津'],
-  touch: ['冷', '热', '温', '凉', '寒', '痛', '麻', '颤', '触', '抚', '割', '冰', '硬', '软', '滑', '烫', '刺', '黏', '糙', '刺骨', '灼热', '剧痛', '僵硬', '湿润', '沉重'],
-  metaphor: ['宛如', '恍若', '仿佛', '犹若', '恰似', '如同', '一样', '像是', '倒悬', '撕裂', '凝滞', '虚妄', '吞噬', '如获新生', '形如鬼魅', '势若奔雷'],
+  sight: [
+    '见',
+    '望',
+    '视',
+    '瞧',
+    '光',
+    '影',
+    '芒',
+    '色',
+    '暗',
+    '红',
+    '青',
+    '蓝',
+    '白',
+    '黑',
+    '耀',
+    '照',
+    '闪',
+    '瞳',
+    '眸',
+    '亮',
+    '阴',
+    '璀璨',
+    '模糊',
+    '清澈',
+    '幽暗',
+    '斑驳',
+    '绚丽',
+  ],
+  sound: [
+    '听',
+    '闻',
+    '响',
+    '声',
+    '音',
+    '鸣',
+    '啸',
+    '雷',
+    '轰',
+    '碎',
+    '静',
+    '震',
+    '呼',
+    '吟',
+    '嘶',
+    '吼',
+    '铿',
+    '锵',
+    '哗',
+    '沉闷',
+    '尖锐',
+    '呼啸',
+    '寂静',
+    '轰鸣',
+    '低语',
+  ],
+  scent: [
+    '嗅',
+    '香',
+    '臭',
+    '腥',
+    '气味',
+    '芳',
+    '焦',
+    '馥',
+    '芬',
+    '气息',
+    '膻',
+    '刺鼻',
+    '泥土',
+    '腐朽',
+    '血腥',
+    '清香',
+    '硝烟',
+    '焦糊',
+    '冷香',
+  ],
+  taste: [
+    '尝',
+    '甜',
+    '苦',
+    '辣',
+    '咸',
+    '酸',
+    '甘',
+    '涩',
+    '醇',
+    '嚼',
+    '吞',
+    '咽',
+    '酒',
+    '舌',
+    '甘甜',
+    '辛辣',
+    '焦苦',
+    '回甘',
+    '生津',
+  ],
+  touch: [
+    '冷',
+    '热',
+    '温',
+    '凉',
+    '寒',
+    '痛',
+    '麻',
+    '颤',
+    '触',
+    '抚',
+    '割',
+    '冰',
+    '硬',
+    '软',
+    '滑',
+    '烫',
+    '刺',
+    '黏',
+    '糙',
+    '刺骨',
+    '灼热',
+    '剧痛',
+    '僵硬',
+    '湿润',
+    '沉重',
+  ],
+  metaphor: [
+    '宛如',
+    '恍若',
+    '仿佛',
+    '犹若',
+    '恰似',
+    '如同',
+    '一样',
+    '像是',
+    '倒悬',
+    '撕裂',
+    '凝滞',
+    '虚妄',
+    '吞噬',
+    '如获新生',
+    '形如鬼魅',
+    '势若奔雷',
+  ],
 }
 
 export class DescribePaletteEngine {
@@ -26,7 +163,10 @@ export class DescribePaletteEngine {
   private randomSource: RandomSource
 
   constructor(customSnippets?: SensorySnippet[], random?: RandomSource) {
-    this.snippets = customSnippets && customSnippets.length > 0 ? customSnippets : (defaultDataset as SensorySnippet[])
+    this.snippets =
+      customSnippets && customSnippets.length > 0
+        ? customSnippets
+        : (defaultDataset as SensorySnippet[])
     this.randomSource = random || defaultRandomSource
   }
 
@@ -81,7 +221,10 @@ export class DescribePaletteEngine {
         // 标签命中
         if (item.tags) {
           for (const tg of item.tags) {
-            if (trimmedQuery.includes(tg.toLowerCase()) || tg.toLowerCase().includes(trimmedQuery)) {
+            if (
+              trimmedQuery.includes(tg.toLowerCase()) ||
+              tg.toLowerCase().includes(trimmedQuery)
+            ) {
               score += 20
             }
           }
@@ -135,7 +278,10 @@ export class DescribePaletteEngine {
     }
 
     // 统计各感官特征词频
-    for (const [senseKey, wordList] of Object.entries(SENSORY_DICTIONARY) as [SenseType, string[]][]) {
+    for (const [senseKey, wordList] of Object.entries(SENSORY_DICTIONARY) as [
+      SenseType,
+      string[],
+    ][]) {
       let count = 0
       for (const cue of wordList) {
         let idx = cleanText.indexOf(cue)
@@ -179,17 +325,34 @@ export class DescribePaletteEngine {
     // 生成专业文学建议
     let advice = ''
     if (totalHits === 0) {
-      advice = '当前段落几乎完全缺乏具象五感描写，容易陷入纯心理独白或平铺直叙，建议补充光影（视觉）与环境声（听觉）。'
-    } else if (maxSense === 'sight' && missingSenses.includes('touch') && missingSenses.includes('scent')) {
-      advice = '视觉镜头感非常强烈，但触觉体感与环境气味缺席。适度增添温差、风压、冷汗或血腥焦糊气味，可使场景立体沉浸。'
+      advice =
+        '当前段落几乎完全缺乏具象五感描写，容易陷入纯心理独白或平铺直叙，建议补充光影（视觉）与环境声（听觉）。'
+    } else if (
+      maxSense === 'sight' &&
+      missingSenses.includes('touch') &&
+      missingSenses.includes('scent')
+    ) {
+      advice =
+        '视觉镜头感非常强烈，但触觉体感与环境气味缺席。适度增添温差、风压、冷汗或血腥焦糊气味，可使场景立体沉浸。'
     } else if (maxSense === 'sound' && missingSenses.includes('sight')) {
-      advice = '声效渲染逼真，但缺乏直观画面勾勒。建议配合远近光影或色彩对比，形成声画交融的电影质感。'
+      advice =
+        '声效渲染逼真，但缺乏直观画面勾勒。建议配合远近光影或色彩对比，形成声画交融的电影质感。'
     } else if (missingSenses.length <= 1) {
       advice = '五感维度分布均衡，通感与细节丰富，现场临场感与文学张力极佳。'
     } else {
       const missingNames = missingSenses
         .slice(0, 3)
-        .map((s) => ({ sight: '视觉', sound: '听觉', scent: '嗅觉', taste: '味觉', touch: '触觉', metaphor: '意象通感' })[s])
+        .map(
+          (s) =>
+            ({
+              sight: '视觉',
+              sound: '听觉',
+              scent: '嗅觉',
+              taste: '味觉',
+              touch: '触觉',
+              metaphor: '意象通感',
+            })[s],
+        )
         .join('、')
       advice = `当前描写较为偏向单一维度，缺少 ${missingNames} 维度的刺激。建议根据场景氛围引入相应细节修辞。`
     }

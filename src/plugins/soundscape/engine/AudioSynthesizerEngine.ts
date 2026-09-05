@@ -1,6 +1,6 @@
-import type { MechanicalSwitchType, AmbienceType, SynthParams } from "../types"
-import type { RandomSource } from "../../../ports/randomSource"
-import { randomSource as defaultRandomSource } from "../../../adapters/randomSource"
+import type { MechanicalSwitchType, AmbienceType, SynthParams } from '../types'
+import type { RandomSource } from '../../../ports/randomSource'
+import { randomSource as defaultRandomSource } from '../../../adapters/randomSource'
 
 /**
  * AudioSynthesizerEngine
@@ -23,16 +23,17 @@ export class AudioSynthesizerEngine {
   }
 
   public getContext(): AudioContext | null {
-    if (typeof window === "undefined") return null
+    if (typeof window === 'undefined') return null
     if (!this.audioCtx) {
       // SAFETY: webkitAudioContext is a legacy Safari Web Audio constructor attached to window
       const AudioContextClass =
-        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       if (AudioContextClass) {
         this.audioCtx = new AudioContextClass()
       }
     }
-    if (this.audioCtx && this.audioCtx.state === "suspended") {
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
       this.audioCtx.resume().catch(() => {})
     }
     return this.audioCtx
@@ -43,7 +44,7 @@ export class AudioSynthesizerEngine {
    */
   public static getSwitchParams(switchType: MechanicalSwitchType): SynthParams {
     switch (switchType) {
-      case "blue": // 青轴：尖锐段落高音 + 金属撞击
+      case 'blue': // 青轴：尖锐段落高音 + 金属撞击
         return {
           transientFreq: 3200,
           resonanceFreq: 320,
@@ -51,7 +52,7 @@ export class AudioSynthesizerEngine {
           resonanceDecay: 0.045,
           volume: 0.7,
         }
-      case "brown": // 茶轴：沉稳段落，无刺耳高频
+      case 'brown': // 茶轴：沉稳段落，无刺耳高频
         return {
           transientFreq: 1100,
           resonanceFreq: 240,
@@ -59,7 +60,7 @@ export class AudioSynthesizerEngine {
           resonanceDecay: 0.035,
           volume: 0.55,
         }
-      case "vintage": // 老式打字机：厚重机簧反弹
+      case 'vintage': // 老式打字机：厚重机簧反弹
         return {
           transientFreq: 2200,
           resonanceFreq: 180,
@@ -67,7 +68,7 @@ export class AudioSynthesizerEngine {
           resonanceDecay: 0.08,
           volume: 0.8,
         }
-      case "silent": // 静音红轴：仅微弱触底阻尼
+      case 'silent': // 静音红轴：仅微弱触底阻尼
       default:
         return {
           transientFreq: 600,
@@ -95,7 +96,7 @@ export class AudioSynthesizerEngine {
     const oscTransient = ctx.createOscillator()
     const gainTransient = ctx.createGain()
 
-    oscTransient.type = "sine"
+    oscTransient.type = 'sine'
     oscTransient.frequency.setValueAtTime(baseParams.transientFreq * jitter, now)
     oscTransient.frequency.exponentialRampToValueAtTime(100, now + baseParams.transientDecay)
 
@@ -112,7 +113,7 @@ export class AudioSynthesizerEngine {
     const oscRes = ctx.createOscillator()
     const gainRes = ctx.createGain()
 
-    oscRes.type = "triangle"
+    oscRes.type = 'triangle'
     oscRes.frequency.setValueAtTime(baseParams.resonanceFreq * jitter, now)
 
     gainRes.gain.setValueAtTime(baseParams.volume * masterVolume * 0.6, now)
@@ -129,7 +130,7 @@ export class AudioSynthesizerEngine {
    * 启动环境背景白噪音（雨声/篝火/古刹钟鸣）
    */
   public startAmbience(ambience: AmbienceType, volume = 0.3): void {
-    if (ambience === "none") {
+    if (ambience === 'none') {
       this.stopAmbience()
       return
     }
@@ -143,15 +144,21 @@ export class AudioSynthesizerEngine {
     const output = noiseBuffer.getChannelData(0)
 
     // 生成 1/f 粉红噪音 (Pink Noise)
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0
+    let b0 = 0,
+      b1 = 0,
+      b2 = 0,
+      b3 = 0,
+      b4 = 0,
+      b5 = 0,
+      b6 = 0
     for (let i = 0; i < bufferSize; i++) {
       const white = this.randomSource.next() * 2 - 1
       b0 = 0.99886 * b0 + white * 0.0555179
       b1 = 0.99332 * b1 + white * 0.0750759
-      b2 = 0.96900 * b2 + white * 0.1538520
-      b3 = 0.86650 * b3 + white * 0.3104856
-      b4 = 0.55000 * b4 + white * 0.5329522
-      b5 = -0.7616 * b5 - white * 0.0168980
+      b2 = 0.969 * b2 + white * 0.153852
+      b3 = 0.8665 * b3 + white * 0.3104856
+      b4 = 0.55 * b4 + white * 0.5329522
+      b5 = -0.7616 * b5 - white * 0.016898
       output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362
       output[i] *= 0.11
       b6 = white * 0.115926
@@ -162,11 +169,11 @@ export class AudioSynthesizerEngine {
     whiteNoise.loop = true
 
     const filter = ctx.createBiquadFilter()
-    if (ambience === "rain") {
-      filter.type = "lowpass"
+    if (ambience === 'rain') {
+      filter.type = 'lowpass'
       filter.frequency.value = 1000 // 雨声低通滤波
-    } else if (ambience === "campfire") {
-      filter.type = "bandpass"
+    } else if (ambience === 'campfire') {
+      filter.type = 'bandpass'
       filter.frequency.value = 600 // 篝火核心低频段
       // 为篝火注入随机木炭爆裂微冲激 (Crackle impulses)
       for (let i = 0; i < bufferSize; i += 2400) {
@@ -178,7 +185,7 @@ export class AudioSynthesizerEngine {
         }
       }
     } else {
-      filter.type = "lowpass"
+      filter.type = 'lowpass'
       filter.frequency.value = 400
     }
 
@@ -199,10 +206,10 @@ export class AudioSynthesizerEngine {
    * 停止背景白噪音
    */
   public stopAmbience(): void {
-    if (this.noiseNode && "stop" in this.noiseNode) {
+    if (this.noiseNode && 'stop' in this.noiseNode) {
       try {
         // SAFETY: AudioScheduledSourceNode has stop method
-        (this.noiseNode as AudioScheduledSourceNode).stop()
+        ;(this.noiseNode as AudioScheduledSourceNode).stop()
       } catch {
         // Ignored if already stopped
       }

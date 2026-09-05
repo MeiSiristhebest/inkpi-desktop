@@ -5,7 +5,10 @@ import type {
 } from '../ports/sprintRepository'
 
 export const indexedDbSprintRepository: SprintRepository = {
-  async getAll(): Promise<SprintRecord[]> {
+  async getAll(projectId?: string): Promise<SprintRecord[]> {
+    if (projectId) {
+      return db.getByIndex<SprintRecord>('sprintRecords', 'projectId', projectId)
+    }
     return db.getAll<SprintRecord>('sprintRecords')
   },
   async save(record: SprintRecord): Promise<void> {

@@ -41,10 +41,7 @@ export interface ProjectDataProviderProps {
   children: ReactNode
 }
 
-export const ProjectDataProvider: FC<ProjectDataProviderProps> = ({
-  projectId,
-  children,
-}) => {
+export const ProjectDataProvider: FC<ProjectDataProviderProps> = ({ projectId, children }) => {
   const [project, setProject] = useState<ProjectRecord | null>(() => {
     return memoryCache.get(projectId)?.project || null
   })
@@ -148,14 +145,19 @@ export const ProjectDataProvider: FC<ProjectDataProviderProps> = ({
       reloadChapters,
       invalidateAll,
     }),
-    [projectId, project, chapters, volumes, isLoading, reloadProject, reloadChapters, invalidateAll]
+    [
+      projectId,
+      project,
+      chapters,
+      volumes,
+      isLoading,
+      reloadProject,
+      reloadChapters,
+      invalidateAll,
+    ],
   )
 
-  return (
-    <ProjectDataContext.Provider value={value}>
-      {children}
-    </ProjectDataContext.Provider>
-  )
+  return <ProjectDataContext.Provider value={value}>{children}</ProjectDataContext.Provider>
 }
 
 export function useProjectData(): ProjectDataContextValue {

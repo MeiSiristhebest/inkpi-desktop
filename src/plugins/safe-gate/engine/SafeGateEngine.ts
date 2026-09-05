@@ -152,10 +152,7 @@ export class SafeGateEngine {
       const sortedSuggestions = this.sortSuggestions(v.suggestions, genre)
       const best = sortedSuggestions[0]
       if (!best) continue
-      modified =
-        modified.slice(0, v.startIndex) +
-        best.replacement +
-        modified.slice(v.endIndex)
+      modified = modified.slice(0, v.startIndex) + best.replacement + modified.slice(v.endIndex)
     }
 
     return modified
@@ -191,7 +188,7 @@ export class SafeGateEngine {
       if (a.startIndex !== b.startIndex) return a.startIndex - b.startIndex
       const wDiff = levelWeight[b.level] - levelWeight[a.level]
       if (wDiff !== 0) return wDiff
-      return (b.endIndex - b.startIndex) - (a.endIndex - a.startIndex)
+      return b.endIndex - b.startIndex - (a.endIndex - a.startIndex)
     })
 
     const results: SafeGateViolation[] = []

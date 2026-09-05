@@ -5,18 +5,9 @@ import { ledgerEngine } from '../engine/LedgerEngine'
 import { indexedDbPromiseLedgerRepository } from '../../../adapters/indexedDbPromiseLedgerRepository'
 import { clock } from '../../../adapters/clock'
 import { pluginEventBus } from '../../../core/pluginEventBus'
-import {
-  Sparkles,
-  AlertCircle,
-  CheckCircle,
-  Flame,
-  TrendingUp,
-} from 'lucide-react'
+import { Sparkles, AlertCircle, CheckCircle, Flame, TrendingUp } from 'lucide-react'
 
-export const LedgerWriterDrawer: FC<DesktopPluginDrawerProps> = ({
-  projectId,
-  currentText,
-}) => {
+export const LedgerWriterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [entries, setEntries] = useState<PromiseLedgerEntry[]>([])
   const [activeTab, setActiveTab] = useState<'candidates' | 'debts'>('candidates')
   const [currentChapter] = useState(1)

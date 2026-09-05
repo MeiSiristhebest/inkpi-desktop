@@ -8,12 +8,41 @@ import type {
 import presetTiersData from '../data/preset-tiers.json'
 import { idGenerator } from '../../../adapters/idGenerator'
 
-const VICTORY_VERBS = ['击败', '斩杀', '重创', '镇压', '秒杀', '打死', '手撕', '斩落', '废去', '轰杀', '刺死']
+const VICTORY_VERBS = [
+  '击败',
+  '斩杀',
+  '重创',
+  '镇压',
+  '秒杀',
+  '打死',
+  '手撕',
+  '斩落',
+  '废去',
+  '轰杀',
+  '刺死',
+]
 const DEFEAT_VERBS = ['败于', '死于', '被杀', '受创于', '不敌', '饮恨于']
-const ACTIVE_SUBJECT_VERBS = ['说', '道', '走', '冲', '拔出', '冷笑', '出手', '点头', '叹息', '盘膝', '飞身', '狂笑', '怒吼', '挥剑']
+const ACTIVE_SUBJECT_VERBS = [
+  '说',
+  '道',
+  '走',
+  '冲',
+  '拔出',
+  '冷笑',
+  '出手',
+  '点头',
+  '叹息',
+  '盘膝',
+  '飞身',
+  '狂笑',
+  '怒吼',
+  '挥剑',
+]
 
 export class ConsistencyEngine {
   private customSystem: PowerTierSystem | null = null
+  // 缓存传递闭包结果，避免双重循环中对同个系统重复执行 O(n^3) Warshall 计算
+  private closureCache = new Map<string, Map<string, Set<string>>>()
 
   public setCustomSystem(system: PowerTierSystem | null): void {
     this.customSystem = system
@@ -48,7 +77,7 @@ export class ConsistencyEngine {
    */
   public buildTransitiveClosure(
     tiers: string[],
-    directRelations?: TierRelation[]
+    directRelations?: TierRelation[],
   ): Map<string, Set<string>> {
     const uniqueTiers = Array.from(new Set(tiers))
     const n = uniqueTiers.length
@@ -57,7 +86,7 @@ export class ConsistencyEngine {
 
     // 1. 初始化布尔可达邻接矩阵 (n x n)
     const reachMatrix: boolean[][] = Array.from({ length: n }, () =>
-      Array.from({ length: n }, () => false)
+      Array.from({ length: n }, () => false),
     )
 
     // 2. 填充基础偏序边
@@ -117,14 +146,20 @@ export class ConsistencyEngine {
     tierA: string,
     tierB: string,
     system: PowerTierSystem,
-    directRelations?: TierRelation[]
+    directRelations?: TierRelation[],
   ): number {
     if (!system.tiers.includes(tierA) || !system.tiers.includes(tierB)) {
       return NaN
     }
     if (tierA === tierB) return 0
 
-    const closure = this.buildTransitiveClosure(system.tiers, directRelations)
+    const cacheKey = `${system.systemName || 'sys'}_${system.tiers.join(',')}_${JSON.stringify(directRelations || [])}`
+    let closure = this.closureCache.get(cacheKey)
+    if (!closure) {
+      closure = this.buildTransitiveClosure(system.tiers, directRelations)
+      this.closureCache.set(cacheKey, closure)
+    }
+
     const aCanReachB = closure.get(tierA)?.has(tierB) // A < B
     const bCanReachA = closure.get(tierB)?.has(tierA) // B < A
 
@@ -201,19 +236,26 @@ export class ConsistencyEngine {
   private extractCombatInteractions(
     text: string,
     charA: string,
-    charB: string
+    charB: string,
   ): Array<{ snippet: string; winner: string; loser: string; matchIndex: number }> {
-    const results: Array<{ snippet: string; winner: string; loser: string; matchIndex: number }> = []
+    const results: Array<{ snippet: string; winner: string; loser: string; matchIndex: number }> =
+      []
 
     // 1. 主动态：A [在15字内] [击败动词] [在15字内] B
     for (const verb of VICTORY_VERBS) {
-      const activeRegex = new RegExp(`(${charA}[^，。！？\n]{0,15}${verb}[^，。！？\n]{0,15}${charB})`, 'g')
+      const activeRegex = new RegExp(
+        `(${charA}[^，。！？\n]{0,15}${verb}[^，。！？\n]{0,15}${charB})`,
+        'g',
+      )
       let m: RegExpExecArray | null
       while ((m = activeRegex.exec(text)) !== null) {
         results.push({ snippet: m[0], winner: charA, loser: charB, matchIndex: m.index })
       }
       // 反向：B 击败 A
-      const activeReverse = new RegExp(`(${charB}[^，。！？\n]{0,15}${verb}[^，。！？\n]{0,15}${charA})`, 'g')
+      const activeReverse = new RegExp(
+        `(${charB}[^，。！？\n]{0,15}${verb}[^，。！？\n]{0,15}${charA})`,
+        'g',
+      )
       while ((m = activeReverse.exec(text)) !== null) {
         results.push({ snippet: m[0], winner: charB, loser: charA, matchIndex: m.index })
       }
@@ -221,7 +263,10 @@ export class ConsistencyEngine {
 
     // 2. 被动态：B [在15字内] [败于/死于] [在15字内] A
     for (const verb of DEFEAT_VERBS) {
-      const passiveRegex = new RegExp(`(${charB}[^，。！？\n]{0,15}${verb}[^，。！？\n]{0,15}${charA})`, 'g')
+      const passiveRegex = new RegExp(
+        `(${charB}[^，。！？\n]{0,15}${verb}[^，。！？\n]{0,15}${charA})`,
+        'g',
+      )
       let m: RegExpExecArray | null
       while ((m = passiveRegex.exec(text)) !== null) {
         results.push({ snippet: m[0], winner: charA, loser: charB, matchIndex: m.index })
@@ -243,6 +288,9 @@ export class ConsistencyEngine {
     const validEntities = entities.filter((e) => e.realm && system.tiers.includes(e.realm))
     if (validEntities.length < 2) return violations
 
+    // 性能优化：闭包在双重循环前预先构建一次，避免 O(|实体|² × |交互| × |境界|³) 的重复矩阵构建
+    const reachable = this.buildTransitiveClosure(system.tiers)
+
     for (let i = 0; i < validEntities.length; i++) {
       for (let j = i + 1; j < validEntities.length; j++) {
         const entA = validEntities[i]
@@ -253,9 +301,26 @@ export class ConsistencyEngine {
           const winnerEnt = inter.winner === entA.name ? entA : entB
           const loserEnt = inter.winner === entA.name ? entB : entA
 
-          // 偏序关系比较：低境界战胜高境界属于潜在越阶
-          const order = this.compareTiers(winnerEnt.realm!, loserEnt.realm!, system)
-          if (order < 0) {
+          const winnerRealm = winnerEnt.realm!
+          const loserRealm = loserEnt.realm!
+
+          // 直接根据预构建闭包查找是否属于低打高
+          const winnerCanReachLoser = reachable.get(winnerRealm)?.has(loserRealm) ?? false
+          const loserCanReachWinner = reachable.get(loserRealm)?.has(winnerRealm) ?? false
+
+          let isLowerBeatsHigher = false
+          if (winnerCanReachLoser && !loserCanReachWinner) {
+            isLowerBeatsHigher = true
+          } else if (!winnerCanReachLoser && !loserCanReachWinner) {
+            // 无偏序关系时按声明线性索引
+            const idxWinner = system.tiers.indexOf(winnerRealm)
+            const idxLoser = system.tiers.indexOf(loserRealm)
+            if (idxWinner !== -1 && idxLoser !== -1 && idxWinner < idxLoser) {
+              isLowerBeatsHigher = true
+            }
+          }
+
+          if (isLowerBeatsHigher) {
             // 检查局部语境（前后 80 字符）是否具有合理解释修饰词（如偷袭、禁器、自爆、大阵）
             const startIdx = Math.max(0, inter.matchIndex - 80)
             const endIdx = Math.min(text.length, inter.matchIndex + inter.snippet.length + 80)
@@ -287,7 +352,7 @@ export class ConsistencyEngine {
    */
   public validatePowerHierarchy(
     system: PowerTierSystem,
-    directRelations?: TierRelation[]
+    directRelations?: TierRelation[],
   ): PosetValidationResult {
     if (!directRelations || directRelations.length === 0) {
       return { isAcyclic: true, cycles: [] }
@@ -300,7 +365,7 @@ export class ConsistencyEngine {
    */
   public scanPowerHierarchyCycles(
     system: PowerTierSystem,
-    directRelations?: TierRelation[]
+    directRelations?: TierRelation[],
   ): ConsistencyViolation[] {
     const validation = this.validatePowerHierarchy(system, directRelations)
     if (validation.isAcyclic) return []

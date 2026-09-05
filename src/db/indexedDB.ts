@@ -265,6 +265,32 @@ class InkStudioDB {
     })
   }
 
+  public async getByIndex<T>(
+    store: StoreName,
+    indexName: string,
+    queryValue: IDBValidKey | IDBKeyRange
+  ): Promise<T[]> {
+    const db = await this.openDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(store, 'readonly')
+      const os = tx.objectStore(store)
+      if (!os.indexNames.contains(indexName)) {
+        // 索引未定义时安全退化为全表过滤
+        const req = os.getAll()
+        req.onsuccess = () => {
+          const list = (req.result as any[]) || []
+          resolve(list.filter((item) => item && item[indexName] === queryValue) as T[])
+        }
+        req.onerror = () => reject(req.error)
+        return
+      }
+      const idx = os.index(indexName)
+      const req = idx.getAll(queryValue)
+      req.onsuccess = () => resolve((req.result as T[]) || [])
+      req.onerror = () => reject(req.error)
+    })
+  }
+
   public async get<T>(store: StoreName, key: string): Promise<T | undefined> {
     const db = await this.openDB()
     return new Promise((resolve, reject) => {

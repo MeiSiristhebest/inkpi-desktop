@@ -1,12 +1,5 @@
 import { useState, useEffect, Suspense, type FC, type ReactNode } from 'react'
-import {
-  PanelRight,
-  Maximize2,
-  Minimize2,
-  Home,
-  PanelLeftOpen,
-  Sparkles,
-} from 'lucide-react'
+import { PanelRight, Maximize2, Minimize2, Home, PanelLeftOpen, Sparkles } from 'lucide-react'
 import { RichEditor, type RichEditorProps } from '../components/editor/RichEditor'
 import { SettingsView } from '../components/settings/SettingsView'
 import { DashboardView } from '../components/dashboard/DashboardView'
@@ -268,7 +261,11 @@ export const Engine: FC<EngineProps> = ({
             </div>
             <div className="flex items-center gap-0.5">
               <IconButton onClick={() => setIsFullscreen((f) => !f)} title="全屏 / 退出全屏">
-                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                {isFullscreen ? (
+                  <Minimize2 className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
               </IconButton>
               {onOpenAssistant ? (
                 <IconButton

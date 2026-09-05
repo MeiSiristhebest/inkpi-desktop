@@ -5,7 +5,10 @@ import type {
 } from '../ports/expectationRepository'
 
 export const indexedDbExpectationRepository: ExpectationRepository = {
-  async getAll(): Promise<ExpectationContract[]> {
+  async getAll(projectId?: string): Promise<ExpectationContract[]> {
+    if (projectId) {
+      return db.getByIndex<ExpectationContract>('expectationContracts', 'projectId', projectId)
+    }
     return db.getAll<ExpectationContract>('expectationContracts')
   },
   async save(contract: ExpectationContract): Promise<void> {

@@ -6,9 +6,9 @@ import {
 import { pluginEventBus } from '../../../core/pluginEventBus'
 
 const PHANTOM_CLICHES = [
-  ...UNIFIED_NARRATIVE_LEXICON.filter(
-    (e) => e.category === 'DRAMATIC_TENSION_CLICHE'
-  ).map((e) => e.phrase),
+  ...UNIFIED_NARRATIVE_LEXICON.filter((e) => e.category === 'DRAMATIC_TENSION_CLICHE').map(
+    (e) => e.phrase,
+  ),
   '忍不住',
   '不由得',
   '暗暗心惊',
@@ -21,16 +21,14 @@ const PHANTOM_CLICHES = [
 ]
 
 const RECAP_BLOATS = [
-  ...UNIFIED_NARRATIVE_LEXICON.filter(
-    (e) => e.category === 'PURE_FILLER_RECAP'
-  ).map((e) => e.phrase),
+  ...UNIFIED_NARRATIVE_LEXICON.filter((e) => e.category === 'PURE_FILLER_RECAP').map(
+    (e) => e.phrase,
+  ),
   '所谓炼气期',
 ]
 
 const MODIFIER_BLOATS = [
-  ...UNIFIED_NARRATIVE_LEXICON.filter(
-    (e) => e.category === 'MODIFIER_STACK'
-  ).map((e) => e.phrase),
+  ...UNIFIED_NARRATIVE_LEXICON.filter((e) => e.category === 'MODIFIER_STACK').map((e) => e.phrase),
   '绝对绝对',
   '分外格外的',
 ]
@@ -64,10 +62,7 @@ export class WaterMeterEngine {
   /**
    * 全文水分审计
    */
-  auditText(
-    text: string,
-    context?: { projectId?: string; chapterId?: string }
-  ): WaterAuditReport {
+  auditText(text: string, context?: { projectId?: string; chapterId?: string }): WaterAuditReport {
     const rawText = (text || '').trim()
     const totalWordCount = rawText.replace(/\s+/g, '').length
 
@@ -141,19 +136,20 @@ export class WaterMeterEngine {
 
     const actionVerbRatio =
       Math.round((actionVerbCount / Math.max(1, totalWordCount)) * 1000) / 1000
-    const clicheRatio =
-      Math.round((clicheCharCount / Math.max(1, totalWordCount)) * 1000) / 1000
+    const clicheRatio = Math.round((clicheCharCount / Math.max(1, totalWordCount)) * 1000) / 1000
     const entropyScore = this.computeShannonEntropy(rawText)
 
-    // 水分评分 (0-100)：动词少 + 套话多 + 熵低
-    // 基准期望：AVR ~ 0.08, CR <= 0.01, Entropy ~ 5.5
+    // 水分评分 (0-100)：以动词密度与套话水词为主，信息熵做篇幅渐进校准
     let score = 0
     if (actionVerbRatio < 0.06) {
       score += Math.round((0.06 - actionVerbRatio) * 600)
     }
     score += Math.round(Math.min(45, clicheRatio * 500))
-    if (entropyScore < 5.0 && totalWordCount > 100) {
-      score += Math.round((5.0 - entropyScore) * 12)
+
+    // 篇幅归一化熵补偿：N 较小时经验熵自然偏低，对短篇放宽阈值避免长度偏倚
+    const expectedEntropy = 4.6 + 0.25 * Math.log10(Math.max(50, totalWordCount))
+    if (entropyScore < expectedEntropy - 0.4 && totalWordCount > 80) {
+      score += Math.round((expectedEntropy - entropyScore) * 8)
     }
 
     score = Math.max(0, Math.min(100, score))
@@ -167,11 +163,11 @@ export class WaterMeterEngine {
     // 脱水率与预估精简字数
     const dehydrationRate = Math.min(
       40,
-      Math.max(2, Math.round(score * 0.35 + (clicheCharCount / totalWordCount) * 100))
+      Math.max(2, Math.round(score * 0.35 + (clicheCharCount / totalWordCount) * 100)),
     )
     const estimatedLeanWordCount = Math.max(
       10,
-      Math.round(totalWordCount * (1 - dehydrationRate / 100))
+      Math.round(totalWordCount * (1 - dehydrationRate / 100)),
     )
 
     const advice: string[] = []

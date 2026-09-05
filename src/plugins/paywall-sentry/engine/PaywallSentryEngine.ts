@@ -51,7 +51,11 @@ export class PaywallSentryEngine {
     const fatigueRiskScore = this.computeFatigueRiskScore(content, wordCount)
 
     // 综合计算 PPI: 0.35*C + 0.35*D + 0.30*P - 0.10*F
-    const rawPPI = 0.35 * cliffhangerScore + 0.35 * unresolvedDesireScore + 0.30 * powerClimaxScore - 0.10 * fatigueRiskScore
+    const rawPPI =
+      0.35 * cliffhangerScore +
+      0.35 * unresolvedDesireScore +
+      0.3 * powerClimaxScore -
+      0.1 * fatigueRiskScore
     const ppiScore = Math.max(0, Math.min(100, Math.round(rawPPI)))
 
     // 评级划分与实战建议生成
@@ -66,20 +70,30 @@ export class PaywallSentryEngine {
       suggestions.push('⚖️ 合格卡点：具备一定的情绪惯性与钩子，能够平稳承接付费转化。')
     } else if (fatigueRiskScore >= 60) {
       recommendation = 'toxic_drop'
-      suggestions.push('☠️ 暴跌断更风险：本章充斥过多背景交代或平淡休整，在此卡点极易造成读者大量流失弃书。')
+      suggestions.push(
+        '☠️ 暴跌断更风险：本章充斥过多背景交代或平淡休整，在此卡点极易造成读者大量流失弃书。',
+      )
     } else {
       recommendation = 'weak_cut'
-      suggestions.push('⚠️ 偏弱卡点：章尾悬念势能偏弱或事件已闭环收束，建议将关键危机前置或移至下一章交界处。')
+      suggestions.push(
+        '⚠️ 偏弱卡点：章尾悬念势能偏弱或事件已闭环收束，建议将关键危机前置或移至下一章交界处。',
+      )
     }
 
     if (cliffhangerScore < 50) {
-      suggestions.push('💡 悬念提升建议：章尾最后一段宜采用“危机顿挫”或“未完之语”，避免在事件尘埃落定时突兀切断。')
+      suggestions.push(
+        '💡 悬念提升建议：章尾最后一段宜采用“危机顿挫”或“未完之语”，避免在事件尘埃落定时突兀切断。',
+      )
     }
     if (unresolvedDesireScore < 40) {
-      suggestions.push('💡 期待唤醒建议：强化主角的当务之急（如倒计时、生死契约、开箱奖励揭晓前一瞬）。')
+      suggestions.push(
+        '💡 期待唤醒建议：强化主角的当务之急（如倒计时、生死契约、开箱奖励揭晓前一瞬）。',
+      )
     }
     if (fatigueRiskScore > 50) {
-      suggestions.push('💡 节奏精简建议：削减大段设定描写或说明性旁白，压缩叙事水分以聚拢核心冲突。')
+      suggestions.push(
+        '💡 节奏精简建议：削减大段设定描写或说明性旁白，压缩叙事水分以聚拢核心冲突。',
+      )
     }
 
     return {
@@ -117,7 +131,7 @@ export class PaywallSentryEngine {
 
     // 标点结尾特征：以省略号、问号、破折号或感叹号结尾的悬念更强
     const trimmed = tailText.trim()
-    if (/[……\.\.\.？！\?!—–-]$/.test(trimmed)) {
+    if (/[…….\..？！?!—–-]$/.test(trimmed)) {
       score += 15
     } else if (/[。]$/.test(trimmed)) {
       // 句号收尾稍降悬念顿挫感
@@ -132,8 +146,19 @@ export class PaywallSentryEngine {
 
     // 核心欲望与目标驱动词（宝箱、突破、揭榜、约定、审判等）
     const desirePatterns = [
-      /奖励/g, /打开/g, /爆出/g, /突破/g, /进阶/g, /升级/g,
-      /倒计时/g, /救/g, /秘密/g, /真相/g, /赌注/g, /复仇/g, /神殿/g
+      /奖励/g,
+      /打开/g,
+      /爆出/g,
+      /突破/g,
+      /进阶/g,
+      /升级/g,
+      /倒计时/g,
+      /救/g,
+      /秘密/g,
+      /真相/g,
+      /赌注/g,
+      /复仇/g,
+      /神殿/g,
     ]
 
     let desireHits = 0
@@ -158,8 +183,20 @@ export class PaywallSentryEngine {
 
     // 战斗与冲突强度词
     const climaxPatterns = [
-      /轰！/g, /轰隆/g, /狂暴/g, /惊骇/g, /碾压/g, /斩/g, /碎裂/g,
-      /威压/g, /天劫/g, /杀意/g, /底牌/g, /暴怒/g, /剑气/g, /九霄/g
+      /轰！/g,
+      /轰隆/g,
+      /狂暴/g,
+      /惊骇/g,
+      /碾压/g,
+      /斩/g,
+      /碎裂/g,
+      /威压/g,
+      /天劫/g,
+      /杀意/g,
+      /底牌/g,
+      /暴怒/g,
+      /剑气/g,
+      /九霄/g,
     ]
 
     let climaxHits = 0
@@ -179,8 +216,16 @@ export class PaywallSentryEngine {
 
     // 判定说明性文本、学术化词汇、大段环境描写比例
     const expPatterns = [
-      /据悉/g, /总而言之/g, /换言之/g, /从某种意义上/g, /客观来说/g,
-      /顾名思义/g, /也就是说/g, /根据记载/g, /史书记载/g, /众所周知/g
+      /据悉/g,
+      /总而言之/g,
+      /换言之/g,
+      /从某种意义上/g,
+      /客观来说/g,
+      /顾名思义/g,
+      /也就是说/g,
+      /根据记载/g,
+      /史书记载/g,
+      /众所周知/g,
     ]
 
     for (const pat of expPatterns) {

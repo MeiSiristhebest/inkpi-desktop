@@ -14,7 +14,7 @@ export interface ExpectationContract {
 }
 
 export interface ExpectationRepository {
-  getAll(): Promise<ExpectationContract[]>
+  getAll(projectId?: string): Promise<ExpectationContract[]>
   save(contract: ExpectationContract): Promise<void>
   delete(id: string): Promise<void>
 }

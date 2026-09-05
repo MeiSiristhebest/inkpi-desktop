@@ -3,16 +3,7 @@ import type { CodexEntity } from '../types'
 import { CodexGraphStore } from '../engine/GraphStore'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { pluginEventBus } from '../../../core/pluginEventBus'
-import {
-  User,
-  Shield,
-  MapPin,
-  Sparkles,
-  BookOpen,
-  Layers,
-  Info,
-  X,
-} from 'lucide-react'
+import { User, Shield, MapPin, Sparkles, BookOpen, Layers, Info, X } from 'lucide-react'
 import { Drawer } from '../../../ui/molecules/Drawer'
 
 interface CodexWriterDrawerProps {

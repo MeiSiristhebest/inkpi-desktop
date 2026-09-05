@@ -28,7 +28,9 @@ export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
       return
     }
     // 文本时间词特征自动捕获
-    const match = currentText.match(/((?:大炎)?(?:天历|灵历|贞观|元丰|洪武|建安)[^，。\n]{2,15}(?:年|月|日))/)
+    const match = currentText.match(
+      /((?:大炎)?(?:天历|灵历|贞观|元丰|洪武|建安)[^，。\n]{2,15}(?:年|月|日))/,
+    )
     if (match) {
       const captured = match[0].trim()
       setDetectedDate(captured)

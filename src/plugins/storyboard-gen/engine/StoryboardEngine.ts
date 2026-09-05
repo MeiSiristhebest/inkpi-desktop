@@ -3,7 +3,7 @@ import type {
   CharacterVisualCard,
   ClimaxStoryboardExtraction,
   StoryboardSceneRecord,
-} from "../types"
+} from '../types'
 
 /**
  * StoryboardEngine (角色立绘与分镜生成器引擎)
@@ -18,7 +18,7 @@ export class StoryboardEngine {
   public static extractStoryboard(
     chapterId: string,
     chapterTitle: string,
-    chapterText: string
+    chapterText: string,
   ): ClimaxStoryboardExtraction {
     const rawLines = chapterText
       .split(/\r?\n/)
@@ -30,14 +30,14 @@ export class StoryboardEngine {
     let opponent = '赵家长老'
 
     // 简单扫描提取高频双字/三字主语
-    const nameMatches = chapterText.match(/([\u4e00-\u9fa5]{2,3})(?:手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出)/g)
+    const nameMatches = chapterText.match(
+      /([\u4e00-\u9fa5]{2,3})(?:手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出)/g,
+    )
     if (nameMatches && nameMatches.length > 0) {
       const extractedNames = Array.from(
         new Set(
-          nameMatches.map((m) =>
-            m.replace(/(手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出)/g, '')
-          )
-        )
+          nameMatches.map((m) => m.replace(/(手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出)/g, '')),
+        ),
       ).filter((n) => n.length >= 2 && n.length <= 3)
 
       if (extractedNames.length >= 1) mainHero = extractedNames[0]
@@ -45,7 +45,8 @@ export class StoryboardEngine {
     }
 
     // 提取关键冲突段落片段作为描述基础
-    const actionSnippet = rawLines.find((l) => /(剑|刀|斩|杀|掌|拳|雷|火|轰)/.test(l)) || rawLines[0] || '双方对峙'
+    const actionSnippet =
+      rawLines.find((l) => /(剑|刀|斩|杀|掌|拳|雷|火|轰)/.test(l)) || rawLines[0] || '双方对峙'
     const defaultConflict = `围绕「${mainHero}」与「${opponent}」的关键交锋：${actionSnippet.slice(0, 45)}`
 
     const frames: ShotFrame[] = [
@@ -119,7 +120,7 @@ export class StoryboardEngine {
     projectId: string,
     chapterId: string,
     extracted: ClimaxStoryboardExtraction,
-    createdAt: number
+    createdAt: number,
   ): StoryboardSceneRecord {
     return {
       id,
@@ -132,4 +133,3 @@ export class StoryboardEngine {
     }
   }
 }
-

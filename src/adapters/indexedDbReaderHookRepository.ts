@@ -5,7 +5,10 @@ import type {
 } from '../ports/readerHookRepository'
 
 export const indexedDbReaderHookRepository: ReaderHookRepository = {
-  async getAll(): Promise<ReaderHookRecord[]> {
+  async getAll(projectId?: string): Promise<ReaderHookRecord[]> {
+    if (projectId) {
+      return db.getByIndex<ReaderHookRecord>('readerHooks', 'projectId', projectId)
+    }
     return db.getAll<ReaderHookRecord>('readerHooks')
   },
   async save(record: ReaderHookRecord): Promise<void> {
