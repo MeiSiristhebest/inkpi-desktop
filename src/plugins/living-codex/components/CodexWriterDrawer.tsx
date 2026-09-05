@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FC } from 'react'
+import { useState, useEffect, useRef, type FC, type ComponentType } from 'react'
 import type { CodexEntity } from '../types'
 import { CodexGraphStore } from '../engine/GraphStore'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
@@ -12,7 +12,7 @@ interface CodexWriterDrawerProps {
   onOpenDetail?: (entityId: string) => void
 }
 
-const CATEGORY_ICONS: Record<string, any> = {
+const CATEGORY_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   character: User,
   faction: Shield,
   location: MapPin,
