@@ -8,103 +8,14 @@ import {
   type ReactNode,
 } from 'react'
 import type { DesktopPlugin, DesktopPluginCategory } from '../types/plugin'
-import { LivingCodexPlugin } from '../plugins/living-codex'
-import { PromiseLedgerPlugin } from '../plugins/promise-ledger'
-import { TimelineGridPlugin } from '../plugins/timeline-grid'
-import { SafeGatePlugin } from '../plugins/safe-gate'
-import { SceneBeatsPlugin } from '../plugins/scene-beats'
-import { DescribePalettePlugin } from '../plugins/describe-palette'
-import { NameForgePlugin } from '../plugins/name-forge'
-import { ExpectationEnginePlugin } from '../plugins/expectation-engine'
-import { ConsistencySentinelPlugin } from '../plugins/consistency-sentinel'
-import { SprintArenaPlugin } from '../plugins/sprint-arena'
-import { ReaderHookPlugin } from '../plugins/reader-hook'
-import { ClueWeaverPlugin } from '../plugins/clue-weaver'
-import { WaterMeterPlugin } from '../plugins/water-meter'
-import { VolumeMasterPlugin } from '../plugins/volume-master'
-import { DialogueDistillerPlugin } from '../plugins/dialogue-distiller'
-import { FactionMatrixPlugin } from '../plugins/faction-matrix'
-import { PaywallSentryPlugin } from '../plugins/paywall-sentry'
-import { MemoryPalacePlugin } from '../plugins/memory-palace'
-import { PressForgePlugin } from '../plugins/press-forge'
-import { EmotionCurvePlugin } from '../plugins/emotion-curve'
-import { SubPlotBraidPlugin } from '../plugins/sub-plot-braid'
-import { BrainstormSparkPlugin } from '../plugins/brainstorm-spark'
-import { ReaderSimulatorPlugin } from '../plugins/reader-simulator'
-import { ChekhovRadarPlugin } from '../plugins/chekhov-radar'
-import { RhythmMetronomePlugin } from '../plugins/rhythm-metronome'
-import { GeographyMapPlugin } from '../plugins/geography-map'
-import { CombatSandboxPlugin } from '../plugins/combat-sandbox'
-import { MultiCalendarPlugin } from '../plugins/multi-calendar'
-import { PovGuardPlugin } from '../plugins/pov-guard'
-import { NarrativeLinterPlugin } from '../plugins/narrative-linter'
-import { DiffReviewerPlugin } from '../plugins/diff-reviewer'
-import { IronChamberPlugin } from '../plugins/iron-chamber'
-import { SoundscapePlugin } from '../plugins/soundscape'
-import { ScrapbookRecyclerPlugin } from '../plugins/scrapbook-recycler'
-import { AftermathSyncPlugin } from '../plugins/aftermath-sync'
-import { SubtextCompilerPlugin } from '../plugins/subtext-compiler'
-import { ArchetypeCardsPlugin } from '../plugins/archetype-cards'
-import { RhythmRadarPlugin } from '../plugins/rhythm-radar'
-import { GoldChaptersEvalPlugin } from '../plugins/gold-chapters-eval'
-import { ShadowReaderPlugin } from '../plugins/shadow-reader'
-import { AuthorOpsPlugin } from '../plugins/author-ops'
-import { MultiverseWhatIfPlugin } from '../plugins/multiverse-whatif'
-import { VoicePreviewPlugin } from '../plugins/voice-preview'
-import { StoryboardGenPlugin } from '../plugins/storyboard-gen'
+import { ALL_LAZY_PLUGINS } from './pluginDefinitions'
 import { indexedDbKeyValueStore } from '../adapters/indexedDbKeyValueStore'
 import { localStorageKeyValueStore } from '../adapters/localStorageKeyValueStore'
 
 export const STORAGE_KEY_ENABLED_PLUGINS = 'inkpi_enabled_plugins_v1'
 
-// 系统内所有可用插件注册列表
-export const ALL_AVAILABLE_PLUGINS: DesktopPlugin[] = [
-  LivingCodexPlugin,
-  PromiseLedgerPlugin,
-  TimelineGridPlugin,
-  SafeGatePlugin,
-  SceneBeatsPlugin,
-  DescribePalettePlugin,
-  NameForgePlugin,
-  ExpectationEnginePlugin,
-  ConsistencySentinelPlugin,
-  SprintArenaPlugin,
-  ReaderHookPlugin,
-  ClueWeaverPlugin,
-  WaterMeterPlugin,
-  VolumeMasterPlugin,
-  DialogueDistillerPlugin,
-  FactionMatrixPlugin,
-  PaywallSentryPlugin,
-  MemoryPalacePlugin,
-  PressForgePlugin,
-  EmotionCurvePlugin,
-  SubPlotBraidPlugin,
-  BrainstormSparkPlugin,
-  ReaderSimulatorPlugin,
-  ChekhovRadarPlugin,
-  RhythmMetronomePlugin,
-  GeographyMapPlugin,
-  CombatSandboxPlugin,
-  MultiCalendarPlugin,
-  PovGuardPlugin,
-  NarrativeLinterPlugin,
-  DiffReviewerPlugin,
-  IronChamberPlugin,
-  SoundscapePlugin,
-  ScrapbookRecyclerPlugin,
-  AftermathSyncPlugin,
-  SubtextCompilerPlugin,
-  ArchetypeCardsPlugin,
-  RhythmRadarPlugin,
-  GoldChaptersEvalPlugin,
-  ShadowReaderPlugin,
-  AuthorOpsPlugin,
-  MultiverseWhatIfPlugin,
-  VoicePreviewPlugin,
-  StoryboardGenPlugin,
-]
-
+// 系统内所有可用插件按需懒加载注册列表（体积大幅缩减，首屏零冗余）
+export const ALL_AVAILABLE_PLUGINS: DesktopPlugin[] = ALL_LAZY_PLUGINS
 
 export const PLUGIN_CATEGORIES: { id: DesktopPluginCategory | 'all'; label: string }[] = [
   { id: 'all', label: '全部插件' },

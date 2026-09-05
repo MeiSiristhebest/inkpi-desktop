@@ -2,7 +2,7 @@
  * 跨插件解耦通信事件总线 (Decoupled Plugin Event Bus)
  *
  * 第一性原理：
- * 各大垂直领域插件（战力沙盘、多历法、因果时间线、契诃夫伏笔、一致性门禁）
+ * 各大垂直领域插件（战力沙盘、多历法、因果时间线、契诃夫伏笔、一致性门禁、记忆宫殿、读者感知）
  * 之间不发生硬代码级直接耦合，而是通过轻量强类型事件总线进行非阻塞、响应式消息分发与联动。
  */
 
@@ -10,8 +10,11 @@ export type PluginEventType =
   | 'TIMELINE_EVENT_REGISTERED'   // multi-calendar -> timeline-grid
   | 'POWER_BREACH_DETECTED'       // combat-sandbox -> consistency-sentinel
   | 'FORESHADOW_PLANTED'          // chekhov-radar -> promise-ledger
+  | 'PROMISE_STATUS_CHANGED'      // promise-ledger -> chekhov-radar
   | 'CODEX_ENTITY_TOUCHED'        // living-codex -> memory-palace
   | 'CHAPTER_CONTENT_AUDITED'     // water-meter / reader-hook -> emotion-curve
+  | 'EMOTIONAL_CURVE_UPDATED'     // timeline-grid -> emotion-curve
+  | 'UNIFIED_CHAPTER_EVALUATED'   // 章节质量统一评估流 (rhythm-radar + reader-hook + paywall-sentry)
 
 export interface PluginEventPayloads {
   TIMELINE_EVENT_REGISTERED: {
@@ -35,6 +38,12 @@ export interface PluginEventPayloads {
     plantChapterOrder: number
     category: string
   }
+  PROMISE_STATUS_CHANGED: {
+    projectId: string
+    promiseId: string
+    status: 'planted' | 'progressing' | 'paid_off' | 'abandoned'
+    targetChapter: number
+  }
   CODEX_ENTITY_TOUCHED: {
     projectId: string
     entityId: string
@@ -46,6 +55,17 @@ export interface PluginEventPayloads {
     chapterId: string
     wordCount: number
     waterScore?: number
+  }
+  EMOTIONAL_CURVE_UPDATED: {
+    projectId: string
+    points: Array<{ chapter: number; averagePolarity: number }>
+  }
+  UNIFIED_CHAPTER_EVALUATED: {
+    projectId: string
+    chapterId: string
+    compositeScore: number
+    pacingRating: string
+    cliffhangerScore: number
   }
 }
 
@@ -130,4 +150,3 @@ export interface ScopedPluginEventBus {
 }
 
 export const pluginEventBus = PluginEventBus.getInstance()
-

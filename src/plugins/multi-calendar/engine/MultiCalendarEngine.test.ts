@@ -49,4 +49,14 @@ describe('MultiCalendarEngine', () => {
     expect(report.paradoxCount).toBe(1)
     expect(report.conflictPairs[0].description).toContain('倒流了 1000 天')
   })
+
+  it('handles negative/BC absolute days without NaN or crash', () => {
+    // 纪元前 -360 天
+    const date = MultiCalendarEngine.fromAbsoluteDay(calAncient, -360)
+    expect(Number.isInteger(date.year)).toBe(true)
+    expect(Number.isInteger(date.month)).toBe(true)
+    expect(Number.isInteger(date.day)).toBe(true)
+    expect(date.month).toBeGreaterThanOrEqual(1)
+    expect(date.day).toBeGreaterThanOrEqual(1)
+  })
 })

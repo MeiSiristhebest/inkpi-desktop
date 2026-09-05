@@ -134,15 +134,24 @@ export class DiffReviewerEngine {
    * - applied: 采纳 proposed (新版)
    * - rejected 或 pending: 保留 original (旧版)
    */
+  /**
+   * 根据各个 Hunk 的裁决状态 (applied / rejected / pending)，重构合并后的终稿文本
+   * - applied: 采纳 proposed (新版)
+   * - rejected 或 pending: 保留 original (旧版)
+   */
   public static applyHunks(
     oldText: string,
-    hunks: Array<{ lines: string[]; resolution: HunkResolution }>
+    hunks: Array<{ lines: string[]; resolution: HunkResolution; oldStartLine?: number }>
   ): string {
     // 筛选出所有状态为 applied 的 hunks 并组装 unified patch 进行精准应用
     const appliedHunks = hunks.filter((h) => h.resolution === "applied")
     if (appliedHunks.length === 0) {
       return oldText
     }
+
+    // 动态嗅探原始换行符（CRLF vs LF），确保 Windows 桌面端合稿保真
+    const isCrlf = oldText.includes("\r\n")
+    const eol = isCrlf ? "\r\n" : "\n"
 
     // 简单高效且确定的重组策略：将 oldText 按行切分，依 hunk 行范围做状态机替换
     const oldLines = oldText.split(/\r?\n/)
@@ -169,21 +178,47 @@ export class DiffReviewerEngine {
 
       // 在 oldLines 中定位 hunkOldLines 的起始索引
       if (hunkOldLines.length === 0) continue
-      const targetFirstLine = hunkOldLines[0]
       let matchIdx = -1
 
-      for (let i = cursor; i <= oldLines.length - hunkOldLines.length; i++) {
-        if (oldLines[i] === targetFirstLine) {
-          let matched = true
-          for (let k = 0; k < hunkOldLines.length; k++) {
-            if (oldLines[i + k] !== hunkOldLines[k]) {
-              matched = false
+      const checkMatchAt = (idx: number): boolean => {
+        if (idx < cursor || idx > oldLines.length - hunkOldLines.length) return false
+        for (let k = 0; k < hunkOldLines.length; k++) {
+          if (oldLines[idx + k] !== hunkOldLines[k]) {
+            return false
+          }
+        }
+        return true
+      }
+
+      // 阶段 1：行号锚定优先 (Line-number anchored matching)
+      if (typeof hunk.oldStartLine === "number" && hunk.oldStartLine > 0) {
+        const expectedZeroIdx = hunk.oldStartLine - 1
+        const windowSize = 5
+        if (checkMatchAt(expectedZeroIdx)) {
+          matchIdx = expectedZeroIdx
+        } else {
+          for (let d = 1; d <= windowSize; d++) {
+            if (checkMatchAt(expectedZeroIdx - d)) {
+              matchIdx = expectedZeroIdx - d
+              break
+            }
+            if (checkMatchAt(expectedZeroIdx + d)) {
+              matchIdx = expectedZeroIdx + d
               break
             }
           }
-          if (matched) {
-            matchIdx = i
-            break
+        }
+      }
+
+      // 阶段 2：若锚定未命中，回退到 cursor 之后的顺序滑动扫描 (Fallback)
+      if (matchIdx === -1) {
+        const targetFirstLine = hunkOldLines[0]
+        for (let i = cursor; i <= oldLines.length - hunkOldLines.length; i++) {
+          if (oldLines[i] === targetFirstLine) {
+            if (checkMatchAt(i)) {
+              matchIdx = i
+              break
+            }
           }
         }
       }
@@ -202,6 +237,9 @@ export class DiffReviewerEngine {
         }
 
         cursor = matchIdx + hunkOldLines.length
+      } else {
+        // Hunk 匹配失败时发出控制台警告以追踪，避免静默失败
+        console.warn(`[DiffReviewerEngine] Hunk at line ${hunk.oldStartLine} failed to match oldText anchor.`)
       }
     }
 
@@ -210,6 +248,6 @@ export class DiffReviewerEngine {
       resultLines.push(oldLines[j])
     }
 
-    return resultLines.join("\n")
+    return resultLines.join(eol)
   }
 }

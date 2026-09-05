@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC, type ReactNode } from 'react'
+import { useState, useEffect, Suspense, type FC, type ReactNode } from 'react'
 import {
   PanelRight,
   Maximize2,
@@ -11,6 +11,7 @@ import { RichEditor, type RichEditorProps } from '../components/editor/RichEdito
 import { SettingsView } from '../components/settings/SettingsView'
 import { DashboardView } from '../components/dashboard/DashboardView'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { PluginSuspenseFallback } from './components/PluginSuspenseFallback'
 import { IconButton, Row } from '../ui/atoms'
 
 // 42 模块组件引入
@@ -207,7 +208,11 @@ export const Engine: FC<EngineProps> = ({
 
     if (matchingPlugin) {
       const MainView = matchingPlugin.mainView
-      return <MainView projectId={projectId} onStats={setStats} />
+      return (
+        <Suspense fallback={<PluginSuspenseFallback label={`${matchingPlugin.name} 加载中...`} />}>
+          <MainView projectId={projectId} onStats={setStats} />
+        </Suspense>
+      )
     }
 
     if (!activeTabMeta) {

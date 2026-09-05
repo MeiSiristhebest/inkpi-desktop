@@ -1,5 +1,7 @@
 import type { PressFormatOptions, TypesetResult } from '../types'
 
+import redWords from '../../safe-gate/data/seed-words-red.json'
+
 export class PressForgeEngine {
   /**
    * 预置多平台规范
@@ -59,11 +61,16 @@ export class PressForgeEngine {
   }
 
   /**
-   * 常见涉敏高风险词库（演示性基础词库）
+   * 共享 safe-gate 红色高危词库与基础敏感词库
    */
-  static readonly SENSITIVE_WORDS = [
-    '中南海', '领导人', '暴动', '分裂', '毒品', '邪教', '违禁药品'
-  ]
+  static readonly SENSITIVE_WORDS: string[] = Array.from(
+    new Set([
+      '中南海', '领导人', '暴动', '分裂', '毒品', '邪教', '违禁药品',
+      ...(Array.isArray(redWords)
+        ? redWords.map((item: any) => (typeof item === 'string' ? item : item.word)).filter(Boolean)
+        : []),
+    ])
+  )
 
   /**
    * 核心 AST / 正则排版压制器

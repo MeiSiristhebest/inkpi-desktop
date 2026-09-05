@@ -34,6 +34,14 @@ export class SprintEngine {
   }
 
   /**
+   * 判定连击是否应当递增：仅当产生了正向净新增字符时（charsDelta > 0）才视为有效连击，
+   * 彻底杜绝连续敲击退格键刷连击的虚假心流作弊。
+   */
+  public shouldIncrementCombo(charsDelta: number): boolean {
+    return charsDelta > 0
+  }
+
+  /**
    * 判定连击是否保持
    * 连续输入间隔 <= 3.5 秒视为保持连击
    */

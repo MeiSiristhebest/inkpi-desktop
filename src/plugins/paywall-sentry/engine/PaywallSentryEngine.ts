@@ -1,4 +1,9 @@
 import type { PaywallAuditResult, PaywallRecommendation } from '../types'
+import {
+  NarrativeLexiconService,
+  SUSPENSE_TRIGGER_WORDS,
+  UNIFIED_NARRATIVE_LEXICON,
+} from '../../../domain/lexicon/NarrativeLexicon'
 
 export class PaywallSentryEngine {
   /**
@@ -95,14 +100,16 @@ export class PaywallSentryEngine {
   private static computeCliffhangerScore(tailText: string): number {
     let score = 30
 
-    // 关键悬念与转折标记词
-    const cliffhangerKeywords = [
-      '忽然', '突然', '骤然', '猛地', '然而', '只见', '竟然', '赫然',
-      '怎么可能', '不可能', '那是……', '那是...', '瞳孔骤缩', '倒吸一口凉气',
-      '脸色剧变', '脚步一顿', '谁？！', '谁?!', '冷笑', '危险', '崩塌', '杀意'
-    ]
+    // 1. 基于统一叙事语境词库的章尾留钩加权 (有明确语义依据，而非孤立规则)
+    for (const item of UNIFIED_NARRATIVE_LEXICON) {
+      if (tailText.includes(item.phrase)) {
+        const evalRes = NarrativeLexiconService.evaluatePhrase(item.phrase, true)
+        score += evalRes.hookBenefit
+      }
+    }
 
-    for (const kw of cliffhangerKeywords) {
+    // 2. 关键强转折与悬念触发词
+    for (const kw of SUSPENSE_TRIGGER_WORDS) {
       if (tailText.includes(kw)) {
         score += 8
       }
@@ -184,9 +191,10 @@ export class PaywallSentryEngine {
     }
 
     // 字数过长带来的单章边际递减疲劳
-    if (wordCount > 6000) {
+    // 依现代网络小说大章（6000-8000字）常态标准校准，避免在标准长章节下误判读者疲劳
+    if (wordCount > 12000) {
       score += 25
-    } else if (wordCount > 4500) {
+    } else if (wordCount > 9000) {
       score += 15
     }
 

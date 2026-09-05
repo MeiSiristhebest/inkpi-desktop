@@ -3,6 +3,7 @@ import type {
   PowerBreachAlert,
   CombatDuelTemplate,
 } from '../types'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 
 export class CombatSandboxEngine {
   /**
@@ -23,17 +24,21 @@ export class CombatSandboxEngine {
 
   /**
    * 严谨 Sigmoid 概率论：计算高境界对手对低境界对手的绝对压制率
-   * P_suppress = 1 / (1 + e^(-k * (deltaLogE - C_offset)))
+   * 当 enemyRank > protagonistRank 时，压制率 > 0.5；
+   * 当 protagonistRank > enemyRank 时，主角对敌方形成压制，敌方对主角压制率 < 0.5；
+   * 当 deltaLogE = 0 时，双方势均力敌，压制率为 0.5。
    */
   static calculateSuppressionRate(protagonistRank: number, enemyRank: number): number {
     const pTier = this.DEFAULT_TIERS.find((t) => t.rankValue === protagonistRank) || { energyLog10: protagonistRank * 0.2 }
     const eTier = this.DEFAULT_TIERS.find((t) => t.rankValue === enemyRank) || { energyLog10: enemyRank * 0.2 }
 
     const deltaLogE = eTier.energyLog10 - pTier.energyLog10
-    if (deltaLogE <= 0) return 0.5 // 势均力敌或主角高
+    if (deltaLogE === 0) return 0.5
 
     const k = 1.2
-    const rate = 1 / (1 + Math.exp(-k * deltaLogE + 1.0))
+    // 当 deltaLogE > 0 (敌强我弱)，rate > 0.5
+    // 当 deltaLogE < 0 (我强敌弱)，rate < 0.5
+    const rate = 1 / (1 + Math.exp(-k * deltaLogE))
     return Math.round(rate * 1000) / 1000
   }
 
@@ -56,8 +61,11 @@ export class CombatSandboxEngine {
     protagonistRank: number
     enemyRank: number
     compensatoryAssets: string[]
+    projectId?: string
+    protagonistName?: string
+    enemyName?: string
   }): PowerBreachAlert {
-    const { protagonistRank, enemyRank, compensatoryAssets } = params
+    const { protagonistRank, enemyRank, compensatoryAssets, projectId, protagonistName, enemyName } = params
     const diff = enemyRank - protagonistRank
 
     if (diff <= 0) {
@@ -113,6 +121,22 @@ export class CombatSandboxEngine {
         : riskLevel === 'WARNING'
         ? `⚠️ 越级挑战预警：面对高阶对手 (${suppressionPct}% 压制)，需铺垫足额代价要素 (当前补偿 ${totalCompensatoryPower.toFixed(1)} / 所需 ${baseDeficit.toFixed(1)})。`
         : `战力体系严密平稳：已配备 ${totalCompensatoryPower.toFixed(1)} 能级代偿资产，合理抹平跨阶压制。`
+
+    // 如果发生越级风险，自动向全系统广播 POWER_BREACH_DETECTED 事件
+    if (isBreached && riskLevel !== 'SAFE') {
+      try {
+        pluginEventBus.emit('POWER_BREACH_DETECTED', {
+          projectId: projectId || 'default',
+          protagonistName: protagonistName || '主角',
+          enemyName: enemyName || '高阶敌方',
+          tierDiff: diff,
+          riskLevel,
+          diagnostic,
+        })
+      } catch (err) {
+        console.warn('[CombatSandboxEngine] Failed to emit POWER_BREACH_DETECTED:', err)
+      }
+    }
 
     return {
       isBreached,

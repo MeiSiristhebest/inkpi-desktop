@@ -52,7 +52,11 @@ describe('Tier 1: F2 - Drawer Dock Activation & WriterDesk Consolidation', () =>
     const pluginsWithDrawers = ALL_AVAILABLE_PLUGINS.filter((p) => Boolean(p.drawerSnippetView))
 
     for (const plugin of pluginsWithDrawers) {
-      expect(typeof plugin.drawerSnippetView).toBe('function')
+      // 兼容 React.lazy 动态加载组件（object, $$typeof = Symbol(react.lazy)）与普通 SFC 函数组件
+      const isComponent =
+        typeof plugin.drawerSnippetView === 'function' ||
+        (typeof plugin.drawerSnippetView === 'object' && plugin.drawerSnippetView !== null)
+      expect(isComponent).toBe(true)
       expect(plugin.id).toBeDefined()
       expect(plugin.name).toBeDefined()
     }

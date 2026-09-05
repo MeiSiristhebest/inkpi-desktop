@@ -42,7 +42,8 @@ export class RhythmRadarEngine {
     }
 
     // 1. 动词与冲突密度统计 (Action & Conflict Density)
-    const combatWords = (text.match(/(杀|斩|破|轰|死|血|剑|刀|爆|灭|震|撕|雷)/g) || []).length
+    // 扩展多字词与广泛冲突表征（对峙、逼近、博弈、暗杀、生死存亡等）
+    const combatWords = (text.match(/(杀|斩|破|轰|死|血|剑|刀|爆|灭|震|撕|雷|对峙|突袭|搏杀|危机|生死|博弈|决绝|绝境)/g) || []).length
     const actionDensity = Math.min(1.0, combatWords / (text.length / 100))
 
     // 2. 情感极性词汇 (Sentiment Valence)
@@ -50,7 +51,7 @@ export class RhythmRadarEngine {
     const negativeWords = (text.match(/(悲|怒|恨|绝望|痛|崩塌|败|陨落|冰冷)/g) || []).length
     const sentimentValence = Math.min(1.0, Math.abs(positiveWords - negativeWords) / 10)
 
-    // 3. 复合张力指数 T = 0.5 * Action + 0.5 * Valence
+    // 3. 复合张力指数 T = 0.55 * Action + 0.45 * Valence
     const tensionScore = Math.round((0.55 * actionDensity + 0.45 * sentimentValence) * 100) / 100
 
     let pacingStatus: PacingStatus = "optimal"

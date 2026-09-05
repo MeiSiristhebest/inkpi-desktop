@@ -13,11 +13,20 @@ const DEFEAT_VERBS = ['败于', '死于', '被杀', '受创于', '不敌', '饮�
 const ACTIVE_SUBJECT_VERBS = ['说', '道', '走', '冲', '拔出', '冷笑', '出手', '点头', '叹息', '盘膝', '飞身', '狂笑', '怒吼', '挥剑']
 
 export class ConsistencyEngine {
+  private customSystem: PowerTierSystem | null = null
+
+  public setCustomSystem(system: PowerTierSystem | null): void {
+    this.customSystem = system
+  }
+
   public getPresetSystems(): PresetTierSystem[] {
     return presetTiersData as PresetTierSystem[]
   }
 
   public getDefaultSystem(): PowerTierSystem {
+    if (this.customSystem) {
+      return this.customSystem
+    }
     const preset = presetTiersData[0] as PresetTierSystem
     return {
       projectId: 'default',

@@ -4,6 +4,8 @@ import type { PowerTierSystem, ConsistencyViolation } from '../types'
 import { consistencyEngine } from '../engine/ConsistencyEngine'
 import { indexedDbPowerTierRepository } from '../../../adapters/indexedDbPowerTierRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { clock } from '../../../adapters/clock'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 import { ShieldAlert, CheckCircle2 } from 'lucide-react'
 
 export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
@@ -12,6 +14,35 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
 }) => {
   const [system, setSystem] = useState<PowerTierSystem>(() => consistencyEngine.getDefaultSystem())
   const [entities, setEntities] = useState<{ name: string; realm?: string; isDeceased?: boolean }[]>([])
+  const [externalBreaches, setExternalBreaches] = useState<ConsistencyViolation[]>([])
+
+  // 订阅系统 EventBus 的 POWER_BREACH_DETECTED 事件（来自 combat-sandbox）
+  useEffect(() => {
+    const unsub = pluginEventBus.on('POWER_BREACH_DETECTED', (payload) => {
+      if (payload.projectId !== projectId) return
+      setExternalBreaches((prev) => {
+        const id = `breach-${payload.protagonistName}-${payload.enemyName}-${clock.now()}`
+        if (prev.some((b) => b.snippet.includes(payload.protagonistName) && b.snippet.includes(payload.enemyName))) {
+          return prev
+        }
+        return [
+          {
+            id,
+            type: 'power_tier_inversion',
+            severity: payload.riskLevel === 'CRITICAL_COLLAPSE' ? 'critical' : 'warning',
+            snippet: `${payload.protagonistName} vs ${payload.enemyName} (阶差: ${payload.tierDiff})`,
+            explanation: `[战力沙盘预警] ${payload.diagnostic}`,
+            suggestedAction: '请在沙盘中补全对等代偿资产（如仙宝大阵、天劫反噬等），或降低敌方战力能级。',
+          },
+          ...prev,
+        ]
+      })
+    })
+
+    return () => {
+      unsub()
+    }
+  }, [projectId])
 
   useEffect(() => {
     indexedDbPowerTierRepository.get(projectId).then((sys) => {
@@ -39,8 +70,8 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({
     const pViolations = consistencyEngine.scanTextForInversions(currentText, powerEntities, system)
     const dViolations = consistencyEngine.scanTextForDeceased(currentText, deceasedEntities)
 
-    return [...pViolations, ...dViolations]
-  }, [currentText, entities, system])
+    return [...pViolations, ...dViolations, ...externalBreaches]
+  }, [currentText, entities, system, externalBreaches])
 
   return (
     <aside

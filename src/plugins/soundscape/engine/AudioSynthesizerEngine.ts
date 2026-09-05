@@ -25,6 +25,7 @@ export class AudioSynthesizerEngine {
   public getContext(): AudioContext | null {
     if (typeof window === "undefined") return null
     if (!this.audioCtx) {
+      // SAFETY: webkitAudioContext is a legacy Safari Web Audio constructor attached to window
       const AudioContextClass =
         window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       if (AudioContextClass) {
@@ -166,7 +167,16 @@ export class AudioSynthesizerEngine {
       filter.frequency.value = 1000 // 雨声低通滤波
     } else if (ambience === "campfire") {
       filter.type = "bandpass"
-      filter.frequency.value = 500 // 篝火频段
+      filter.frequency.value = 600 // 篝火核心低频段
+      // 为篝火注入随机木炭爆裂微冲激 (Crackle impulses)
+      for (let i = 0; i < bufferSize; i += 2400) {
+        if (this.randomSource.next() > 0.85) {
+          const burstLen = Math.min(15, bufferSize - i)
+          for (let k = 0; k < burstLen; k++) {
+            output[i + k] += (this.randomSource.next() * 2 - 1) * 0.85
+          }
+        }
+      }
     } else {
       filter.type = "lowpass"
       filter.frequency.value = 400
@@ -191,8 +201,11 @@ export class AudioSynthesizerEngine {
   public stopAmbience(): void {
     if (this.noiseNode && "stop" in this.noiseNode) {
       try {
+        // SAFETY: AudioScheduledSourceNode has stop method
         (this.noiseNode as AudioScheduledSourceNode).stop()
-      } catch {}
+      } catch {
+        // Ignored if already stopped
+      }
       this.noiseNode.disconnect()
       this.noiseNode = null
     }
@@ -201,6 +214,19 @@ export class AudioSynthesizerEngine {
       this.noiseGain = null
     }
     this.isAmbiencePlaying = false
+  }
+
+  /**
+   * 彻底释放底层 AudioContext 资源，杜绝浏览器限制（单页上限 6 个）与内存泄漏
+   */
+  public close(): void {
+    this.stopAmbience()
+    if (this.audioCtx) {
+      if (this.audioCtx.state !== 'closed') {
+        this.audioCtx.close().catch(() => {})
+      }
+      this.audioCtx = null
+    }
   }
 
   public getIsAmbiencePlaying(): boolean {

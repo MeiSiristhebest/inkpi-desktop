@@ -1,4 +1,5 @@
 import type { HookAnalysisResult, HookTemplate, ReaderHookType, HookRating } from '../types'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 
 const HOOK_PATTERNS: Array<{
   type: ReaderHookType
@@ -210,6 +211,23 @@ export class ReaderHookEngine {
 
   getTemplates(): HookTemplate[] {
     return PRESET_TEMPLATES
+  }
+
+  /**
+   * 审计章节末尾并同步广播至事件总线（供其它分析套件感知）
+   */
+  auditChapterEnding(params: {
+    projectId: string
+    chapterId: string
+    content: string
+  }): HookAnalysisResult {
+    const result = this.analyzeEnding(params.content)
+    pluginEventBus.emit('CHAPTER_CONTENT_AUDITED', {
+      projectId: params.projectId,
+      chapterId: params.chapterId,
+      wordCount: params.content.replace(/\s+/g, '').length,
+    })
+    return result
   }
 }
 

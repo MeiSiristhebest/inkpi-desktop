@@ -9,15 +9,10 @@ import type {
   GenreStyle,
   LiteraryAlternative,
 } from '../types'
-
-interface ACTrieNode {
-  children: Map<string, ACTrieNode>
-  fail: ACTrieNode | null
-  outputs: SensitiveWord[]
-}
+import { GenericAhoCorasick } from '../../../utils/AhoCorasick'
 
 export class SafeGateEngine {
-  private root: ACTrieNode = { children: new Map(), fail: null, outputs: [] }
+  private acEngine = new GenericAhoCorasick<SensitiveWord>()
   private regexList: { rule: RegexRule; regex: RegExp }[] = []
   private wordMap = new Map<string, SensitiveWord>()
 
@@ -25,47 +20,19 @@ export class SafeGateEngine {
    * 初始化引擎：构建 AC 自动机树与编译正则
    */
   public build(words: SensitiveWord[], regexRules: RegexRule[]): void {
-    this.root = { children: new Map(), fail: null, outputs: [] }
     this.wordMap.clear()
     this.regexList = []
 
-    // 1. 插入所有敏感词至 Trie
-    for (const w of words) {
+    const items = words.map((w) => {
       this.wordMap.set(w.id, w)
-      let curr = this.root
-      for (const char of w.word) {
-        if (!curr.children.has(char)) {
-          curr.children.set(char, { children: new Map(), fail: null, outputs: [] })
-        }
-        curr = curr.children.get(char)!
+      return {
+        keyword: w.word,
+        payload: w,
       }
-      curr.outputs.push(w)
-    }
+    })
+    this.acEngine.build(items)
 
-    // 2. BFS 构建 Fail 指针
-    const queue: ACTrieNode[] = []
-    for (const child of this.root.children.values()) {
-      child.fail = this.root
-      queue.push(child)
-    }
-
-    while (queue.length > 0) {
-      const curr = queue.shift()!
-      for (const [char, child] of curr.children.entries()) {
-        let fail = curr.fail
-        while (fail !== null && !fail.children.has(char)) {
-          fail = fail.fail
-        }
-        child.fail = fail ? fail.children.get(char)! : this.root
-
-        if (child.fail.outputs.length > 0) {
-          child.outputs.push(...child.fail.outputs)
-        }
-        queue.push(child)
-      }
-    }
-
-    // 3. 预编译正则表达式
+    // 预编译正则表达式
     for (const rule of regexRules) {
       try {
         const flags = rule.flags.includes('g') ? rule.flags : `${rule.flags}g`
@@ -88,33 +55,22 @@ export class SafeGateEngine {
     }
 
     const violations: SafeGateViolation[] = []
-    let curr = this.root
 
-    // 阶段 1：AC 自动机精确扫描
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i]
-      while (curr !== this.root && !curr.children.has(char)) {
-        curr = curr.fail || this.root
-      }
-      curr = curr.children.get(char) || this.root
-
-      if (curr.outputs.length > 0) {
-        for (const word of curr.outputs) {
-          const startIndex = i - word.word.length + 1
-          const endIndex = i + 1
-          violations.push({
-            id: `v-ac-${startIndex}-${endIndex}`,
-            ruleType: 'ac_exact',
-            wordId: word.id,
-            matchedText: word.word,
-            startIndex,
-            endIndex,
-            level: word.level,
-            category: word.category,
-            suggestions: this.sortSuggestions(word.literaryAlternatives, genre),
-          })
-        }
-      }
+    // 阶段 1：通用 AC 自动机精确扫描
+    const matches = this.acEngine.scan(text)
+    for (const match of matches) {
+      const word = match.payload
+      violations.push({
+        id: `v-ac-${match.startIndex}-${match.endIndex}`,
+        ruleType: 'ac_exact',
+        wordId: word.id,
+        matchedText: word.word,
+        startIndex: match.startIndex,
+        endIndex: match.endIndex,
+        level: word.level,
+        category: word.category,
+        suggestions: this.sortSuggestions(word.literaryAlternatives, genre),
+      })
     }
 
     // 阶段 2：正则表达式模糊规则扫描

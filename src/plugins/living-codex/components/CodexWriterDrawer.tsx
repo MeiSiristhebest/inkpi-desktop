@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type FC } from 'react'
 import type { CodexEntity } from '../types'
 import { CodexGraphStore } from '../engine/GraphStore'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 import {
   User,
   Shield,
@@ -63,6 +64,20 @@ export const CodexWriterDrawer: FC<CodexWriterDrawerProps> = ({
     const { matchedEntities, xmlContext } = graphStore.current.resolveContextSlice(text, 800)
     setActiveEntities(matchedEntities)
     setXmlSnippet(xmlContext)
+
+    // 向系统 EventBus 广播被正文触碰到的实体 (CODEX_ENTITY_TOUCHED)
+    matchedEntities.forEach((ent) => {
+      try {
+        pluginEventBus.emit('CODEX_ENTITY_TOUCHED', {
+          projectId,
+          entityId: ent.id,
+          entityName: ent.name,
+          category: ent.category,
+        })
+      } catch (err) {
+        console.warn('[CodexWriterDrawer] Failed to emit CODEX_ENTITY_TOUCHED:', err)
+      }
+    })
   }
 
   // 150ms 输入防抖扫描

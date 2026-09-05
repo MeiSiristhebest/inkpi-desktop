@@ -19,8 +19,17 @@ export class NameForgeEngine {
     this.randomSource = random || defaultRandomSource
   }
 
-  private pickOne<T>(list: T[], rng: RandomSource): T {
-    const idx = Math.floor(rng.next() * list.length)
+  /**
+   * 带倾斜权重的采样器：支持头部权重衰减分布（前排常用姓氏/字根获得更高采样先验）
+   */
+  private pickOne<T>(list: T[], rng: RandomSource, weighted = false): T {
+    if (!weighted || list.length <= 3) {
+      const idx = Math.floor(rng.next() * list.length)
+      return list[Math.min(idx, list.length - 1)]
+    }
+    // 指数衰减加权采样：P(i) 正比于 1 / (i + 1)^0.6
+    const r = Math.pow(rng.next(), 1.5)
+    const idx = Math.floor(r * list.length)
     return list[Math.min(idx, list.length - 1)]
   }
 

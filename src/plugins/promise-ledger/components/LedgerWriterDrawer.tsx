@@ -4,6 +4,7 @@ import type { PromiseLedgerEntry, PayoffCandidate } from '../types'
 import { ledgerEngine } from '../engine/LedgerEngine'
 import { indexedDbPromiseLedgerRepository } from '../../../adapters/indexedDbPromiseLedgerRepository'
 import { clock } from '../../../adapters/clock'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 import {
   Sparkles,
   AlertCircle,
@@ -32,6 +33,19 @@ export const LedgerWriterDrawer: FC<DesktopPluginDrawerProps> = ({
 
   useEffect(() => {
     loadEntries()
+  }, [projectId])
+
+  // 监听 FORESHADOW_PLANTED 事件（来自 chekhov-radar 自动扫描捕获的伏笔），自动入库或刷新列表
+  useEffect(() => {
+    const unsub = pluginEventBus.on('FORESHADOW_PLANTED', (payload) => {
+      if (payload.projectId === projectId) {
+        // 自动入账或刷新列表
+        loadEntries()
+      }
+    })
+    return () => {
+      unsub()
+    }
   }, [projectId])
 
   // 检测正文中出现的伏笔关键词候选

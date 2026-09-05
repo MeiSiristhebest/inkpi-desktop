@@ -1,20 +1,19 @@
 import type { WaterAuditReport, WaterBloatItem, WaterLevel } from '../types'
+import {
+  UNIFIED_NARRATIVE_LEXICON,
+  CORE_ACTION_VERBS,
+} from '../../../domain/lexicon/NarrativeLexicon'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 
 const PHANTOM_CLICHES = [
-  '倒吸了一口凉气',
-  '倒吸一口凉气',
-  '深吸了一口气',
-  '深吸一口气',
+  ...UNIFIED_NARRATIVE_LEXICON.filter(
+    (e) => e.category === 'DRAMATIC_TENSION_CLICHE'
+  ).map((e) => e.phrase),
   '忍不住',
   '不由得',
   '暗暗心惊',
-  '心中掀起惊涛骇浪',
-  '掀起滔天骇浪',
   '只觉得',
   '下意识地',
-  '整个人都不好了',
-  '瞳孔骤然收缩',
-  '瞳孔微缩',
   '后背被冷汗浸透',
   '冷汗涔涔',
   '面露震惊之色',
@@ -22,32 +21,21 @@ const PHANTOM_CLICHES = [
 ]
 
 const RECAP_BLOATS = [
-  '众所周知',
-  '正如前文所说',
-  '正如前文所言',
-  '前面说过',
-  '大家都知道',
-  '在整个修仙界中',
-  '在修仙界中',
+  ...UNIFIED_NARRATIVE_LEXICON.filter(
+    (e) => e.category === 'PURE_FILLER_RECAP'
+  ).map((e) => e.phrase),
   '所谓炼气期',
-  '按常理来说',
-  '毋庸置疑',
 ]
 
 const MODIFIER_BLOATS = [
-  '非常非常',
-  '极其极其',
-  '万万万万',
-  '不可思议的极其',
+  ...UNIFIED_NARRATIVE_LEXICON.filter(
+    (e) => e.category === 'MODIFIER_STACK'
+  ).map((e) => e.phrase),
   '绝对绝对',
   '分外格外的',
 ]
 
-const ACTION_VERBS = [
-  '斩', '杀', '刺', '夺', '踏', '破', '劈', '跃', '冲', '遁',
-  '袭', '擒', '铸', '炼', '崩', '撕', '截', '轰', '击', '奔',
-  '拔', '战', '扣', '掷', '抓', '按', '撞', '射', '爆', '掠',
-]
+const ACTION_VERBS = CORE_ACTION_VERBS
 
 export class WaterMeterEngine {
   /**
@@ -76,7 +64,10 @@ export class WaterMeterEngine {
   /**
    * 全文水分审计
    */
-  auditText(text: string): WaterAuditReport {
+  auditText(
+    text: string,
+    context?: { projectId?: string; chapterId?: string }
+  ): WaterAuditReport {
     const rawText = (text || '').trim()
     const totalWordCount = rawText.replace(/\s+/g, '').length
 
@@ -195,6 +186,20 @@ export class WaterMeterEngine {
     }
     if (advice.length === 0) {
       advice.push('文字精炼度极佳，无明显冗余水词，保持当前的叙事密度！')
+    }
+
+    // 广播章节正文审计完成事件 (CHAPTER_CONTENT_AUDITED)
+    if (context?.projectId && context?.chapterId) {
+      try {
+        pluginEventBus.emit('CHAPTER_CONTENT_AUDITED', {
+          projectId: context.projectId,
+          chapterId: context.chapterId,
+          wordCount: totalWordCount,
+          waterScore: score,
+        })
+      } catch (err) {
+        console.warn('[WaterMeterEngine] Failed to emit CHAPTER_CONTENT_AUDITED:', err)
+      }
     }
 
     return {

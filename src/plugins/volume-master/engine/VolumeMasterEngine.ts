@@ -7,57 +7,121 @@ import type {
 
 export class VolumeMasterEngine {
   /**
-   * 正交多项式叙事弧光张力曲线回归度分析：
-   * 对分卷章节的实际张力强度 y_i 拟合二次经典三幕/四幕剧抛物线 y = -a(x - h)^2 + k
-   * 计算决定系数 R^2 (Goodness of Fit)。若 R^2 显著偏低，提示中段坍塌或缺乏高潮拱顶。
+   * 普通最小二乘法 (OLS) 二阶多项式回归求解器：
+   * 拟合 y = beta2 * x^2 + beta1 * x + beta0
+   * 求解正规方程组 (X^T * X) * Beta = X^T * Y (Cramer法则精确求解)
+   * 并计算判定系数 R^2 = 1 - SS_res / SS_tot 与二次顶点归一化位置 apexRatio = -beta1 / (2 * beta2)
+   */
+  computeOlsQuadratic(points: { x: number; y: number }[]): {
+    beta0: number
+    beta1: number
+    beta2: number
+    r2: number
+    apexRatio: number
+  } {
+    const n = points.length
+    if (n < 3) {
+      return { beta0: 0, beta1: 0, beta2: 0, r2: 0, apexRatio: 0 }
+    }
+
+    let s0 = n
+    let s1 = 0, s2 = 0, s3 = 0, s4 = 0
+    let t0 = 0, t1 = 0, t2 = 0
+
+    for (const p of points) {
+      const x = p.x
+      const y = p.y
+      const x2 = x * x
+      s1 += x
+      s2 += x2
+      s3 += x2 * x
+      s4 += x2 * x2
+
+      t0 += y
+      t1 += x * y
+      t2 += x2 * y
+    }
+
+    // 3x3 行列式 Det(X^T * X)
+    const det =
+      s0 * (s2 * s4 - s3 * s3) -
+      s1 * (s1 * s4 - s2 * s3) +
+      s2 * (s1 * s3 - s2 * s2)
+
+    if (Math.abs(det) < 1e-12) {
+      return { beta0: 0, beta1: 0, beta2: 0, r2: 0, apexRatio: 0 }
+    }
+
+    const det0 =
+      t0 * (s2 * s4 - s3 * s3) -
+      s1 * (t1 * s4 - t2 * s3) +
+      s2 * (t1 * s3 - t2 * s2)
+
+    const det1 =
+      s0 * (t1 * s4 - t2 * s3) -
+      t0 * (s1 * s4 - s2 * s3) +
+      s2 * (s1 * t2 - s2 * t1)
+
+    const det2 =
+      s0 * (s2 * t2 - s3 * t1) -
+      s1 * (s1 * t2 - s2 * t1) +
+      t0 * (s1 * s3 - s2 * s2)
+
+    const beta0 = det0 / det
+    const beta1 = det1 / det
+    const beta2 = det2 / det
+
+    // 计算总平方和 SS_tot 与残差平方和 SS_res
+    const meanY = t0 / n
+    let ssTot = 0
+    let ssRes = 0
+
+    for (const p of points) {
+      const yPred = beta0 + beta1 * p.x + beta2 * p.x * p.x
+      ssRes += (p.y - yPred) * (p.y - yPred)
+      ssTot += (p.y - meanY) * (p.y - meanY)
+    }
+
+    const r2 = ssTot === 0 ? 1.0 : Math.max(0, 1 - ssRes / ssTot)
+    const apexRatio = beta2 !== 0 ? -beta1 / (2 * beta2) : 0
+
+    return {
+      beta0,
+      beta1,
+      beta2,
+      r2,
+      apexRatio,
+    }
+  }
+
+  /**
+   * 正交/普通多项式叙事弧光张力曲线回归度分析：
+   * 对分卷章节的实际张力序列拟合 OLS 二阶曲线 y = beta2 * x^2 + beta1 * x + beta0
+   * 输出决定系数 R^2 与高潮顶点归一化位置 apexPositionRatio
    */
   fitNarrativeArcR2(chapterTensionPoints: number[]): { r2: number; apexPositionRatio: number } {
     const n = chapterTensionPoints.length
-    if (n < 4) return { r2: 1.0, apexPositionRatio: 0.75 }
+    if (n < 3) return { r2: 1.0, apexPositionRatio: 0.75 }
 
-    const x = chapterTensionPoints.map((_, i) => i / (n - 1)) // 归一化到 [0, 1]
-    const y = chapterTensionPoints
+    const points = chapterTensionPoints.map((y, i) => ({
+      x: i / (n - 1),
+      y,
+    }))
 
-    // 寻找张力最高峰所在位置
-    let maxIdx = 0
-    let maxY = y[0]
-    for (let i = 1; i < n; i++) {
-      if (y[i] > maxY) {
-        maxY = y[i]
-        maxIdx = i
-      }
-    }
-    const apexRatio = maxIdx / (n - 1)
+    const ols = this.computeOlsQuadratic(points)
 
-    // 理论经典四幕高潮点位于 70% ~ 85% 位置
-    const idealApex = 0.75
-    const apexDeviation = Math.abs(apexRatio - idealApex)
+    // 顶点位置归一化夹紧于 [0, 1]
+    const clampedApex = Math.max(0, Math.min(1.0, ols.apexRatio))
 
-    // 计算均值与总平方和 SST
-    const meanY = y.reduce((a, b) => a + b, 0) / n
-    const sst = y.reduce((sum, yi) => sum + Math.pow(yi - meanY, 2), 0)
-
-    if (sst === 0) return { r2: 0.5, apexPositionRatio: apexRatio }
-
-    // 简单二次曲线拟合残差估计
-    let ssr = 0
-    for (let i = 0; i < n; i++) {
-      // 经典三幕抛物线参考模型：起步0.3 -> 顶峰1.0 -> 尾声0.4
-      const xi = x[i]
-      const yPred = 0.3 + 0.7 * Math.max(0, 1 - Math.pow((xi - apexRatio) / 0.5, 2)) * maxY
-      ssr += Math.pow(y[i] - yPred, 2)
-    }
-
-    const r2 = Math.max(0, Math.min(1.0, 1 - ssr / (sst + 1e-5) - apexDeviation * 0.2))
     return {
-      r2: Math.round(r2 * 100) / 100,
-      apexPositionRatio: Math.round(apexRatio * 100) / 100,
+      r2: Math.round(ols.r2 * 1000) / 1000,
+      apexPositionRatio: Math.round(clampedApex * 1000) / 1000,
     }
   }
 
   calculateVolumeStat(
     volume: { id: string; title: string; order: number },
-    chapters: Array<{ volumeId?: string; wordCount?: number }>,
+    chapters: Array<{ volumeId?: string; wordCount?: number; tension?: number }>,
     arcRecord?: VolumeArcRecord
   ): VolumeStat {
     const volChapters = chapters.filter((c) => c.volumeId === volume.id)
@@ -77,6 +141,31 @@ export class VolumeMasterEngine {
     let status: VolumeStat['status'] = 'on_track'
     let advice = '分卷节奏健康，字数与戏剧进度处于平稳发展区间。'
 
+    // 计算分卷章节张力回归弧线（若有张力点）
+    let arcRegression: VolumeStat['arcRegression'] = undefined
+    const tensionPoints: number[] = volChapters
+      .map((c, idx) => {
+        if (typeof c.tension === 'number') return c.tension
+        // 若未显式录入章节张力，根据章节位次按理论三幕阶段赋予张力基线 (0.2 ~ 0.9)
+        const progress = volChapters.length > 1 ? idx / (volChapters.length - 1) : 0.5
+        return Math.sin(progress * Math.PI) * 0.7 + 0.2
+      })
+
+    if (tensionPoints.length >= 3) {
+      const regressionPoints = tensionPoints.map((y, i) => ({
+        x: i / (tensionPoints.length - 1),
+        y,
+      }))
+      const ols = this.computeOlsQuadratic(regressionPoints)
+      arcRegression = {
+        beta0: Math.round(ols.beta0 * 1000) / 1000,
+        beta1: Math.round(ols.beta1 * 1000) / 1000,
+        beta2: Math.round(ols.beta2 * 1000) / 1000,
+        r2: Math.round(ols.r2 * 1000) / 1000,
+        apexRatio: Math.round(Math.max(0, Math.min(1.0, ols.apexRatio)) * 1000) / 1000,
+      }
+    }
+
     if (burnRate > 115 && (currentAct === 'act1_intro' || currentAct === 'act2_rising')) {
       status = 'lagging_water'
       advice = '警告：字数已超标消耗但剧情仍停留在铺垫期，存在节奏拖沓或灌水风险，需尽快引发核心矛盾！'
@@ -86,6 +175,8 @@ export class VolumeMasterEngine {
     } else if (burnRate >= 100 && currentAct === 'act4_fallout') {
       status = 'completed'
       advice = '本卷戏剧弧已圆满闭环，请做好跨卷大悬念（Cliffhanger），准备引出下一卷崭新大地图。'
+    } else if (arcRegression && arcRegression.r2 < 0.25 && volChapters.length >= 5) {
+      advice = '提示：当前分卷戏剧张力波动与标准戏剧弧相关度较低（R²偏低），建议检查中段是否缺乏危机蓄势或高潮拱顶。'
     }
 
     return {
@@ -99,6 +190,7 @@ export class VolumeMasterEngine {
       status,
       currentAct,
       advice,
+      arcRegression,
     }
   }
 

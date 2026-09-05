@@ -87,13 +87,16 @@ export class LedgerEngine {
         urgencyScore = Math.round(progressInWarn * 50 * tierWeight)
       }
 
+      // 数值溢出硬保护：将单项 urgencyScore 夹紧至合理范围 [0, 1000]，杜绝极端权重下爆表
+      const clampedUrgency = Math.max(0, Math.min(1000, Math.round(urgencyScore)))
+
       return {
         entry,
         elapsedChapters: elapsed,
         isOverdue,
         isWarning,
         memoryHeat,
-        urgencyScore: Math.round(urgencyScore),
+        urgencyScore: clampedUrgency,
       }
     })
   }

@@ -1,11 +1,28 @@
-import { useState, useMemo, type FC } from 'react'
+import { useState, useMemo, useEffect, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { EmotionCurveEngine } from '../engine/EmotionCurveEngine'
 import type { ChapterEmotionEvaluation } from '../types'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 import { Activity } from 'lucide-react'
 
-export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
+export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [inputText, setInputText] = useState('')
+  const [auditNotice, setAuditNotice] = useState<{ waterScore?: number; wordCount: number } | null>(null)
+
+  // 订阅 CHAPTER_CONTENT_AUDITED 事件，联动展示水分审计结果
+  useEffect(() => {
+    const unsub = pluginEventBus.on('CHAPTER_CONTENT_AUDITED', (payload) => {
+      if (payload.projectId === projectId) {
+        setAuditNotice({
+          waterScore: payload.waterScore,
+          wordCount: payload.wordCount,
+        })
+      }
+    })
+    return () => {
+      unsub()
+    }
+  }, [projectId])
 
   const textToAnalyze = inputText || currentText || ''
 
@@ -28,6 +45,15 @@ export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
           {currentText ? '编辑器正文联动' : '手动输入'}
         </span>
       </div>
+
+      {auditNotice && (
+        <div className="p-2 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[11px] flex justify-between items-center">
+          <span>正文审计联动: {auditNotice.wordCount} 字</span>
+          {typeof auditNotice.waterScore === 'number' && (
+            <span className="font-semibold">水分值: {auditNotice.waterScore}</span>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <label className="text-[11px] text-[var(--ink-text-muted)] block">

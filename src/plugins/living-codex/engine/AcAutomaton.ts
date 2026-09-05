@@ -1,68 +1,45 @@
 // Aho-Corasick 多模式字符匹配自动机
+// 采用统一底层 GenericAhoCorasick 实现，增加实体指纹缓存跳过无变动重构
 // 时间复杂度：构建 O(sum|L_i|)，文本扫描严格 O(N + Z)，Z 为命中数
 
 import type { ScanHit } from '../types'
-
-interface ACNode {
-  children: Map<string, ACNode>
-  fail: ACNode | null
-  outputs: Array<{ entityId: string; keyword: string }>
-}
+import { GenericAhoCorasick } from '../../../utils/AhoCorasick'
 
 export class AcAutomaton {
-  private root: ACNode = { children: new Map(), fail: null, outputs: [] }
-  private patternCount = 0
+  private engine = new GenericAhoCorasick<{ entityId: string }>()
+  private lastFingerprint = ''
 
   /**
    * 构建 AC 自动机 Trie 树并使用 BFS 构造失败指针
+   * 采用脏标记/实体指纹检查，避免无变动时高频重复构建
    * @param entities 包含主名称与所有别名的实体列表
    */
   public build(entities: Array<{ id: string; name: string; aliases?: string[] }>): void {
-    this.root = { children: new Map(), fail: null, outputs: [] }
-    this.patternCount = 0
+    const fingerprint = entities
+      .map((e) => `${e.id}:${e.name}:${(e.aliases || []).join(',')}`)
+      .join('|')
 
-    // 1. 插入所有词条（主名称 + 全部别名）
+    if (fingerprint === this.lastFingerprint && this.engine.getPatternCount() > 0) {
+      return
+    }
+    this.lastFingerprint = fingerprint
+
+    const items: Array<{ keyword: string; payload: { entityId: string } }> = []
+
     for (const ent of entities) {
       const keys = [ent.name, ...(ent.aliases || [])]
         .map((k) => (k ? k.trim() : ''))
         .filter((k) => k.length > 0)
 
       for (const key of keys) {
-        let curr = this.root
-        for (const char of key) {
-          if (!curr.children.has(char)) {
-            curr.children.set(char, { children: new Map(), fail: null, outputs: [] })
-          }
-          curr = curr.children.get(char)!
-        }
-        curr.outputs.push({ entityId: ent.id, keyword: key })
-        this.patternCount++
+        items.push({
+          keyword: key,
+          payload: { entityId: ent.id },
+        })
       }
     }
 
-    // 2. BFS 队列构建 Fail 指针
-    const queue: ACNode[] = []
-    for (const child of this.root.children.values()) {
-      child.fail = this.root
-      queue.push(child)
-    }
-
-    while (queue.length > 0) {
-      const curr = queue.shift()!
-      for (const [char, child] of curr.children.entries()) {
-        let fail = curr.fail
-        while (fail !== null && !fail.children.has(char)) {
-          fail = fail.fail
-        }
-        child.fail = fail ? fail.children.get(char)! : this.root
-
-        // 合并后缀命中输出链
-        if (child.fail.outputs.length > 0) {
-          child.outputs.push(...child.fail.outputs)
-        }
-        queue.push(child)
-      }
-    }
+    this.engine.build(items)
   }
 
   /**
@@ -70,33 +47,16 @@ export class AcAutomaton {
    * @param text 正文或段落字符串
    */
   public scan(text: string): ScanHit[] {
-    if (!text || this.patternCount === 0) return []
-    const hits: ScanHit[] = []
-    let curr = this.root
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i]
-      while (curr !== this.root && !curr.children.has(char)) {
-        curr = curr.fail || this.root
-      }
-      curr = curr.children.get(char) || this.root
-
-      if (curr.outputs.length > 0) {
-        for (const out of curr.outputs) {
-          hits.push({
-            entityId: out.entityId,
-            keyword: out.keyword,
-            startIndex: i - out.keyword.length + 1,
-            endIndex: i + 1,
-          })
-        }
-      }
-    }
-
-    return hits
+    const matches = this.engine.scan(text)
+    return matches.map((m) => ({
+      entityId: m.payload.entityId,
+      keyword: m.keyword,
+      startIndex: m.startIndex,
+      endIndex: m.endIndex,
+    }))
   }
 
   public getPatternCount(): number {
-    return this.patternCount
+    return this.engine.getPatternCount()
   }
 }
