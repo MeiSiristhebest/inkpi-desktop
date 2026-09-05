@@ -146,10 +146,11 @@ export class WaterMeterEngine {
     }
     score += Math.round(Math.min(45, clicheRatio * 500))
 
-    // 篇幅归一化熵补偿：N 较小时经验熵自然偏低，对短篇放宽阈值避免长度偏倚
-    const expectedEntropy = 4.6 + 0.25 * Math.log10(Math.max(50, totalWordCount))
-    if (entropyScore < expectedEntropy - 0.4 && totalWordCount > 80) {
-      score += Math.round((expectedEntropy - entropyScore) * 8)
+    // 篇幅归一化熵补偿：针对中文文本真实信息熵分布（通常在 3.8 ~ 4.4 区间，而非英文的 4.6+）
+    // 采用更契合中文实测分布的基准 3.9，仅在信息熵显著低于基准时触发惩罚，避免正常紧凑中文被误罚
+    const expectedEntropy = 3.9 + 0.2 * Math.log10(Math.max(50, totalWordCount))
+    if (entropyScore < expectedEntropy - 0.45 && totalWordCount > 80) {
+      score += Math.round((expectedEntropy - entropyScore) * 6)
     }
 
     score = Math.max(0, Math.min(100, score))

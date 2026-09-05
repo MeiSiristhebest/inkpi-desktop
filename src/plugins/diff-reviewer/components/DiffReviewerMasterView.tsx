@@ -8,11 +8,12 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 
 export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const host = useOptionalPluginHostContext()
-  const [sourceText, setSourceText] = useState(
-    '林凡紧握着铁剑，站在狂风暴雨之中。\n对面的敌人冷冷一笑。',
-  )
+  const initialSource =
+    host?.activeChapter?.content ||
+    '风雨如晦，夜幕笼罩着古老残破的城池。\n远处传来急促而沉重的脚步声。'
+  const [sourceText, setSourceText] = useState(initialSource)
   const [proposedText, setProposedText] = useState(
-    '林凡紧握着断剑，伫立在倾盆暴雨之中。\n前方的刺客阴森一笑。',
+    '骤雨如瀑，阴冷夜幕笼罩着风雨飘摇的废弃古城。\n寂静长街深处传来急促而沉重的破空脚步声。',
   )
   const [hunks, setHunks] = useState<ReviewHunkView[]>([])
   const [mergedResult, setMergedResult] = useState('')

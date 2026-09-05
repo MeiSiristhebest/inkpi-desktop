@@ -269,6 +269,7 @@ export interface ChapterEditorActions {
   setFindText: (v: string) => void
   setReplaceText: (v: string) => void
   setActiveMatch: (v: number) => void
+  refreshData: () => Promise<void>
 }
 
 /**
@@ -1028,6 +1029,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     setFindText: (v) => patch({ findText: v }),
     setReplaceText: (v) => patch({ replaceText: v }),
     setActiveMatch: (v) => patch({ activeMatch: v }),
+    refreshData: loadData,
   }
 
   return {

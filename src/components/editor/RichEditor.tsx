@@ -306,6 +306,9 @@ export const RichEditor: FC<RichEditorProps> = ({
       chapters={model.chapters}
       onAiPrompt={onAiPrompt}
       isAiConnected={isConnected}
+      onRefreshHierarchy={async () => {
+        await model.actions.refreshData()
+      }}
       onChapterUpdate={(updated) => {
         const ed = editorRef.current
         if (
