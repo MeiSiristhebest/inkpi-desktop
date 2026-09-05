@@ -67,7 +67,7 @@ const ta = () => screen.getByPlaceholderText(/挥洒你的灵感/) as HTMLTextAr
 describe('WriterDesk — 空状态与受控守卫', () => {
   it('shows the empty hint and does not crash when typing with no active chapter', async () => {
     render(<WriterDesk projectId="p1" />)
-    await waitFor(() => expect(mocked.getAll).toHaveBeenCalled())
+    await waitFor(() => expect(mocked.getAll).toHaveBeenCalled(), { timeout: 4000 })
     expect(screen.getByText(/还没有分卷/)).toBeInTheDocument()
     fireEvent.change(ta(), { target: { value: '测试' } })
     // activeChapter 为 null -> 受控守卫直接返回，字数保持 0

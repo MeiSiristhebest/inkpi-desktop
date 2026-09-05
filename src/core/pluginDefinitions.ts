@@ -18,10 +18,8 @@ import {
   MessageSquare,
   Users,
   DollarSign,
-  Castle,
   Printer,
   TrendingUp,
-  GitMerge,
   Lightbulb,
   UserCheck,
   Crosshair,
@@ -37,11 +35,8 @@ import {
   Recycle,
   RefreshCw,
   EyeOff,
-  Radio,
   Activity,
-  Star,
   UserX,
-  Cpu,
   Split,
   Mic,
   Film,
@@ -300,20 +295,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryDrawer })),
   },
-  {
-    id: 'memory-palace',
-    name: '记忆宫殿',
-    description: '三层空间层次卡片、暗格秘密与多机位场景速览',
-    version: '1.0.0',
-    category: 'lore',
-    tags: ['空间', '场景', '地图', '空间层次'],
-    enabledByDefault: true,
-    icon: Castle,
-    loadMainView: () =>
-      import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceDrawer })),
-  },
+  
   {
     id: 'press-forge',
     name: '出版铸造厂',
@@ -342,20 +324,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveDrawer })),
   },
-  {
-    id: 'sub-plot-braid',
-    name: '副线编织器',
-    description: '主线与多支线交错拓扑编织、主仆伴生与副线闭环监控',
-    version: '1.0.0',
-    category: 'plot',
-    tags: ['支线', '多线交错', '编织', '群像'],
-    enabledByDefault: true,
-    icon: GitMerge,
-    loadMainView: () =>
-      import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidDrawer })),
-  },
+  
   {
     id: 'brainstorm-spark',
     name: '破局灵感火花',
@@ -566,20 +535,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextDrawer })),
   },
-  {
-    id: 'archetype-cards',
-    name: '原型人物卡',
-    description: '荣格 12 原型投射、三维角色动机与人物关系雷达',
-    version: '1.0.0',
-    category: 'lore',
-    tags: ['人物卡', '原型', '动机', '立体人物'],
-    enabledByDefault: true,
-    icon: Radio,
-    loadMainView: () =>
-      import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeDrawer })),
-  },
+  
   {
     id: 'rhythm-radar',
     name: '断章雷达',
@@ -594,20 +550,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarDrawer })),
   },
-  {
-    id: 'gold-chapters-eval',
-    name: '黄金前三章评估',
-    description: '前 3 章节奏、留存力与网文签约门槛全方位打分评估',
-    version: '1.0.0',
-    category: 'rhythm',
-    tags: ['黄金三章', '签约评估', '留存测试', '前瞻诊断'],
-    enabledByDefault: true,
-    icon: Star,
-    loadMainView: () =>
-      import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersDrawer })),
-  },
+  
   {
     id: 'shadow-reader',
     name: '读者影子视角',
@@ -622,20 +565,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderDrawer })),
   },
-  {
-    id: 'author-ops',
-    name: '作者看板',
-    description: '全书连载日历、日均更新字数统计与码字战报输出',
-    version: '1.0.0',
-    category: 'flow',
-    tags: ['看板', '战报', '连载日历', '写作效率'],
-    enabledByDefault: true,
-    icon: Cpu,
-    loadMainView: () =>
-      import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsDrawer })),
-  },
+  
   {
     id: 'multiverse-whatif',
     name: '平行推演 What-If',

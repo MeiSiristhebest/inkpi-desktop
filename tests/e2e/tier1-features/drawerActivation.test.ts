@@ -37,12 +37,12 @@ describe('Tier 1: F2 - Drawer Dock Activation & WriterDesk Consolidation', () =>
     expect(harness.activeDrawerPluginId).toBe('diff-reviewer')
   })
 
-  it('TC-DRAWER-03: Verifies plugin registry drawer availability across 44 plugins', () => {
-    expect(ALL_AVAILABLE_PLUGINS.length).toBe(44)
+  it('TC-DRAWER-03: Verifies plugin registry drawer availability across 39 consolidated plugins', () => {
+    expect(ALL_AVAILABLE_PLUGINS.length).toBe(39)
 
-    // Exactly 43 of 44 plugins declare drawerSnippetView (all except timeline-grid)
+    // Exactly 38 of 39 plugins declare drawerSnippetView (all except timeline-grid)
     const pluginsWithDrawers = ALL_AVAILABLE_PLUGINS.filter((p) => Boolean(p.drawerSnippetView))
-    expect(pluginsWithDrawers.length).toBe(43)
+    expect(pluginsWithDrawers.length).toBe(38)
 
     const timelineGridPlugin = ALL_AVAILABLE_PLUGINS.find((p) => p.id === 'timeline-grid')
     expect(timelineGridPlugin?.drawerSnippetView).toBeUndefined()
