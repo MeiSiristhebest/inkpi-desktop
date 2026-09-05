@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbScrapbookRepository: ScrapbookRepository = {
   async getAll(projectId: string): Promise<ScrapbookFragmentRecord[]> {
-    const all = await db.getAll<ScrapbookFragmentRecord>("scrapbookFragments")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<ScrapbookFragmentRecord>("scrapbookFragments", 'projectId', projectId)
   },
 
   async get(id: string): Promise<ScrapbookFragmentRecord | undefined> {

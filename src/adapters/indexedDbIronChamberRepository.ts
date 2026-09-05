@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbIronChamberRepository: IronChamberRepository = {
   async getAll(projectId: string): Promise<IronChamberRecord[]> {
-    const all = await db.getAll<IronChamberRecord>("ironChamberRecords")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<IronChamberRecord>("ironChamberRecords", 'projectId', projectId)
   },
 
   async getActive(projectId: string): Promise<IronChamberRecord | undefined> {

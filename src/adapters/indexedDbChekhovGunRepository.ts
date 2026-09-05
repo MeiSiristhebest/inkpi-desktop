@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbChekhovGunRepository: ChekhovGunRepository = {
   async getAll(projectId: string): Promise<ChekhovGunRecord[]> {
-    const all = await db.getAll<ChekhovGunRecord>('chekhovGuns')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<ChekhovGunRecord>('chekhovGuns', 'projectId', projectId)
   },
 
   async get(id: string): Promise<ChekhovGunRecord | undefined> {

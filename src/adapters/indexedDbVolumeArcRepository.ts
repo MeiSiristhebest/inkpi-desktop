@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbVolumeArcRepository: VolumeArcRepository = {
   async getAll(projectId: string): Promise<VolumeArcRecord[]> {
-    const all = await db.getAll<VolumeArcRecord>('volumeArcs')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<VolumeArcRecord>('volumeArcs', 'projectId', projectId)
   },
 
   async getByVolumeId(projectId: string, volumeId: string): Promise<VolumeArcRecord | undefined> {

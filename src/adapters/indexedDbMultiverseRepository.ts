@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbMultiverseRepository: MultiverseRepository = {
   async getAll(projectId: string): Promise<MultiverseBranchRecord[]> {
-    const all = await db.getAll<MultiverseBranchRecord>("multiverseBranches")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<MultiverseBranchRecord>("multiverseBranches", 'projectId', projectId)
   },
 
   async get(id: string): Promise<MultiverseBranchRecord | undefined> {

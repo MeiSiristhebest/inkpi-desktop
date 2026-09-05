@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbVoicePreviewRepository: VoicePreviewRepository = {
   async getAll(projectId: string): Promise<VoiceCastProfileRecord[]> {
-    const all = await db.getAll<VoiceCastProfileRecord>("voiceScriptCasts")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<VoiceCastProfileRecord>("voiceScriptCasts", 'projectId', projectId)
   },
 
   async get(id: string): Promise<VoiceCastProfileRecord | undefined> {

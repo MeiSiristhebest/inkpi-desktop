@@ -6,13 +6,11 @@ import type {
 
 export const indexedDbSubtextRepository: SubtextRepository = {
   async getAll(projectId: string): Promise<SubtextDialogueRecord[]> {
-    const all = await db.getAll<SubtextDialogueRecord>("subtextDialogues")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<SubtextDialogueRecord>("subtextDialogues", 'projectId', projectId)
   },
 
   async getByChapter(chapterId: string): Promise<SubtextDialogueRecord[]> {
-    const all = await db.getAll<SubtextDialogueRecord>("subtextDialogues")
-    return all.filter((r) => r.chapterId === chapterId)
+    return db.getByIndex<SubtextDialogueRecord>("subtextDialogues", 'chapterId', chapterId)
   },
 
   async get(id: string): Promise<SubtextDialogueRecord | undefined> {

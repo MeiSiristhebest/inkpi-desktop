@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbReaderSimulationRepository: ReaderSimulationRepository = {
   async getAll(projectId: string): Promise<ReaderSimulationRecord[]> {
-    const all = await db.getAll<ReaderSimulationRecord>('readerSimulations')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<ReaderSimulationRecord>('readerSimulations', 'projectId', projectId)
   },
 
   async getByChapterId(chapterId: string): Promise<ReaderSimulationRecord | undefined> {

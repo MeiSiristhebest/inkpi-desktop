@@ -30,6 +30,8 @@ export interface DesktopPluginHostProviderProps {
   chapters?: ChapterRecord[]
   onChapterUpdate?: (updated: ChapterRecord) => void
   onRefreshHierarchy?: () => Promise<void>
+  onAiPrompt?: (text: string, chapterId?: string) => void
+  isAiConnected?: boolean
   children: ReactNode
 }
 
@@ -41,6 +43,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
   chapters = [],
   onChapterUpdate,
   onRefreshHierarchy,
+  onAiPrompt,
+  isAiConnected = false,
   children,
 }) => {
   const [activeDrawerPluginId, setActiveDrawerPluginId] = useState<string | null>(null)
@@ -73,6 +77,21 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       await onRefreshHierarchy()
     }
   }, [onRefreshHierarchy])
+
+  const aiAssistant = useMemo(() => {
+    if (!onAiPrompt) return undefined
+    return {
+      isAvailable: !!isAiConnected,
+      prompt: async (instruction: string): Promise<string | null> => {
+        try {
+          onAiPrompt(instruction, activeChapter?.id)
+          return 'AI 请求已发送至副驾驶'
+        } catch {
+          return null
+        }
+      },
+    }
+  }, [onAiPrompt, isAiConnected, activeChapter?.id])
 
   const mutateActiveChapter = useCallback(
     async (patch: ChapterMutationPatch): Promise<ChapterMutationResult> => {
@@ -189,6 +208,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       closeDrawer,
       toggleDrawer,
       scopedBus,
+      aiAssistant,
     }),
     [
       projectId,
@@ -205,6 +225,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       closeDrawer,
       toggleDrawer,
       scopedBus,
+      aiAssistant,
     ],
   )
 

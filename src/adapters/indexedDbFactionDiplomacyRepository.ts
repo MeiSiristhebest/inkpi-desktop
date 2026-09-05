@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbFactionDiplomacyRepository: FactionDiplomacyRepository = {
   async getAll(projectId: string): Promise<FactionDiplomacyRecord[]> {
-    const all = await db.getAll<FactionDiplomacyRecord>('factionDiplomacies')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<FactionDiplomacyRecord>('factionDiplomacies', 'projectId', projectId)
   },
 
   async save(record: FactionDiplomacyRecord): Promise<void> {

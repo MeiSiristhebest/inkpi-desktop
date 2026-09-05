@@ -6,13 +6,11 @@ import type {
 
 export const indexedDbAftermathRepository: AftermathRepository = {
   async getAll(projectId: string): Promise<AftermathPatchRecord[]> {
-    const all = await db.getAll<AftermathPatchRecord>("aftermathPatches")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<AftermathPatchRecord>("aftermathPatches", 'projectId', projectId)
   },
 
   async getByChapter(chapterId: string): Promise<AftermathPatchRecord[]> {
-    const all = await db.getAll<AftermathPatchRecord>("aftermathPatches")
-    return all.filter((r) => r.chapterId === chapterId)
+    return db.getByIndex<AftermathPatchRecord>("aftermathPatches", 'chapterId', chapterId)
   },
 
   async get(id: string): Promise<AftermathPatchRecord | undefined> {

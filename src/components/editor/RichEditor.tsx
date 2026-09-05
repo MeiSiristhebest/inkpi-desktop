@@ -288,7 +288,14 @@ export const RichEditor: FC<RichEditorProps> = ({
     if (effectiveTypewriter) {
       requestAnimationFrame(recenterTypewriter)
     }
-  }, [activeChapter?.content, effectiveTypewriter, recenterTypewriter, activeChapterId, model.fontSize, model.lineHeight])
+  }, [
+    activeChapter?.content,
+    effectiveTypewriter,
+    recenterTypewriter,
+    activeChapterId,
+    model.fontSize,
+    model.lineHeight,
+  ])
 
   /* ── 渲染 ──────────────────────────────────────────────── */
   return (
@@ -297,137 +304,145 @@ export const RichEditor: FC<RichEditorProps> = ({
       activeChapter={activeChapter}
       volumes={model.volumes}
       chapters={model.chapters}
+      onAiPrompt={onAiPrompt}
+      isAiConnected={isConnected}
       onChapterUpdate={(updated) => {
         const ed = editorRef.current
-        if (ed && !ed.isDestroyed && updated.content !== undefined && ed.getText() !== updated.content) {
+        if (
+          ed &&
+          !ed.isDestroyed &&
+          updated.content !== undefined &&
+          ed.getText() !== updated.content
+        ) {
           ed.commands.setContent(updated.content)
         }
       }}
     >
       <div className="flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
-      {!effectiveZen && model.isSidebarOpen && (
-        <ChapterTree
-          model={model}
-          isConnected={isConnected}
-          isReconnecting={isReconnecting}
-          onReconnect={onReconnect}
-        />
-      )}
-
-      <div className="flex-1 flex flex-col min-w-0 h-full">
-        <EditorToolbar
-          model={model}
-          editor={editor}
-          onHome={onHome}
-          onToggleFocus={onToggleFocus}
-          focusMode={effectiveZen}
-          isFullscreen={isFullscreen}
-          onToggleFullscreen={onToggleFullscreen}
-          onToggleRightPanel={onToggleRightPanel}
-          isRightOpen={isRightOpen}
-          hasAssistant={hasAssistant ?? Boolean(onOpenAssistant)}
-          isNavOpen={isNavOpen}
-          onToggleNav={onToggleNav}
-        />
-
-        {showFindReplace && !effectiveZen && <FindReplaceBar model={model} editorRef={editorRef} />}
-
-        {/* 字数目标进度条 */}
-        {!effectiveZen && wordTarget > 0 && (
-          <div
-            data-testid="chapter-progress"
-            className="shrink-0 h-1 w-full bg-[var(--ink-bg-hover)]"
-          >
-            <div
-              className="h-full bg-[var(--ink-accent)] transition-all duration-300 ease-[var(--ink-ease)]"
-              style={{ width: `${Math.min(100, Math.round((chapterWords / wordTarget) * 100))}%` }}
-            />
-          </div>
-        )}
-
-        <div className="flex-1 flex min-h-0 overflow-hidden relative">
-          <EditorCanvas
+        {!effectiveZen && model.isSidebarOpen && (
+          <ChapterTree
             model={model}
-            editor={editor}
-            canvasRef={canvasRef}
-            effectiveZen={effectiveZen}
-            effectiveTypewriter={effectiveTypewriter}
-            projectId={projectId}
-            onAiPrompt={onAiPrompt}
-            onOpenAssistant={onOpenAssistant}
-          />
-          <DrawerDock
-            projectId={projectId}
-            currentText={activeChapter?.content || ''}
-          />
-        </div>
-
-        {!effectiveZen && model.showStatsBar && (
-          <StatusFooter
-            model={model}
-            isTypewriter={isTypewriter}
-            onTypewriterChange={onTypewriterChange}
             isConnected={isConnected}
             isReconnecting={isReconnecting}
             onReconnect={onReconnect}
           />
         )}
+
+        <div className="flex-1 flex flex-col min-w-0 h-full">
+          <EditorToolbar
+            model={model}
+            editor={editor}
+            onHome={onHome}
+            onToggleFocus={onToggleFocus}
+            focusMode={effectiveZen}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={onToggleFullscreen}
+            onToggleRightPanel={onToggleRightPanel}
+            isRightOpen={isRightOpen}
+            hasAssistant={hasAssistant ?? Boolean(onOpenAssistant)}
+            isNavOpen={isNavOpen}
+            onToggleNav={onToggleNav}
+          />
+
+          {showFindReplace && !effectiveZen && (
+            <FindReplaceBar model={model} editorRef={editorRef} />
+          )}
+
+          {/* 字数目标进度条 */}
+          {!effectiveZen && wordTarget > 0 && (
+            <div
+              data-testid="chapter-progress"
+              className="shrink-0 h-1 w-full bg-[var(--ink-bg-hover)]"
+            >
+              <div
+                className="h-full bg-[var(--ink-accent)] transition-all duration-300 ease-[var(--ink-ease)]"
+                style={{
+                  width: `${Math.min(100, Math.round((chapterWords / wordTarget) * 100))}%`,
+                }}
+              />
+            </div>
+          )}
+
+          <div className="flex-1 flex min-h-0 overflow-hidden relative">
+            <EditorCanvas
+              model={model}
+              editor={editor}
+              canvasRef={canvasRef}
+              effectiveZen={effectiveZen}
+              effectiveTypewriter={effectiveTypewriter}
+              projectId={projectId}
+              onAiPrompt={onAiPrompt}
+              onOpenAssistant={onOpenAssistant}
+            />
+            <DrawerDock projectId={projectId} currentText={activeChapter?.content || ''} />
+          </div>
+
+          {!effectiveZen && model.showStatsBar && (
+            <StatusFooter
+              model={model}
+              isTypewriter={isTypewriter}
+              onTypewriterChange={onTypewriterChange}
+              isConnected={isConnected}
+              isReconnecting={isReconnecting}
+              onReconnect={onReconnect}
+            />
+          )}
+        </div>
+
+        {showGlobalSearch && <GlobalSearchPopup model={model} />}
+
+        {/* 敏感词即时检测浮层 */}
+        {showSensitiveModal && (
+          <SensitiveModal
+            content={activeChapter?.content || ''}
+            onApply={(newContent) => {
+              const ed = editorRef.current
+              if (ed && !ed.isDestroyed) ed.commands.setContent(newContent)
+            }}
+            onClose={() => actions.setShowSensitiveModal(false)}
+          />
+        )}
+
+        {/* 小黑屋强制码字浮层 */}
+        {showLockModal && (
+          <LockModal
+            currentWordCount={chapterWords}
+            onClose={() => actions.setShowLockModal(false)}
+          />
+        )}
+
+        {/* 时光机历史版本浮层 */}
+        {showHistoryModal && activeChapter && (
+          <HistoryModal
+            chapter={activeChapter}
+            onRestore={(content) => {
+              const ed = editorRef.current
+              if (ed && !ed.isDestroyed) ed.commands.setContent(content)
+            }}
+            onClose={() => actions.setShowHistoryModal(false)}
+          />
+        )}
+
+        {/* 高频词与口癖点检浮层 */}
+        {showOveruseModal && activeChapter && (
+          <OveruseWordsModal
+            content={activeChapter.content || ''}
+            chapterTitle={activeChapter.title}
+            onHighlightWord={(word) => {
+              actions.setShowFindReplace(true)
+              actions.setFindText(word)
+            }}
+            onClose={() => actions.setShowOveruseModal(false)}
+          />
+        )}
+
+        {chapterContextMenu && <ChapterContextMenu model={model} />}
+        {renamingChapter && <RenameChapterDialog model={model} />}
+        {deletingChapter && <DeleteChapterDialog model={model} />}
+        {volumeContextMenu && <VolumeContextMenu model={model} />}
+        {renamingVolume && <RenameVolumeDialog model={model} />}
+        {deletingVolume && <DeleteVolumeDialog model={model} />}
       </div>
-
-      {showGlobalSearch && <GlobalSearchPopup model={model} />}
-
-      {/* 敏感词即时检测浮层 */}
-      {showSensitiveModal && (
-        <SensitiveModal
-          content={activeChapter?.content || ''}
-          onApply={(newContent) => {
-            const ed = editorRef.current
-            if (ed && !ed.isDestroyed) ed.commands.setContent(newContent)
-          }}
-          onClose={() => actions.setShowSensitiveModal(false)}
-        />
-      )}
-
-      {/* 小黑屋强制码字浮层 */}
-      {showLockModal && (
-        <LockModal
-          currentWordCount={chapterWords}
-          onClose={() => actions.setShowLockModal(false)}
-        />
-      )}
-
-      {/* 时光机历史版本浮层 */}
-      {showHistoryModal && activeChapter && (
-        <HistoryModal
-          chapter={activeChapter}
-          onRestore={(content) => {
-            const ed = editorRef.current
-            if (ed && !ed.isDestroyed) ed.commands.setContent(content)
-          }}
-          onClose={() => actions.setShowHistoryModal(false)}
-        />
-      )}
-
-      {/* 高频词与口癖点检浮层 */}
-      {showOveruseModal && activeChapter && (
-        <OveruseWordsModal
-          content={activeChapter.content || ''}
-          chapterTitle={activeChapter.title}
-          onHighlightWord={(word) => {
-            actions.setShowFindReplace(true)
-            actions.setFindText(word)
-          }}
-          onClose={() => actions.setShowOveruseModal(false)}
-        />
-      )}
-
-      {chapterContextMenu && <ChapterContextMenu model={model} />}
-      {renamingChapter && <RenameChapterDialog model={model} />}
-      {deletingChapter && <DeleteChapterDialog model={model} />}
-      {volumeContextMenu && <VolumeContextMenu model={model} />}
-      {renamingVolume && <RenameVolumeDialog model={model} />}
-      {deletingVolume && <DeleteVolumeDialog model={model} />}
-    </div>
     </DesktopPluginHostProvider>
   )
 }

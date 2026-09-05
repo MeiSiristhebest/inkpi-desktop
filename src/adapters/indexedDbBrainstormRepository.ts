@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbBrainstormRepository: BrainstormRepository = {
   async getAll(projectId: string): Promise<BrainstormSparkRecord[]> {
-    const all = await db.getAll<BrainstormSparkRecord>('brainstormSparks')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<BrainstormSparkRecord>('brainstormSparks', 'projectId', projectId)
   },
 
   async get(id: string): Promise<BrainstormSparkRecord | undefined> {

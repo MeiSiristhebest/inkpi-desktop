@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbRhythmRadarRepository: RhythmRadarRepository = {
   async getAll(projectId: string): Promise<RhythmRadarReportRecord[]> {
-    const all = await db.getAll<RhythmRadarReportRecord>("rhythmRadarReports")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<RhythmRadarReportRecord>("rhythmRadarReports", 'projectId', projectId)
   },
 
   async getByChapter(chapterId: string): Promise<RhythmRadarReportRecord | undefined> {

@@ -6,13 +6,11 @@ import type {
 
 export const indexedDbShadowReaderRepository: ShadowReaderRepository = {
   async getAll(projectId: string): Promise<ShadowDanmakuRecord[]> {
-    const all = await db.getAll<ShadowDanmakuRecord>("shadowDanmakus")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<ShadowDanmakuRecord>("shadowDanmakus", 'projectId', projectId)
   },
 
   async getByChapter(chapterId: string): Promise<ShadowDanmakuRecord[]> {
-    const all = await db.getAll<ShadowDanmakuRecord>("shadowDanmakus")
-    return all.filter((r) => r.chapterId === chapterId)
+    return db.getByIndex<ShadowDanmakuRecord>("shadowDanmakus", 'chapterId', chapterId)
   },
 
   async save(record: ShadowDanmakuRecord): Promise<void> {

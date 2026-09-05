@@ -102,7 +102,12 @@ export class PluginEventBus {
     if (buffered && buffered.length > 0) {
       for (const item of buffered) {
         try {
-          listener(item)
+          const res = listener(item)
+          if (res && typeof (res as Promise<void>).catch === 'function') {
+            ;(res as Promise<void>).catch((err) => {
+              console.warn(`[PluginEventBus] Async error replaying event ${type}:`, err)
+            })
+          }
         } catch (err) {
           console.warn(`[PluginEventBus] Error replaying event ${type}:`, err)
         }
@@ -134,7 +139,12 @@ export class PluginEventBus {
 
     for (const fn of bucket) {
       try {
-        fn(payload)
+        const res = fn(payload)
+        if (res && typeof (res as Promise<void>).catch === 'function') {
+          ;(res as Promise<void>).catch((err) => {
+            console.warn(`[PluginEventBus] Async error handling event ${type}:`, err)
+          })
+        }
       } catch (err) {
         console.warn(`[PluginEventBus] Error handling event ${type}:`, err)
       }

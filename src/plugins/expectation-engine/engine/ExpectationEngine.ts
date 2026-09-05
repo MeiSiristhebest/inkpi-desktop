@@ -1,38 +1,122 @@
-import type {
-  ChapterEmotionalScore,
-  GoldenThreeDiagnostic,
-  ExpectationContract,
-} from '../types'
+import type { ChapterEmotionalScore, GoldenThreeDiagnostic, ExpectationContract } from '../types'
 
 const SUPPRESSION_CUES = [
-  '打压', '屈辱', '嘲讽', '绝境', '吐血', '危机', '围攻', '压制',
-  '命悬一线', '退婚', '冷笑', '蝼蚁', '残废', '夺骨', '废物', '羞辱', '重伤', '被困'
+  '打压',
+  '屈辱',
+  '嘲讽',
+  '绝境',
+  '吐血',
+  '危机',
+  '围攻',
+  '压制',
+  '命悬一线',
+  '退婚',
+  '冷笑',
+  '蝼蚁',
+  '残废',
+  '夺骨',
+  '废物',
+  '羞辱',
+  '重伤',
+  '被困',
 ]
 
 const PAYOFF_CUES = [
-  '突破', '斩杀', '震惊', '目瞪口呆', '悔恨', '暴毙', '臣服', '奉上',
-  '神通大成', '打脸', '秒杀', '骇然', '不可思议', '狂喜', '倒吸一口凉气', '横扫', '翻盘'
+  '突破',
+  '斩杀',
+  '震惊',
+  '目瞪口呆',
+  '悔恨',
+  '暴毙',
+  '臣服',
+  '奉上',
+  '神通大成',
+  '打脸',
+  '秒杀',
+  '骇然',
+  '不可思议',
+  '狂喜',
+  '倒吸一口凉气',
+  '横扫',
+  '翻盘',
 ]
 
 const GOLDEN_FINGER_CUES = [
-  '系统', '造化', '金手指', '古玉', '传承', '觉醒', '残魂', '神尊',
-  '至尊骨', '重生', '异鼎', '戒指', '识海', '重修', '至宝', '至尊'
+  '系统',
+  '造化',
+  '金手指',
+  '古玉',
+  '传承',
+  '觉醒',
+  '残魂',
+  '神尊',
+  '至尊骨',
+  '重生',
+  '异鼎',
+  '戒指',
+  '识海',
+  '重修',
+  '至宝',
+  '至尊',
 ]
 
 const HOOK_CUES = [
-  '三年之约', '大比', '宗门', '秘境', '生死战', '黑手', '大劫',
-  '迷雾', '杀父之仇', '深渊', '未解之谜', '誓杀', '惊天阴谋'
+  '三年之约',
+  '大比',
+  '宗门',
+  '秘境',
+  '生死战',
+  '黑手',
+  '大劫',
+  '迷雾',
+  '杀父之仇',
+  '深渊',
+  '未解之谜',
+  '誓杀',
+  '惊天阴谋',
 ]
 
 export class ExpectationEngine {
   /**
+   * 生成针对黄金三章与商业期待感的大语言模型深度诊断 Prompt
+   */
+  public static buildAiGoldenThreePrompt(params: {
+    chapters: Array<{ order: number; title: string; content: string }>
+  }): string {
+    return [
+      `【指令：商业网络小说黄金三章高维心智体检】`,
+      `你是一位资深网文总编与爽点期待感把控专家，请对前三章内容进行深度文学与商业化评审：`,
+      params.chapters
+        .map(
+          (c) => `第${c.order}章《${c.title}》：\n${c.content.slice(0, 1500)}\n-------------------`,
+        )
+        .join('\n'),
+      ``,
+      `请从 4 个核心维度给出专业诊断：`,
+      `1. 核心金手指/金手指兑现速度 (Golden Finger Clarity)`,
+      `2. 压抑-释放比率与打压阻力设计 (Suppression vs Payoff Balance)`,
+      `3. 核心驱动力与长期期待伏笔 (Long-term Hooks & Curiosity)`,
+      `4. 读者弃书风险点与改稿建议 (Drop-off Risk & Polish Advice)`,
+      ``,
+      `请按 JSON 格式输出：{ "score": number, "claritySummary": string, "hookLevel": "excellent"|"fair"|"weak", "sprAnalysis": string, "actionableAdvice": string[] }`,
+    ].join('\n')
+  }
+
+  /**
    * 连续张力梯度积分分析 (Continuous Tension Gradient Integral)：
    * 将长文本划分为 N 个段落分块 (Chunk)，计算情感正负梯度累积量。
    */
-  public computeTensionIntegral(text: string): { suppressionArea: number; payoffArea: number; dynamicSpr: number } {
+  public computeTensionIntegral(text: string): {
+    suppressionArea: number
+    payoffArea: number
+    dynamicSpr: number
+  } {
     if (!text || text.length < 50) return { suppressionArea: 0, payoffArea: 0, dynamicSpr: 1.0 }
 
-    const paragraphs = text.split(/\n+/).map((p) => p.trim()).filter((p) => p.length > 5)
+    const paragraphs = text
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 5)
     if (paragraphs.length === 0) return { suppressionArea: 0, payoffArea: 0, dynamicSpr: 1.0 }
 
     let suppArea = 0
@@ -53,7 +137,8 @@ export class ExpectationEngine {
       payArea += payWeight
     }
 
-    const dynamicSpr = payArea > 0 ? Number((suppArea / payArea).toFixed(2)) : suppArea > 0 ? suppArea : 1.0
+    const dynamicSpr =
+      payArea > 0 ? Number((suppArea / payArea).toFixed(2)) : suppArea > 0 ? suppArea : 1.0
     return {
       suppressionArea: Math.round(suppArea * 10) / 10,
       payoffArea: Math.round(payArea * 10) / 10,
@@ -190,7 +275,9 @@ export class ExpectationEngine {
   public auditContracts(contracts: ExpectationContract[], currentChapter: number) {
     const total = contracts.length
     const fulfilled = contracts.filter((c) => c.status === 'fulfilled').length
-    const active = contracts.filter((c) => c.status === 'planted' || c.status === 'building' || c.status === 'climax')
+    const active = contracts.filter(
+      (c) => c.status === 'planted' || c.status === 'building' || c.status === 'climax',
+    )
     const overdue = active.filter((c) => c.promisedResolveChapter < currentChapter)
 
     const fulfillmentRate = total > 0 ? Math.round((fulfilled / total) * 100) : 100

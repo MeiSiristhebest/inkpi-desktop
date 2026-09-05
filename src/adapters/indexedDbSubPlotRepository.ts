@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbSubPlotRepository: SubPlotRepository = {
   async getAll(projectId: string): Promise<SubPlotStrandRecord[]> {
-    const all = await db.getAll<SubPlotStrandRecord>('subPlotStrands')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<SubPlotStrandRecord>('subPlotStrands', 'projectId', projectId)
   },
 
   async get(id: string): Promise<SubPlotStrandRecord | undefined> {

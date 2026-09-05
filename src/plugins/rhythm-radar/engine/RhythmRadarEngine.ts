@@ -37,22 +37,32 @@ export class RhythmRadarEngine {
       }
     }
 
-    // 1. 动词与冲突密度统计 (Action & Conflict Density)
+    // 1. 动词与动作密度统计 (Action Density)
     // 扩展多字词与广泛冲突表征（对峙、逼近、博弈、暗杀、生死存亡等）
     const combatWords = (
       text.match(
         /(杀|斩|破|轰|死|血|剑|刀|爆|灭|震|撕|雷|对峙|突袭|搏杀|危机|生死|博弈|决绝|绝境)/g,
       ) || []
     ).length
-    const actionDensity = Math.min(1.0, combatWords / (text.length / 100))
+    // 每百字动作词密度，最高 1.0
+    const actionDensity = Math.min(1.0, combatWords / Math.max(1, text.length / 100))
 
-    // 2. 情感极性词汇 (Sentiment Valence)
+    // 2. 情感极性与唤醒度 (Arousal & Valence)
+    // Russell 情感环状模型：张力本质源于 Arousal (唤醒度 / 情绪激烈度)
     const positiveWords = (text.match(/(喜|笑|胜|突破|得道|生机|希望|狂喜|温暖)/g) || []).length
     const negativeWords = (text.match(/(悲|怒|恨|绝望|痛|崩塌|败|陨落|冰冷)/g) || []).length
+    // valence: 净情感极性方向（0 到 1，保留做情绪偏向指标）
     const sentimentValence = Math.min(1.0, Math.abs(positiveWords - negativeWords) / 10)
+    // arousal: 情绪总唤醒度，正面与负面交织冲击体现高张力，避免悲喜抵消
+    const emotionalArousal = Math.min(1.0, (positiveWords + negativeWords) / 5)
 
-    // 3. 复合张力指数 T = 0.55 * Action + 0.45 * Valence
-    const tensionScore = Math.round((0.55 * actionDensity + 0.45 * sentimentValence) * 100) / 100
+    // 3. 冲突对立强度 (Conflict Factor)
+    const conflictWords = (text.match(/(敌|抗|阻|争|战|叛|谋|仇|险|劫|锁|怒|狂)/g) || []).length
+    const conflictFactor = Math.min(1.0, conflictWords / Math.max(1, text.length / 100))
+
+    // 4. 复合张力指数 T = 0.50 * Action + 0.30 * Arousal + 0.20 * Conflict
+    const tensionScore =
+      Math.round((0.5 * actionDensity + 0.3 * emotionalArousal + 0.2 * conflictFactor) * 100) / 100
 
     let pacingStatus: PacingStatus = 'optimal'
     if (tensionScore < 0.2) pacingStatus = 'dragged'

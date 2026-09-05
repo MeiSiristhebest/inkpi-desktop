@@ -159,6 +159,43 @@ export class CombatSandboxEngine {
   }
 
   /**
+   * 构建用于大语言模型推演真实动作拆招与兵刃战术的 Prompt
+   */
+  static buildAiCombatPrompt(params: {
+    protagonistName: string
+    enemyName: string
+    protagonistTechnique?: string
+    enemyTechnique?: string
+    battlefieldTerrain?: string
+    plotGoal?: string
+  }): string {
+    const {
+      protagonistName,
+      enemyName,
+      protagonistTechnique = '自修功法/核心绝技',
+      enemyTechnique = '敌方绝杀功法',
+      battlefieldTerrain = '绝壁深渊 / 荒古禁地',
+      plotGoal = '逆风翻盘，绝境反杀',
+    } = params
+
+    return [
+      `【指令：专业动作打斗与高武拆招博弈推演】`,
+      `你是一位精通网络小说战斗描写与微观武打设计的指导顾问，请为下述对决设计具有极强画面感、战术博弈与物理/法理对抗的四段式拆招链：`,
+      `对阵双方：${protagonistName}（使用：${protagonistTechnique}） VS ${enemyName}（使用：${enemyTechnique}）`,
+      `交战环境：${battlefieldTerrain}`,
+      `叙事目标：${plotGoal}`,
+      ``,
+      `必须严格分为四阶段递进：`,
+      `1. probing (试探交锋)：试探破绽，气机锁定，空间压缩`,
+      `2. escalation (变招僵持)：变招虚晃，法理博弈，环境借势`,
+      `3. climax_strike (极境绝杀)：底牌尽出，绝对压制，生死一线`,
+      `4. reversal_turn (绝境反杀/掀桌破局)：预埋伏笔爆发，弱点致命打击，胜负定格`,
+      ``,
+      `请按 JSON 格式输出：{ "title": string, "beats": Array<{ "phase": string, "attacker": string, "moveName": string, "tacticDescription": string, "damageOrConsequence": string }> }`,
+    ].join('\n')
+  }
+
+  /**
    * 生成四段博弈微观拆招链 (起手试探 -> 变招相持 -> 杀招逼命 -> 绝境反杀)
    */
   static generateFourPhaseTemplate(
@@ -167,39 +204,41 @@ export class CombatSandboxEngine {
     options?: {
       protagonistTechnique?: string
       enemyTechnique?: string
+      terrain?: string
     },
   ): CombatDuelTemplate {
     const pTech = options?.protagonistTechnique || '九霄雷印法'
     const eTech = options?.enemyTechnique || '幽冥蚀骨罡'
+    const terrain = options?.terrain || '虚空'
 
     const beats: CombatActionBeat[] = [
       {
         phase: 'probing',
         attacker: enemyName,
-        moveName: `${eTech}·神识锁定与试探式截杀`,
-        tacticDescription: `${enemyName} 负手而立，散发高阶灵压封锁方圆百丈虚空，以一式随手弹指打出探路试探。`,
-        damageOrConsequence: `${protagonistName} 提前侦测气机异动，踏奇门步法险险侧身避让，余波刮碎护体法衣。`,
+        moveName: `${eTech}·气机锁定与试探式截杀`,
+        tacticDescription: `${enemyName} 负手而立，散发高阶威压封锁${terrain}四周，以一式随手弹指打出试探，迫使${protagonistName}暴露出气机破绽。`,
+        damageOrConsequence: `${protagonistName} 提前侦测气机异动，踏玄妙步法侧身避让，余波擦过护体真元激荡起剧烈涟漪。`,
       },
       {
         phase: 'escalation',
         attacker: protagonistName,
         moveName: `${pTech}·多重术式变招牵制与虚晃`,
-        tacticDescription: `${protagonistName} 抛出三枚障目符箓遮蔽神识，同时虚引法诀诱使对方护体罡气偏转，直袭防线薄弱处。`,
-        damageOrConsequence: `${enemyName} 眉头微皱被迫侧退半步化解暗劲，眼中轻蔑转为凝重，杀意暴涨。`,
+        tacticDescription: `${protagonistName} 借由${terrain}掩护虚引法诀，多重复合术式交织闪烁，诱使对方护体罡气偏转，直袭防线薄弱侧肋。`,
+        damageOrConsequence: `${enemyName} 眉头微皱被迫侧退化解暗劲，眼中轻蔑转为凝重，杀意暴涨。`,
       },
       {
         phase: 'climax_strike',
         attacker: enemyName,
-        moveName: `${eTech}·本命法宝全开之必杀绝境`,
-        tacticDescription: `${enemyName} 暴喝一声祭出本命煞兵，天地灵气瞬间被抽空抽干，形成断绝一切退路的锁空杀阵！`,
-        damageOrConsequence: `${protagonistName} 护身至宝发出悲鸣瞬间布满裂纹，退路彻底断绝，命悬一线陷入绝境！`,
+        moveName: `${eTech}·全域极境爆发之必杀死局`,
+        tacticDescription: `${enemyName} 暴喝一声全力祭出杀招，方圆气流瞬间被抽空，化作断绝一切生机的毁灭死局！`,
+        damageOrConsequence: `${protagonistName} 护身底牌发出悲鸣，退路彻底断绝，命悬一线陷入绝境！`,
       },
       {
         phase: 'reversal_turn',
         attacker: protagonistName,
-        moveName: `引爆预埋后手·破局反杀掀桌一击`,
-        tacticDescription: `${protagonistName} 顺应败势诱敌深入，在对方胜券在握逼近三步的刹那，骤然引爆早已埋设好的本源克制杀招！`,
-        damageOrConsequence: `${enemyName} 护体真罡如琉璃般轰然崩碎，满脸骇然倒飞喋血，战局彻底翻盘逆转！`,
+        moveName: `引爆克制杀招·绝境破局反杀`,
+        tacticDescription: `${protagonistName} 顺应败势诱敌深入，在对方逼近三步胜券在握的刹那，骤然引爆早已预埋的弱点克制杀招！`,
+        damageOrConsequence: `${enemyName} 护体屏障如琉璃般轰然崩碎，满脸骇然倒飞喋血，战局彻底翻盘逆转！`,
       },
     ]
 

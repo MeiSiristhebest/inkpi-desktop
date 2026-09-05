@@ -33,7 +33,7 @@ export interface DesktopPluginHostContextValue {
   mutateActiveChapter: (patch: ChapterMutationPatch) => Promise<ChapterMutationResult>
   mutateCodexEntity: (
     entityId: string,
-    mutation: (prev: CodexEntity) => Partial<CodexEntity>
+    mutation: (prev: CodexEntity) => Partial<CodexEntity>,
   ) => Promise<void>
   refreshBookHierarchy: () => Promise<void>
   activeDrawerPluginId: string | null
@@ -41,4 +41,9 @@ export interface DesktopPluginHostContextValue {
   closeDrawer: () => void
   toggleDrawer: (pluginId: string) => void
   scopedBus?: ScopedPluginEventBus
+  /** 语义化 AI 助理能力（若已连接 Daemon/LLM，则供插件直接调度深度语义分析） */
+  aiAssistant?: {
+    prompt: (instruction: string) => Promise<string | null>
+    isAvailable: boolean
+  }
 }

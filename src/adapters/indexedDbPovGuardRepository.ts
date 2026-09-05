@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbPovGuardRepository: PovGuardRepository = {
   async getAll(projectId: string): Promise<PovSnapshotRecord[]> {
-    const all = await db.getAll<PovSnapshotRecord>("povSnapshots")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<PovSnapshotRecord>("povSnapshots", 'projectId', projectId)
   },
 
   async getByChapter(chapterId: string): Promise<PovSnapshotRecord | undefined> {

@@ -15,34 +15,73 @@ import type {
  * 4. 合（Impact Wide 广角高潮）：余波席卷与胜负定格
  */
 export class StoryboardEngine {
+  /**
+   * 生成分镜导演与画师推演的 Prompt（用于通过 AiAssistant 生成高规格电影分镜）
+   */
+  public static buildAiStoryboardPrompt(params: {
+    chapterTitle: string
+    chapterText: string
+    artStyle?: string
+  }): string {
+    const { chapterTitle, chapterText, artStyle = '电影质感高概念概念设计 / 8K虚幻5渲染' } = params
+    return [
+      `【指令：文学高潮四格电影视听分镜重构】`,
+      `你是一位资深电影分镜师与插画导演，请针对下述小说高潮段落，提取出具有极强视觉张力的四幕分镜脚本与人物立绘特征：`,
+      `艺术风格：${artStyle}`,
+      `章节：《${chapterTitle}》`,
+      `正文片段：`,
+      chapterText.slice(0, 1800),
+      ``,
+      `请按四格语法输出标准 JSON：`,
+      `{`,
+      `  "conflictDescription": "核心交锋概览",`,
+      `  "suggestedCharacters": [{ "characterName": string, "visualFeatures": string, "stableDiffusionPrompt": string }],`,
+      `  "frames": [`,
+      `    { "shotOrder": 1, "shotType": "establishing_wide", "shotLabel": "【起】远景全景", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string },`,
+      `    { "shotOrder": 2, "shotType": "medium_confrontation", "shotLabel": "【承】中景对峙", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string },`,
+      `    { "shotOrder": 3, "shotType": "dutch_closeup", "shotLabel": "【转】特写倾斜", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string },`,
+      `    { "shotOrder": 4, "shotType": "impact_wide", "shotLabel": "【合】广角高潮", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string }`,
+      `  ]`,
+      `}`,
+    ].join('\n')
+  }
+
   public static extractStoryboard(
     chapterId: string,
     chapterTitle: string,
     chapterText: string,
+    context?: { protagonist?: string; antagonist?: string },
   ): ClimaxStoryboardExtraction {
     const rawLines = chapterText
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l.length > 5)
 
+    // 优先采用上下文显式传入的主角/对手设定，彻底避免无脑 fallback 到“林凡”与“赵家长老”
+    let mainHero = context?.protagonist || ''
+    let opponent = context?.antagonist || ''
+
     // 尝试从文本中解析人物与动作焦点
-    let mainHero = '林凡'
-    let opponent = '赵家长老'
+    if (!mainHero || !opponent) {
+      const nameMatches = chapterText.match(
+        /([\u4e00-\u9fa5]{2,4})(?:手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出|拔出|祭出|负手)/g,
+      )
+      if (nameMatches && nameMatches.length > 0) {
+        const extractedNames = Array.from(
+          new Set(
+            nameMatches.map((m) =>
+              m.replace(/(手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出|拔出|祭出|负手)/g, ''),
+            ),
+          ),
+        ).filter((n) => n.length >= 2 && n.length <= 4)
 
-    // 简单扫描提取高频双字/三字主语
-    const nameMatches = chapterText.match(
-      /([\u4e00-\u9fa5]{2,3})(?:手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出)/g,
-    )
-    if (nameMatches && nameMatches.length > 0) {
-      const extractedNames = Array.from(
-        new Set(
-          nameMatches.map((m) => m.replace(/(手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出)/g, '')),
-        ),
-      ).filter((n) => n.length >= 2 && n.length <= 3)
-
-      if (extractedNames.length >= 1) mainHero = extractedNames[0]
-      if (extractedNames.length >= 2) opponent = extractedNames[1]
+        if (!mainHero && extractedNames.length >= 1) mainHero = extractedNames[0]
+        if (!opponent && extractedNames.length >= 2) opponent = extractedNames[1]
+      }
     }
+
+    if (!mainHero) mainHero = '主角'
+    if (!opponent) opponent = '强敌对手'
 
     // 提取关键冲突段落片段作为描述基础
     const actionSnippet =

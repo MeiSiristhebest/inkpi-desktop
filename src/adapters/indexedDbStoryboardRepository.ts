@@ -6,13 +6,11 @@ import type {
 
 export const indexedDbStoryboardRepository: StoryboardRepository = {
   async getAll(projectId: string): Promise<StoryboardSceneRecord[]> {
-    const all = await db.getAll<StoryboardSceneRecord>("storyboardScenes")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<StoryboardSceneRecord>("storyboardScenes", 'projectId', projectId)
   },
 
   async getByChapter(chapterId: string): Promise<StoryboardSceneRecord[]> {
-    const all = await db.getAll<StoryboardSceneRecord>("storyboardScenes")
-    return all.filter((r) => r.chapterId === chapterId)
+    return db.getByIndex<StoryboardSceneRecord>("storyboardScenes", 'chapterId', chapterId)
   },
 
   async get(id: string): Promise<StoryboardSceneRecord | undefined> {

@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbDiffReviewRepository: DiffReviewRepository = {
   async getAll(projectId: string): Promise<DiffReviewRecord[]> {
-    const all = await db.getAll<DiffReviewRecord>("diffReviews")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<DiffReviewRecord>("diffReviews", 'projectId', projectId)
   },
 
   async get(id: string): Promise<DiffReviewRecord | undefined> {
@@ -15,8 +14,7 @@ export const indexedDbDiffReviewRepository: DiffReviewRepository = {
   },
 
   async getByChapter(chapterId: string): Promise<DiffReviewRecord[]> {
-    const all = await db.getAll<DiffReviewRecord>("diffReviews")
-    return all.filter((r) => r.chapterId === chapterId)
+    return db.getByIndex<DiffReviewRecord>("diffReviews", 'chapterId', chapterId)
   },
 
   async save(record: DiffReviewRecord): Promise<void> {

@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbDialogueVoiceprintRepository: DialogueVoiceprintRepository = {
   async getAll(projectId: string): Promise<CharacterVoiceprint[]> {
-    const all = await db.getAll<CharacterVoiceprint>('dialogueVoiceprints')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<CharacterVoiceprint>('dialogueVoiceprints', 'projectId', projectId)
   },
 
   async getByName(projectId: string, name: string): Promise<CharacterVoiceprint | undefined> {

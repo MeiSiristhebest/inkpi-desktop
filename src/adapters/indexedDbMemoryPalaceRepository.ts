@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbMemoryPalaceRepository: MemoryPalaceRepository = {
   async getAll(projectId: string): Promise<MemoryPalaceSnapshotRecord[]> {
-    const all = await db.getAll<MemoryPalaceSnapshotRecord>('memoryPalaceSnapshots')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<MemoryPalaceSnapshotRecord>('memoryPalaceSnapshots', 'projectId', projectId)
   },
 
   async getByEntityId(entityId: string): Promise<MemoryPalaceSnapshotRecord | undefined> {

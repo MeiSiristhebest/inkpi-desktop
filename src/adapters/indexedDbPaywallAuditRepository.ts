@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbPaywallAuditRepository: PaywallAuditRepository = {
   async getAll(projectId: string): Promise<PaywallAuditRecord[]> {
-    const all = await db.getAll<PaywallAuditRecord>('paywallAudits')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<PaywallAuditRecord>('paywallAudits', 'projectId', projectId)
   },
 
   async getByChapterId(chapterId: string): Promise<PaywallAuditRecord | undefined> {

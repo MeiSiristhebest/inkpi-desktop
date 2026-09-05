@@ -3,8 +3,7 @@ import type { CombatDuelRecord, CombatSandboxRepository } from '../ports/combatS
 
 export const indexedDbCombatSandboxRepository: CombatSandboxRepository = {
   async getAll(projectId: string): Promise<CombatDuelRecord[]> {
-    const all = await db.getAll<CombatDuelRecord>('combatDuels')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<CombatDuelRecord>('combatDuels', 'projectId', projectId)
   },
 
   async get(id: string): Promise<CombatDuelRecord | undefined> {

@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbWaterAuditRepository: WaterAuditRepository = {
   async getAll(projectId: string): Promise<WaterAuditSnapshot[]> {
-    const all = await db.getAll<WaterAuditSnapshot>('waterAuditSnapshots')
-    return all.filter((s) => s.projectId === projectId)
+    return db.getByIndex<WaterAuditSnapshot>('waterAuditSnapshots', 'projectId', projectId)
   },
 
   async getByChapter(projectId: string, chapterId: string): Promise<WaterAuditSnapshot | undefined> {

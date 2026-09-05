@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbEmotionAuditRepository: EmotionAuditRepository = {
   async getAll(projectId: string): Promise<EmotionAuditRecord[]> {
-    const all = await db.getAll<EmotionAuditRecord>('emotionAudits')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<EmotionAuditRecord>('emotionAudits', 'projectId', projectId)
   },
 
   async getByChapterId(chapterId: string): Promise<EmotionAuditRecord | undefined> {

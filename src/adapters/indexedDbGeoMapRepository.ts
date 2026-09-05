@@ -3,8 +3,7 @@ import type { GeoMapGridRecord, GeoMapRepository } from '../ports/geoMapReposito
 
 export const indexedDbGeoMapRepository: GeoMapRepository = {
   async getAll(projectId: string): Promise<GeoMapGridRecord[]> {
-    const all = await db.getAll<GeoMapGridRecord>('geoMapGrids')
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<GeoMapGridRecord>('geoMapGrids', 'projectId', projectId)
   },
 
   async get(id: string): Promise<GeoMapGridRecord | undefined> {

@@ -6,8 +6,7 @@ import type {
 
 export const indexedDbGoldChaptersRepository: GoldChaptersRepository = {
   async getAll(projectId: string): Promise<GoldChapterEvalRecord[]> {
-    const all = await db.getAll<GoldChapterEvalRecord>("goldChapterEvals")
-    return all.filter((r) => r.projectId === projectId)
+    return db.getByIndex<GoldChapterEvalRecord>("goldChapterEvals", 'projectId', projectId)
   },
 
   async get(id: string): Promise<GoldChapterEvalRecord | undefined> {
