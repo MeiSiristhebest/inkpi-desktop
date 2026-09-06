@@ -1,16 +1,44 @@
+---
 name: CI
 
 on:
   push:
     branches: [master, main]
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.ts'
+      - 'vite.config.ts'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [master, main]
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.ts'
+      - 'vite.config.ts'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
-    name: Lint, Build & Test Coverage (${{ matrix.os }}, Node ${{ matrix.node-version }})
+    name: Desktop Frontend Check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [22.x]
@@ -44,18 +72,29 @@ jobs:
           pnpm install --no-frozen-lockfile --ignore-scripts
           pnpm run build
 
+      - name: Setup npm Cache for Desktop
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: >-
+            ${{ runner.os }}-npm-desktop-${{
+            hashFiles('inkpi-desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-desktop-
+
       - name: Install Desktop Dependencies
         working-directory: inkpi-desktop
         run: npm install --ignore-scripts
 
-      - name: Lint Check
+      - name: Lint Check (Oxlint)
         working-directory: inkpi-desktop
         run: npm run lint
 
-      - name: Typecheck & Build
+      - name: TypeScript Typecheck & Vite Build
         working-directory: inkpi-desktop
         run: npm run build
 
       - name: Run Test Coverage & Thresholds
         working-directory: inkpi-desktop
         run: npm run test:coverage
+...
