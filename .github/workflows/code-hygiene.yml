@@ -1,0 +1,50 @@
+---
+name: Code Hygiene & Fast Linter
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.oxlintrc.json'
+      - '.prettierrc.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/code-hygiene.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-hygiene-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-check:
+    name: Fast Oxlint & Format Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Desktop Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install Desktop Dependencies
+        run: npm install --ignore-scripts
+
+      - name: Oxlint Static Analysis
+        run: npm run lint
+
+      - name: Prettier Code Format Verification
+        run: npm run format:check
+...
