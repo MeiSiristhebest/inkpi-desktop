@@ -6,15 +6,11 @@ import { indexedDbVolumeArcRepository } from '../../../adapters/indexedDbVolumeA
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import {
-  Save,
-  CheckCircle2,
-  Layers,
-  BookOpen,
-  Target,
-} from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { Save, CheckCircle2, Layers, BookOpen, Target, Bot } from 'lucide-react'
 
 export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [volumes, setVolumes] = useState<Array<{ id: string; title: string; order: number }>>([])
   const [chapters, setChapters] = useState<Array<{ volumeId?: string; wordCount?: number }>>([])
   const [arcs, setArcs] = useState<VolumeArcRecord[]>([])
@@ -52,10 +48,29 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     }
   }
 
+  // 真实 AI 辅助分卷弧线与卷末大悬念推演
+  const handleAiVolumeArcRecommend = () => {
+    const curVol = volumes.find((v) => v.id === selectedVolId)
+    const volChapters = chapters.filter((c) => c.volumeId === selectedVolId)
+    const prompt = `请作为百万字长篇网络小说大纲总监，对【第 ${curVol?.order ?? 1} 卷《${curVol?.title ?? '当前卷'}》】进行三幕式分卷弧线与卷末高潮设计：
+【分卷信息】：已创作 ${volChapters.length} 章节，目标字数 ${editTargetWords} 字
+【核心矛盾现状】：${editConflict || '暂未详细规划'}
+【卷末高潮预设】：${editClimax || '暂未详细规划'}
+
+请给出长篇工业级分卷设计建议：
+1. 卷核心矛盾（推动主角必须跨卷成长、离开新手村或打破旧秩序的核心动机）；
+2. 卷末终局大高潮（Climax）节点设计（怎样的高潮决战最具视觉感与情绪爆点）；
+3. 卷末跨卷大悬念（Cross-volume Cliffhanger）：打完大Boss后，如何用一封绝密玉简、突发天地异象或神秘势力降临，让读者产生翻开下一卷的狂热驱动力？`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
+
   const syncFormWithArc = (
     volId: string,
     _volList: Array<{ id: string; title: string; order: number }>,
-    arcList: VolumeArcRecord[]
+    arcList: VolumeArcRecord[],
   ) => {
     const existing = arcList.find((a) => a.volumeId === volId)
     if (existing) {
@@ -111,11 +126,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     await loadAll()
   }
 
-  const metrics: TotalBookMetrics = volumeMasterEngine.aggregateBookMetrics(
-    volumes,
-    chapters,
-    arcs
-  )
+  const metrics: TotalBookMetrics = volumeMasterEngine.aggregateBookMetrics(volumes, chapters, arcs)
 
   const activeVol = volumes.find((v) => v.id === selectedVolId)
   const activeArc = arcs.find((a) => a.volumeId === selectedVolId)
@@ -141,14 +152,30 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           </p>
         </div>
 
-        <button
-          onClick={handleSaveArc}
-          disabled={!selectedVolId}
-          className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-semibold hover:opacity-90 flex items-center gap-1.5 shadow-sm disabled:opacity-50"
-        >
-          {savedSuccess ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-          <span>{savedSuccess ? '规划已保存' : '保存分卷规划'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiVolumeArcRecommend}
+              disabled={!selectedVolId}
+              className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              <Bot className="w-3.5 h-3.5 text-purple-400" />
+              <span>AI 分卷弧线与跨卷悬念推演</span>
+            </button>
+          )}
+          <button
+            onClick={handleSaveArc}
+            disabled={!selectedVolId}
+            className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-semibold hover:opacity-90 flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+          >
+            {savedSuccess ? (
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            <span>{savedSuccess ? '规划已保存' : '保存分卷规划'}</span>
+          </button>
+        </div>
       </div>
 
       {/* 宏观数据概览条 */}
@@ -222,14 +249,19 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[var(--ink-text)] truncate">{vol.title}</span>
+                      <span className="font-semibold text-[var(--ink-text)] truncate">
+                        {vol.title}
+                      </span>
                       <span className="text-[10px] text-[var(--ink-text-muted)] shrink-0">
                         第 {vol.order + 1} 卷
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-[var(--ink-text-muted)]">
-                      <span>{stat.actualWordCount.toLocaleString()} / {stat.targetWordCount.toLocaleString()} 字</span>
+                      <span>
+                        {stat.actualWordCount.toLocaleString()} /{' '}
+                        {stat.targetWordCount.toLocaleString()} 字
+                      </span>
                       <span className="font-medium text-purple-400">{stat.burnRate}%</span>
                     </div>
 
@@ -280,31 +312,35 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-[var(--ink-text)]">分形分卷四幕阶段：</span>
-                  <span className="text-[11px] text-purple-400 font-medium">{actInfo.progressRange}</span>
+                  <span className="text-[11px] text-purple-400 font-medium">
+                    {actInfo.progressRange}
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {(['act1_intro', 'act2_rising', 'act3_climax', 'act4_fallout'] as const).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setEditActStage(st)}
-                      className={`p-2.5 rounded-lg border text-left transition-all ${
-                        editActStage === st
-                          ? 'border-purple-500 bg-purple-500/15 text-purple-400 font-semibold'
-                          : 'border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]'
-                      }`}
-                    >
-                      <span className="block font-medium text-xs">
-                        {st === 'act1_intro'
-                          ? '第一幕 破局'
-                          : st === 'act2_rising'
-                            ? '第二幕 危机'
-                            : st === 'act3_climax'
-                              ? '第三幕 卷巅峰'
-                              : '第四幕 余波'}
-                      </span>
-                    </button>
-                  ))}
+                  {(['act1_intro', 'act2_rising', 'act3_climax', 'act4_fallout'] as const).map(
+                    (st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setEditActStage(st)}
+                        className={`p-2.5 rounded-lg border text-left transition-all ${
+                          editActStage === st
+                            ? 'border-purple-500 bg-purple-500/15 text-purple-400 font-semibold'
+                            : 'border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]'
+                        }`}
+                      >
+                        <span className="block font-medium text-xs">
+                          {st === 'act1_intro'
+                            ? '第一幕 破局'
+                            : st === 'act2_rising'
+                              ? '第二幕 危机'
+                              : st === 'act3_climax'
+                                ? '第三幕 卷巅峰'
+                                : '第四幕 余波'}
+                        </span>
+                      </button>
+                    ),
+                  )}
                 </div>
                 <p className="text-[11px] text-[var(--ink-text-muted)] italic bg-[var(--ink-bg-canvas)] p-2 rounded border border-[var(--ink-border)]/50">
                   {actInfo.desc}
@@ -375,7 +411,8 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                   </span>
                   {activeStat.arcRegression && (
                     <span className="text-[10px] text-purple-400 font-mono">
-                      二阶 OLS 拟合度 R²: {activeStat.arcRegression.r2} · 顶点位置: {Math.round(activeStat.arcRegression.apexRatio * 100)}%
+                      二阶 OLS 拟合度 R²: {activeStat.arcRegression.r2} · 顶点位置:{' '}
+                      {Math.round(activeStat.arcRegression.apexRatio * 100)}%
                     </span>
                   )}
                 </div>

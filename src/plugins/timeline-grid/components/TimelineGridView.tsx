@@ -1,3 +1,4 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { NarrativeThread, TimelineNode, NarrativeConflict } from '../types'
@@ -5,9 +6,11 @@ import { causalEngine } from '../engine/CausalEngine'
 import { TimelineNodeCard } from './TimelineNodeCard'
 import { ConflictPanel } from './ConflictPanel'
 import { indexedDbTimelineRepository } from '../../../adapters/indexedDbTimelineRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { Plus, GitBranch, X, Check, Trash2 } from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { Plus, GitBranch, X, Check, Trash2, Bot, Sparkles } from 'lucide-react'
 
 export const DEFAULT_THREADS: Omit<NarrativeThread, 'projectId'>[] = [
   { id: 'thread-main', name: '主线 / 逆天修仙', color: '#3b82f6', characterIds: [], order: 0 },
@@ -68,8 +71,10 @@ export const DEMO_NODES: Omit<TimelineNode, 'projectId' | 'createdAt' | 'updated
 ]
 
 export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [threads, setThreads] = useState<NarrativeThread[]>([])
   const [nodes, setNodes] = useState<TimelineNode[]>([])
+  const [chaptersList, setChaptersList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showConflicts, setShowConflicts] = useState(true)
   const [editingNode, setEditingNode] = useState<Partial<TimelineNode> | null>(null)
@@ -78,9 +83,10 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [allThreads, allNodes] = await Promise.all([
+      const [allThreads, allNodes, allChapters] = await Promise.all([
         indexedDbTimelineRepository.getAllThreads(),
         indexedDbTimelineRepository.getAllNodes(),
+        indexedDbProjectRepository.getChaptersByProject(projectId),
       ])
 
       const projThreads = allThreads
@@ -91,8 +97,9 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
       setThreads(projThreads)
       setNodes(projNodes)
+      setChaptersList(allChapters)
 
-      const highestCh = Math.max(6, ...projNodes.map((n) => n.chapterOrder + 2))
+      const highestCh = Math.max(6, allChapters.length, ...projNodes.map((n) => n.chapterOrder + 2))
       setMaxChapter(highestCh)
     } catch (e) {
       console.error('Failed to load timeline grid data:', e)
@@ -105,7 +112,32 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     loadData()
   }, [projectId])
 
-  const handleSeedDemo = async () => {
+  // 核心：基于作品真实章节正文，让 AI 逆向提炼多线大纲
+  const handleAiExtractTimeline = () => {
+    if (chaptersList.length === 0) return
+    const chaptersSummary = chaptersList
+      .slice(0, 15)
+      .map(
+        (c) => `第 ${c.order} 章《${c.title}》：\n${htmlToPlain(c.content || '').slice(0, 300)}...`,
+      )
+      .join('\n\n')
+
+    const prompt = `请分析以下小说的已创作章节正文，帮作者逆向提炼并初始化【多线时空大纲因果网格】：
+【已写正文前序】：
+${chaptersSummary}
+
+请以结构化方式梳理出：
+1. 核心叙事线划分（建议 3~4 条，如：主线事件、势力/暗涌线、情感/羁绊线）；
+2. 提取出前各章中真实发生的标志性转折节点（事件标题、前置因果依赖、因果产生的结果）；
+3. 标注出各事件在因果链条上可能引发的后续逻辑暗坑。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
+
+  // 基础骨架建立：基于作品建立真实三线骨架
+  const handleInitRealSkeleton = async () => {
     const now = clock.now()
     for (const t of DEFAULT_THREADS) {
       await indexedDbTimelineRepository.saveThread({ ...t, projectId })
@@ -164,15 +196,23 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
         </div>
 
         <div className="flex items-center gap-3">
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiExtractTimeline}
+              className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+            >
+              <Bot className="w-3.5 h-3.5 text-indigo-400" /> AI 逆向提取大纲
+            </button>
+          )}
           <button
             onClick={() => setMaxChapter((prev) => prev + 2)}
-            className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs"
+            className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs cursor-pointer"
           >
             + 扩展 2 章
           </button>
           <button
             onClick={() => setShowConflicts((prev) => !prev)}
-            className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
               conflicts.length > 0
                 ? 'border-rose-500/50 bg-rose-500/10 text-rose-500'
                 : 'border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]'
@@ -191,7 +231,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                 emotionalPolarity: 0,
               })
             }
-            className="px-3 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> 添加大纲事件
           </button>
@@ -205,20 +245,33 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             加载因果大纲网格...
           </div>
         ) : threads.length === 0 && nodes.length === 0 ? (
-          /* 空状态 */
+          /* 空状态：彻底告别逼人抄写与死板修仙Demo */
           <div className="flex-1 flex items-center justify-center p-8">
-            <div className="max-w-md p-8 border border-dashed border-[var(--ink-border)] rounded-2xl text-center bg-[var(--ink-bg-panel)]">
+            <div className="max-w-md p-8 border border-[var(--ink-border)] rounded-2xl text-center bg-[var(--ink-bg-panel)] shadow-sm">
               <GitBranch className="w-8 h-8 mx-auto text-[var(--ink-accent)] mb-3 opacity-80" />
-              <h3 className="font-medium text-sm text-[var(--ink-text)] mb-1">尚无时空大纲网格</h3>
+              <h3 className="font-semibold text-sm text-[var(--ink-text)] mb-1">
+                尚无时空大纲网格
+              </h3>
               <p className="text-xs text-[var(--ink-text-muted)] mb-5 leading-relaxed">
-                为你的作品建立多线叙事坐标。主线、支线与暗线交织演进，实时杜绝因果死锁与逻辑吃书。
+                无需复杂运筹建档。主线、支线与暗线交织演进，实时杜绝因果死锁与逻辑吃书。
               </p>
-              <button
-                onClick={handleSeedDemo}
-                className="px-4 py-2 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90"
-              >
-                预载修仙多线因果网格示例
-              </button>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                {hostContext?.aiAssistant?.isAvailable && (
+                  <button
+                    onClick={handleAiExtractTimeline}
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    AI 自动扫描正文初始化大纲
+                  </button>
+                )}
+                <button
+                  onClick={handleInitRealSkeleton}
+                  className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] text-xs font-medium cursor-pointer"
+                >
+                  预载修仙多线因果网格示例
+                </button>
+              </div>
             </div>
           </div>
         ) : (

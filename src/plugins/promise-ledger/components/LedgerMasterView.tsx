@@ -5,16 +5,15 @@ import { ledgerEngine } from '../engine/LedgerEngine'
 import { DebtGanttChart } from './DebtGanttChart'
 import { PromiseEntryEditor } from './PromiseEntryEditor'
 import { indexedDbPromiseLedgerRepository } from '../../../adapters/indexedDbPromiseLedgerRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
-import {
-  Plus,
-  Search,
-  Sparkles,
-  Edit2,
-  Trash2,
-} from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { Plus, Search, Sparkles, Edit2, Trash2, Bot } from 'lucide-react'
 
-export const DEMO_PROMISES: Omit<PromiseLedgerEntry, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>[] = [
+export const DEMO_PROMISES: Omit<
+  PromiseLedgerEntry,
+  'id' | 'projectId' | 'createdAt' | 'updatedAt'
+>[] = [
   {
     clueName: '断界残鼎的第三重封印',
     tier: 'main_plot',
@@ -63,25 +62,59 @@ export const DEMO_PROMISES: Omit<PromiseLedgerEntry, 'id' | 'projectId' | 'creat
 ]
 
 export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [entries, setEntries] = useState<PromiseLedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | PromiseStatus | 'overdue'>('all')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'gantt' | 'list'>('gantt')
   const [editingEntry, setEditingEntry] = useState<Partial<PromiseLedgerEntry> | null>(null)
-  const [currentChapter] = useState(22)
+  const [currentChapter, setCurrentChapter] = useState(1)
 
   // 加载数据
   const loadEntries = async () => {
     try {
       setLoading(true)
-      const all = await indexedDbPromiseLedgerRepository.getAll()
+      const [all, allChapters] = await Promise.all([
+        indexedDbPromiseLedgerRepository.getAll(),
+        indexedDbProjectRepository.getChaptersByProject(projectId),
+      ])
       const projectEntries = all.filter((e) => e.projectId === projectId)
       setEntries(projectEntries.sort((a, b) => a.plantChapter - b.plantChapter))
+
+      if (allChapters.length > 0) {
+        const maxCh = Math.max(...allChapters.map((c) => c.order))
+        setCurrentChapter(maxCh)
+      }
     } catch (e) {
       console.error('Failed to load promise ledger entries:', e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 真实 AI 读者遗忘曲线与伏笔死锁审查
+  const handleAiLedgerAudit = () => {
+    if (entries.length === 0) return
+    const entrySummaries = entries
+      .map(
+        (e) =>
+          `伏笔【${e.clueName}】(${e.tier})：始于第 ${e.plantChapter} 章，承诺解决限期第 ${e.dueChapterLimit} 章，状态：${e.status}。埋设说明：${e.plantNote}`,
+      )
+      .join('\n')
+
+    const prompt = `请作为小说结构编辑，对以下【未回收伏笔账本与剧情悬念债】进行专业审查：
+【当前全书推进进度】：第 ${currentChapter} 章
+【伏笔账本记录】：
+${entrySummaries}
+
+请重点排查：
+1. 哪些伏笔已经严重超出读者记忆遗忘半衰期（遗忘衰减指数过大，读者基本忘光，若突然出现读者会觉得突兀莫名）；
+2. 哪些伏笔存在“死锁”风险（前面挖坑设定过大，后续战力或世界观无法合理自洽回收）；
+3. 给出前 3 条最该在接下来 5~10 章内分步给甜头或彻底闭环的伏笔规划。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
     }
   }
 
@@ -196,9 +229,19 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             <div className="text-sm font-bold text-rose-500">{overdueCount}</div>
           </div>
 
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiLedgerAudit}
+              className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Bot className="w-3.5 h-3.5 text-amber-500" />
+              <span>AI 伏笔死锁排查</span>
+            </button>
+          )}
+
           <button
             onClick={() => setEditingEntry({})}
-            className="px-3 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1.5 transition-opacity"
+            className="px-3 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1.5 transition-opacity cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> 埋下伏笔
           </button>

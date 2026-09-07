@@ -3,20 +3,16 @@ import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { ExpectationContract, GoldenThreeDiagnostic } from '../types'
 import { expectationEngine } from '../engine/ExpectationEngine'
 import { indexedDbExpectationRepository } from '../../../adapters/indexedDbExpectationRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import {
-  Sparkles,
-  Plus,
-  Trash2,
-  Activity,
-  Flame,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { Sparkles, Plus, Trash2, Activity, Flame, ChevronDown, ChevronUp, Bot } from 'lucide-react'
 
 export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [contracts, setContracts] = useState<ExpectationContract[]>([])
+  const [, setChapters] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   // 黄金三章诊断器弹层/折叠
@@ -35,13 +31,48 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   const loadContracts = async () => {
     try {
       setLoading(true)
-      const all = await indexedDbExpectationRepository.getAll()
+      const [all, allChapters] = await Promise.all([
+        indexedDbExpectationRepository.getAll(),
+        indexedDbProjectRepository.getChaptersByProject(projectId),
+      ])
       const filtered = all.filter((c) => c.projectId === projectId)
       setContracts(filtered)
+
+      allChapters.sort((a, b) => a.order - b.order)
+      setChapters(allChapters)
+      if (allChapters.length >= 3 && !ch1Input) {
+        setCh1Input(allChapters[0].content || '')
+        setCh2Input(allChapters[1].content || '')
+        setCh3Input(allChapters[2].content || '')
+      }
     } catch (e) {
       console.error('Failed to load expectation contracts:', e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 真实 AI 爽点节奏与多巴胺契约长线排查
+  const handleAiExpectationAudit = () => {
+    if (contracts.length === 0) return
+    const contractSummaries = contracts
+      .map(
+        (c) =>
+          `爽点期待【${c.title}】(强度 ${c.intensity}星)：立项于第 ${c.plantedChapter} 章，承诺兑现第 ${c.promisedResolveChapter} 章，状态：${c.status}`,
+      )
+      .join('\n')
+
+    const prompt = `请作为网络小说爽点与期待感专家，对当前作品的【多巴胺爽点契约与压抑释放比（SPR）】进行长线节奏排查：
+【当前签约的爽点契约清单】：
+${contractSummaries}
+
+请诊断：
+1. 压抑蓄势是否过长：是否有高强度的爽点契约拖延超过 20 章没有兑现，导致读者积怨甚至判定为“无脑虐主”；
+2. 密集高潮是否导致审美疲劳：是否有短时间内连续兑现大爽点后突然进入漫长剧情真空期；
+3. 给出后续剧情的最佳爽点释放时刻表（哪一章该给小甜头，哪一章引爆终极装逼打脸高潮）。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
     }
   }
 
@@ -72,7 +103,10 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     await loadContracts()
   }
 
-  const handleUpdateStatus = async (contract: ExpectationContract, status: ExpectationContract['status']) => {
+  const handleUpdateStatus = async (
+    contract: ExpectationContract,
+    status: ExpectationContract['status'],
+  ) => {
     const updated: ExpectationContract = {
       ...contract,
       status,
@@ -109,14 +143,29 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
             </p>
           </div>
 
-          <button
-            onClick={() => setShowGoldenThree(!showGoldenThree)}
-            className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5 transition-colors"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>黄金三章追读体检</span>
-            {showGoldenThree ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
+          <div className="flex items-center gap-2">
+            {hostContext?.aiAssistant?.isAvailable && (
+              <button
+                onClick={handleAiExpectationAudit}
+                className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <Bot className="w-3.5 h-3.5 text-amber-500" />
+                <span>AI 爽点爆发期深度推演</span>
+              </button>
+            )}
+            <button
+              onClick={() => setShowGoldenThree(!showGoldenThree)}
+              className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>黄金三章追读体检</span>
+              {showGoldenThree ? (
+                <ChevronUp className="w-3 h-3" />
+              ) : (
+                <ChevronDown className="w-3 h-3" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* 统计指标 */}
@@ -135,7 +184,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
           </div>
           <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
             <span className="text-[11px] text-[var(--ink-text-muted)] block">超期未兑现预警</span>
-            <span className={`text-lg font-bold ${audit.overdueContracts.length > 0 ? 'text-rose-500' : 'text-[var(--ink-text-muted)]'}`}>
+            <span
+              className={`text-lg font-bold ${audit.overdueContracts.length > 0 ? 'text-rose-500' : 'text-[var(--ink-text-muted)]'}`}
+            >
               {audit.overdueContracts.length}
             </span>
           </div>
@@ -157,7 +208,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-[11px] text-[var(--ink-text-muted)] block mb-1">第一章：困境与金手指</label>
+              <label className="text-[11px] text-[var(--ink-text-muted)] block mb-1">
+                第一章：困境与金手指
+              </label>
               <textarea
                 rows={3}
                 value={ch1Input}
@@ -167,7 +220,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               />
             </div>
             <div>
-              <label className="text-[11px] text-[var(--ink-text-muted)] block mb-1">第二章：矛盾升级与微观立威</label>
+              <label className="text-[11px] text-[var(--ink-text-muted)] block mb-1">
+                第二章：矛盾升级与微观立威
+              </label>
               <textarea
                 rows={3}
                 value={ch2Input}
@@ -177,7 +232,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               />
             </div>
             <div>
-              <label className="text-[11px] text-[var(--ink-text-muted)] block mb-1">第三章：大危机与长期悬念</label>
+              <label className="text-[11px] text-[var(--ink-text-muted)] block mb-1">
+                第三章：大危机与长期悬念
+              </label>
               <textarea
                 rows={3}
                 value={ch3Input}
@@ -200,13 +257,19 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-[11px]">
-                <div className={`p-2 rounded border ${diagnosticResult.chapter1Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}>
+                <div
+                  className={`p-2 rounded border ${diagnosticResult.chapter1Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}
+                >
                   Ch1: {diagnosticResult.chapter1Status.feedback}
                 </div>
-                <div className={`p-2 rounded border ${diagnosticResult.chapter2Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}>
+                <div
+                  className={`p-2 rounded border ${diagnosticResult.chapter2Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}
+                >
                   Ch2: {diagnosticResult.chapter2Status.feedback}
                 </div>
-                <div className={`p-2 rounded border ${diagnosticResult.chapter3Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}>
+                <div
+                  className={`p-2 rounded border ${diagnosticResult.chapter3Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}
+                >
                   Ch3: {diagnosticResult.chapter3Status.feedback}
                 </div>
               </div>
@@ -269,7 +332,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       {/* 契约卡片看板列表 */}
       <div className="flex-1 overflow-y-auto p-6">
         {loading ? (
-          <div className="p-8 text-center text-xs text-[var(--ink-text-muted)]">加载爽点契约中...</div>
+          <div className="p-8 text-center text-xs text-[var(--ink-text-muted)]">
+            加载爽点契约中...
+          </div>
         ) : contracts.length === 0 ? (
           <div className="p-12 text-center text-xs text-[var(--ink-text-muted)]">
             当前暂无爽点契约。在上方录入你在正文中许诺给读者的期待与高潮兑现计划！
@@ -285,7 +350,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <h4 className={`font-semibold text-xs leading-snug ${isFulfilled ? 'line-through text-[var(--ink-text-muted)]' : 'text-[var(--ink-text)]'}`}>
+                      <h4
+                        className={`font-semibold text-xs leading-snug ${isFulfilled ? 'line-through text-[var(--ink-text-muted)]' : 'text-[var(--ink-text)]'}`}
+                      >
                         {c.title}
                       </h4>
                       <button
@@ -299,7 +366,10 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
 
                     <div className="flex items-center gap-1 text-amber-500 text-xs mb-2">
                       <Flame className="w-3.5 h-3.5" />
-                      <span>{'★'.repeat(c.intensity)}{'☆'.repeat(5 - c.intensity)}</span>
+                      <span>
+                        {'★'.repeat(c.intensity)}
+                        {'☆'.repeat(5 - c.intensity)}
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-[var(--ink-text-muted)] bg-[var(--ink-bg-canvas)] p-2 rounded-lg border border-[var(--ink-border)]/50">
@@ -322,7 +392,13 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                               : 'bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]'
                           }`}
                         >
-                          {st === 'planted' ? '埋设' : st === 'building' ? '蓄势' : st === 'climax' ? '临界' : '兑现'}
+                          {st === 'planted'
+                            ? '埋设'
+                            : st === 'building'
+                              ? '蓄势'
+                              : st === 'climax'
+                                ? '临界'
+                                : '兑现'}
                         </button>
                       ))}
                     </div>

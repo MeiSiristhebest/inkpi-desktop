@@ -141,31 +141,32 @@
 
   /* ── 专业写作阅读皮肤主题（基于 Ulysses、Kindle 与眼科护眼色彩科学） ── */
 
-  /* 护眼茶白 (Clear Sage)：520nm 波长柔光，减轻眼部睫状肌疲劳，极佳护眼 */
+  /* 护眼茶白 / 白绿书卷风 (Clear Sage)：520nm 波长柔光，减轻眼部睫状肌疲劳，雅致书卷配色 */
   :root[data-skin='youth'] {
-    --ink-bg: #f1f6ef;
-    --ink-bg-sidebar: #e6eee3;
-    --ink-bg-panel: #f6faf4;
-    --ink-bg-elevated: #fafdf9;
-    --ink-bg-hover: #dbe6d7;
-    --ink-bg-active: #cfdec9;
+    --ink-bg: #eef3eb;
+    --ink-bg-sidebar: #e5ece1;
+    --ink-bg-panel: rgba(255, 255, 255, 0.85);
+    --ink-bg-card: rgba(255, 255, 255, 0.9);
+    --ink-bg-elevated: #ffffff;
+    --ink-bg-hover: #dbe5d6;
+    --ink-bg-active: #cfdec8;
 
-    --ink-text: #213324;
-    --ink-text-muted: #536b58;
-    --ink-text-faint: #7f9984;
+    --ink-text: #2d3748;
+    --ink-text-muted: #4a5568;
+    --ink-text-faint: #5a6a57;
 
-    --ink-border: #cad8c5;
-    --ink-border-strong: #b5c7af;
+    --ink-border: #cbd5c5;
+    --ink-border-strong: #b2c2ab;
 
-    --ink-accent: #15803d;
-    --ink-accent-hover: #166534;
-    --ink-accent-soft: #dcfce7;
+    --ink-accent: #2e7d32;
+    --ink-accent-hover: #226126;
+    --ink-accent-soft: #dceeda;
 
-    --ink-success: #15803d;
+    --ink-success: #2e7d32;
     --ink-danger: #c4544a;
-    --ink-warning: #9a6700;
+    --ink-warning: #d97706;
 
-    --ink-ghost: #8ca391;
+    --ink-ghost: #7a8c77;
   }
 
   /* 羊皮暖纸 (Sepia Paper / 水墨)：过滤 85% 蓝光，还原复古纸书温润质感，长篇阅读金牌配色 */

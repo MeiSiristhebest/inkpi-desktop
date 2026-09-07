@@ -1,3 +1,4 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { ChapterBeatPlan, SceneBeatItem } from '../types'
@@ -14,19 +15,29 @@ import {
   CheckCircle2,
   Trash2,
   TrendingUp,
+  Bot,
 } from 'lucide-react'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 
 export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
+  const [chapters, setChapters] = useState<any[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const loadPlans = async () => {
     try {
       setLoading(true)
-      const all = await indexedDbSceneBeatRepository.getAll()
+      const [all, allChapters] = await Promise.all([
+        indexedDbSceneBeatRepository.getAll(),
+        indexedDbProjectRepository.getChaptersByProject(projectId),
+      ])
       const projectPlans = all.filter((p) => p.projectId === projectId)
       setPlans(projectPlans)
+      allChapters.sort((a, b) => a.order - b.order)
+      setChapters(allChapters)
       if (projectPlans.length > 0 && !selectedPlanId) {
         setSelectedPlanId(projectPlans[0].id)
       }
@@ -45,6 +56,24 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     () => plans.find((p) => p.id === selectedPlanId) || plans[0],
     [plans, selectedPlanId],
   )
+
+  // AI 智能拆解并生成单章 4 幕电影级节拍表
+  const handleAiGenerateBeats = () => {
+    const curChap = chapters.find((c) => c.id === currentPlan?.chapterId)
+    const prompt = `请作为好莱坞戏剧与网文高潮节拍指导，为第 ${curChap?.order ?? 1} 章《${curChap?.title ?? '当前章节'}》设计【标准单章四段式场景节拍表】：
+【目标字数】：${currentPlan?.targetWordCount ?? 3000} 字
+【章节简述】：${htmlToPlain(curChap?.content || '')?.slice(0, 300) || '暂无正文'}
+
+请设计 4 个环环相扣的场景节拍：
+1. 启幕（20%字数）：建立场景环境、当前行动目标与压制阻碍；
+2. 突变（25%字数）：意外突发或敌手强势介入，打乱原有计划；
+3. 危机对抗（35%字数）：矛盾爆发到顶点，主角面临抉择或被迫以伤换伤；
+4. 结局余波与断章钩子（20%字数）：尘埃落定或留下悬念，情绪极性发生剧烈逆转。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   const handleCreatePlanFromTemplate = async (
     templateId: 'climax_burst' | 'investigation' | 'transition',
@@ -110,7 +139,8 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
   // 戏剧张力势能评估
   const arcAnalysis = useMemo(() => {
-    if (!currentPlan || !currentPlan.beats) return { totalVoltageDelta: 0, isStagnant: true, curve: [] }
+    if (!currentPlan || !currentPlan.beats)
+      return { totalVoltageDelta: 0, isStagnant: true, curve: [] }
     return sceneBeatsEngine.evaluateDramaticArc(currentPlan.beats)
   }, [currentPlan])
 
@@ -132,6 +162,15 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
         {/* 预置模板快速新建 */}
         <div className="flex items-center gap-2">
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiGenerateBeats}
+              className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Bot className="w-3.5 h-3.5 text-amber-500" />
+              <span>AI 场景四幕节拍推演</span>
+            </button>
+          )}
           <button
             onClick={() => handleCreatePlanFromTemplate('climax_burst')}
             className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"

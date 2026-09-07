@@ -3,42 +3,49 @@ import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { CombatSandboxEngine } from '../engine/CombatSandboxEngine'
 import type { CombatDuelRecord, CombatActionBeat, PowerBreachAlert } from '../types'
 import { indexedDbCombatSandboxRepository } from '../../../adapters/indexedDbCombatSandboxRepository'
+import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import {
-  Swords,
-  ShieldAlert,
-  Flame,
-  Zap,
-  BookmarkCheck,
-  Sparkles,
-} from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { Swords, ShieldAlert, Flame, Zap, BookmarkCheck, Sparkles, Bot } from 'lucide-react'
 
 export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [selectedDuelId, setSelectedDuelId] = useState<string>('')
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
   // 对决配置状态
-  const [protagonistName, setProtagonistName] = useState('韩立')
-  const [protagonistRank, setProtagonistRank] = useState(10) // 筑基初期
-  const [enemyName, setEnemyName] = useState('王蝉少主')
-  const [enemyRank, setEnemyRank] = useState(20) // 金丹初期
-  const [stakes, setStakes] = useState('燕家堡血祭大典夺路逃生')
+  const [protagonistName, setProtagonistName] = useState('主角')
+  const [protagonistRank, setProtagonistRank] = useState(10) // 基础段位
+  const [enemyName, setEnemyName] = useState('死敌')
+  const [enemyRank, setEnemyRank] = useState(20) // 越级敌手
+  const [stakes, setStakes] = useState('生死存亡与秘境至宝夺取')
 
   // 越级补偿要素
-  const [assets, setAssets] = useState<string[]>([
-    '天阶辟邪神雷克制魔功',
-    '万剑市坊古宝残卷',
-  ])
+  const [assets, setAssets] = useState<string[]>(['天阶雷法属性克制', '本命法宝舍命自爆'])
   const [newAssetInput, setNewAssetInput] = useState('')
 
   // 四段博弈拆招动作列表
-  const [beats, setBeats] = useState<CombatActionBeat[]>(() =>
-    CombatSandboxEngine.generateFourPhaseTemplate('韩立', '王蝉少主').beats
+  const [beats, setBeats] = useState<CombatActionBeat[]>(
+    () => CombatSandboxEngine.generateFourPhaseTemplate('主角', '死敌').beats,
   )
 
   const loadData = async () => {
-    const all = await indexedDbCombatSandboxRepository.getAll(projectId)
+    const [all, allCodex] = await Promise.all([
+      indexedDbCombatSandboxRepository.getAll(projectId),
+      indexedDbCodexEntityRepository.getAll(),
+    ])
+
+    const chars = allCodex
+      .filter((e) => e.projectId === projectId && e.category === 'character')
+      .map((e) => e.name)
+
+    if (chars.length >= 2 && protagonistName === '主角' && enemyName === '死敌') {
+      setProtagonistName(chars[0])
+      setEnemyName(chars[1])
+      setBeats(CombatSandboxEngine.generateFourPhaseTemplate(chars[0], chars[1]).beats)
+    }
+
     if (all.length > 0 && !selectedDuelId) {
       const first = all[0]
       setSelectedDuelId(first.id)
@@ -55,6 +62,24 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   useEffect(() => {
     loadData()
   }, [projectId])
+
+  // 真实 AI 战斗拆招与越级绝杀推演
+  const handleAiCombatRecommend = () => {
+    const prompt = `请作为仙侠玄幻动作戏与战斗场面动作指导，对以下【两强决死搏杀战役】进行四段式硬核拆招设计：
+【交战双方】：【${protagonistName}】(战力标量 ${protagonistRank}) VS 【${enemyName}】(战力标量 ${enemyRank})
+【战役筹码】：${stakes}
+【越级底牌】：${assets.join('、') || '暂无底牌'}
+
+请设计四段式层层递进的经典高燃打斗节拍：
+1. 第一段（试探交锋）：双方如何通过远程道法或试探性杀招互探虚实；
+2. 第二段（敌手碾压）：反派展现大境界压制，主角如何陷入绝境并负伤见血；
+3. 第三段（底牌博弈）：主角如何利用预留的克制法宝/地形代价引诱敌人露出致命破绽；
+4. 第四段（终极绝杀）：一击定乾坤的招式动作细节与尘埃落定后的代价反馈。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   const breachAudit: PowerBreachAlert = useMemo(() => {
     return CombatSandboxEngine.auditPowerBreach({
@@ -134,9 +159,17 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               {savedSuccessMsg}
             </span>
           )}
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiCombatRecommend}
+              className="px-3.5 py-1.5 text-xs font-semibold bg-[var(--ink-accent)] text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
+            >
+              <Bot className="w-4 h-4" /> AI 四段高燃拆招推演
+            </button>
+          )}
           <button
             onClick={handleSaveDuel}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm"
+            className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
             <BookmarkCheck className="w-4 h-4" /> 保存对决演武
           </button>
@@ -149,8 +182,8 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           breachAudit.riskLevel === 'CRITICAL_COLLAPSE'
             ? 'bg-rose-50/50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-200'
             : breachAudit.riskLevel === 'WARNING'
-            ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-900 text-amber-800 dark:text-amber-200'
-            : 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
+              ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-900 text-amber-800 dark:text-amber-200'
+              : 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
         }`}
       >
         <div className="space-y-1">
@@ -160,8 +193,8 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             {breachAudit.riskLevel === 'CRITICAL_COLLAPSE'
               ? '严重越级崩坏（差阶过大且无代价）'
               : breachAudit.riskLevel === 'WARNING'
-              ? '越级挑战需补充伏笔代价'
-              : '战力体系严谨合理'}
+                ? '越级挑战需补充伏笔代价'
+                : '战力体系严谨合理'}
           </div>
           <p className="text-xs opacity-90 leading-relaxed">{breachAudit.diagnostic}</p>
         </div>
@@ -319,10 +352,10 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                   {beat.phase === 'probing'
                     ? '起手试探 (Probing)'
                     : beat.phase === 'escalation'
-                    ? '变招施压 (Escalation)'
-                    : beat.phase === 'climax_strike'
-                    ? '祭出绝命杀招 (Climax Strike)'
-                    : '暗藏底牌掀桌反杀 (Reversal Turn)'}
+                      ? '变招施压 (Escalation)'
+                      : beat.phase === 'climax_strike'
+                        ? '祭出绝命杀招 (Climax Strike)'
+                        : '暗藏底牌掀桌反杀 (Reversal Turn)'}
                 </span>
                 <span className="text-slate-400 font-medium">发起方: {beat.attacker}</span>
               </div>
@@ -338,7 +371,9 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">博弈细节与走位：</label>
+                  <label className="block text-[11px] text-slate-400 mb-0.5">
+                    博弈细节与走位：
+                  </label>
                   <input
                     type="text"
                     value={beat.tacticDescription}
@@ -347,7 +382,9 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">战局后果/伤害结算：</label>
+                  <label className="block text-[11px] text-slate-400 mb-0.5">
+                    战局后果/伤害结算：
+                  </label>
                   <input
                     type="text"
                     value={beat.damageOrConsequence}

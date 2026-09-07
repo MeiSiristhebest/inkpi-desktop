@@ -1,3 +1,4 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ChekhovRadarEngine } from '../engine/ChekhovRadarEngine'
@@ -6,6 +7,7 @@ import { indexedDbChekhovGunRepository } from '../../../adapters/indexedDbChekho
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import {
   Crosshair,
   Flame,
@@ -15,10 +17,13 @@ import {
   Trash2,
   Sparkles,
   CheckCircle2,
+  Bot,
 } from 'lucide-react'
 
 export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [guns, setGuns] = useState<ChekhovGunRecord[]>([])
+  const [chapters, setChapters] = useState<any[]>([])
   const [maxChapterOrder, setMaxChapterOrder] = useState<number>(1)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isCreating, setIsCreating] = useState(false)
@@ -36,6 +41,8 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       indexedDbProjectRepository.getChaptersByProject(projectId),
     ])
 
+    allChapters.sort((a, b) => a.order - b.order)
+    setChapters(allChapters)
     const maxOrder = allChapters.length > 0 ? Math.max(...allChapters.map((c) => c.order)) : 1
     setMaxChapterOrder(maxOrder)
 
@@ -45,7 +52,10 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       return {
         ...g,
         rustingDistance: dist,
-        isRustingAlert: dist >= ChekhovRadarEngine.RUSTING_THRESHOLD && g.status !== 'fired' && g.status !== 'abandoned',
+        isRustingAlert:
+          dist >= ChekhovRadarEngine.RUSTING_THRESHOLD &&
+          g.status !== 'fired' &&
+          g.status !== 'abandoned',
       }
     })
 
@@ -55,6 +65,30 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   useEffect(() => {
     loadData()
   }, [projectId])
+
+  // 核心：基于已写章节正文，让 AI 自动扫描前文埋下的道具/伏线
+  const handleAiScanGuns = () => {
+    if (chapters.length === 0) return
+    const chaptersSnippet = chapters
+      .slice(0, 15)
+      .map(
+        (c) => `第 ${c.order} 章《${c.title}》：\n${htmlToPlain(c.content || '').slice(0, 300)}...`,
+      )
+      .join('\n\n')
+
+    const prompt = `请对以下小说的前序章节进行【契诃夫之枪（前文埋设道具/关键伏笔）】深度逆向扫描：
+【已写章节内容】：
+${chaptersSnippet}
+
+请严格排查：
+1. 前文哪些地方提到了特殊的物品、功法、神秘NPC承诺、悬而未决的约定？
+2. 哪些伏线埋下后至今没有回响，存在“严重锈蚀”或“读者遗忘/作者吃书”风险？
+3. 给出 2~3 条具体的收拢方案（在后续哪个剧情高潮中引爆这些伏笔）。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   const stats = useMemo(() => {
     return ChekhovRadarEngine.computeStats(guns, maxChapterOrder)
@@ -97,7 +131,8 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const updated: ChekhovGunRecord = {
       ...gun,
       status: newStatus,
-      actualFiredChapterOrder: newStatus === 'fired' ? maxChapterOrder : gun.actualFiredChapterOrder,
+      actualFiredChapterOrder:
+        newStatus === 'fired' ? maxChapterOrder : gun.actualFiredChapterOrder,
       updatedAt: clock.now(),
     }
     await indexedDbChekhovGunRepository.save(updated)
@@ -123,12 +158,23 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreating(true)}
-          className="px-3.5 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" /> 埋下一柄新枪 (伏笔)
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiScanGuns}
+              className="px-3 py-1.5 text-xs font-semibold bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Bot className="w-3.5 h-3.5 text-rose-500" />
+              <span>AI 逆向扫描伏笔</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsCreating(true)}
+            className="px-3.5 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> 埋下一柄新枪 (伏笔)
+          </button>
+        </div>
       </div>
 
       {/* 核心宏观指标卡片 */}
@@ -141,9 +187,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         </div>
         <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-xs text-slate-400">已引爆回收 (响枪)</div>
-          <div className="text-xl font-bold text-emerald-500 mt-1">
-            {stats.firedCount}
-          </div>
+          <div className="text-xl font-bold text-emerald-500 mt-1">{stats.firedCount}</div>
         </div>
         <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-xs text-slate-400">正在孵化/休眠中</div>
@@ -156,15 +200,11 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
             严重锈蚀未引爆
           </div>
-          <div className="text-xl font-bold text-amber-500 mt-1">
-            {stats.rustingCount}
-          </div>
+          <div className="text-xl font-bold text-amber-500 mt-1">{stats.rustingCount}</div>
         </div>
         <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-xs text-slate-400">伏笔闭环率</div>
-          <div className="text-xl font-bold text-rose-500 mt-1">
-            {stats.closureRate}%
-          </div>
+          <div className="text-xl font-bold text-rose-500 mt-1">{stats.closureRate}%</div>
         </div>
       </div>
 
@@ -289,8 +329,8 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                 gun.isRustingAlert
                   ? 'border-amber-400 dark:border-amber-600/60 bg-amber-50/20'
                   : gun.status === 'fired'
-                  ? 'border-emerald-200 dark:border-emerald-800/40'
-                  : 'border-slate-200 dark:border-slate-700'
+                    ? 'border-emerald-200 dark:border-emerald-800/40'
+                    : 'border-slate-200 dark:border-slate-700'
               }`}
             >
               <div className="space-y-1.5 flex-1">
@@ -302,15 +342,16 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                     {gun.category === 'item'
                       ? '道具神兵'
                       : gun.category === 'secret'
-                      ? '身世秘辛'
-                      : gun.category === 'promise'
-                      ? '誓约承诺'
-                      : gun.category === 'character'
-                      ? '暗中人物'
-                      : '禁忌秘术'}
+                        ? '身世秘辛'
+                        : gun.category === 'promise'
+                          ? '誓约承诺'
+                          : gun.category === 'character'
+                            ? '暗中人物'
+                            : '禁忌秘术'}
                   </span>
                   <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> 第 {gun.plantChapterOrder} 章埋设 (已跨度 {gun.rustingDistance} 章)
+                    <Clock className="w-3 h-3" /> 第 {gun.plantChapterOrder} 章埋设 (已跨度{' '}
+                    {gun.rustingDistance} 章)
                   </span>
                   {gun.isRustingAlert && (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1">
@@ -319,7 +360,8 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                   )}
                   {gun.status === 'fired' && (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> 已在第 {gun.actualFiredChapterOrder} 章引爆
+                      <CheckCircle2 className="w-3 h-3" /> 已在第 {gun.actualFiredChapterOrder}{' '}
+                      章引爆
                     </span>
                   )}
                 </div>

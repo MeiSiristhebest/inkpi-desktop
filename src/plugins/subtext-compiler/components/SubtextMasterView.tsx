@@ -3,15 +3,36 @@ import type { DesktopPluginViewProps } from "../../../types/plugin"
 import { indexedDbSubtextRepository } from "../../../adapters/indexedDbSubtextRepository"
 import { SubtextCompilerEngine } from "../engine/SubtextCompilerEngine"
 import type { SubtextDialogueRecord } from "../types"
-import { MessageSquareQuote, Layers, Send } from "lucide-react"
+import { MessageSquareQuote, Layers, Send, Bot } from "lucide-react"
+import { useOptionalPluginHostContext } from "../../../core/pluginHostContext"
 import { clock } from "../../../adapters/clock"
 import { idGenerator } from "../../../adapters/idGenerator"
 
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [spoken, setSpoken] = useState("你走吧，我一个人也可以很好。")
   const [speakerName, setSpeakerName] = useState("苏雨柔")
   const [emotion, setEmotion] = useState<"anger" | "fear" | "pride" | "affection" | "jealousy" | "guilt">("affection")
   
+
+
+  const handleAiSubtextCompile = () => {
+    if (!spoken.trim()) return
+    const prompt = `请作为世界顶级戏剧与电影台词导演，对以下小说台词进行【海明威冰山理论·潜台词与微表情双轨编译】：
+【说话角色】：${speakerName || '当前角色'}
+【隐藏心理主导情绪】：${emotion}
+【口头表面说出的话】：
+“${spoken}”
+
+请提供三轨深层文学重塑：
+1. 【冰山潜台词（Subtext）】：角色内心真正没有说出口的渴望、恐惧或痛苦是什么？
+2. 【伴随微动作/反差神态（Physical Micro-action）】：说话时角色有什么下意识的身体反应（如手指微微一颤、避开视线、握紧衣角），用来形成“言行矛盾”的巨大张力；
+3. 【高段位台词重写】：给出 2 句更含蓄、更克制却更具刀子感或回味感的文学重写示范。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   const loadList = async () => {
     await indexedDbSubtextRepository.getAll(projectId)
@@ -97,6 +118,15 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
               onChange={(e) => setSpoken(e.target.value)}
             />
           </div>
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiSubtextCompile}
+              className="px-3 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs mr-2"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              AI 潜台词与微表情深度编译
+            </button>
+          )}
           <button
             onClick={handleSave}
             className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs flex items-center justify-center gap-1.5 transition"

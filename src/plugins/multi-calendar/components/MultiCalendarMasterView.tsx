@@ -1,3 +1,4 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { MultiCalendarEngine } from '../engine/MultiCalendarEngine'
@@ -12,6 +13,7 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import type { ChapterRecord } from '../../../types'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -21,11 +23,15 @@ import {
   Trash2,
   BookmarkCheck,
   CheckCircle2,
+  Bot,
 } from 'lucide-react'
 
 export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [record, setRecord] = useState<MultiCalendarProjectRecord | null>(null)
-  const [calendars, setCalendars] = useState<CalendarDefinition[]>(MultiCalendarEngine.DEFAULT_CALENDARS)
+  const [calendars, setCalendars] = useState<CalendarDefinition[]>(
+    MultiCalendarEngine.DEFAULT_CALENDARS,
+  )
   const [events, setEvents] = useState<ChapterChronologyEvent[]>([])
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
@@ -77,6 +83,30 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   useEffect(() => {
     loadData()
   }, [projectId])
+
+  // AI 逆向扫描各章时间标注，防时间倒流
+  const handleAiChronologyScan = () => {
+    if (chapters.length === 0) return
+    const chaptersText = chapters
+      .slice(0, 15)
+      .map(
+        (c) => `第 ${c.order} 章《${c.title}》：\n${htmlToPlain(c.content || '').slice(0, 250)}...`,
+      )
+      .join('\n\n')
+
+    const prompt = `请分析以下小说的连续章节正文，进行【全书时空线与多重历法时间倒流排查】：
+【章节正文样本】：
+${chaptersText}
+
+请提取并排查：
+1. 提取各章出现的明示/暗示时间锚点（如“三年后”、“次日清晨”、“天元一零四年”、“正统七年仲春”）；
+2. 检测章节之间是否存在“时间倒流”、“季节矛盾（前一章白雪皑皑，后一章烈日炎炎却无过渡）”或“角色年龄成长对不上”；
+3. 给出各章节建议标注的统一时间线坐标。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   // 历法换算计算
   const conversionResult = useMemo(() => {
@@ -162,9 +192,18 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               {savedSuccessMsg}
             </span>
           )}
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiChronologyScan}
+              className="px-3 py-1.5 text-xs font-semibold bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Bot className="w-3.5 h-3.5 text-indigo-500" />
+              <span>AI 章节时空逆向排查</span>
+            </button>
+          )}
           <button
             onClick={handleSaveAll}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm"
+            className="px-3.5 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
             <BookmarkCheck className="w-4 h-4" /> 保存历法时间线
           </button>
@@ -270,9 +309,12 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 text-indigo-800 dark:text-indigo-300">
             <div className="text-[10px] text-indigo-500">折合标量天数与对应日期：</div>
             <div className="font-bold text-xs mt-0.5">
-              {conversionResult.targetDate.year} 年 {conversionResult.targetDate.month} 月 {conversionResult.targetDate.day} 日
+              {conversionResult.targetDate.year} 年 {conversionResult.targetDate.month} 月{' '}
+              {conversionResult.targetDate.day} 日
             </div>
-            <div className="text-[10px] opacity-75">绝对第 {conversionResult.absoluteDayIndex} 天</div>
+            <div className="text-[10px] opacity-75">
+              绝对第 {conversionResult.absoluteDayIndex} 天
+            </div>
           </div>
         </div>
       </div>
@@ -365,7 +407,9 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
       {/* 故事时间线节点瀑布流 */}
       <div className="space-y-2 flex-1">
-        <div className="font-bold text-xs text-slate-500">全书编年史序列 ({events.length} 个时间节点)</div>
+        <div className="font-bold text-xs text-slate-500">
+          全书编年史序列 ({events.length} 个时间节点)
+        </div>
         {events.length === 0 ? (
           <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-400 text-xs">
             暂无已登记章节时间点。在上方登记后将自动进行因果单调性巡检。
@@ -385,8 +429,8 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                 </span>
                 <span className="text-slate-400">
                   【{calendars.find((c) => c.id === ev.timePoint.calendarId)?.name}】
-                  {ev.timePoint.year}年{ev.timePoint.month}月{ev.timePoint.day}日
-                  (绝对宇宙天数: {ev.timePoint.absoluteDayIndex})
+                  {ev.timePoint.year}年{ev.timePoint.month}月{ev.timePoint.day}日 (绝对宇宙天数:{' '}
+                  {ev.timePoint.absoluteDayIndex})
                 </span>
               </div>
 

@@ -1,6 +1,7 @@
 import { db } from '../db/indexedDB'
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
+import { indexedDbDailyStatsRepository } from './indexedDbDailyStatsRepository'
 
 /**
  * IndexedDB 项目仓储适配器：把端口方法映射到 inkpi-studio 数据库的具体 CRUD。
@@ -21,6 +22,20 @@ export const indexedDbProjectRepository: ProjectRepository = {
   getAllChapters: () => db.getAll<ChapterRecord>('chapters'),
   getChaptersByProject: (projectId) =>
     db.getAll<ChapterRecord>('chapters').then((cs) => cs.filter((c) => c.projectId === projectId)),
-  saveChapter: (chapter) => db.put('chapters', chapter),
+  saveChapter: async (chapter) => {
+    let existing: ChapterRecord | undefined
+    if (typeof db.get === 'function') {
+      existing = await db.get<ChapterRecord>('chapters', chapter.id).catch(() => undefined)
+    }
+    await db.put('chapters', chapter)
+    if (existing && existing.wordCount !== chapter.wordCount) {
+      const delta = chapter.wordCount - existing.wordCount
+      await indexedDbDailyStatsRepository.recordDailyWords(chapter.projectId, delta).catch(() => {})
+    } else if (!existing && chapter.wordCount > 0) {
+      await indexedDbDailyStatsRepository
+        .recordDailyWords(chapter.projectId, chapter.wordCount)
+        .catch(() => {})
+    }
+  },
   deleteChapter: (id) => db.delete('chapters', id),
 }

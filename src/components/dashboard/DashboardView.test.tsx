@@ -7,8 +7,21 @@ afterEach(() => cleanup())
 
 describe('DashboardView', () => {
   it('renders the writing panel with stat cards and quick entries', async () => {
-    await db.put('projects', { id: 'p-dash', name: '示范', genre: '仙侠修真', createdAt: 1, updatedAt: 1 })
-    await db.put('volumes', { id: 'v1', projectId: 'p-dash', title: '第一卷 风起', order: 0, createdAt: 1, updatedAt: 1 })
+    await db.put('projects', {
+      id: 'p-dash',
+      name: '示范',
+      genre: '仙侠修真',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    await db.put('volumes', {
+      id: 'v1',
+      projectId: 'p-dash',
+      title: '第一卷 风起',
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    })
     await db.put('chapters', {
       id: 'c1',
       projectId: 'p-dash',
@@ -27,18 +40,20 @@ describe('DashboardView', () => {
     expect(screen.getByRole('heading', { name: '写作面板' })).toBeInTheDocument()
     expect(screen.getByText('累计字数')).toBeInTheDocument()
     expect(screen.getByText('完稿章节')).toBeInTheDocument()
-    expect(screen.getByText('今日产出')).toBeInTheDocument()
-    expect(screen.getByText('近7日产量')).toBeInTheDocument()
-    expect(screen.getByText('码字日历')).toBeInTheDocument()
-    expect(screen.getByText('近 7 日写作字数')).toBeInTheDocument()
+    expect(screen.getAllByText('未回收伏笔').length).toBeGreaterThan(0)
+    expect(screen.getByText('近 7 日产量')).toBeInTheDocument()
+    expect(screen.getByText('码字活动')).toBeInTheDocument()
     expect(screen.getByText('快捷入口')).toBeInTheDocument()
     expect(screen.getByText('分卷进度')).toBeInTheDocument()
     expect(screen.getByText('创作健康提醒')).toBeInTheDocument()
 
-    // 真实快捷入口
-    expect(screen.getByText('正文写作')).toBeInTheDocument()
-    expect(screen.getByText('沉浸专注')).toBeInTheDocument()
-    expect(screen.getByText('大纲与资料')).toBeInTheDocument()
+    // 真实快捷入口 6 大高频页签
+    expect(screen.getByText('正文编辑')).toBeInTheDocument()
+    expect(screen.getByText('章节总表')).toBeInTheDocument()
+    expect(screen.getByText('伏笔追踪')).toBeInTheDocument()
+    expect(screen.getByText('时间脉络')).toBeInTheDocument()
+    expect(screen.getByText('爽点节奏')).toBeInTheDocument()
+    expect(screen.getByText('灵感素材')).toBeInTheDocument()
 
     await db.delete('chapters', 'c1')
     await db.delete('volumes', 'v1')

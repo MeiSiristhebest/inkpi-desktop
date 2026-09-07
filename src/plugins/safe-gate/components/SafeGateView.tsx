@@ -1,7 +1,10 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { SensitiveWord, RegexRule, GenreStyle, SafeGateScanResult } from '../types'
 import { SafeGateEngine } from '../engine/SafeGateEngine'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import seedWordsRed from '../data/seed-words-red.json'
 import seedWordsYellow from '../data/seed-words-yellow.json'
 import seedWordsBlue from '../data/seed-words-blue.json'
@@ -15,6 +18,8 @@ import {
   AlertOctagon,
   AlertTriangle,
   Info,
+  BookOpen,
+  Bot,
 } from 'lucide-react'
 
 const ALL_WORDS: SensitiveWord[] = [
@@ -23,26 +28,86 @@ const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsBlue as SensitiveWord[]),
 ]
 
-const DEMO_TEST_TEXT = `林枫手持利刃杀入敌阵，刹那间血肉横飞，场面开膛破肚惨不忍睹。
+const DEMO_FALLBACK_TEXT = `林枫手持利刃杀入敌阵，刹那间血肉横飞，场面开膛破肚惨不忍睹。
 后方政府与公安局的飞舟正在赶来，消息传出后立刻被河  蟹了。
 一旁的魔修狂妄叫嚣：“你这屌丝也敢来送死？老子的战力当真牛逼！”`
 
-export const SafeGateView: FC<DesktopPluginViewProps> = () => {
+export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [engine] = useState(() => {
     const eng = new SafeGateEngine()
     eng.build(ALL_WORDS, regexRules as RegexRule[])
     return eng
   })
 
-  const [text, setText] = useState(DEMO_TEST_TEXT)
+  const [chapters, setChapters] = useState<any[]>([])
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
+  const [text, setText] = useState(DEMO_FALLBACK_TEXT)
   const [genre, setGenre] = useState<GenreStyle>('xianxia')
   const [filterLevel, setFilterLevel] = useState<'all' | 'red' | 'yellow' | 'blue'>('all')
   const [scanResult, setScanResult] = useState<SafeGateScanResult>(() =>
-    engine.scan(DEMO_TEST_TEXT, 'xianxia'),
+    engine.scan(DEMO_FALLBACK_TEXT, 'xianxia'),
   )
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const list = await indexedDbProjectRepository.getChaptersByProject(projectId)
+        list.sort((a, b) => a.order - b.order)
+        setChapters(list)
+        if (list.length > 0) {
+          const defaultChap = hostContext?.activeChapter
+            ? list.find((c) => c.id === hostContext.activeChapter?.id) || list[0]
+            : list[0]
+          setSelectedChapterId(defaultChap.id)
+          const chapContent = htmlToPlain(defaultChap.content || '')
+          if (chapContent.trim()) {
+            setText(chapContent)
+            setScanResult(engine.scan(chapContent, genre))
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load chapters in safe gate:', e)
+      }
+    }
+    load()
+  }, [projectId, hostContext?.activeChapter?.id])
+
+  const handleSelectChapter = (chapId: string) => {
+    setSelectedChapterId(chapId)
+    if (chapId === 'all') {
+      const allText = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      setText(allText.slice(0, 20000))
+      setScanResult(engine.scan(allText.slice(0, 20000), genre))
+    } else {
+      const chap = chapters.find((c) => c.id === chapId)
+      const chapContent = chap?.content || ''
+      setText(chapContent)
+      setScanResult(engine.scan(chapContent, genre))
+    }
+  }
 
   const handleScan = () => {
     setScanResult(engine.scan(text, genre))
+  }
+
+  // 真实 AI 全文违规隐晦语境排查
+  const handleAiDeepSafeAudit = () => {
+    if (!text.trim()) return
+    const chap = chapters.find((c) => c.id === selectedChapterId)
+    const prompt = `请作为主流网文各大发布平台（起点/晋江/番茄）资深风控合规审校员，对以下章节进行严格的【涉政/涉黄/过激暴恐及暗号谐音防封查杀】：
+【当前章节】：${chap ? `第 ${chap.order} 章《${chap.title}》` : '正文采样'}
+【正文文本】：
+${text.slice(0, 2500)}
+
+请重点拦截：
+1. 传统正则扫描无法捕获的隐晦变体、拼音暗号或拆字谐音；
+2. 是否存在高危涉政隐喻或过激血腥残虐（容易导致单章封禁或整本下架）；
+3. 给出安全的文学修辞平替建议，确保既不丢失剧情张力，又能 100% 稳妥通过平台机审。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
   }
 
   useEffect(() => {
@@ -103,10 +168,19 @@ export const SafeGateView: FC<DesktopPluginViewProps> = () => {
             <span className="text-[11px] font-medium">蓝线建议：{scanResult.blueCount}</span>
           </div>
 
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiDeepSafeAudit}
+              className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Bot className="w-3.5 h-3.5 text-rose-500" />
+              <span>AI 隐晦谐音与风控初审</span>
+            </button>
+          )}
           <button
             onClick={handleBatchReplace}
             disabled={scanResult.isClean}
-            className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-opacity"
+            className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-opacity cursor-pointer"
           >
             <Wand2 className="w-3.5 h-3.5" /> 一键文学平替
           </button>
@@ -116,6 +190,23 @@ export const SafeGateView: FC<DesktopPluginViewProps> = () => {
       {/* 控制栏 */}
       <div className="border-b border-[var(--ink-border)] px-4 py-2 bg-[var(--ink-bg-elevated)]/40 shrink-0 flex items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
+          {chapters.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-[var(--ink-text-muted)] mr-2">
+              <BookOpen className="w-3.5 h-3.5" />
+              <select
+                value={selectedChapterId}
+                onChange={(e) => handleSelectChapter(e.target.value)}
+                className="px-2 py-1 text-xs rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+              >
+                <option value="all">全书章节采样</option>
+                {chapters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    第 {c.order} 章 · {c.title || '无题'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <span className="text-[var(--ink-text-muted)]">文风适配：</span>
           <select
             value={genre}
@@ -178,10 +269,13 @@ export const SafeGateView: FC<DesktopPluginViewProps> = () => {
         </div>
 
         <button
-          onClick={() => setText(DEMO_TEST_TEXT)}
-          className="text-[11px] text-[var(--ink-accent)] hover:underline flex items-center gap-1"
+          onClick={() => {
+            const defaultText = chapters.length > 0 ? chapters[0].content || '' : ''
+            setText(defaultText)
+          }}
+          className="text-[11px] text-[var(--ink-accent)] hover:underline flex items-center gap-1 cursor-pointer"
         >
-          <RefreshCw className="w-3 h-3" /> 重置演示文本
+          <RefreshCw className="w-3 h-3" /> 重置章节文本
         </button>
       </div>
 

@@ -48,7 +48,7 @@ interface Stats {
   updatedAt?: number
 }
 
-// 视图注册表：以数据驱动替代 if 链，新增视图只需登记一条（OCP，§3.1）
+// 视图注册表：以数据驱动替代 if链，新增视图只需登记一条（OCP，§3.1）
 interface ViewDeps {
   projectId: string
   activeTabId: string
@@ -56,6 +56,7 @@ interface ViewDeps {
   onOpenView: (v: string) => void
   onStats: (s: Stats) => void
   onOpenAssistant?: () => void
+  onAiPrompt?: (text: string, chapterId?: string) => void
   onStartFocus: () => void
   editorProps: RichEditorProps
 }
@@ -63,12 +64,13 @@ interface ViewDeps {
 type ViewFactory = (deps: ViewDeps) => ReactNode
 
 const VIEW_REGISTRY: Record<string, ViewFactory> = {
-  dashboard: ({ projectId, onOpenView, onStats, onOpenAssistant, onStartFocus }) => (
+  dashboard: ({ projectId, onOpenView, onStats, onOpenAssistant, onAiPrompt, onStartFocus }) => (
     <DashboardView
       projectId={projectId}
       onOpenView={onOpenView}
       onStats={onStats}
       onOpenAssistant={onOpenAssistant}
+      onAiPrompt={onAiPrompt}
       onStartFocus={onStartFocus}
     />
   ),
@@ -189,6 +191,7 @@ export const Engine: FC<EngineProps> = ({
       onOpenView: (v) => setActiveTabId(v),
       onStats: setStats,
       onOpenAssistant,
+      onAiPrompt,
       onStartFocus: () => {
         setActiveTabId('editor')
         setFocusMode(true)

@@ -12,23 +12,15 @@ import { indexedDbFactionDiplomacyRepository } from '../../../adapters/indexedDb
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import {
-  Shield,
-  Zap,
-  CheckCircle2,
-  AlertTriangle,
-  GitBranch,
-} from 'lucide-react'
-
-const DEFAULT_DEMO_FACTIONS: FactionNode[] = [
-  { id: 'f-xuanjian', name: '玄剑宗', type: 'righteous', powerTier: '正道七大派', protagonistReputation: 35 },
-  { id: 'f-zixia', name: '紫霞派', type: 'righteous', powerTier: '名门宗派', protagonistReputation: 15 },
-  { id: 'f-xuesha', name: '血煞门', type: 'demonic', powerTier: '魔道巨擘', protagonistReputation: -45 },
-]
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { Shield, Zap, CheckCircle2, AlertTriangle, GitBranch, Bot, Plus } from 'lucide-react'
 
 export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const [factions, setFactions] = useState<FactionNode[]>(DEFAULT_DEMO_FACTIONS)
+  const hostContext = useOptionalPluginHostContext()
+  const [factions, setFactions] = useState<FactionNode[]>([])
   const [diplomacies, setDiplomacies] = useState<FactionDiplomacyRecord[]>([])
+  const [newFactionName, setNewFactionName] = useState('')
+  const [isAddingFaction, setIsAddingFaction] = useState(false)
 
   // 事件涟漪推演状态
   const [rippleTargetId, setRippleTargetId] = useState('')
@@ -47,19 +39,74 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         .map((e) => ({
           id: e.id,
           name: e.name,
-          type: 'righteous' as const,
-          powerTier: (e.attributes?.powerTier as string) || (e.attributes?.位阶 as string) || '宗门',
+          type: (e.attributes?.factionType as any) || 'righteous',
+          powerTier:
+            (e.attributes?.powerTier as string) || (e.attributes?.位阶 as string) || '宗门',
           protagonistReputation: Number(e.attributes?.reputation ?? 10),
         }))
 
-      const finalFactions = codexFactions.length >= 2 ? codexFactions : DEFAULT_DEMO_FACTIONS
-      setFactions(finalFactions)
+      setFactions(codexFactions)
       setDiplomacies(allDips)
-      if (finalFactions.length > 0 && !rippleTargetId) {
-        setRippleTargetId(finalFactions[0].id)
+      if (codexFactions.length > 0 && !rippleTargetId) {
+        setRippleTargetId(codexFactions[0].id)
       }
     } catch (e) {
       console.error('Failed to load faction data:', e)
+    }
+  }
+
+  useEffect(() => {
+    loadAll()
+  }, [projectId])
+
+  // 支持直接在矩阵中新增宗门并持久化到 Codex 百科
+  const handleCreateFaction = async () => {
+    if (!newFactionName.trim()) return
+    const now = clock.now()
+    const entity = {
+      id: idGenerator.generate('ent_fac'),
+      projectId,
+      name: newFactionName.trim(),
+      category: 'faction' as const,
+      aliases: [],
+      summary: '在势力矩阵中创建的阵营/宗门',
+      content: '',
+      relations: [],
+      attributes: {
+        powerTier: '主要阵营',
+        reputation: 10,
+        factionType: 'righteous',
+      },
+      tags: ['阵营', '势力'],
+      createdAt: now,
+      updatedAt: now,
+    }
+    await indexedDbCodexEntityRepository.save(entity)
+    setNewFactionName('')
+    setIsAddingFaction(false)
+    await loadAll()
+  }
+
+  // 触发 AI 分析宗门博弈与剧情暗线
+  const handleAiFactionAnalysis = () => {
+    if (factions.length === 0) return
+    const facNames = factions.map((f) => f.name).join('、')
+    const paradoxStr =
+      paradoxes.length > 0
+        ? `【当前地缘悖论/冲突】：${paradoxes.map((p) => p.reason).join('；')}`
+        : '【当前地缘格局】：暂无直接逻辑悖论'
+
+    const prompt = `请作为长篇网络小说剧情总监，对当前作品的各大宗门势力格局进行推演分析：
+【登场势力/阵营】：${facNames}
+${paradoxStr}
+
+请针对当前作品的地缘关系给出剧情推演建议：
+1. 敌友关系与平衡性：当前势力间的拉扯是否足够产生强烈的剧情推力？
+2. 矛盾升级设计：建议主角通过何种标志性大事件（如宗门大比、遗迹争夺、秘境覆灭）打破当前的均势，引爆冲突高潮？
+3. 给出一条富有张力的三方博弈或“表面结盟、暗中背刺”的剧情暗线建议。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
     }
   }
 
@@ -71,7 +118,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const d = diplomacies.find(
       (rec) =>
         (rec.factionAId === idA && rec.factionBId === idB) ||
-        (rec.factionBId === idA && rec.factionAId === idB)
+        (rec.factionBId === idA && rec.factionAId === idB),
     )
     return d ? d.stance : 'neutral'
   }
@@ -80,7 +127,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const existing = diplomacies.find(
       (rec) =>
         (rec.factionAId === fA.id && rec.factionBId === fB.id) ||
-        (rec.factionBId === fA.id && rec.factionAId === fB.id)
+        (rec.factionBId === fA.id && rec.factionAId === fB.id),
     )
 
     let nextStance: FactionStance = 'allied'
@@ -110,13 +157,18 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
   const handleRunRipple = () => {
     if (!rippleTargetId) return
-    const res = factionMatrixEngine.simulateEventRipple(factions, diplomacies, rippleTargetId, rippleDelta)
+    const res = factionMatrixEngine.simulateEventRipple(
+      factions,
+      diplomacies,
+      rippleTargetId,
+      rippleDelta,
+    )
     setRippleResult(res)
   }
 
   const paradoxes: BalanceParadox[] = factionMatrixEngine.detectStructuralParadoxes(
     factions,
-    diplomacies
+    diplomacies,
   )
 
   return (
@@ -134,7 +186,51 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             掌控全书各大宗门外交敌友状态，推演主角大事件引发的声望仇恨连锁反应
           </p>
         </div>
+
+        <div className="flex items-center gap-2">
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiFactionAnalysis}
+              className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1 cursor-pointer"
+            >
+              <Bot className="w-3.5 h-3.5 text-indigo-400" />
+              AI 地缘博弈推演
+            </button>
+          )}
+          <button
+            onClick={() => setIsAddingFaction(!isAddingFaction)}
+            className="px-3 py-1.5 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            新增阵营宗门
+          </button>
+        </div>
       </div>
+
+      {isAddingFaction && (
+        <div className="p-4 bg-[var(--ink-bg-elevated)] border-b border-[var(--ink-border)] flex items-center gap-3">
+          <span className="text-xs font-medium">宗门/阵营名:</span>
+          <input
+            type="text"
+            value={newFactionName}
+            onChange={(e) => setNewFactionName(e.target.value)}
+            placeholder="如：九幽冥殿、万宝商会..."
+            className="px-2.5 py-1 text-xs rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+          />
+          <button
+            onClick={handleCreateFaction}
+            className="px-3 py-1 text-xs rounded bg-[var(--ink-accent)] text-white font-medium"
+          >
+            保存并入库
+          </button>
+          <button
+            onClick={() => setIsAddingFaction(false)}
+            className="px-2 py-1 text-xs text-[var(--ink-text-muted)]"
+          >
+            取消
+          </button>
+        </div>
+      )}
 
       {/* 主体滚动区 */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -155,8 +251,14 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-sm">{f.name}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${repInfo.badgeClass}`}>
-                      {repInfo.label} ({f.protagonistReputation > 0 ? `+${f.protagonistReputation}` : f.protagonistReputation})
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full border ${repInfo.badgeClass}`}
+                    >
+                      {repInfo.label} (
+                      {f.protagonistReputation > 0
+                        ? `+${f.protagonistReputation}`
+                        : f.protagonistReputation}
+                      )
                     </span>
                   </div>
                   <p className="text-[10px] text-[var(--ink-text-muted)]">{repInfo.desc}</p>
@@ -186,9 +288,14 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
-                  <th className="p-2.5 text-left font-medium text-[var(--ink-text-muted)] w-32">势力 \ 势力</th>
+                  <th className="p-2.5 text-left font-medium text-[var(--ink-text-muted)] w-32">
+                    势力 \ 势力
+                  </th>
                   {factions.map((f) => (
-                    <th key={f.id} className="p-2.5 text-center font-medium text-[var(--ink-text)] min-w-[110px]">
+                    <th
+                      key={f.id}
+                      className="p-2.5 text-center font-medium text-[var(--ink-text)] min-w-[110px]"
+                    >
                       {f.name}
                     </th>
                   ))}
@@ -196,12 +303,18 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               </thead>
               <tbody>
                 {factions.map((fA, idxA) => (
-                  <tr key={fA.id} className="border-b border-[var(--ink-border)]/40 hover:bg-[var(--ink-bg-hover)]/20">
+                  <tr
+                    key={fA.id}
+                    className="border-b border-[var(--ink-border)]/40 hover:bg-[var(--ink-bg-hover)]/20"
+                  >
                     <td className="p-2.5 font-medium text-[var(--ink-text)]">{fA.name}</td>
                     {factions.map((fB, idxB) => {
                       if (idxA === idxB) {
                         return (
-                          <td key={fB.id} className="p-2 text-center text-[10px] text-[var(--ink-text-muted)]">
+                          <td
+                            key={fB.id}
+                            className="p-2 text-center text-[10px] text-[var(--ink-text-muted)]"
+                          >
                             —
                           </td>
                         )
@@ -268,7 +381,9 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                 className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
               >
                 {factions.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
                 ))}
               </select>
 
@@ -288,7 +403,11 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             {rippleResult && (
               <div className="p-3.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] space-y-2 text-xs">
                 <span className="font-semibold text-[var(--ink-text)]">
-                  连锁反应推演分析（直接受创/获益：{rippleResult.directFaction} {rippleResult.directChange > 0 ? `+${rippleResult.directChange}` : rippleResult.directChange}）：
+                  连锁反应推演分析（直接受创/获益：{rippleResult.directFaction}{' '}
+                  {rippleResult.directChange > 0
+                    ? `+${rippleResult.directChange}`
+                    : rippleResult.directChange}
+                  ）：
                 </span>
                 {rippleResult.ripples.length === 0 ? (
                   <p className="text-[11px] text-[var(--ink-text-muted)]">
@@ -302,10 +421,16 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                         className="p-2 rounded border border-[var(--ink-border)]/60 bg-[var(--ink-bg-elevated)] flex items-start justify-between gap-2 text-[11px]"
                       >
                         <div>
-                          <span className="font-semibold text-[var(--ink-text)]">{rip.factionName}</span>
-                          <p className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">{rip.reason}</p>
+                          <span className="font-semibold text-[var(--ink-text)]">
+                            {rip.factionName}
+                          </span>
+                          <p className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">
+                            {rip.reason}
+                          </p>
                         </div>
-                        <span className={`font-bold ${rip.change > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        <span
+                          className={`font-bold ${rip.change > 0 ? 'text-emerald-500' : 'text-rose-500'}`}
+                        >
                           {rip.change > 0 ? `+${rip.change}` : rip.change}
                         </span>
                       </div>

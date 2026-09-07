@@ -1,3 +1,4 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type {
@@ -10,8 +11,10 @@ import type {
 import { clueWeaverEngine } from '../engine/ClueWeaverEngine'
 import { indexedDbClueWeaverRepository } from '../../../adapters/indexedDbClueWeaverRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import {
   Network,
   Plus,
@@ -20,12 +23,16 @@ import {
   Users,
   Search,
   CheckCircle2,
+  Bot,
 } from 'lucide-react'
 
 export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [clues, setClues] = useState<ClueItem[]>([])
   const [cognitions, setCognitions] = useState<ClueCognitionRecord[]>([])
   const [characters, setCharacters] = useState<Array<{ id: string; name: string }>>([])
+  const [chapters, setChapters] = useState<any[]>([])
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
 
   // 新建线索表单
   const [newTitle, setNewTitle] = useState('')
@@ -34,7 +41,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
   // 视角泄露扫描
   const [scanText, setScanText] = useState(
-    '陆沉冷笑道：“师兄，你当真以为太上长老是走火入魔？那分明是中了九幽冥毒！”'
+    '陆沉冷笑道：“师兄，你当真以为太上长老是走火入魔？那分明是中了九幽冥毒！”',
   )
   const [violations, setViolations] = useState<GodViewViolation[]>([])
 
@@ -45,13 +52,17 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
   const loadAll = async () => {
     try {
-      const [allClues, allCogs, allCodex] = await Promise.all([
+      const [allClues, allCogs, allCodex, allChapters] = await Promise.all([
         indexedDbClueWeaverRepository.getAllClues(projectId),
         indexedDbClueWeaverRepository.getAllCognitions(projectId),
         indexedDbCodexEntityRepository.getAll(),
+        indexedDbProjectRepository.getChaptersByProject(projectId),
       ])
       setClues(allClues)
       setCognitions(allCogs)
+
+      allChapters.sort((a, b) => a.order - b.order)
+      setChapters(allChapters)
 
       const chars = allCodex
         .filter((e) => e.projectId === projectId && e.category === 'character')
@@ -64,8 +75,52 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       setCharacters(chars)
       if (!charA && chars.length > 0) setCharA(chars[0].name)
       if (!charB && chars.length > 1) setCharB(chars[1].name)
+
+      // 默认尝试拉取第一章内容
+      if (allChapters.length > 0 && allChapters[0].content) {
+        setScanText(allChapters[0].content)
+        const found = clueWeaverEngine.scanGodViewLeakage(allChapters[0].content, allClues, allCogs)
+        setViolations(found)
+      }
     } catch (e) {
       console.error('Failed to load clue weaver data:', e)
+    }
+  }
+
+  const handleSelectChapter = (chapId: string) => {
+    setSelectedChapterId(chapId)
+    if (chapId === 'all') {
+      const fullText = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      setScanText(fullText.slice(0, 15000))
+      setViolations(
+        clueWeaverEngine.scanGodViewLeakage(fullText.slice(0, 15000), clues, cognitions),
+      )
+    } else {
+      const chap = chapters.find((c) => c.id === chapId)
+      const content = chap?.content || ''
+      setScanText(content)
+      setViolations(clueWeaverEngine.scanGodViewLeakage(content, clues, cognitions))
+    }
+  }
+
+  // AI 深度推演：检查全书信息差悬念与视点越权
+  const handleAiDeepLeakAudit = () => {
+    if (!scanText.trim()) return
+    const clueList = clues.map((c) => `【${c.title}】(${c.category})`).join('、') || '暂无登记线索'
+    const charList = characters.map((c) => c.name).join('、') || '角色列表'
+    const prompt = `请作为悬疑与长篇剧情审读专家，对以下章节正文进行【上帝视点泄露与信息差博弈】深度排查：
+【全书核心秘密/线索】：${clueList}
+【核心登场人物】：${charList}
+【待核查章节正文】：
+${scanText.slice(0, 2500)}
+
+请重点核查并给出反馈：
+1. 是否存在“上帝视点泄露”：某个角色是否在毫无得知线索途径的情况下，突然未卜先知说出了只有读者才知道的秘密？
+2. 信息差悬念拉扯：当前对话或剧情推进中，角色之间的信息差是否营造出了足够抓人的戏剧讽刺与张力？
+3. 如果存在漏洞或可优化的伏笔交锋点，请指出具体位置并提供修改建议。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
     }
   }
 
@@ -106,7 +161,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
   const handleToggleState = async (charId: string, charName: string, clueId: string) => {
     const existing = cognitions.find(
-      (c) => c.clueId === clueId && (c.characterId === charId || c.characterName === charName)
+      (c) => c.clueId === clueId && (c.characterId === charId || c.characterName === charName),
     )
 
     let nextState: EpistemicState = 'known'
@@ -145,7 +200,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       bObj?.id || charB,
       charB,
       clues,
-      cognitions
+      cognitions,
     )
     setAdvantage(res)
   }
@@ -223,7 +278,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" /> 盲区 (Blind)
               </span>
-              <span className="text-[10px] text-[var(--ink-text-muted)]">（点击单元格切换认知）</span>
+              <span className="text-[10px] text-[var(--ink-text-muted)]">
+                （点击单元格切换认知）
+              </span>
             </div>
           </div>
 
@@ -236,11 +293,18 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
-                    <th className="p-2.5 text-left font-medium text-[var(--ink-text-muted)] w-36">角色 \ 线索</th>
+                    <th className="p-2.5 text-left font-medium text-[var(--ink-text-muted)] w-36">
+                      角色 \ 线索
+                    </th>
                     {clues.map((c) => (
-                      <th key={c.id} className="p-2.5 text-center font-medium text-[var(--ink-text)] min-w-[140px]">
+                      <th
+                        key={c.id}
+                        className="p-2.5 text-center font-medium text-[var(--ink-text)] min-w-[140px]"
+                      >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="truncate" title={c.title}>{c.title}</span>
+                          <span className="truncate" title={c.title}>
+                            {c.title}
+                          </span>
                           <button
                             onClick={() => handleDeleteClue(c.id)}
                             className="text-[var(--ink-text-muted)] hover:text-rose-500 p-0.5"
@@ -255,7 +319,10 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 </thead>
                 <tbody>
                   {matrix.map((row) => (
-                    <tr key={row.character.id} className="border-b border-[var(--ink-border)]/50 hover:bg-[var(--ink-bg-hover)]/30">
+                    <tr
+                      key={row.character.id}
+                      className="border-b border-[var(--ink-border)]/50 hover:bg-[var(--ink-bg-hover)]/30"
+                    >
                       <td className="p-2.5 font-medium text-[var(--ink-text)] flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
                         {row.character.name}
@@ -265,7 +332,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                         return (
                           <td key={cs.clueId} className="p-2 text-center">
                             <button
-                              onClick={() => handleToggleState(row.character.id, row.character.name, cs.clueId)}
+                              onClick={() =>
+                                handleToggleState(row.character.id, row.character.name, cs.clueId)
+                              }
                               className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
                                 st === 'known'
                                   ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
@@ -274,7 +343,11 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                                     : 'bg-rose-500/15 text-rose-500 border border-rose-500/30'
                               }`}
                             >
-                              {st === 'known' ? '🟢 确知' : st === 'suspected' ? '🟡 怀疑' : '🔴 盲区'}
+                              {st === 'known'
+                                ? '🟢 确知'
+                                : st === 'suspected'
+                                  ? '🟡 怀疑'
+                                  : '🔴 盲区'}
                             </button>
                           </td>
                         )
@@ -296,19 +369,44 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 <Search className="w-3.5 h-3.5 text-rose-500" />
                 天降全知实时巡检 (God-view Leakage Scan)
               </span>
-              <button
-                onClick={handleScanText}
-                className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90"
-              >
-                扫描台词
-              </button>
+              <div className="flex items-center gap-2">
+                {chapters.length > 0 && (
+                  <select
+                    value={selectedChapterId}
+                    onChange={(e) => handleSelectChapter(e.target.value)}
+                    className="text-xs px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                  >
+                    <option value="all">全书章节采样</option>
+                    {chapters.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        第 {c.order} 章 · {c.title || '无题'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  onClick={handleScanText}
+                  className="px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs font-medium hover:border-[var(--ink-accent)] cursor-pointer"
+                >
+                  规则扫描
+                </button>
+                {hostContext?.aiAssistant?.isAvailable && (
+                  <button
+                    onClick={handleAiDeepLeakAudit}
+                    className="px-2.5 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Bot className="w-3 h-3" />
+                    AI 信息差深查
+                  </button>
+                )}
+              </div>
             </div>
 
             <textarea
               rows={3}
               value={scanText}
               onChange={(e) => setScanText(e.target.value)}
-              placeholder="输入含有对白的章节文本（如：某某冷笑道：“...”）..."
+              placeholder="自动从所选章节同步，亦可手动编辑或修改测试..."
               className="w-full p-2.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
             />
 
@@ -326,10 +424,14 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   >
                     <div className="flex items-center gap-1.5 font-semibold">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>【全知泄露】角色“{v.characterName}”提前知道“{v.clueTitle}”！</span>
+                      <span>
+                        【全知泄露】角色“{v.characterName}”提前知道“{v.clueTitle}”！
+                      </span>
                     </div>
                     <p className="text-[11px] text-[var(--ink-text)] opacity-90">{v.reason}</p>
-                    <p className="text-[10px] text-[var(--ink-text-muted)] italic">抓取台词：{v.snippet}</p>
+                    <p className="text-[10px] text-[var(--ink-text-muted)] italic">
+                      抓取台词：{v.snippet}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -348,7 +450,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 className="flex-1 px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
               >
                 {characters.map((c) => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
               <span className="text-[var(--ink-text-muted)]">VS</span>
@@ -358,7 +462,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 className="flex-1 px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
               >
                 {characters.map((c) => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
               <button
@@ -373,7 +479,15 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <div className="p-3 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs space-y-2">
                 <div className="flex items-center justify-between font-semibold">
                   <span>情报优势指数:</span>
-                  <span className={advantage.advantageScore > 0 ? 'text-emerald-500' : advantage.advantageScore < 0 ? 'text-rose-500' : 'text-amber-500'}>
+                  <span
+                    className={
+                      advantage.advantageScore > 0
+                        ? 'text-emerald-500'
+                        : advantage.advantageScore < 0
+                          ? 'text-rose-500'
+                          : 'text-amber-500'
+                    }
+                  >
                     {advantage.advantageScore > 0
                       ? `${advantage.characterA} 压制 +${advantage.advantageScore}`
                       : advantage.advantageScore < 0
@@ -382,8 +496,12 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   </span>
                 </div>
                 <div className="text-[11px] text-[var(--ink-text-muted)] space-y-1">
-                  <p>• {advantage.characterA} 独占线索: {advantage.knownByAOnly.length} 条</p>
-                  <p>• {advantage.characterB} 独占线索: {advantage.knownByBOnly.length} 条</p>
+                  <p>
+                    • {advantage.characterA} 独占线索: {advantage.knownByAOnly.length} 条
+                  </p>
+                  <p>
+                    • {advantage.characterB} 独占线索: {advantage.knownByBOnly.length} 条
+                  </p>
                   <p>• 双方共有线索: {advantage.mutualKnown.length} 条</p>
                 </div>
               </div>

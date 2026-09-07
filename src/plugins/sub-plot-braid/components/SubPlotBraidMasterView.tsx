@@ -6,9 +6,11 @@ import { indexedDbSubPlotRepository } from '../../../adapters/indexedDbSubPlotRe
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { GitMerge, Plus, AlertCircle, RefreshCw } from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { GitMerge, Plus, AlertCircle, RefreshCw, Bot } from 'lucide-react'
 
 export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [strands, setStrands] = useState<SubPlotStrand[]>([])
   const [maxChapterOrder, setMaxChapterOrder] = useState<number>(1)
   const [loading, setLoading] = useState(true)
@@ -41,6 +43,31 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   useEffect(() => {
     loadData()
   }, [projectId])
+
+  // AI 深度支线交织收敛排查
+  const handleAiSubPlotScan = () => {
+    if (strands.length === 0) return
+    const strandSummaries = strands
+      .map(
+        (s) =>
+          `支线【${s.title}】：涉及人物 [${s.involvedCharacterNames.join(', ')}]，始于第 ${s.startChapterOrder} 章，最近活跃第 ${s.lastActiveChapterOrder} 章，状态：${s.status}。梗概：${s.summary}`,
+      )
+      .join('\n')
+
+    const prompt = `请作为小说结构大纲指导，对以下【多线叙事与支线收拢交汇计划】进行专业审查：
+【当前全书最大章节序号】：第 ${maxChapterOrder} 章
+【当前登记的各支线状态】：
+${strandSummaries}
+
+请排查：
+1. 是否有严重“掉线休眠”的支线（隔了几十万字没动静，读者几乎遗忘）；
+2. 支线与主线的高潮交汇设计：如何设计一桩大事件，让上述两到三条支线同时发生化学反应并收拢为主线推力；
+3. 给出一条最紧迫需要推进或闭环的支线建议。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   const healthMetrics = useMemo(() => {
     return SubPlotBraidEngine.assessStrandHealth({
@@ -100,16 +127,25 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiSubPlotScan}
+              className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              AI 支线交织收敛排查
+            </button>
+          )}
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-3 py-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm"
+            className="px-3 py-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             开启新支线
           </button>
           <button
             onClick={loadData}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1"
+            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             刷新
@@ -194,7 +230,9 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       {loading ? (
         <div className="text-center py-12 text-slate-400">正在排查多线编织拓扑...</div>
       ) : strands.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">项目中暂未规划多线叙事副线，点击右上角开启新支线。</div>
+        <div className="text-center py-12 text-slate-400">
+          项目中暂未规划多线叙事副线，点击右上角开启新支线。
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {strands.map((s) => {
@@ -214,18 +252,25 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                         s.status === 'resolved'
                           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
                           : s.status === 'climax'
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                          : 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
                       }`}
                     >
-                      {s.status === 'resolved' ? '已闭环' : s.status === 'climax' ? '汇聚高潮中' : '推进中'}
+                      {s.status === 'resolved'
+                        ? '已闭环'
+                        : s.status === 'climax'
+                          ? '汇聚高潮中'
+                          : '推进中'}
                     </span>
                   </div>
 
                   {metric?.isStarved && (
                     <div className="mb-2 p-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded text-xs text-rose-700 dark:text-rose-300 flex items-center gap-1.5 font-medium">
                       <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-500" />
-                      <span>支线严重饥饿：距上次推进已跨越 {metric.dormancyDistance} 章，急需推进防遗忘！</span>
+                      <span>
+                        支线严重饥饿：距上次推进已跨越 {metric.dormancyDistance}{' '}
+                        章，急需推进防遗忘！
+                      </span>
                     </div>
                   )}
 
@@ -253,7 +298,10 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                       <span>关涉人物：</span>
                       <div className="flex flex-wrap gap-1">
                         {s.involvedCharacterNames.map((name, idx) => (
-                          <span key={idx} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px]">
+                          <span
+                            key={idx}
+                            className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px]"
+                          >
                             {name}
                           </span>
                         ))}

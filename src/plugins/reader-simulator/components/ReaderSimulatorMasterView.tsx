@@ -1,3 +1,4 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ReaderSimulatorEngine } from '../engine/ReaderSimulatorEngine'
@@ -6,9 +7,19 @@ import { indexedDbReaderSimulationRepository } from '../../../adapters/indexedDb
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { Users, AlertTriangle, MessageSquare, ShieldAlert, BookmarkCheck, RefreshCw } from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import {
+  Users,
+  AlertTriangle,
+  MessageSquare,
+  ShieldAlert,
+  BookmarkCheck,
+  RefreshCw,
+  Bot,
+} from 'lucide-react'
 
 export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -40,9 +51,31 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
       chapterOrder: currentChapter.order,
-      content: currentChapter.content || '',
+      content: htmlToPlain(currentChapter.content || '') || '',
     })
   }, [currentChapter])
+
+  // 真实 AI 读者多视点本章追读段评推演
+  const handleAiReaderSimulate = () => {
+    if (!currentChapter || !htmlToPlain(currentChapter.content || '')) return
+    const prompt = `请分别代入以下【四类典型长篇网络小说核心读者人格】，对第 ${currentChapter.order} 章《${currentChapter.title}》进行真实、犀利的章末与本章说段评实况模拟：
+【读者人格 1】：【十年老书虫·弃书狂魔】（极度反感下跪受辱、圣母放虎归山、降智打脸，毒抗极低）
+【读者人格 2】：【考据逻辑党·列文虎克】（死抠战力数值平衡、时间线漏洞、境界倒退与战力崩坏）
+【读者人格 3】：【情感与羁绊党】（极其关注男女主互动甜度、重要配角是否会被无脑祭天）
+【读者人格 4】：【爽点与追更狂魔】（追求极致节奏、期待感与断章卡点，只在乎剧情推力）
+
+【待审阅正文片段】：
+${htmlToPlain(currentChapter.content || '').slice(0, 3000)}
+
+请给出：
+1. 四位读者各自最具真实互联网本章说语感的典型发言；
+2. 本章最可能触发大面积怒喷或掉均订的潜在【暴毙毒点】；
+3. 编辑部建议：在发布前建议打磨掉的 2 处生硬过渡。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   const handleSaveSimulation = async () => {
     if (!simulation) return
@@ -83,16 +116,25 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
               {savedSuccessMsg}
             </span>
           )}
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiReaderSimulate}
+              className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              AI 读者多视点段评模拟
+            </button>
+          )}
           <button
             onClick={handleSaveSimulation}
-            className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm"
+            className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"
           >
             <BookmarkCheck className="w-3.5 h-3.5" />
             保存评估
           </button>
           <button
             onClick={loadChapters}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1"
+            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             重新推演
@@ -133,7 +175,9 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
                       <span className="flex items-center gap-1 text-rose-500 font-semibold">
                         <ShieldAlert className="w-3.5 h-3.5" /> 毒点风险指数 (TRI)
                       </span>
-                      <span className={`font-bold ${simulation.toxicityScore > 30 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                      <span
+                        className={`font-bold ${simulation.toxicityScore > 30 ? 'text-rose-500' : 'text-emerald-500'}`}
+                      >
                         {simulation.toxicityScore} / 100
                       </span>
                     </div>
@@ -161,7 +205,9 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
                   <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-1.5">
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-amber-500">爽点满足感</span>
-                      <span className="font-bold text-amber-500">{simulation.pleasureScore} / 100</span>
+                      <span className="font-bold text-amber-500">
+                        {simulation.pleasureScore} / 100
+                      </span>
                     </div>
                     <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
                       <div
@@ -185,9 +231,14 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
 
                 {simulation.suggestions.length > 0 && (
                   <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
-                    <div className="font-semibold text-slate-800 dark:text-slate-200">防杠优化建议：</div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200">
+                      防杠优化建议：
+                    </div>
                     {simulation.suggestions.map((sug, idx) => (
-                      <div key={idx} className="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-800">
+                      <div
+                        key={idx}
+                        className="p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-800"
+                      >
                         {sug}
                       </div>
                     ))}
@@ -223,22 +274,20 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
                           cmt.sentiment === 'toxic_alert'
                             ? 'bg-rose-500/20 text-rose-500'
                             : cmt.sentiment === 'criticism'
-                            ? 'bg-amber-500/20 text-amber-500'
-                            : 'bg-emerald-500/20 text-emerald-500'
+                              ? 'bg-amber-500/20 text-amber-500'
+                              : 'bg-emerald-500/20 text-emerald-500'
                         }`}
                       >
                         {cmt.persona === 'toxic_hunter'
                           ? '毒点排查官'
                           : cmt.persona === 'logic_critic'
-                          ? '考据杠精'
-                          : cmt.persona === 'pleasure_seeker'
-                          ? '爽感追更'
-                          : 'CP党'}
+                            ? '考据杠精'
+                            : cmt.persona === 'pleasure_seeker'
+                              ? '爽感追更'
+                              : 'CP党'}
                       </span>
                     </div>
-                    <span className="text-[10px] text-slate-400">
-                      👍 {cmt.upvotes}
-                    </span>
+                    <span className="text-[10px] text-slate-400">👍 {cmt.upvotes}</span>
                   </div>
 
                   <p className="text-slate-700 dark:text-slate-200 font-medium">

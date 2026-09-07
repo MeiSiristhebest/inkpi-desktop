@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react'
-import { Bold, Italic, Wand2 } from 'lucide-react'
+import { Bold, Italic, Wand2, Anchor, CheckCircle2 } from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 
 interface SelectionToolbarProps {
   /** TipTap 编辑器实例（任意结构，仅在具备 on/off/view 时生效） */
@@ -36,6 +37,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   onOpenAssistant,
   activeChapterId,
 }) => {
+  const host = useOptionalPluginHostContext()
   const [state, setState] = useState<ToolbarState>({ show: false, top: 0, left: 0 })
 
   useEffect(() => {
@@ -133,12 +135,45 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       <button
         type="button"
         onClick={aiPolish}
-        className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors duration-150"
+        className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors duration-150 cursor-pointer"
         title="调用 InkPi AI 划词润色"
       >
         <Wand2 className="w-3 h-3" />
         <span>AI 润色</span>
       </button>
+
+      {/* 划词直接触发断章张力分析抽屉 */}
+      {host && (
+        <>
+          <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
+          <button
+            type="button"
+            onClick={() => {
+              host.openDrawer('reader-hook')
+            }}
+            className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-amber-500 hover:bg-amber-500/10 transition-colors duration-150 cursor-pointer"
+            title="查看所选文本追读与断章张力"
+          >
+            <Anchor className="w-3 h-3" />
+            <span>断章感知</span>
+          </button>
+        </>
+      )}
+
+      {/* 划词直接触发文学质量门禁体检 */}
+      {host && (
+        <button
+          type="button"
+          onClick={() => {
+            host.openDrawer('narrative-linter')
+          }}
+          className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-emerald-500 hover:bg-emerald-500/10 transition-colors duration-150 cursor-pointer"
+          title="排查所选文字是否存在副词堆叠、长句或热梗"
+        >
+          <CheckCircle2 className="w-3 h-3" />
+          <span>文字体检</span>
+        </button>
+      )}
     </div>
   )
 }

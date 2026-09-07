@@ -23,7 +23,7 @@ const CATEGORY_META: Record<
   plot: { label: '大纲与因果', icon: Compass },
   rhythm: { label: '网文节奏', icon: Zap },
   craft: { label: '修辞与调色', icon: Palette },
-  review: { label: '质检与门禁', icon: ShieldAlert },
+  review: { label: '文本质检', icon: ShieldAlert },
   flow: { label: '心流与竞技', icon: Puzzle },
   tools: { label: '辅助与工具', icon: Layers },
 }

@@ -1,25 +1,43 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbGoldChaptersRepository } from '../../../adapters/indexedDbGoldChaptersRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { GoldChaptersEngine } from '../engine/GoldChaptersEngine'
 import type { GoldChapterEvalRecord } from '../types'
-import { Award, Sparkles, Send } from 'lucide-react'
+import { Award, Sparkles, Send, Bot, BookOpen } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 
 export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
-  const [chaptersText, setChaptersText] = useState(
-    '暴雨倾盆的断魂崖边，少年握紧染血的长刀，冷冷扫视着步步紧逼的追兵。\n“交出你父亲留下的古卷，尚可留你全尸！”为首的统领按刀狞笑。\n没有回应，唯有识海深处突然泛起冰冷浩瀚的共鸣波动——觉醒时刻已至！',
-  )
+  const hostContext = useOptionalPluginHostContext()
+  const [chaptersText, setChaptersText] = useState('')
   const [evaluations, setEvaluations] = useState<GoldChapterEvalRecord[]>([])
 
-  const loadEvals = async () => {
-    const all = await indexedDbGoldChaptersRepository.getAll(projectId)
-    setEvaluations(all)
+  const loadData = async () => {
+    try {
+      const [allEvals, allChapters] = await Promise.all([
+        indexedDbGoldChaptersRepository.getAll(projectId),
+        indexedDbProjectRepository.getChaptersByProject(projectId),
+      ])
+      setEvaluations(allEvals)
+      allChapters.sort((a, b) => a.order - b.order)
+      if (allChapters.length > 0) {
+        // 自动提取前三章（黄金开篇前 4000 字）
+        const firstThree = allChapters
+          .slice(0, 3)
+          .map((c) => `【第 ${c.order} 章 · ${c.title}】\n${htmlToPlain(c.content || '')}`)
+          .join('\n\n')
+        setChaptersText(firstThree)
+      }
+    } catch (e) {
+      console.error('Failed to load gold chapters data:', e)
+    }
   }
 
   useEffect(() => {
-    loadEvals().catch(console.error)
+    loadData().catch(console.error)
   }, [projectId])
 
   useEffect(() => {
@@ -31,6 +49,24 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
   }, [chaptersText, onStats])
 
   const currentEval = GoldChaptersEngine.evaluate(chaptersText)
+
+  // 真实 AI 主编级黄金三章签约评测
+  const handleAiGoldAudit = () => {
+    if (!chaptersText.trim()) return
+    const prompt = `请作为网文头部平台资深签约主编，对该作品的【前三章开篇（黄金三章）】进行严格的签约与留存深度审核：
+【开篇正文文本】：
+${chaptersText.slice(0, 4000)}
+
+请给出专业批注：
+1. 主角核心动机（是否有极其强烈、不可替代的目标与生存驱动力）；
+2. 金手指/核心卖点（金手指出现是否太晚？规则是否清晰且具备高期待感？）；
+3. 冲突与张力（首章是否陷入了大段枯燥的背景设定说明，还是用事件直接抓住读者？）；
+4. 明确签约结论（若拒签，给出前三章必须修改的 3 个手术刀级调整建议）。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
 
   const handleSave = async () => {
     const record: GoldChapterEvalRecord = {
@@ -47,11 +83,12 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
       evaluatedAt: clock.now(),
     }
     await indexedDbGoldChaptersRepository.save(record)
-    await loadEvals()
+    const all = await indexedDbGoldChaptersRepository.getAll(projectId)
+    setEvaluations(all)
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto text-slate-800 dark:text-slate-100">
+    <div className="p-6 space-y-6 max-w-5xl mx-auto text-slate-800 dark:text-slate-100 font-sans">
       <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
@@ -59,24 +96,39 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
             <span>黄金三章与签约过稿诊断器 (GoldChaptersEval)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            严格针对商业网文前三章（前3000字）的主角动机、金手指筹码与主要矛盾进行量化过稿诊断
+            直连全书前三章正文，量化主角动机、金手指筹码与主要矛盾，消除开篇被拒签风险
           </p>
         </div>
+
+        {hostContext?.aiAssistant?.isAvailable && (
+          <button
+            onClick={handleAiGoldAudit}
+            className="px-3.5 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            AI 主编级开篇签约初审
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="border rounded-xl p-5 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-3">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            前三章开篇文本输入:
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <BookOpen className="w-3.5 h-3.5" />
+              前三章正文提取（自动同步）：
+            </label>
+            <span className="text-[11px] text-slate-400">{chaptersText.length} 字</span>
+          </div>
           <textarea
-            className="w-full h-64 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 leading-relaxed"
+            className="w-full h-64 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 leading-relaxed focus:outline-none"
             value={chaptersText}
+            placeholder="自动从项目前三章提取正文，亦可手动编辑调试..."
             onChange={(e) => setChaptersText(e.target.value)}
           />
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1.5 transition"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
           >
             <Send className="w-4 h-4" /> 保存当前过稿评测快照
           </button>

@@ -1,3 +1,4 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { PaywallSentryEngine } from '../engine/PaywallSentryEngine'
@@ -6,9 +7,19 @@ import { indexedDbPaywallAuditRepository } from '../../../adapters/indexedDbPayw
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { ShieldCheck, Flame, AlertTriangle, Skull, RefreshCw, BookmarkCheck } from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import {
+  ShieldCheck,
+  Flame,
+  AlertTriangle,
+  Skull,
+  RefreshCw,
+  BookmarkCheck,
+  Bot,
+} from 'lucide-react'
 
 export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
   const [chapters, setChapters] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filterRating, setFilterRating] = useState<string>('all')
@@ -29,14 +40,38 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     refreshChapters()
   }, [projectId])
 
+  // AI 深度测算最佳上架付费卡点
+  const handleAiPaywallRecommend = () => {
+    if (chapters.length === 0) return
+    const summaries = chapters
+      .slice(0, 30)
+      .map(
+        (c) => `第 ${c.order} 章《${c.title}》尾段：\n${htmlToPlain(c.content || '').slice(-250)}`,
+      )
+      .join('\n\n')
+
+    const prompt = `请作为网文商业化运作与主编级运营专家，对以下章节的章尾悬念与付费转化能力进行【上架倒 V / 付费黄金卡点点检】：
+【待评估章节末尾清单】：
+${summaries}
+
+请给出专业推演：
+1. 哪一章的结尾最具“首订引爆力”（高潮悬念留白、大招刚出手、最强宿敌降临）；
+2. 拦截“劝退弱卡点”：指出哪些章节属于大战后的垃圾时间或说明性章节，严禁选作上架前最后一章；
+3. 给出前 3 位最推荐作为付费卡点的章节排名与具体卡点修改指导。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
+  }
+
   const auditResults: PaywallAuditResult[] = useMemo(() => {
     return chapters.map((ch) =>
       PaywallSentryEngine.analyzeChapter({
         chapterId: ch.id,
         chapterTitle: ch.title,
         chapterOrder: ch.order,
-        content: ch.content || '',
-      })
+        content: htmlToPlain(ch.content || ''),
+      }),
     )
   }, [chapters])
 
@@ -113,9 +148,18 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               {savedSuccessMsg}
             </span>
           )}
+          {hostContext?.aiAssistant?.isAvailable && (
+            <button
+              onClick={handleAiPaywallRecommend}
+              className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              AI 黄金卡点深度推演
+            </button>
+          )}
           <button
             onClick={refreshChapters}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1"
+            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             重新扫描
@@ -138,12 +182,12 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             {key === 'all'
               ? '全部章节'
               : key === 'prime_paywall'
-              ? '黄金卡点'
-              : key === 'acceptable'
-              ? '合格'
-              : key === 'weak_cut'
-              ? '偏弱'
-              : '风险'}
+                ? '黄金卡点'
+                : key === 'acceptable'
+                  ? '合格'
+                  : key === 'weak_cut'
+                    ? '偏弱'
+                    : '风险'}
           </button>
         ))}
       </div>
@@ -176,19 +220,27 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                 <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 mb-3 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
                   <div className="flex justify-between">
                     <span>章尾悬念 (C)：</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100">{r.cliffhangerScore}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">
+                      {r.cliffhangerScore}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>欲望期待 (D)：</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100">{r.unresolvedDesireScore}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">
+                      {r.unresolvedDesireScore}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>战力高潮 (P)：</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100">{r.powerClimaxScore}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">
+                      {r.powerClimaxScore}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>疲劳流失风险 (F)：</span>
-                    <span className={`font-medium ${r.fatigueRiskScore > 50 ? 'text-rose-500' : 'text-slate-900 dark:text-slate-100'}`}>
+                    <span
+                      className={`font-medium ${r.fatigueRiskScore > 50 ? 'text-rose-500' : 'text-slate-900 dark:text-slate-100'}`}
+                    >
                       {r.fatigueRiskScore}
                     </span>
                   </div>
@@ -196,7 +248,9 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
                 <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 mb-3">
                   {r.suggestions.map((s, idx) => (
-                    <p key={idx} className="line-clamp-2">{s}</p>
+                    <p key={idx} className="line-clamp-2">
+                      {s}
+                    </p>
                   ))}
                 </div>
               </div>

@@ -1,33 +1,72 @@
+import { htmlToPlain } from '../../../domain/text'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { HookAnalysisResult, ReaderHookRecord, HookTemplate } from '../types'
 import { readerHookEngine } from '../engine/ReaderHookEngine'
 import { indexedDbReaderHookRepository } from '../../../adapters/indexedDbReaderHookRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
-import {
-  Anchor,
-  Copy,
-  Check,
-  Plus,
-  Trash2,
-  Sparkles,
-  Zap,
-} from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { Anchor, Copy, Check, Plus, Trash2, Sparkles, Zap, BookOpen, Bot } from 'lucide-react'
 
 export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const hostContext = useOptionalPluginHostContext()
+  const [chapters, setChapters] = useState<any[]>([])
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [testText, setTestText] = useState(
-    '玉简上的倒计时只剩最后三息，血色巨眼猛然睁开，虚空瞬间撕裂！'
+    '玉简上的倒计时只剩最后三息，血色巨眼猛然睁开，虚空瞬间撕裂！',
   )
   const [analysis, setAnalysis] = useState<HookAnalysisResult>(() =>
-    readerHookEngine.analyzeEnding(testText)
+    readerHookEngine.analyzeEnding(testText),
   )
   const [savedHooks, setSavedHooks] = useState<ReaderHookRecord[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [newChapterNum, setNewChapterNum] = useState(1)
 
   const templates = readerHookEngine.getTemplates()
+
+  // 1. 真实读取项目章节并默认拉取当前激活章节末尾
+  useEffect(() => {
+    const loadChapters = async () => {
+      try {
+        const list = await indexedDbProjectRepository.getChaptersByProject(projectId)
+        list.sort((a, b) => a.order - b.order)
+        setChapters(list)
+        if (list.length > 0) {
+          const defaultChap = hostContext?.activeChapter
+            ? list.find((c) => c.id === hostContext.activeChapter?.id) || list[0]
+            : list[0]
+          setSelectedChapterId(defaultChap.id)
+          setNewChapterNum(defaultChap.order || 1)
+          // 抽取章末末尾 350 字
+          const tailText = htmlToPlain(defaultChap.content || '')
+            .slice(-350)
+            .trim()
+          setTestText(tailText || defaultChap.title || '')
+          setAnalysis(readerHookEngine.analyzeEnding(tailText || defaultChap.title || ''))
+        }
+      } catch (e) {
+        console.error('Failed to load chapters for reader hook:', e)
+      }
+    }
+    loadChapters()
+  }, [projectId, hostContext?.activeChapter?.id])
+
+  // 切换选中章节时自动填充末尾文字
+  const handleSelectChapter = (chapId: string) => {
+    setSelectedChapterId(chapId)
+    const chap = chapters.find((c) => c.id === chapId)
+    if (chap) {
+      setNewChapterNum(chap.order || 1)
+      const tailText = htmlToPlain(chap.content || '')
+        .slice(-350)
+        .trim()
+      setTestText(tailText || '')
+      setAnalysis(readerHookEngine.analyzeEnding(tailText || ''))
+    }
+  }
 
   const loadSavedHooks = async () => {
     try {
@@ -45,6 +84,25 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
   const handleAudit = () => {
     setAnalysis(readerHookEngine.analyzeEnding(testText))
+  }
+
+  // 真实 AI 诊断请求通道
+  const handleAiDeepAudit = () => {
+    if (!testText.trim()) return
+    const chap = chapters.find((c) => c.id === selectedChapterId)
+    const prompt = `请作为专业网络小说责任编辑，对以下章节末尾 300 字的“断章张力（Cliffhanger）与留存吸引力”进行深度诊断：
+【章节信息】：第 ${newChapterNum} 章《${chap?.title || '未命名'}》
+【章末尾部文本】：
+${testText}
+
+请评估：
+1. 悬念留白度与读者情绪曲线（是否让读者产生迫不及待翻到下一章或投推荐票的心理）；
+2. 是否存在“平淡关门”、“强行断章”或“说明性文字收尾”等断章大忌；
+3. 给出 2~3 种具有张力的改写句式或结尾卡点建议。`
+
+    if (hostContext?.aiAssistant?.prompt) {
+      hostContext.aiAssistant.prompt(prompt)
+    }
   }
 
   const handleSaveHook = async () => {
@@ -93,9 +151,30 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            诊断章尾 300 字悬念张力，避免平淡结章流失读者，掌握网文工业级追更断章技术
+            诊断章尾 300 字悬念张力，直连真实章节，掌握网文工业级断章追更技术
           </p>
         </div>
+
+        {/* 章节快速切换选择器 */}
+        {chapters.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--ink-text-muted)] flex items-center gap-1">
+              <BookOpen className="w-3.5 h-3.5" />
+              当前章节:
+            </span>
+            <select
+              value={selectedChapterId}
+              onChange={(e) => handleSelectChapter(e.target.value)}
+              className="text-xs px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+            >
+              {chapters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  第 {c.order} 章 · {c.title || '无标题'} ({c.wordCount || 0}字)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* 主体左右分区 */}
@@ -106,22 +185,33 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
                 <Anchor className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                章尾 300 字实时张力推演
+                章尾 300 字真实张力推演
               </span>
-              <button
-                onClick={handleAudit}
-                className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1"
-              >
-                <Zap className="w-3 h-3" />
-                测算 CTI 张力
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleAudit}
+                  className="px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] text-xs font-medium flex items-center gap-1 cursor-pointer"
+                >
+                  <Zap className="w-3 h-3 text-amber-500" />
+                  测算 CTI 张力
+                </button>
+                {hostContext?.aiAssistant?.isAvailable && (
+                  <button
+                    onClick={handleAiDeepAudit}
+                    className="px-2.5 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Bot className="w-3 h-3" />
+                    AI 深度审读
+                  </button>
+                )}
+              </div>
             </div>
 
             <textarea
-              rows={4}
+              rows={5}
               value={testText}
               onChange={(e) => setTestText(e.target.value)}
-              placeholder="在此粘贴或撰写本章尾部文本..."
+              placeholder="自动从所选章节末尾同步，亦可手动编辑或修改测试..."
               className="w-full p-3 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
             />
 
@@ -151,7 +241,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     }`}
                   >
                     {analysis.rating === 'god_tier'
-                      ? '顶级断章狗'
+                      ? '高悬念断章'
                       : analysis.rating === 'cliffhanger'
                         ? '合格断章'
                         : analysis.rating === 'moderate'
@@ -213,9 +303,13 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
           {/* 已归档钩子列表 */}
           <div className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-            <h3 className="text-xs font-semibold text-[var(--ink-text)]">全书已入库断章记录 ({savedHooks.length})</h3>
+            <h3 className="text-xs font-semibold text-[var(--ink-text)]">
+              全书已入库断章记录 ({savedHooks.length})
+            </h3>
             {savedHooks.length === 0 ? (
-              <p className="text-xs text-[var(--ink-text-muted)]">暂无入库断章。将满意的断章结语保存以便前后审视。</p>
+              <p className="text-xs text-[var(--ink-text-muted)]">
+                暂无入库断章。将满意的断章结语保存以便前后审视。
+              </p>
             ) : (
               <div className="space-y-2">
                 {savedHooks.map((h) => (
@@ -225,11 +319,15 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-semibold text-[var(--ink-accent)]">第 {h.chapterNumber || 1} 章</span>
+                        <span className="font-semibold text-[var(--ink-accent)]">
+                          第 {h.chapterNumber || 1} 章
+                        </span>
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-500">
                           {h.hookType}
                         </span>
-                        <span className="text-[11px] text-[var(--ink-text-muted)]">CTI: {h.tensionScore} 分</span>
+                        <span className="text-[11px] text-[var(--ink-text-muted)]">
+                          CTI: {h.tensionScore} 分
+                        </span>
                       </div>
                       <p className="text-[11px] text-[var(--ink-text)] truncate">{h.hookText}</p>
                     </div>
