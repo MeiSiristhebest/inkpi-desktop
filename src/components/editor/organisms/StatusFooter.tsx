@@ -1,4 +1,5 @@
-import { Sparkles, AlignJustify, Type } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { Sparkles, AlignJustify, Type, BarChart3, ChevronUp } from 'lucide-react'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 
@@ -34,6 +35,20 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
     activeChapter,
     actions,
   } = model
+
+  const [wordMenuOpen, setWordMenuOpen] = useState(false)
+  const wordMenuRef = useRef<HTMLDivElement>(null)
+
+  // 点击外部关闭字数菜单
+  useEffect(() => {
+    const handleDocClick = (e: MouseEvent) => {
+      if (wordMenuRef.current && !wordMenuRef.current.contains(e.target as Node)) {
+        setWordMenuOpen(false)
+      }
+    }
+    window.addEventListener('click', handleDocClick)
+    return () => window.removeEventListener('click', handleDocClick)
+  }, [])
   return (
     <footer className="h-8 shrink-0 flex items-center justify-between px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)]">
       <div className="flex items-center gap-4">
@@ -84,6 +99,54 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
             <span>Tab 采纳续写</span>
           </button>
         )}
+
+        {/* 字数详情入口：「本章: N ▲」点击弹出向上菜单 */}
+        <div className="relative" ref={wordMenuRef}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setWordMenuOpen((v) => !v)
+            }}
+            title="字数详情与稿费预估"
+            className="flex items-center gap-1 hover:text-[var(--ink-text)] transition-colors cursor-pointer select-none"
+          >
+            <span className="tabular-nums">本章：{chapterWords.toLocaleString()}</span>
+            <ChevronUp
+              className={`w-3 h-3 transition-transform duration-150 ${
+                wordMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {/* 向上弹出菜单 */}
+          {wordMenuOpen && (
+            <div className="absolute bottom-full right-0 mb-1.5 z-50 min-w-[120px] py-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[13px] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowWordCountPanelModal(true)
+                  setWordMenuOpen(false)
+                }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span>字数详情</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // 稿费预估功能占位
+                  setWordMenuOpen(false)
+                }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <span className="text-amber-500 shrink-0 text-[15px] leading-none">¥</span>
+                <span>稿费预估</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 画布宽度：限宽 / 铺满 循环切换 */}
         <IconButton

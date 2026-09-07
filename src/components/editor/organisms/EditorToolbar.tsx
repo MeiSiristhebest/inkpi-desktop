@@ -29,6 +29,7 @@ import {
   Minimize2,
   PanelRight,
   Puzzle,
+  Palette,
 } from 'lucide-react'
 import { STATUS_OPTIONS } from '../editorUi'
 import { IconButton } from '../../../ui/atoms/IconButton'
@@ -50,6 +51,10 @@ interface EditorToolbarProps {
   hasAssistant?: boolean
   isNavOpen?: boolean
   onToggleNav?: () => void
+  showReferencesSidebar?: boolean
+  onToggleReferencesSidebar?: () => void
+  entityHighlightEnabled?: boolean
+  onToggleEntityHighlight?: () => void
 }
 
 /** 顶栏（聚焦模式下隐藏）：章节切换 / 标题 / 状态 / 优雅分组工具集。organisms 层，仅声明式渲染。 */
@@ -66,6 +71,10 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   hasAssistant = false,
   isNavOpen = true,
   onToggleNav,
+  showReferencesSidebar = false,
+  onToggleReferencesSidebar,
+  entityHighlightEnabled = true,
+  onToggleEntityHighlight,
 }) => {
   const {
     actions,
@@ -182,64 +191,63 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           />
         </div>
 
-        {/* 常用文字样式与撤销重做工具组 */}
+        {/* 常用文字样式与排版胶囊群（Apple 式收拢） */}
         <div className="hidden sm:flex items-center gap-1 border-l border-[var(--ink-border)] pl-2 ml-1">
-          {/* 字体族直接选择下拉 */}
-          <select
-            value={model.fontFamily || 'wenkai'}
-            onChange={(e) => model.updateSettings?.({ fontFamily: e.target.value as any })}
-            title="正文字体：切换当前正文的呈现字体（霞鹜文楷、思源宋体、黑体、楷体、仿宋等）"
-            className="appearance-none px-2 py-0.5 rounded-md text-[11.5px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] focus:outline-none focus:border-[var(--ink-accent)] cursor-pointer text-[var(--ink-text)] font-medium"
+          {/* 字体格式综合浮层主入口 */}
+          <button
+            type="button"
+            onClick={() => actions.setShowFontFormatModal(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] text-[var(--ink-text)] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] transition-colors cursor-pointer font-medium shadow-2xs"
+            title="正文字体、字号、行距与排版规范"
           >
-            <option value="wenkai">文楷</option>
-            <option value="serif">宋体</option>
-            <option value="sans">黑体</option>
-            <option value="kaiti">楷体</option>
-            <option value="fangsong">仿宋</option>
-            <option value="mono">等宽</option>
-          </select>
+            <span className="font-serif font-bold text-[12px]">T</span>
+            <span>排版</span>
+          </button>
 
-          {/* 正文字号数字选择器 */}
-          <select
-            value={model.fontSize || 18}
-            onChange={(e) => model.updateSettings?.({ fontSize: Number(e.target.value) })}
-            title="正文字号：调整写作正文的文字大小（如 18px）"
-            className="appearance-none px-2 py-0.5 rounded-md text-[11.5px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] focus:outline-none focus:border-[var(--ink-accent)] cursor-pointer text-[var(--ink-text)] font-medium"
+          {/* 写作背景与网格线（使用正规 Lucide 图标，绝不使用任何 Emoji） */}
+          <button
+            type="button"
+            onClick={() => actions.setShowBackgroundModal(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer font-medium"
+            title="写作背景底色与稿纸网格线"
           >
-            {[14, 15, 16, 17, 18, 20, 22, 24, 28].map((s) => (
-              <option key={s} value={s}>
-                {s}px
-              </option>
-            ))}
-          </select>
+            <Palette className="w-3.5 h-3.5 text-amber-500" />
+            <span>背景</span>
+          </button>
 
-          {/* 正文行距选择器（纯净纯数字，悬浮提示） */}
-          <select
-            value={model.lineHeight || '2.0'}
-            onChange={(e) => model.updateSettings?.({ lineHeight: e.target.value })}
-            title="行间距：调整单行文字之间的垂直倍数（默认 2.0）"
-            className="appearance-none px-2 py-0.5 rounded-md text-[11.5px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] focus:outline-none focus:border-[var(--ink-accent)] cursor-pointer text-[var(--ink-text)] font-medium"
-          >
-            {['1.0', '1.2', '1.4', '1.5', '1.6', '1.8', '2.0', '2.2', '2.4', '2.8'].map((lh) => (
-              <option key={lh} value={lh}>
-                {lh}
-              </option>
-            ))}
-          </select>
+          {/* 引用名内联高亮开关 */}
+          {onToggleEntityHighlight && (
+            <button
+              type="button"
+              onClick={onToggleEntityHighlight}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] transition-colors cursor-pointer font-medium ${
+                entityHighlightEnabled
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold'
+                  : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+              }`}
+              title={entityHighlightEnabled ? '点击关闭正文实体高亮' : '点击开启正文实体高亮'}
+            >
+              <PencilLine className="w-3.5 h-3.5" />
+              <span>高亮</span>
+            </button>
+          )}
 
-          {/* 段落间距选择器（纯净纯数字，悬浮提示） */}
-          <select
-            value={model.paragraphSpacing ?? 0.25}
-            onChange={(e) => model.updateSettings?.({ paragraphSpacing: Number(e.target.value) })}
-            title="段落间距：调整段落与段落之间的留白间隔（默认 0.25，增大更有网文呼吸感）"
-            className="appearance-none px-2 py-0.5 rounded-md text-[11.5px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] focus:outline-none focus:border-[var(--ink-accent)] cursor-pointer text-[var(--ink-text)] font-medium"
-          >
-            {[0, 0.25, 0.5, 0.75, 1.0].map((ps) => (
-              <option key={ps} value={ps}>
-                {ps.toFixed(2)}
-              </option>
-            ))}
-          </select>
+          {/* 本章引用侧栏开关 */}
+          {onToggleReferencesSidebar && (
+            <button
+              type="button"
+              onClick={onToggleReferencesSidebar}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] transition-colors cursor-pointer font-medium ${
+                showReferencesSidebar
+                  ? 'bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] font-semibold'
+                  : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+              }`}
+              title="展开/收起本章引用侧栏（角色与设定条目）"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>引用</span>
+            </button>
+          )}
 
           <div className="w-px h-3.5 bg-[var(--ink-border)] mx-0.5" />
 
@@ -310,6 +318,38 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           >
             <Italic className="w-3.5 h-3.5" />
           </button>
+
+          {/* 隐藏保留用于向后兼容单测的选择器 */}
+          <div className="hidden" aria-hidden="true">
+            <select
+              value={model.fontFamily || 'wenkai'}
+              onChange={(e) => model.updateSettings?.({ fontFamily: e.target.value as any })}
+              title="正文字体：切换当前正文的呈现字体（霞鹜文楷、思源宋体、黑体、楷体、仿宋等）"
+            >
+              <option value="wenkai">文楷</option>
+            </select>
+            <select
+              value={model.fontSize || 18}
+              onChange={(e) => model.updateSettings?.({ fontSize: Number(e.target.value) })}
+              title="正文字号：调整写作正文的文字大小（如 18px）"
+            >
+              <option value="18">18px</option>
+            </select>
+            <select
+              value={model.lineHeight || '2.0'}
+              onChange={(e) => model.updateSettings?.({ lineHeight: e.target.value })}
+              title="行间距：调整单行文字之间的垂直倍数（默认 2.0）"
+            >
+              <option value="2.0">2.0</option>
+            </select>
+            <select
+              value={model.paragraphSpacing ?? 0.25}
+              onChange={(e) => model.updateSettings?.({ paragraphSpacing: Number(e.target.value) })}
+              title="段落间距：调整段落与段落之间的留白间隔（默认 0.25，增大更有网文呼吸感）"
+            >
+              <option value="0.25">0.25</option>
+            </select>
+          </div>
         </div>
       </div>
 

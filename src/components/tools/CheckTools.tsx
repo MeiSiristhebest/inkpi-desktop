@@ -7,6 +7,7 @@ import { TAB_DEFINITIONS as tabDefinitions } from '../../config/tabDefinitions'
 import { ShieldAlert, Activity, CheckCircle2, AlertTriangle, Play } from 'lucide-react'
 
 import { DEFAULT_SENSITIVE_WORDS } from '../../config/sensitiveWords'
+import { GenericAhoCorasick } from '../../utils/AhoCorasick'
 import {
   findDuplicateCodes,
   findMissingDisplayNames,
@@ -56,7 +57,7 @@ export const CheckTools: React.FC<CheckToolsProps> = ({
     }
   }
 
-  // 全书敏感词扫描
+  // 全书敏感词扫描（基于 Aho-Corasick 工业级多模式匹配，O(N+Z) 极速扫描）
   const runSensitiveScan = async () => {
     setChecking(true)
     try {
@@ -70,18 +71,23 @@ export const CheckTools: React.FC<CheckToolsProps> = ({
           .filter(Boolean),
       ]
 
+      if (wordsToScan.length === 0 || projChapters.length === 0) {
+        setSensitiveHits([])
+        setHasScanned(true)
+        return
+      }
+
+      const ac = new GenericAhoCorasick<string>()
+      ac.build(wordsToScan.map((w) => ({ keyword: w, payload: w })))
+
       const results: { chapterTitle: string; hits: string[] }[] = []
 
       for (const ch of projChapters) {
-        const hits: string[] = []
         const content = ch.content || ''
-        for (const w of wordsToScan) {
-          if (content.includes(w)) {
-            hits.push(w)
-          }
-        }
-        if (hits.length > 0) {
-          results.push({ chapterTitle: ch.title, hits })
+        const matches = ac.scan(content)
+        if (matches.length > 0) {
+          const uniqueKeywords = Array.from(new Set(matches.map((m) => m.keyword)))
+          results.push({ chapterTitle: ch.title, hits: uniqueKeywords })
         }
       }
 

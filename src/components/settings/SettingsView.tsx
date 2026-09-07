@@ -28,8 +28,11 @@ import {
   Copy,
   Search,
   Check,
+  Keyboard,
 } from 'lucide-react'
 import { PluginSettingsView } from '../plugins/PluginSettingsView'
+import { WritingHabitsTab } from './WritingHabitsTab'
+import { ShortcutsTab } from './ShortcutsTab'
 import { clock } from '../../adapters/clock'
 import {
   useSettings,
@@ -43,11 +46,19 @@ import {
   type ThemeSkin,
 } from '../../core/settings'
 
-type TabKey = 'appearance' | 'editor' | 'plugins' | 'ai' | 'connection' | 'about'
+type TabKey =
+  'appearance' | 'editor' | 'writing' | 'shortcuts' | 'plugins' | 'ai' | 'connection' | 'about'
 
 const TABS: { key: TabKey; label: string; desc: string; icon: FC<{ className?: string }> }[] = [
   { key: 'appearance', label: '外观', desc: '主题配色、皮肤与界面缩放', icon: Palette },
   { key: 'editor', label: '编辑器', desc: '正文字体、字号与排版规范', icon: Type },
+  {
+    key: 'writing',
+    label: '写作与习惯',
+    desc: '自动滚屏、实体高亮、久坐与分章提醒',
+    icon: Feather,
+  },
+  { key: 'shortcuts', label: '快捷键', desc: '键盘键位映射与盲操快捷键', icon: Keyboard },
   { key: 'plugins', label: '插件管理', desc: '小说工作台扩展与实验能力', icon: Puzzle },
   { key: 'ai', label: '自定义 AI 模型', desc: '大模型提供商、密钥与参数', icon: Sparkles },
   { key: 'connection', label: '连接', desc: '本地 Daemon 与服务通信', icon: Wifi },
@@ -469,6 +480,8 @@ export const SettingsView: FC<SettingsViewProps> = ({ open, onClose }) => {
             >
               {tab === 'appearance' && <AppearanceTab settings={settings} update={update} />}
               {tab === 'editor' && <EditorTab settings={settings} update={update} />}
+              {tab === 'writing' && <WritingHabitsTab settings={settings} update={update} />}
+              {tab === 'shortcuts' && <ShortcutsTab />}
               {tab === 'plugins' && <PluginSettingsView />}
               {tab === 'ai' && <AiTab settings={settings} update={update} />}
               {tab === 'connection' && <ConnectionTab settings={settings} update={update} />}

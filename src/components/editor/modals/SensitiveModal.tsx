@@ -3,6 +3,7 @@ import { ShieldAlert, CheckCircle2, AlertTriangle, X, Replace } from 'lucide-rea
 import { Modal } from '../../../ui/molecules/Modal'
 
 import { DEFAULT_SENSITIVE_WORDS } from '../../../config/sensitiveWords'
+import { GenericAhoCorasick } from '../../../utils/AhoCorasick'
 
 interface SensitiveModalProps {
   content: string
@@ -25,22 +26,26 @@ export const SensitiveModal: React.FC<SensitiveModalProps> = ({ content, onApply
   }, [customWords])
 
   const hits = useMemo(() => {
-    const list: { word: string; count: number }[] = []
-    for (const w of allWords) {
-      if (!w) continue
-      const regex = new RegExp(w, 'g')
-      const matches = content.match(regex)
-      if (matches && matches.length > 0) {
-        list.push({ word: w, count: matches.length })
-      }
+    if (!content || allWords.length === 0) return []
+    const ac = new GenericAhoCorasick<string>()
+    ac.build(allWords.map((w) => ({ keyword: w, payload: w })))
+    const matches = ac.scan(content)
+
+    // 聚合统计每个命中词汇的出现频次
+    const counts = new Map<string, number>()
+    for (const m of matches) {
+      counts.set(m.keyword, (counts.get(m.keyword) || 0) + 1)
     }
-    return list
+
+    return Array.from(counts.entries()).map(([word, count]) => ({
+      word,
+      count,
+    }))
   }, [content, allWords])
 
   const handleReplaceOne = (word: string) => {
     const rep = replacements[word] || '**'
-    const regex = new RegExp(word, 'g')
-    const updated = content.replace(regex, rep)
+    const updated = content.split(word).join(rep)
     onApply(updated)
   }
 
@@ -48,8 +53,7 @@ export const SensitiveModal: React.FC<SensitiveModalProps> = ({ content, onApply
     let updated = content
     for (const h of hits) {
       const rep = replacements[h.word] || '**'
-      const regex = new RegExp(h.word, 'g')
-      updated = updated.replace(regex, rep)
+      updated = updated.split(h.word).join(rep)
     }
     onApply(updated)
     onClose()

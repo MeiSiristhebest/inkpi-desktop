@@ -295,7 +295,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryDrawer })),
   },
-  
+
   {
     id: 'press-forge',
     name: '出版铸造厂',
@@ -324,7 +324,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveDrawer })),
   },
-  
+
   {
     id: 'brainstorm-spark',
     name: '破局灵感火花',
@@ -535,7 +535,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextDrawer })),
   },
-  
+
   {
     id: 'rhythm-radar',
     name: '断章雷达',
@@ -550,7 +550,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarDrawer })),
   },
-  
+
   {
     id: 'shadow-reader',
     name: '读者影子视角',
@@ -565,7 +565,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderDrawer })),
   },
-  
+
   {
     id: 'multiverse-whatif',
     name: '平行推演 What-If',

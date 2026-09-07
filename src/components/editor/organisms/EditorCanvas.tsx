@@ -1,23 +1,25 @@
-import { EditorContent } from '@tiptap/react'
-import type { Editor } from '@tiptap/react'
+import React from 'react'
+import { SelectionToolbar } from '../SelectionToolbar'
 import { SplitViewDrawer } from '../modals/SplitViewDrawer'
 import { ScratchpadDrawer } from '../modals/ScratchpadDrawer'
-import { SelectionToolbar } from '../SelectionToolbar'
+import { EditorContent } from '@tiptap/react'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
-import type { VolumeRecord, ChapterRecord } from '../../../types'
+import type { ChapterRecord, VolumeRecord } from '../../../types'
+import type { EditorBackgroundConfig } from '../modals/BackgroundModal'
+import { PRESET_SKINS } from '../modals/BackgroundModal'
 
 interface EditorCanvasProps {
   model: EditorModel
-  editor: Editor | null
+  editor?: any
   canvasRef: React.RefObject<HTMLDivElement | null>
-  effectiveZen: boolean
+  effectiveZen?: boolean
   effectiveTypewriter?: boolean
   projectId: string
   onAiPrompt?: (text: string, chapterId?: string) => void
   onOpenAssistant?: () => void
+  bgConfig?: EditorBackgroundConfig
 }
 
-/** 写作画布（标题 + 选区工具条 + 正文 + 分屏/备忘侧栏）。organisms 层，仅声明式渲染。 */
 export const EditorCanvas: React.FC<EditorCanvasProps> = ({
   model,
   editor,
@@ -27,6 +29,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
   projectId,
   onAiPrompt,
   onOpenAssistant,
+  bgConfig,
 }) => {
   const {
     activeChapter,
@@ -40,8 +43,56 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
     chapters,
     actions,
   } = model
+
+  // 计算当前背景颜色
+  const currentSkin = PRESET_SKINS.find((s) => s.id === bgConfig?.skinId)
+  const isDark = bgConfig?.themeMode === 'dark'
+  const bgColor = bgConfig?.customBgImage
+    ? 'transparent'
+    : currentSkin
+      ? isDark
+        ? currentSkin.darkBg
+        : currentSkin.bg
+      : undefined
+
+  // 网格线科学对齐系统：每行文字基线严格端坐在网格线上
+  const gridType = bgConfig?.gridType || 'none'
+  const isDashed = gridType === 'dashed'
+  const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'
+  const lineHeightNum = Number(lineHeight || 2.0)
+  const stepPx = Math.round(fontSize * lineHeightNum)
+
+  // 段落间距也必须是 stepPx 的整数倍，这样多个段落之间不会错位！
+  const paragraphSpacingPx = stepPx * (model.paragraphSpacing ? 1 : 0)
+
+  // 稿纸底纹：基于 stepPx 的精准基线
+  const gridBackground =
+    gridType === 'none'
+      ? undefined
+      : isDashed
+        ? `linear-gradient(90deg, ${gridColor} 6px, transparent 6px) repeat-x 0 ${stepPx}px`
+        : `linear-gradient(to bottom, transparent ${stepPx - 1}px, ${gridColor} ${stepPx - 1}px, ${gridColor} ${stepPx}px)`
+
+  const canvasBackgroundStyle: React.CSSProperties = {
+    backgroundColor: bgColor,
+    backgroundImage: bgConfig?.customBgImage ? `url(${bgConfig.customBgImage})` : undefined,
+    backgroundSize: bgConfig?.customBgImage ? 'cover' : undefined,
+    backgroundPosition: bgConfig?.customBgImage ? 'center' : undefined,
+    backgroundAttachment: bgConfig?.customBgImage ? 'fixed' : undefined,
+  }
+
+  // 仅在正文编辑容器内绘制基准格线，确保第一行文字的底沿 100% 对齐第一条线
+  const editorAreaGridStyle: React.CSSProperties = {
+    backgroundImage: gridType !== 'none' && !bgConfig?.customBgImage ? gridBackground : undefined,
+    backgroundSize: isDashed ? `12px ${stepPx}px` : `100% ${stepPx}px`,
+    backgroundPosition: `0 0`,
+  }
+
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden relative">
+    <div
+      className="flex-1 flex min-h-0 overflow-hidden relative transition-colors duration-300"
+      style={canvasBackgroundStyle}
+    >
       <div
         className={`flex-1 flex flex-col h-full overflow-hidden ${
           showSplitView ? 'w-1/2' : 'w-full'
@@ -63,7 +114,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
           ref={canvasRef}
           className={`flex-1 overflow-y-auto relative ${effectiveTypewriter ? 'scroll-smooth' : ''}`}
         >
-          {/* 打字机模式下的垂直视觉对齐指示（极度柔和的半透明参考线） */}
+          {/* 打字机模式下的垂直视觉对齐指示 */}
           {effectiveTypewriter && (
             <div
               className="pointer-events-none sticky top-[45%] -translate-y-1/2 border-t border-[var(--ink-accent)]/15 z-10 flex items-center justify-end pr-4"
@@ -115,10 +166,11 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
               className="ink-editor"
               style={
                 {
+                  ...editorAreaGridStyle,
                   fontSize: `${fontSize}px`,
-                  lineHeight,
+                  lineHeight: `${stepPx}px`,
                   fontFamily: fontStack,
-                  '--ink-paragraph-spacing': `${(model.paragraphSpacing ?? 0.25) * 2.4}em`,
+                  '--ink-paragraph-spacing': `${paragraphSpacingPx}px`,
                 } as React.CSSProperties
               }
             >
@@ -128,7 +180,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
         </div>
       </div>
 
-      {/* 左右分屏对照阅读：真实 50/50 双栏排版对等视口 */}
+      {/* 左右分屏对照阅读 */}
       {showSplitView && !effectiveZen && (
         <SplitViewDrawer
           currentChapterId={activeChapter?.id || ''}
@@ -141,7 +193,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
         />
       )}
 
-      {/* 行旁待办与备忘录（导出自动滤除） */}
+      {/* 行旁待办与备忘录 */}
       {showScratchpad && !effectiveZen && (
         <ScratchpadDrawer
           projectId={projectId}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, type FC } from 'react'
+import { useEffect, useRef, useCallback, useState, type FC } from 'react'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import CharacterCount from '@tiptap/extension-character-count'
@@ -7,11 +7,24 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { GhostText, clearGhostText as hideGhostText } from '../../extensions/ghost-text'
 import { QuoteHighlight } from '../../extensions/quote-highlight'
 import { SmartQuotes } from '../../extensions/smart-quotes'
+import { EntityHighlight, entityHighlightPluginKey } from '../../extensions/entity-highlight'
 import { useChapterEditorModel } from './hooks/useChapterEditorModel'
 import { SensitiveModal } from './modals/SensitiveModal'
 import { LockModal } from './modals/LockModal'
 import { HistoryModal } from './modals/HistoryModal'
 import { OveruseWordsModal } from './modals/OveruseWordsModal'
+import { WordCountPanelModal, type WordCountConfig } from './modals/WordCountPanelModal'
+import { DailyGoalModal } from './modals/DailyGoalModal'
+import { BackgroundModal, type EditorBackgroundConfig } from './modals/BackgroundModal'
+import { FontFormatModal } from './modals/FontFormatModal'
+import { FloatingWordCountWidget } from './organisms/FloatingWordCountWidget'
+import { useWritingSessionStats } from './hooks/useWritingSessionStats'
+import { indexedDbProjectRepository } from '../../adapters/indexedDbProjectRepository'
+import { indexedDbCodexEntityRepository } from '../../adapters/indexedDbCodexEntityRepository'
+import { localStorageKeyValueStore } from '../../adapters/localStorageKeyValueStore'
+import type { ProjectRecord } from '../../types'
+import type { CodexEntity } from '../../plugins/living-codex/types'
+import { ChapterReferencesSidebar } from '../../plugins/living-codex/components/ChapterReferencesSidebar'
 
 import { ChapterTree } from './organisms/ChapterTree'
 import { EditorToolbar } from './organisms/EditorToolbar'
@@ -102,6 +115,9 @@ export const RichEditor: FC<RichEditorProps> = ({
     showLockModal,
     showHistoryModal,
     showOveruseModal,
+    showWordCountPanelModal,
+    showBackgroundModal,
+    showFontFormatModal,
     chapterContextMenu,
     renamingChapter,
     deletingChapter,
@@ -113,6 +129,96 @@ export const RichEditor: FC<RichEditorProps> = ({
 
   const effectiveZen = focusMode
   const effectiveTypewriter = isTypewriter || defaultTypewriter
+
+  // 会话打字统计 hook：作品级当天连续累计、防粘贴虚假增量、空闲持续累加
+  const sessionStats = useWritingSessionStats({
+    projectId,
+    isActive: !focusMode,
+  })
+
+  // 记录上一次的正文纯文字长度，用于在用户自然打字输入时派发有效打字字数
+  const prevChapterLenRef = useRef<number>(activeChapter?.wordCount || 0)
+  const isPasteOperationRef = useRef<boolean>(false)
+
+  // 写作背景与网格线配置（默认采用用户最适宜的写作底色与网格设定）
+  const [bgConfig, setBgConfig] = useState<EditorBackgroundConfig>(() => {
+    try {
+      const raw = localStorageKeyValueStore.getSync('inkpi-editor-bg-config')
+      if (raw) return JSON.parse(raw)
+    } catch {
+      /* ignore */
+    }
+    return {
+      themeMode: 'light',
+      skinId: 'mist-gray',
+      gridType: 'none',
+    }
+  })
+
+  // 悬浮小组件开关：默认开启悬浮小组件
+  const [showFloatingWidget, setShowFloatingWidget] = useState(true)
+  const [showGoalModal, setShowGoalModal] = useState(false)
+  const [dailyGoalTarget, setDailyGoalTarget] = useState(() => {
+    const saved = localStorageKeyValueStore.getSync(`inkpi-daily-goal-${projectId}`)
+    return saved ? Number(saved) || 4600 : 4600
+  })
+
+  const [widgetConfig, setWidgetConfig] = useState<WordCountConfig>({
+    headerType: 'mascot',
+    showMascotMotto: true,
+    showSessionWords: true,
+    showSpeed: true,
+    showWritingTime: true,
+    showIdleTime: true,
+    layout: 'layout2',
+  })
+
+  // 设定集实体与正文高亮联动
+  const [entities, setEntities] = useState<CodexEntity[]>([])
+  const [entityHighlightEnabled, setEntityHighlightEnabled] = useState(true)
+  const [showReferencesSidebar, setShowReferencesSidebar] = useState(false)
+
+  // 加载当前项目设定集所有实体（角色、势力、宗门、物品等）
+  useEffect(() => {
+    let alive = true
+    void indexedDbCodexEntityRepository.getAll().then((all) => {
+      if (alive) {
+        const currentProjectEntities = all.filter((e) => e.projectId === projectId)
+        setEntities(currentProjectEntities)
+      }
+    })
+    return () => {
+      alive = false
+    }
+  }, [projectId])
+
+  // 当实体列表更新或高亮开关变动时，实时通知 TipTap ProseMirror 插件重新计算 Decorations
+  useEffect(() => {
+    const ed = editorRef.current
+    if (ed && !ed.isDestroyed && ed.view) {
+      const tr = ed.view.state.tr.setMeta(entityHighlightPluginKey, {
+        entities,
+        enabled: entityHighlightEnabled,
+        highlightRole: true,
+        highlightSetting: true,
+      })
+      ed.view.dispatch(tr)
+    }
+  }, [entities, entityHighlightEnabled])
+
+  // 获取当前书本详情（用于字数面板封面与书名展示）
+  const [currentProject, setCurrentProject] = useState<ProjectRecord | null>(null)
+  useEffect(() => {
+    let alive = true
+    if (projectId) {
+      void indexedDbProjectRepository.getProject(projectId).then((p) => {
+        if (alive && p) setCurrentProject(p)
+      })
+    }
+    return () => {
+      alive = false
+    }
+  }, [projectId])
 
   const recenterTypewriter = useCallback(() => {
     if (!effectiveTypewriter) return
@@ -143,9 +249,24 @@ export const RichEditor: FC<RichEditorProps> = ({
       GhostText,
       QuoteHighlight,
       SmartQuotes,
+      EntityHighlight.configure({
+        entities,
+        enabled: entityHighlightEnabled,
+        highlightRole: true,
+        highlightSetting: true,
+        onEntityClick: (_ent) => {
+          // 点击正文高亮实体时，自动展开右侧引用侧栏
+          setShowReferencesSidebar(true)
+        },
+      }),
     ],
     content: activeChapter?.content || '',
     editorProps: {
+      handlePaste: (_view, _event) => {
+        isPasteOperationRef.current = true
+        sessionStats.recordPasteWords(0)
+        return false
+      },
       handleKeyDown: (_view, event) => {
         // Tab 采纳光标后的内联 Ghost Text 续写
         if (event.key === 'Tab' && ghostTextRef.current) {
@@ -160,7 +281,17 @@ export const RichEditor: FC<RichEditorProps> = ({
         return false
       },
     },
-    onUpdate: () => actions.handleEditorUpdate(),
+    onUpdate: () => {
+      actions.handleEditorUpdate()
+      const currentLen = editorRef.current?.getText()?.replace(/\s+/g, '')?.length || 0
+      const delta = currentLen - prevChapterLenRef.current
+      prevChapterLenRef.current = currentLen
+
+      if (delta > 0 && !isPasteOperationRef.current) {
+        sessionStats.recordTypedWords(delta)
+      }
+      isPasteOperationRef.current = false
+    },
     onTransaction: () => {
       if (effectiveTypewriter) {
         requestAnimationFrame(recenterTypewriter)
@@ -206,6 +337,8 @@ export const RichEditor: FC<RichEditorProps> = ({
       hideGhostText(ed)
       ghostTextRef.current = ''
       actions.setGhostText('')
+      prevChapterLenRef.current = ch.content ? ch.wordCount : 0
+      isPasteOperationRef.current = true
     } catch {
       /* 编辑器销毁过程中可能短暂不一致，忽略 */
     }
@@ -237,6 +370,7 @@ export const RichEditor: FC<RichEditorProps> = ({
         actions.setDeletingChapter(null)
         if (uiRef.current.showFindReplace) actions.setShowFindReplace(false)
         actions.setShowHistoryModal(false)
+        setShowReferencesSidebar(false)
         return
       }
       if (e.key === 'F2') {
@@ -322,6 +456,7 @@ export const RichEditor: FC<RichEditorProps> = ({
       }}
     >
       <div className="flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+        {/* 左侧分卷/章节目录树（聚焦模式下隐藏） */}
         {!effectiveZen && model.isSidebarOpen && (
           <ChapterTree
             model={model}
@@ -345,6 +480,10 @@ export const RichEditor: FC<RichEditorProps> = ({
             hasAssistant={hasAssistant ?? Boolean(onOpenAssistant)}
             isNavOpen={isNavOpen}
             onToggleNav={onToggleNav}
+            showReferencesSidebar={showReferencesSidebar}
+            onToggleReferencesSidebar={() => setShowReferencesSidebar((v) => !v)}
+            entityHighlightEnabled={entityHighlightEnabled}
+            onToggleEntityHighlight={() => setEntityHighlightEnabled((v) => !v)}
           />
 
           {showFindReplace && !effectiveZen && (
@@ -376,7 +515,22 @@ export const RichEditor: FC<RichEditorProps> = ({
               projectId={projectId}
               onAiPrompt={onAiPrompt}
               onOpenAssistant={onOpenAssistant}
+              bgConfig={bgConfig}
             />
+
+            {/* 本章引用侧栏（角色/设定条目列表，支持点击直达） */}
+            <ChapterReferencesSidebar
+              isOpen={showReferencesSidebar && !effectiveZen}
+              entities={entities}
+              currentText={activeChapter?.content || ''}
+              onClose={() => setShowReferencesSidebar(false)}
+              onSelectEntity={(ent) => {
+                // 点击词条后，在正文中高亮并直接聚焦查找，亦可通过事件总线打开设定详情
+                actions.setShowFindReplace(true)
+                actions.setFindText(ent.name)
+              }}
+            />
+
             <DrawerDock projectId={projectId} currentText={activeChapter?.content || ''} />
           </div>
 
@@ -436,6 +590,68 @@ export const RichEditor: FC<RichEditorProps> = ({
               actions.setFindText(word)
             }}
             onClose={() => actions.setShowOveruseModal(false)}
+          />
+        )}
+
+        {/* 字数面板配置弹窗 */}
+        {showWordCountPanelModal && (
+          <WordCountPanelModal
+            onClose={() => actions.setShowWordCountPanelModal(false)}
+            bookTitle={currentProject?.name || '私密作品使用指南'}
+            bookCover={currentProject?.cover}
+            todayTarget={dailyGoalTarget}
+            stats={sessionStats}
+            config={widgetConfig}
+            onConfigChange={setWidgetConfig}
+            onPinAsWidget={() => setShowFloatingWidget(true)}
+            onOpenGoalModal={() => setShowGoalModal(true)}
+          />
+        )}
+
+        {/* 可自由拖动的小组件卡片 */}
+        {showFloatingWidget && (
+          <FloatingWordCountWidget
+            stats={sessionStats}
+            config={widgetConfig}
+            bookTitle={currentProject?.name || '私密作品使用指南'}
+            bookCover={currentProject?.cover}
+            todayTarget={dailyGoalTarget}
+            onOpenSettings={() => actions.setShowWordCountPanelModal(true)}
+            onOpenGoalModal={() => setShowGoalModal(true)}
+            onClose={() => setShowFloatingWidget(false)}
+          />
+        )}
+
+        {/* 每日目标与写作提醒弹窗 */}
+        {showGoalModal && (
+          <DailyGoalModal
+            onClose={() => setShowGoalModal(false)}
+            currentGoal={dailyGoalTarget}
+            onSave={(newGoal) => {
+              setDailyGoalTarget(newGoal)
+              void localStorageKeyValueStore.set(`inkpi-daily-goal-${projectId}`, String(newGoal))
+            }}
+            onDelete={() => {
+              setDailyGoalTarget(4600)
+            }}
+          />
+        )}
+
+        {/* 写作背景与网格线设置弹窗 */}
+        {showBackgroundModal && (
+          <BackgroundModal
+            onClose={() => actions.setShowBackgroundModal(false)}
+            config={bgConfig}
+            onChange={setBgConfig}
+          />
+        )}
+
+        {/* 字体、字号、行高行宽排版综合设置弹窗 */}
+        {showFontFormatModal && (
+          <FontFormatModal
+            onClose={() => actions.setShowFontFormatModal(false)}
+            model={model}
+            editor={editorRef.current}
           />
         )}
 

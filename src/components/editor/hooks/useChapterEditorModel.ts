@@ -68,6 +68,9 @@ export interface EditorModelState {
   showOveruseModal: boolean
   showSplitView: boolean
   showScratchpad: boolean
+  showWordCountPanelModal: boolean
+  showBackgroundModal: boolean
+  showFontFormatModal: boolean
   chapterContextMenu: ChapterContextMenu | null
   renamingChapter: ChapterRecord | null
   renamingTitle: string
@@ -125,6 +128,9 @@ function createInitialState(projectId: string): EditorModelState {
     showOveruseModal: false,
     showSplitView: false,
     showScratchpad: false,
+    showWordCountPanelModal: false,
+    showBackgroundModal: false,
+    showFontFormatModal: false,
     chapterContextMenu: null,
     renamingChapter: null,
     renamingTitle: '',
@@ -185,6 +191,9 @@ export interface ChapterEditorModel {
   showOveruseModal: boolean
   showSplitView: boolean
   showScratchpad: boolean
+  showWordCountPanelModal: boolean
+  showBackgroundModal: boolean
+  showFontFormatModal: boolean
   chapterContextMenu: ChapterContextMenu | null
   renamingChapter: ChapterRecord | null
   renamingTitle: string
@@ -254,6 +263,9 @@ export interface ChapterEditorActions {
   setShowOveruseModal: (v: boolean) => void
   setShowSplitView: (v: boolean) => void
   setShowScratchpad: (v: boolean) => void
+  setShowWordCountPanelModal: (v: boolean) => void
+  setShowBackgroundModal: (v: boolean) => void
+  setShowFontFormatModal: (v: boolean) => void
   setShowGlobalSearch: (v: boolean) => void
   setChapterContextMenu: (v: ChapterContextMenu | null) => void
   setRenamingChapter: (v: ChapterRecord | null) => void
@@ -1014,6 +1026,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     setShowOveruseModal: (v: boolean) => patch({ showOveruseModal: v }),
     setShowSplitView: (v: boolean) => patch({ showSplitView: v }),
     setShowScratchpad: (v: boolean) => patch({ showScratchpad: v }),
+    setShowWordCountPanelModal: (v: boolean) => patch({ showWordCountPanelModal: v }),
+    setShowBackgroundModal: (v: boolean) => patch({ showBackgroundModal: v }),
+    setShowFontFormatModal: (v: boolean) => patch({ showFontFormatModal: v }),
     setShowGlobalSearch: (v: boolean) => patch({ showGlobalSearch: v }),
     setChapterContextMenu: (v) => patch({ chapterContextMenu: v }),
     setRenamingChapter: (v) => patch({ renamingChapter: v }),

@@ -48,9 +48,13 @@ export function computeDashboardModel(
 ): DashboardModel {
   const pv = volumes.filter((v) => v.projectId === projectId).sort((a, b) => a.order - b.order)
   const pc = chapters.filter((c) => c.projectId === projectId)
-  const currentNow = now || (project?.updatedAt ?? 0)
+  const currentNow = now > 0 ? now : (project?.updatedAt ?? 0)
   const weekAgo = currentNow - WEEK_MS
-  const dayStart = currentNow - (currentNow % DAY_MS)
+
+  // 严格基于本地日期的今日零点时间戳
+  const todayDateObj = new Date(currentNow)
+  todayDateObj.setHours(0, 0, 0, 0)
+  const dayStart = todayDateObj.getTime()
 
   const published = pc.filter((c) => c.status === 'published').length
   const drafted = pc.filter((c) => !c.status || c.status === 'draft').length
@@ -76,12 +80,23 @@ export function computeDashboardModel(
   let streakDays = 0
   let idleDays = 0
   if (sortedDates.length > 0) {
-    const lastDay = new Date(sortedDates[sortedDates.length - 1]).getTime()
-    idleDays = Math.floor((now - lastDay) / DAY_MS)
-    let cursor = now
-    while (dailyWords[toISODate(cursor)] > 0 || cursor >= lastDay) {
-      if (dailyWords[toISODate(cursor)] > 0) streakDays++
-      cursor -= DAY_MS
+    const lastDateStr = sortedDates[sortedDates.length - 1]
+    const [ly, lm, ld] = lastDateStr.split('-').map(Number)
+    const lastDayMidnight = new Date(ly, lm - 1, ld).getTime()
+
+    // 距离最近一次有产出的天数
+    idleDays = Math.max(0, Math.floor((dayStart - lastDayMidnight) / DAY_MS))
+
+    // 连续创作天数（Streak）：从今天或昨天往回倒推连续天数
+    let cursorDate = new Date(todayDateObj.getTime())
+    // 如果今天还没有字数，检查昨天是否有字数
+    if ((dailyWords[toISODate(cursorDate.getTime())] || 0) === 0) {
+      cursorDate.setDate(cursorDate.getDate() - 1)
+    }
+
+    while ((dailyWords[toISODate(cursorDate.getTime())] || 0) > 0) {
+      streakDays++
+      cursorDate.setDate(cursorDate.getDate() - 1)
     }
   }
 

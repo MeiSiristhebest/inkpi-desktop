@@ -60,12 +60,9 @@
     --ink-font-serif:
       'Songti SC', 'SimSun', 'Source Han Serif SC', 'Noto Serif CJK SC', Georgia, 'Times New Roman',
       serif;
-    --ink-font-wenkai:
-      'LXGW WenKai Screen', 'LXGW WenKai', '霞鹜文楷', 'KaiTi', 'STKaiti', serif;
-    --ink-font-kaiti:
-      'STKaiti', 'KaiTi', '楷体', 'BiauKai', serif;
-    --ink-font-fangsong:
-      'STFangsong', 'FangSong', '仿宋', serif;
+    --ink-font-wenkai: 'LXGW WenKai Screen', 'LXGW WenKai', '霞鹜文楷', 'KaiTi', 'STKaiti', serif;
+    --ink-font-kaiti: 'STKaiti', 'KaiTi', '楷体', 'BiauKai', serif;
+    --ink-font-fangsong: 'STFangsong', 'FangSong', '仿宋', serif;
     --ink-font-mono: 'SF Mono', SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace;
 
     /* 缓动：Apple 的标准曲线 */
@@ -284,6 +281,8 @@
   outline: none;
   min-height: 420px;
   caret-color: var(--ink-accent);
+  letter-spacing: 0.04em; /* 雅致的字间距，字距疏朗自然，彻底告别紧凑拥挤 */
+  word-spacing: 0.08em;
 }
 
 .ink-editor .ProseMirror p {
@@ -352,11 +351,41 @@
   color: var(--ink-text-faint);
 }
 
-/* 引用高亮：成对引号内文本的柔和背景 */
+/* 引用高亮：仅对实体角色/设定名称生效（取消无差别整句对话全句加蓝底） */
 .ink-editor .ink-quote-highlight {
-  background: var(--ink-accent-soft);
-  border-radius: 2px;
-  padding: 0.05em 0;
+  /* 恢复干净纯粹的文字排版，不干扰阅读 */
+  background: transparent;
+}
+
+/* 设定集专有名词/角色名智能高亮（1:1复刻作家助手淡雅青绿色底纹） */
+.ink-editor .ink-entity-highlight {
+  border-radius: 3px;
+  padding: 1px 3px;
+  margin: 0 1px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+/* 角色名高亮：温润淡青绿衬底 (对齐参考图中的「陈渊」、「萧景行」、「青岚山」) */
+.ink-editor .ink-entity-character {
+  background-color: rgba(184, 219, 196, 0.45);
+  color: inherit;
+  border-bottom: 1.5px solid rgba(16, 185, 129, 0.5);
+}
+
+.ink-editor .ink-entity-character:hover {
+  background-color: rgba(184, 219, 196, 0.7);
+}
+
+/* 设定专有名词高亮：雅致淡灰绿衬底 (对齐参考图中的「测灵大典」、「云州」) */
+.ink-editor .ink-entity-setting {
+  background-color: rgba(200, 230, 210, 0.4);
+  color: inherit;
+  border-bottom: 1.5px solid rgba(45, 160, 110, 0.5);
+}
+
+.ink-editor .ink-entity-setting:hover {
+  background-color: rgba(200, 230, 210, 0.65);
 }
 
 /* ── Ghost Text 内联续写建议 ──────────────────────────────── */
