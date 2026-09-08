@@ -1,5 +1,6 @@
-import type { AiTask, TaskResult, TaskStatusSnapshot, TaskSubmitResult } from '@inkpi/protocol'
+import type { AiTask, TaskCancelResult, TaskResult, TaskStatusSnapshot, TaskSubmitResult } from '@inkpi/protocol'
 import type { AiAssistant, RpcClient } from '../ports/aiGateway'
+import { CreativeIntelligence, type CreativeTaskGateway } from '../ai/orchestrator/creativeIntelligence'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 
@@ -9,6 +10,14 @@ import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstr
  */
 export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   let pluginInstructionsReady: Promise<void> | undefined
+  const taskGateway: CreativeTaskGateway = {
+    submitTask: (task) => client.request<TaskSubmitResult>('task.submit', { task }),
+    getTaskStatus: (taskId) => client.request<TaskStatusSnapshot>('task.status', { taskId }),
+    cancelTask: (taskId) => client.request<TaskCancelResult>('task.cancel', { taskId }),
+    steerTask: (taskId, input) => client.request<{ accepted: boolean }>('task.steer', { taskId, input }),
+    resumeTask: (taskId) => client.request<TaskSubmitResult>('task.resume', { taskId }),
+  }
+  const creativeIntelligence = new CreativeIntelligence(taskGateway)
 
   const ensurePluginInstructionsRegistered = (): Promise<void> => {
     if (!pluginInstructionsReady) {
@@ -32,20 +41,7 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   return {
     runTask: async (task: AiTask, options = {}): Promise<TaskResult | null> => {
       await ensurePluginInstructionsRegistered()
-      await client.request<TaskSubmitResult>('task.submit', { task })
-      const pollIntervalMs = options.pollIntervalMs ?? 100
-      while (true) {
-        if (options.signal?.aborted) {
-          await client.request('task.cancel', { taskId: task.id }).catch(() => undefined)
-          throw abortError()
-        }
-        const status = await client.request<TaskStatusSnapshot>('task.status', { taskId: task.id })
-        options.onProgress?.(status)
-        if (['waiting-user', 'completed', 'failed', 'cancelled'].includes(status.status)) {
-          return status.result || null
-        }
-        await delay(pollIntervalMs, options.signal)
-      }
+      return creativeIntelligence.run(task, options)
     },
 
     steerTask: async (taskId: string, input: unknown): Promise<boolean> => {
@@ -61,24 +57,4 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
 
     close: () => client.close(),
   }
-}
-
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(abortError())
-      return
-    }
-    const timer = setTimeout(resolve, Math.max(0, ms))
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer)
-      reject(abortError())
-    }, { once: true })
-  })
-}
-
-function abortError(): Error {
-  const error = new Error('Creative task was cancelled')
-  error.name = 'AbortError'
-  return error
 }

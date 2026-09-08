@@ -9,7 +9,7 @@ function task(id: string): AiTask {
   return {
     id,
     kind: 'plugin.demo.analysis',
-    input: { text: 'input' },
+    input: { text: `input:${id}` },
     outputContract: { format: 'text' },
   }
 }
@@ -105,6 +105,18 @@ describe('createDaemonAiAssistant instruction registration', () => {
     await expect(Promise.all([first, second])).resolves.toHaveLength(2)
     expect(harness.registerCalls).toBe(1)
     expect(harness.calls.filter((call) => call.method === 'task.submit')).toHaveLength(2)
+  })
+
+  it('routes completed tasks through capability selection and the deterministic cache', async () => {
+    const harness = makeClient()
+    const assistant = createDaemonAiAssistant(harness.client)
+
+    const first = await assistant.runTask(task('cached'), { pollIntervalMs: 0 })
+    const second = await assistant.runTask(task('cached'), { pollIntervalMs: 0 })
+
+    expect(first?.provenance).toMatchObject({ routeId: 'creative-gateway', cacheHit: false })
+    expect(second?.provenance).toMatchObject({ routeId: 'creative-gateway', cacheHit: true })
+    expect(harness.calls.filter((call) => call.method === 'task.submit')).toHaveLength(1)
   })
 
   it('surfaces a network failure during registration and retries the handshake', async () => {
