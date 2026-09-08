@@ -152,6 +152,7 @@ export function createDeepReasoningTask(input: DeepReasoningTaskInput): AiTask {
       capabilities: ['creative-reasoning'],
       modalities: ['text'],
       outputFormats: ['structured'],
+      needsReasoning: true,
     },
     extra: { question: input.question, depth: input.depth ?? 'thorough' },
   })
