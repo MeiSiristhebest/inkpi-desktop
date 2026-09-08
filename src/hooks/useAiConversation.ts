@@ -7,6 +7,7 @@ import { DEFAULT_DAEMON_URL } from '../config'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { semanticDocumentFromText } from '../domain/content'
 import { createAssistantTask, createContinueTask, taskResultText } from '../ai'
+import { idGenerator } from '../adapters/idGenerator'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -95,7 +96,7 @@ export function useAiConversation(
       try {
         const document = semanticDocumentFromText(chapterId, text)
         const task = createContinueTask({
-          taskId: `ghost-${chapterId}-${Date.now().toString(36)}`,
+          taskId: idGenerator.generate(`ghost-${chapterId}`),
           document,
           selection: { from: document.text.length, to: document.text.length },
           metadata: { modelId: aiModel?.id },
@@ -133,7 +134,7 @@ export function useAiConversation(
         if (!clientRef.current.runTask) throw new Error('Task runtime is unavailable')
         const document = semanticDocumentFromText(chapterId || 'assistant', '')
         const task = createAssistantTask({
-          taskId: `assistant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          taskId: idGenerator.generate('assistant'),
           document,
           question: trimmed,
           metadata: { modelId: aiModel?.id },

@@ -5,6 +5,7 @@ import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createRewriteTask } from '../../ai'
 import { semanticDocumentFromProseMirror, semanticDocumentFromText } from '../../domain/content'
 import { hashText, ProposalConflictError, ProposalLedger, proposalFromPatch, type AiProposal } from '../../ai/proposals'
+import { idGenerator } from '../../adapters/idGenerator'
 
 interface SelectionToolbarProps {
   /** TipTap 编辑器实例（任意结构，仅在具备 on/off/view 时生效） */
@@ -132,7 +133,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     try {
       const result = await onAiTask(
         createRewriteTask({
-          taskId: `rewrite-${activeChapterId || 'selection'}-${Date.now().toString(36)}`,
+          taskId: idGenerator.generate(`rewrite-${activeChapterId || 'selection'}`),
           document: semanticDocument,
           selection,
           goal: '保持事实和原意，改进选中文本',
