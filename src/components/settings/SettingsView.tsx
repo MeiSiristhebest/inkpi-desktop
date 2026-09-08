@@ -34,6 +34,7 @@ import { PluginSettingsView } from '../plugins/PluginSettingsView'
 import { WritingHabitsTab } from './WritingHabitsTab'
 import { ShortcutsTab } from './ShortcutsTab'
 import { clock } from '../../adapters/clock'
+import { fetchModelIds, probeModelEndpoint } from '../../adapters/modelProviderProbe'
 import {
   useSettings,
   PROVIDER_META,
@@ -1002,37 +1003,29 @@ const AiTab: FC<{
       setSpeedResult(null)
     }
 
-    const start = clock.now()
     try {
-      const cleanUrl = targetUrl.replace(/\/+$/, '')
-      const testEp = cleanUrl.endsWith('/v1') ? `${cleanUrl}/models` : `${cleanUrl}/v1/models`
-      const res = await fetch(testEp, {
-        method: 'GET',
-        headers: targetKey ? { Authorization: `Bearer ${targetKey}` } : {},
-        signal: AbortSignal.timeout(6000),
-      })
-      const latency = clock.now() - start
-      if (res.ok) {
+      const probe = await probeModelEndpoint(targetUrl, targetKey, { now: () => clock.now() })
+      if (probe.status >= 200 && probe.status < 300) {
         const payload = {
           status: 'ok' as const,
-          latency,
-          msg: `${latency}ms 正常 (HTTP ${res.status})`,
+          latency: probe.latency,
+          msg: `${probe.latency}ms 正常 (HTTP ${probe.status})`,
         }
         if (resultTargetId) setCardSpeedResults((prev) => ({ ...prev, [resultTargetId]: payload }))
         else setSpeedResult(payload)
-      } else if (res.status === 401 || res.status === 403) {
+      } else if (probe.status === 401 || probe.status === 403) {
         const payload = {
           status: 'err' as const,
-          latency,
-          msg: `${latency}ms 端点可达，密钥未通过 (HTTP ${res.status})`,
+          latency: probe.latency,
+          msg: `${probe.latency}ms 端点可达，密钥未通过 (HTTP ${probe.status})`,
         }
         if (resultTargetId) setCardSpeedResults((prev) => ({ ...prev, [resultTargetId]: payload }))
         else setSpeedResult(payload)
       } else {
         const payload = {
           status: 'ok' as const,
-          latency,
-          msg: `${latency}ms 端点可达 (HTTP ${res.status})`,
+          latency: probe.latency,
+          msg: `${probe.latency}ms 端点可达 (HTTP ${probe.status})`,
         }
         if (resultTargetId) setCardSpeedResults((prev) => ({ ...prev, [resultTargetId]: payload }))
         else setSpeedResult(payload)
@@ -1055,32 +1048,7 @@ const AiTab: FC<{
     }
     setFetchingModels(true)
     try {
-      const cleanUrl = targetUrl.replace(/\/+$/, '')
-      const candidates = [`${cleanUrl}/models`, `${cleanUrl}/v1/models`, cleanUrl]
-      let found: { id: string }[] = []
-      for (const ep of candidates) {
-        try {
-          const res = await fetch(ep, {
-            method: 'GET',
-            headers: draft?.apiKey ? { Authorization: `Bearer ${draft.apiKey}` } : {},
-            signal: AbortSignal.timeout(6000),
-          })
-          if (!res.ok) continue
-          const data = await res.json()
-          if (Array.isArray(data?.data)) {
-            found = data.data.map((m: any) => ({ id: m.id || m.name })).filter((m: any) => !!m.id)
-            if (found.length > 0) break
-          }
-          if (Array.isArray(data?.models)) {
-            found = data.models
-              .map((m: any) => ({ id: m.name || m.model || m.id }))
-              .filter((m: any) => !!m.id)
-            if (found.length > 0) break
-          }
-        } catch {
-          /* try next candidate */
-        }
-      }
+      const found = (await fetchModelIds(targetUrl, draft?.apiKey)).map((id) => ({ id }))
       if (found.length > 0) {
         setFetchedModels(found)
         setShowModelDropdown(true)

@@ -171,6 +171,14 @@ describe('AI Runtime Phase 0 Desktop architecture guards', () => {
     assertRatchet('Plugin UI direct model call', violations, EXISTING_PLUGIN_MODEL_CALL_COMPONENTS)
   })
 
+  it('keeps provider HTTP probes behind adapters', () => {
+    const violations = componentFiles()
+      .filter((file) => /\bfetch\s*\(/.test(stripComments(readFileSync(file, 'utf8'))))
+      .map((file) => relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/'))
+      .sort()
+    expect(violations, `Direct HTTP from UI components:\n${violations.join('\n')}`).toEqual([])
+  })
+
   it('does not reintroduce removed legacy AI entry points', () => {
     const legacyPatterns = [
       /onAiPrompt/,
