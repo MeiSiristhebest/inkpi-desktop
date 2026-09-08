@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { NarrativeLinterEngine } from '../engine/NarrativeLinterEngine'
@@ -31,7 +31,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
             ? all.find((c) => c.id === hostContext.activeChapter?.id) || all[0]
             : all[0]
           setSelectedChapterId(defaultChap.id)
-          const chapText = htmlToPlain(defaultChap.content || '')
+      const chapText = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
           setText(chapText)
           if (chapText) {
             const res = engine.lint(chapText, rules)
@@ -49,7 +49,9 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
   const handleSelectChapter = (chapId: string) => {
     setSelectedChapterId(chapId)
     if (chapId === 'all') {
-      const allText = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      const allText = chapters
+        .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
+        .join('\n\n')
       setText(allText.slice(0, 20000))
       const res = engine.lint(allText.slice(0, 20000), rules)
       setIssues(res.issues)
@@ -78,23 +80,17 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
     setCleanScore(res.cleanScore)
   }
 
-  // 接入真实 AI 叙事深度体检
+  // 接入 AI 叙事深度体检
   const handleAiDeepLint = () => {
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
-    const prompt = `请作为资深文学编辑与网络小说审读总监，对以下正文文本进行深度的“叙事质量与人设瑕疵排查”：
-【章节】：${chap ? `第 ${chap.order} 章《${chap.title}》` : '全书采样'}
-【正文截选】：
-${text.slice(0, 2500)}
+    const analysisInput = {
+      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
+      text: text.slice(0, 2500),
+    }
 
-请给出专业批注：
-1. 语言表达层面：是否存在窒息冗长单句、过度副词修饰、翻译腔或现代出戏网络热梗；
-2. 叙事节奏层面：是否存在“作者跳出来大段背景科普（Info-dumping）”而冲淡当前矛盾冲突；
-3. 代词与视点层面：是否有主语代词频繁混淆（他/她/其）或越权上帝全知视角硬伤；
-4. 给出最值得立刻重构润色的 2 处原句与改写对照。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('narrative-linter', analysisInput)
     }
   }
 

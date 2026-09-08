@@ -188,12 +188,12 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.queryByText('世界观')).not.toBeInTheDocument()
   })
 
-  it('sends the selected paragraph to AI on polish (划词润色)', async () => {
-    const onAiPrompt = vi.fn()
+  it('sends the selected paragraph to the rewrite task runtime (划词润色)', async () => {
+    const onAiTask = vi.fn().mockResolvedValue(null)
     const onOpenAssistant = vi.fn()
     h.selectedText = '某段落文字'
     render(
-      <RichEditor projectId="p-polish" onAiPrompt={onAiPrompt} onOpenAssistant={onOpenAssistant} />,
+      <RichEditor projectId="p-polish" onAiTask={onAiTask} onOpenAssistant={onOpenAssistant} />,
     )
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     // SelectionToolbar 仅在「有选区」时渲染，这里模拟用户在编辑器内划选
@@ -204,7 +204,12 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     fireEvent.click(screen.getByText('AI 润色'))
     const chs = await db.getAll('chapters')
     const firstId = chs.find((c) => c.title === '第001章 寒潭惊变')?.id
-    expect(onAiPrompt).toHaveBeenCalledWith(expect.stringContaining('某段落文字'), firstId)
+    expect(onAiTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'creative.rewrite',
+        input: expect.objectContaining({ documentId: firstId }),
+      }),
+    )
     expect(onOpenAssistant).toHaveBeenCalled()
   })
 

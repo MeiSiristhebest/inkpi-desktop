@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ReaderSimulatorEngine } from '../engine/ReaderSimulatorEngine'
@@ -51,29 +51,31 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
       chapterOrder: currentChapter.order,
-      content: htmlToPlain(currentChapter.content || '') || '',
+      content: semanticTextFromContent(
+        currentChapter.id,
+        currentChapter.content || '',
+        currentChapter.revision,
+      ) || '',
     })
   }, [currentChapter])
 
   // 真实 AI 读者多视点本章追读段评推演
   const handleAiReaderSimulate = () => {
-    if (!currentChapter || !htmlToPlain(currentChapter.content || '')) return
-    const prompt = `请分别代入以下【四类典型长篇网络小说核心读者人格】，对第 ${currentChapter.order} 章《${currentChapter.title}》进行真实、犀利的章末与本章说段评实况模拟：
-【读者人格 1】：【十年老书虫·弃书狂魔】（极度反感下跪受辱、圣母放虎归山、降智打脸，毒抗极低）
-【读者人格 2】：【考据逻辑党·列文虎克】（死抠战力数值平衡、时间线漏洞、境界倒退与战力崩坏）
-【读者人格 3】：【情感与羁绊党】（极其关注男女主互动甜度、重要配角是否会被无脑祭天）
-【读者人格 4】：【爽点与追更狂魔】（追求极致节奏、期待感与断章卡点，只在乎剧情推力）
+    if (!currentChapter) return
+    const chapterText = semanticTextFromContent(
+      currentChapter.id,
+      currentChapter.content || '',
+      currentChapter.revision,
+    )
+    if (!chapterText) return
+    const analysisInput = {
+      chapter: { id: currentChapter.id, order: currentChapter.order, title: currentChapter.title },
+      text: chapterText.slice(0, 3000),
+      readerProfiles: ['dropout-prone veteran', 'logic-focused reader', 'relationship-focused reader', 'pacing-focused reader'],
+    }
 
-【待审阅正文片段】：
-${htmlToPlain(currentChapter.content || '').slice(0, 3000)}
-
-请给出：
-1. 四位读者各自最具真实互联网本章说语感的典型发言；
-2. 本章最可能触发大面积怒喷或掉均订的潜在【暴毙毒点】；
-3. 编辑部建议：在发布前建议打磨掉的 2 处生硬过渡。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('reader-simulator', analysisInput)
     }
   }
 

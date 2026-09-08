@@ -7,6 +7,7 @@ import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { ChapterRecord, VolumeRecord } from '../../../types'
 import type { EditorBackgroundConfig } from '../modals/BackgroundModal'
 import { PRESET_SKINS } from '../modals/BackgroundModal'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
 
 interface EditorCanvasProps {
   model: EditorModel
@@ -15,7 +16,8 @@ interface EditorCanvasProps {
   effectiveZen?: boolean
   effectiveTypewriter?: boolean
   projectId: string
-  onAiPrompt?: (text: string, chapterId?: string) => void
+  onAiTask?: (task: AiTask) => Promise<TaskResult | null>
+  activeChapterRevision?: number
   onOpenAssistant?: () => void
   bgConfig?: EditorBackgroundConfig
 }
@@ -27,7 +29,8 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
   effectiveZen,
   effectiveTypewriter = false,
   projectId,
-  onAiPrompt,
+  onAiTask,
+  activeChapterRevision,
   onOpenAssistant,
   bgConfig,
 }) => {
@@ -156,7 +159,8 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
               <SelectionToolbar
                 editor={editor}
                 containerRef={canvasRef}
-                onAiPrompt={onAiPrompt}
+                onAiTask={onAiTask}
+                activeChapterRevision={activeChapterRevision}
                 onOpenAssistant={onOpenAssistant}
                 activeChapterId={activeChapter?.id}
               />

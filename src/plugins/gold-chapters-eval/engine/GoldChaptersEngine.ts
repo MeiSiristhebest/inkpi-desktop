@@ -12,33 +12,23 @@ import type { GoldChaptersEvaluation } from '../types'
  */
 export class GoldChaptersEngine {
   /**
-   * 生成针对商业网文过稿与黄金三章审核的大模型深度诊断 Prompt
+   * 生成统一任务运行时使用的结构化诊断输入。
    */
-  public static buildAiAuditPrompt(chaptersText: string): string {
-    return [
-      `【指令：资深网文主编 · 黄金三章商业签约与开篇诊断】`,
-      `你是一位具有丰富爆款孵化经验的顶级网文主编，请对以下开篇前 3000 字进行深度商业过稿诊断：`,
-      `开篇文本：`,
-      chaptersText.slice(0, 3000),
-      ``,
-      `请按 4 大核心商业网文过稿铁律进行评估：`,
-      `1. 主角主观核心动机与危机迫切度 (0-100)`,
-      `2. 差异化核心金手指/金刚钻筹码辨识度与兑现时机 (0-100)`,
-      `3. 主要冲突设立、反派智商与压迫感 (0-100)`,
-      `4. 读者追读期待感与留存钩子 (0-100)`,
-      ``,
-      `输出严格 JSON 结构：`,
-      `{`,
-      `  "score": number,`,
-      `  "isQualified": boolean,`,
-      `  "motiveScore": number,`,
-      `  "goldFingerScore": number,`,
-      `  "conflictScore": number,`,
-      `  "expectationScore": number,`,
-      `  "keyDiagnosis": string[],`,
-      `  "suggestions": string[]`,
-      `}`,
-    ].join('\n')
+  public static buildAnalysisInput(chaptersText: string): Record<string, unknown> {
+    return {
+      text: chaptersText.slice(0, 3000),
+      rubric: ['motiveScore', 'goldFingerScore', 'conflictScore', 'expectationScore'],
+      outputFields: [
+        'score',
+        'isQualified',
+        'motiveScore',
+        'goldFingerScore',
+        'conflictScore',
+        'expectationScore',
+        'keyDiagnosis',
+        'suggestions',
+      ],
+    }
   }
 
   public static evaluate(chaptersText: string): GoldChaptersEvaluation {

@@ -8,6 +8,33 @@ import { ThemeController } from './core/ThemeController'
 import { useAiConversation } from './hooks/useAiConversation'
 import { useProjectLibrary } from './hooks/useProjectLibrary'
 import { PluginProvider } from './core/pluginRegistry'
+import { ProjectDataProvider, useProjectData } from './core/projectDataContext'
+import { DesktopPluginHostProvider } from './core/pluginHostContext'
+import type { ReactNode } from 'react'
+
+const ProjectWorkspace: FC<{
+  projectId: string
+  projectName?: string
+  isConnected: boolean
+  onAiTask: (task: import('@inkpi/protocol').AiTask) => Promise<import('@inkpi/protocol').TaskResult | null>
+  children: ReactNode
+}> = ({ projectId, projectName, isConnected, onAiTask, children }) => {
+  const { chapters, volumes, reloadChapters } = useProjectData()
+  return (
+    <DesktopPluginHostProvider
+      projectId={projectId}
+      projectName={projectName}
+      activeChapter={chapters[0] || null}
+      chapters={chapters}
+      volumes={volumes}
+      onRefreshHierarchy={reloadChapters}
+      onAiTask={onAiTask}
+      isAiConnected={isConnected}
+    >
+      {children}
+    </DesktopPluginHostProvider>
+  )
+}
 
 /**
  * 应用根组件（组合根）：只负责 Provider 装配（SettingsProvider / ThemeController），
@@ -56,6 +83,7 @@ const AppShell: FC = () => {
     reconnect,
     requestGhost,
     sendAiPrompt,
+    runAiTask,
   } = ai
 
   const content = !activeProjectId ? (
@@ -73,30 +101,39 @@ const AppShell: FC = () => {
     </ErrorBoundary>
   ) : (
     <ErrorBoundary label="应用主框架">
-      <Engine
-        projectId={activeProjectId}
-        projectName={projects.find((p) => p.id === activeProjectId)?.name}
-        isConnected={isConnected}
-        isReconnecting={isReconnecting}
-        onReconnect={reconnect}
-        onRequestGhost={requestGhost}
-        onAiPrompt={sendAiPrompt}
-        onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
-        onHome={() => setActiveProjectId(null)}
-        rightPanel={
-          aiPanelOpen ? (
-            <AiAssistantPanel
-              messages={aiMessages}
-              input={aiInput}
-              busy={aiBusy}
-              connected={isConnected}
-              onInputChange={setAiInput}
-              onSend={() => sendAiPrompt(aiInput)}
-              onClose={() => setAiPanelOpen(false)}
-            />
-          ) : null
-        }
-      />
+      <ProjectDataProvider projectId={activeProjectId}>
+        <ProjectWorkspace
+          projectId={activeProjectId}
+          projectName={projects.find((p) => p.id === activeProjectId)?.name}
+          isConnected={isConnected}
+          onAiTask={runAiTask}
+        >
+          <Engine
+            projectId={activeProjectId}
+            projectName={projects.find((p) => p.id === activeProjectId)?.name}
+            isConnected={isConnected}
+            isReconnecting={isReconnecting}
+            onReconnect={reconnect}
+            onRequestGhost={requestGhost}
+            onAiTask={runAiTask}
+            onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
+            onHome={() => setActiveProjectId(null)}
+            rightPanel={
+              aiPanelOpen ? (
+                <AiAssistantPanel
+                  messages={aiMessages}
+                  input={aiInput}
+                  busy={aiBusy}
+                  connected={isConnected}
+                  onInputChange={setAiInput}
+                  onSend={() => sendAiPrompt(aiInput)}
+                  onClose={() => setAiPanelOpen(false)}
+                />
+              ) : null
+            }
+          />
+        </ProjectWorkspace>
+      </ProjectDataProvider>
     </ErrorBoundary>
   )
 

@@ -16,34 +16,20 @@ import type {
  */
 export class StoryboardEngine {
   /**
-   * 生成分镜导演与画师推演的 Prompt（用于通过 AiAssistant 生成高规格电影分镜）
+   * 生成统一任务运行时使用的结构化分镜分析输入。
    */
-  public static buildAiStoryboardPrompt(params: {
+  public static buildAnalysisInput(params: {
     chapterTitle: string
     chapterText: string
     artStyle?: string
-  }): string {
-    const { chapterTitle, chapterText, artStyle = '电影质感高概念概念设计 / 8K虚幻5渲染' } = params
-    return [
-      `【指令：文学高潮四格电影视听分镜重构】`,
-      `你是一位资深电影分镜师与插画导演，请针对下述小说高潮段落，提取出具有极强视觉张力的四幕分镜脚本与人物立绘特征：`,
-      `艺术风格：${artStyle}`,
-      `章节：《${chapterTitle}》`,
-      `正文片段：`,
-      chapterText.slice(0, 1800),
-      ``,
-      `请按四格语法输出标准 JSON：`,
-      `{`,
-      `  "conflictDescription": "核心交锋概览",`,
-      `  "suggestedCharacters": [{ "characterName": string, "visualFeatures": string, "stableDiffusionPrompt": string }],`,
-      `  "frames": [`,
-      `    { "shotOrder": 1, "shotType": "establishing_wide", "shotLabel": "【起】远景全景", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string },`,
-      `    { "shotOrder": 2, "shotType": "medium_confrontation", "shotLabel": "【承】中景对峙", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string },`,
-      `    { "shotOrder": 3, "shotType": "dutch_closeup", "shotLabel": "【转】特写倾斜", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string },`,
-      `    { "shotOrder": 4, "shotType": "impact_wide", "shotLabel": "【合】广角高潮", "description": string, "compositionGuide": string, "lightingMood": string, "visualPrompt": string }`,
-      `  ]`,
-      `}`,
-    ].join('\n')
+  }): Record<string, unknown> {
+    return {
+      chapterTitle: params.chapterTitle,
+      chapterText: params.chapterText.slice(0, 1800),
+      artStyle: params.artStyle || '电影质感高概念概念设计 / 8K虚幻5渲染',
+      shotGrammar: ['establishing_wide', 'medium_confrontation', 'dutch_closeup', 'impact_wide'],
+      outputFields: ['conflictDescription', 'suggestedCharacters', 'frames'],
+    }
   }
 
   public static extractStoryboard(

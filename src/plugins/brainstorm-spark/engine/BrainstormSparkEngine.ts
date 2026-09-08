@@ -56,27 +56,25 @@ export class BrainstormSparkEngine {
   ]
 
   /**
-   * 生成大语言模型推演 Prompt（用于通过 AiAssistant 端口实现工业级深度破局）
+   * 生成结构化分析输入；任务指令由统一 Creative Intelligence runtime 注入。
    */
-  static buildAiPrompt(params: {
+  static buildAnalysisInput(params: {
     dilemmaType: DilemmaType
     coreProblem: string
     currentSituation: string
     protagonistGoal: string
     enemyAdvantage: string
-  }): string {
-    const operatorSummaries = this.OPERATORS.map((op) => `- 【${op.name}】: ${op.principle}`).join('\n')
-    return `你是一位顶级网文白金架构师。请针对小说作者当前的卡文困境进行深度推演。
-【当前困境类型】: ${params.dilemmaType}
-【核心死局问题】: ${params.coreProblem}
-【当前危机局势】: ${params.currentSituation}
-【主角战术目标】: ${params.protagonistGoal}
-【敌方压倒优势】: ${params.enemyAdvantage}
-
-请严格基于以下8大逆向破局算子库，结合博弈论纳什均衡打破原理，推导出逻辑自洽且充满反转张力的具体情节：
-${operatorSummaries}
-
-输出要求：每个方案需包含具体行动步骤、所需付出的不可逆代偿代价、以及该操作带来的次生危机。`
+  }): Record<string, unknown> {
+    return {
+      ...params,
+      operators: this.OPERATORS.map(({ id, name, principle, twistImpact }) => ({
+        id,
+        name,
+        principle,
+        twistImpact,
+      })),
+      outputFields: ['operatorId', 'concretePlot', 'twistImpact', 'pros', 'cons'],
+    }
   }
 
   /**

@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbGoldChaptersRepository } from '../../../adapters/indexedDbGoldChaptersRepository'
@@ -27,7 +27,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
         // 自动提取前三章（黄金开篇前 4000 字）
         const firstThree = allChapters
           .slice(0, 3)
-          .map((c) => `【第 ${c.order} 章 · ${c.title}】\n${htmlToPlain(c.content || '')}`)
+          .map((c) => `【第 ${c.order} 章 · ${c.title}】\n${semanticTextFromContent(c.id, c.content || '', c.revision)}`)
           .join('\n\n')
         setChaptersText(firstThree)
       }
@@ -50,21 +50,13 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
   const currentEval = GoldChaptersEngine.evaluate(chaptersText)
 
-  // 真实 AI 主编级黄金三章签约评测
+  // AI 主编级黄金三章签约评测
   const handleAiGoldAudit = () => {
     if (!chaptersText.trim()) return
-    const prompt = `请作为网文头部平台资深签约主编，对该作品的【前三章开篇（黄金三章）】进行严格的签约与留存深度审核：
-【开篇正文文本】：
-${chaptersText.slice(0, 4000)}
+    const analysisInput = { openingText: chaptersText.slice(0, 4000) }
 
-请给出专业批注：
-1. 主角核心动机（是否有极其强烈、不可替代的目标与生存驱动力）；
-2. 金手指/核心卖点（金手指出现是否太晚？规则是否清晰且具备高期待感？）；
-3. 冲突与张力（首章是否陷入了大段枯燥的背景设定说明，还是用事件直接抓住读者？）；
-4. 明确签约结论（若拒签，给出前三章必须修改的 3 个手术刀级调整建议）。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('gold-chapters-eval', analysisInput)
     }
   }
 

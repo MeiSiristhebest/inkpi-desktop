@@ -20,6 +20,25 @@ export interface DesktopPluginDrawerProps {
   onOpenDetail?: (entityId: string) => void
 }
 
+export interface PluginContextRequest {
+  projectId: string
+  currentText: string
+  activeChapterId?: string
+}
+
+export interface PluginContextFragment {
+  id: string
+  source: string
+  kind: string
+  data: unknown
+  priority?: number
+  metadata?: Record<string, unknown>
+}
+
+export type PluginContextProvider = (
+  request: PluginContextRequest,
+) => Promise<PluginContextFragment | null>
+
 export interface DesktopPlugin {
   id: string
   name: string
@@ -37,10 +56,8 @@ export interface DesktopPlugin {
   // 2. 写作台 HUD 随动抽屉组件 (可选，在 RichEditor 右侧栏嵌入随动感知)
   drawerSnippetView?: ComponentType<DesktopPluginDrawerProps>
   
-  // 3. AI 提示词扩展或工具能力
-  aiCapabilities?: {
-    systemPromptEnhancer?: (projectId: string, currentText: string) => Promise<string>
-  }
+  // 3. 结构化上下文贡献者；指令和模型选择由统一任务运行时负责。
+  contextProvider?: PluginContextProvider
 }
 
 export interface PluginRegistryState {

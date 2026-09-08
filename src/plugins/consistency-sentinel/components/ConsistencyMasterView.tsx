@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { PowerTierSystem, ConsistencyViolation, PresetTierSystem } from '../types'
@@ -57,7 +57,11 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       allChapters.sort((a, b) => a.order - b.order)
       setChapters(allChapters)
       if (allChapters.length > 0 && !auditText) {
-        const firstChapText = allChapters[0].content || ''
+        const firstChapText = semanticTextFromContent(
+          allChapters[0].id,
+          allChapters[0].content || '',
+          allChapters[0].revision,
+        )
         setAuditText(firstChapText)
       }
     } catch (e) {
@@ -72,32 +76,28 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   const handleSelectChapter = (chapId: string) => {
     setSelectedChapterId(chapId)
     if (chapId === 'all') {
-      const allText = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      const allText = chapters
+        .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
+        .join('\n\n')
       setAuditText(allText.slice(0, 15000))
     } else {
       const chap = chapters.find((c) => c.id === chapId)
-      setAuditText(chap?.content || '')
+      setAuditText(chap ? semanticTextFromContent(chap.id, chap.content || '', chap.revision) : '')
     }
   }
 
-  // 真实 AI 深度设定自洽与战力崩坏排查
+  // AI 深度设定自洽与战力崩坏排查
   const handleAiConsistencyAudit = () => {
     if (!auditText.trim()) return
-    const tierList = system.tiers.join(' → ')
     const chap = chapters.find((c) => c.id === selectedChapterId)
-    const prompt = `请作为网文设定与战力平衡资深审读专家，对以下章节进行【战力阶梯崩坏与设定吃书】深度审查：
-【当前作品战力境界】：${tierList}
-【当前核查章节】：${chap ? `第 ${chap.order} 章《${chap.title}》` : '多章聚合正文'}
-【待审阅正文】：
-${auditText.slice(0, 2500)}
+    const analysisInput = {
+      powerTiers: [...system.tiers],
+      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
+      text: auditText.slice(0, 2500),
+    }
 
-请严格排查并反馈：
-1. 战力是否出现无解越级倒错（如主角或反派没有借助任何特定神兵/秘法/禁忌代价，跨大境界秒杀强敌）；
-2. 是否存在死者复生、角色性格瞬间突变或吃书矛盾；
-3. 给出 2 条战力失衡修复示范（如何合情合理地为越级战斗铺垫代价与借力伏笔）。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('consistency-sentinel', analysisInput)
     }
   }
 

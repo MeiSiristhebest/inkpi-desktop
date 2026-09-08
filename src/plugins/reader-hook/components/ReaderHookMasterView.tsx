@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { HookAnalysisResult, ReaderHookRecord, HookTemplate } from '../types'
@@ -41,7 +41,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           setSelectedChapterId(defaultChap.id)
           setNewChapterNum(defaultChap.order || 1)
           // 抽取章末末尾 350 字
-          const tailText = htmlToPlain(defaultChap.content || '')
+          const tailText = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
             .slice(-350)
             .trim()
           setTestText(tailText || defaultChap.title || '')
@@ -60,7 +60,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     const chap = chapters.find((c) => c.id === chapId)
     if (chap) {
       setNewChapterNum(chap.order || 1)
-      const tailText = htmlToPlain(chap.content || '')
+      const tailText = semanticTextFromContent(chap.id, chap.content || '', chap.revision)
         .slice(-350)
         .trim()
       setTestText(tailText || '')
@@ -90,18 +90,13 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   const handleAiDeepAudit = () => {
     if (!testText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
-    const prompt = `请作为专业网络小说责任编辑，对以下章节末尾 300 字的“断章张力（Cliffhanger）与留存吸引力”进行深度诊断：
-【章节信息】：第 ${newChapterNum} 章《${chap?.title || '未命名'}》
-【章末尾部文本】：
-${testText}
+    const analysisInput = {
+      chapter: { id: chap?.id, order: newChapterNum, title: chap?.title || '未命名' },
+      endingText: testText,
+    }
 
-请评估：
-1. 悬念留白度与读者情绪曲线（是否让读者产生迫不及待翻到下一章或投推荐票的心理）；
-2. 是否存在“平淡关门”、“强行断章”或“说明性文字收尾”等断章大忌；
-3. 给出 2~3 种具有张力的改写句式或结尾卡点建议。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('reader-hook', analysisInput)
     }
   }
 

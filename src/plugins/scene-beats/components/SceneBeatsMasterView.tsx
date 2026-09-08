@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { ChapterBeatPlan, SceneBeatItem } from '../types'
@@ -60,18 +60,16 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   // AI 智能拆解并生成单章 4 幕电影级节拍表
   const handleAiGenerateBeats = () => {
     const curChap = chapters.find((c) => c.id === currentPlan?.chapterId)
-    const prompt = `请作为好莱坞戏剧与网文高潮节拍指导，为第 ${curChap?.order ?? 1} 章《${curChap?.title ?? '当前章节'}》设计【标准单章四段式场景节拍表】：
-【目标字数】：${currentPlan?.targetWordCount ?? 3000} 字
-【章节简述】：${htmlToPlain(curChap?.content || '')?.slice(0, 300) || '暂无正文'}
+    const analysisInput = {
+      chapter: curChap ? { id: curChap.id, order: curChap.order, title: curChap.title } : undefined,
+      targetWordCount: currentPlan?.targetWordCount ?? 3000,
+      synopsis: curChap
+        ? semanticTextFromContent(curChap.id, curChap.content || '', curChap.revision).slice(0, 300)
+        : '',
+    }
 
-请设计 4 个环环相扣的场景节拍：
-1. 启幕（20%字数）：建立场景环境、当前行动目标与压制阻碍；
-2. 突变（25%字数）：意外突发或敌手强势介入，打乱原有计划；
-3. 危机对抗（35%字数）：矛盾爆发到顶点，主角面临抉择或被迫以伤换伤；
-4. 结局余波与断章钩子（20%字数）：尘埃落定或留下悬念，情绪极性发生剧烈逆转。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('scene-beats', analysisInput)
     }
   }
 

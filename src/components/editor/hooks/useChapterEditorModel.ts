@@ -839,8 +839,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       ...cur,
       content: html,
       wordCount: wc,
+      revision: html === cur.content ? (cur.revision ?? 0) : (cur.revision ?? 0) + 1,
       updatedAt: clock.now(),
     }
+    activeChapterRef.current = updated
     patch({
       activeChapter: updated,
       chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),

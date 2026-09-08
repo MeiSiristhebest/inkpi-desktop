@@ -40,6 +40,7 @@ import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
 import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
 
 export interface RichEditorProps {
   projectId: string
@@ -55,8 +56,7 @@ export interface RichEditorProps {
   onReconnect?: () => void
   /** 请求 Daemon 行内续写建议（按章节隔离会话） */
   onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
-  /** 发送指令给 AI 副驾驶（划词润色等） */
-  onAiPrompt?: (text: string, chapterId?: string) => void
+  onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 顶栏单层合一注入 */
   onHome?: () => void
   onToggleFocus?: () => void
@@ -85,7 +85,7 @@ export const RichEditor: FC<RichEditorProps> = ({
   isReconnecting = false,
   onReconnect = () => {},
   onRequestGhost = async () => null,
-  onAiPrompt = () => {},
+  onAiTask,
   onHome,
   onToggleFocus,
   isFullscreen = false,
@@ -438,7 +438,7 @@ export const RichEditor: FC<RichEditorProps> = ({
       activeChapter={activeChapter}
       volumes={model.volumes}
       chapters={model.chapters}
-      onAiPrompt={onAiPrompt}
+      onAiTask={onAiTask}
       isAiConnected={isConnected}
       onRefreshHierarchy={async () => {
         await model.actions.refreshData()
@@ -513,7 +513,8 @@ export const RichEditor: FC<RichEditorProps> = ({
               effectiveZen={effectiveZen}
               effectiveTypewriter={effectiveTypewriter}
               projectId={projectId}
-              onAiPrompt={onAiPrompt}
+              onAiTask={onAiTask}
+              activeChapterRevision={activeChapter?.revision}
               onOpenAssistant={onOpenAssistant}
               bgConfig={bgConfig}
             />

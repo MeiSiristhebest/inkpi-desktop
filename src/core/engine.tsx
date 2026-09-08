@@ -6,6 +6,7 @@ import { DashboardView } from '../components/dashboard/DashboardView'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { PluginSuspenseFallback } from './components/PluginSuspenseFallback'
 import { IconButton, Row } from '../ui/atoms'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
 
 // 42 模块组件引入
 import { TAB_DEFINITIONS as tabDefinitions, type TabDefinition } from '../config/tabDefinitions'
@@ -36,8 +37,7 @@ interface EngineProps {
   onReconnect?: () => void
   /** 行内 Ghost Text 续写请求 */
   onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
-  /** 发送指令给 AI 副驾驶（划词润色等） */
-  onAiPrompt?: (text: string, chapterId?: string) => void
+  onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 返回书架/工作台入口（提供时顶栏显示返回按钮） */
   onHome?: () => void
 }
@@ -56,7 +56,7 @@ interface ViewDeps {
   onOpenView: (v: string) => void
   onStats: (s: Stats) => void
   onOpenAssistant?: () => void
-  onAiPrompt?: (text: string, chapterId?: string) => void
+  onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   onStartFocus: () => void
   editorProps: RichEditorProps
 }
@@ -64,13 +64,12 @@ interface ViewDeps {
 type ViewFactory = (deps: ViewDeps) => ReactNode
 
 const VIEW_REGISTRY: Record<string, ViewFactory> = {
-  dashboard: ({ projectId, onOpenView, onStats, onOpenAssistant, onAiPrompt, onStartFocus }) => (
+  dashboard: ({ projectId, onOpenView, onStats, onOpenAssistant, onStartFocus }) => (
     <DashboardView
       projectId={projectId}
       onOpenView={onOpenView}
       onStats={onStats}
       onOpenAssistant={onOpenAssistant}
-      onAiPrompt={onAiPrompt}
       onStartFocus={onStartFocus}
     />
   ),
@@ -103,7 +102,7 @@ export const Engine: FC<EngineProps> = ({
   isReconnecting,
   onReconnect,
   onRequestGhost,
-  onAiPrompt,
+  onAiTask,
   onHome,
 }) => {
   // 当前激活的页签（默认直达正文写作 editor）
@@ -167,7 +166,7 @@ export const Engine: FC<EngineProps> = ({
     isReconnecting,
     onReconnect,
     onRequestGhost,
-    onAiPrompt,
+    onAiTask,
     onHome,
     onToggleFocus: () => setFocusMode((f) => !f),
     isFullscreen,
@@ -191,7 +190,7 @@ export const Engine: FC<EngineProps> = ({
       onOpenView: (v) => setActiveTabId(v),
       onStats: setStats,
       onOpenAssistant,
-      onAiPrompt,
+      onAiTask,
       onStartFocus: () => {
         setActiveTabId('editor')
         setFocusMode(true)

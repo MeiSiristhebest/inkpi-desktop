@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { MultiCalendarEngine } from '../engine/MultiCalendarEngine'
@@ -90,21 +90,14 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const chaptersText = chapters
       .slice(0, 15)
       .map(
-        (c) => `第 ${c.order} 章《${c.title}》：\n${htmlToPlain(c.content || '').slice(0, 250)}...`,
+        (c) => `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 250)}...`,
       )
       .join('\n\n')
 
-    const prompt = `请分析以下小说的连续章节正文，进行【全书时空线与多重历法时间倒流排查】：
-【章节正文样本】：
-${chaptersText}
+    const analysisInput = { chapterSamples: chaptersText }
 
-请提取并排查：
-1. 提取各章出现的明示/暗示时间锚点（如“三年后”、“次日清晨”、“天元一零四年”、“正统七年仲春”）；
-2. 检测章节之间是否存在“时间倒流”、“季节矛盾（前一章白雪皑皑，后一章烈日炎炎却无过渡）”或“角色年龄成长对不上”；
-3. 给出各章节建议标注的统一时间线坐标。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('multi-calendar', analysisInput)
     }
   }
 

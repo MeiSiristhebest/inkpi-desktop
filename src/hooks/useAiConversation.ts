@@ -4,6 +4,9 @@ import { inkpiDaemonGateway } from '../adapters/inkpiDaemonGateway'
 import type { AiAssistant } from '../ports/aiGateway'
 import type { ModelConfig } from '../core/settings'
 import { DEFAULT_DAEMON_URL } from '../config'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
+import { semanticDocumentFromText } from '../domain/content'
+import { createAssistantTask, createContinueTask, taskResultText } from '../ai'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -21,15 +24,6 @@ interface AiMessage {
   text: string
 }
 
-const messageToText = (msg: unknown): string => {
-  if (!msg) return ''
-  const m = msg as { content?: unknown }
-  if (typeof m.content === 'string') return m.content
-  if (Array.isArray(m.content))
-    return m.content.map((b: { text?: string }) => b?.text ?? '').join('')
-  return ''
-}
-
 export interface AiConversation {
   isConnected: boolean
   isReconnecting: boolean
@@ -42,6 +36,7 @@ export interface AiConversation {
   reconnect: () => void
   requestGhost: (chapterId: string, text: string) => Promise<string | null>
   sendAiPrompt: (prompt: string, chapterId?: string) => void
+  runAiTask: (task: AiTask) => Promise<TaskResult | null>
 }
 
 export interface UseAiConversationOptions {
@@ -94,33 +89,23 @@ export function useAiConversation(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const ensureSession = useCallback(
-    async (chapterId: string): Promise<string | null> => {
-      const client = clientRef.current
-      if (!client) return null
-      const sessionId = `desk-${chapterId}`
-      try {
-        await client.openSession(sessionId, { model: aiModel || undefined })
-      } catch (e: unknown) {
-        if (!String((e as { message?: string })?.message || e).includes('already exists')) throw e
-      }
-      return sessionId
-    },
-    [aiModel],
-  )
-
   const requestGhost = useCallback(
     async (chapterId: string, text: string): Promise<string | null> => {
-      if (!clientRef.current || !isConnected) return null
+      if (!clientRef.current || !isConnected || !clientRef.current.runTask) return null
       try {
-        const sessionId = await ensureSession(chapterId)
-        if (!sessionId) return null
-        return await clientRef.current.suggestContinuation(sessionId, text)
+        const document = semanticDocumentFromText(chapterId, text)
+        const task = createContinueTask({
+          taskId: `ghost-${chapterId}-${Date.now().toString(36)}`,
+          document,
+          selection: { from: document.text.length, to: document.text.length },
+          metadata: { modelId: aiModel?.id },
+        })
+        return taskResultText(await clientRef.current.runTask(task))
       } catch {
         return null
       }
     },
-    [ensureSession, isConnected],
+    [aiModel?.id, isConnected],
   )
 
   const sendAiPrompt = useCallback(
@@ -145,10 +130,16 @@ export function useAiConversation(
 
       setAiBusy(true)
       try {
-        const sessionId =
-          (chapterId && (await ensureSession(chapterId))) || (await ensureSession('main'))
-        const res = await clientRef.current.prompt(sessionId ?? 'main', trimmed)
-        const text = messageToText(res?.lastMessage) || JSON.stringify(res)
+        if (!clientRef.current.runTask) throw new Error('Task runtime is unavailable')
+        const document = semanticDocumentFromText(chapterId || 'assistant', '')
+        const task = createAssistantTask({
+          taskId: `assistant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          document,
+          question: trimmed,
+          metadata: { modelId: aiModel?.id },
+        })
+        const result = await clientRef.current.runTask(task)
+        const text = taskResultText(result) || (result?.error?.message ?? '')
         setAiMessages((prev) => [...prev, { role: 'assistant', text }])
       } catch (err: unknown) {
         setAiMessages((prev) => [
@@ -162,12 +153,20 @@ export function useAiConversation(
         setAiBusy(false)
       }
     },
-    [aiBusy, ensureSession, isConnected],
+    [aiBusy, aiModel?.id, isConnected],
   )
 
   const reconnect = useCallback(() => {
     initConnection(wsUrl)
   }, [initConnection, wsUrl])
+
+  const runAiTask = useCallback(
+    async (task: AiTask): Promise<TaskResult | null> => {
+      if (!clientRef.current || !isConnected || !clientRef.current.runTask) return null
+      return clientRef.current.runTask(task)
+    },
+    [isConnected],
+  )
 
   return {
     isConnected,
@@ -181,5 +180,6 @@ export function useAiConversation(
     reconnect,
     requestGhost,
     sendAiPrompt,
+    runAiTask,
   }
 }

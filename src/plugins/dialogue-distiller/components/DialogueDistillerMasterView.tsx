@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { CharacterVoiceprint, SimilarityPair } from '../types'
@@ -60,7 +60,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
       // 默认拼接全书正文或前几章真实对白供抽取分析
       if (allChapters.length > 0) {
         const sampleText = allChapters
-          .map((c) => htmlToPlain(c.content || ''))
+          .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
           .filter(Boolean)
           .join('\n\n')
         setExtractText(sampleText.slice(0, 10000))
@@ -78,7 +78,9 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
   const handleSelectChapter = (chapId: string) => {
     setSelectedChapterId(chapId)
     if (chapId === 'all') {
-      const allText = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      const allText = chapters
+        .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
+        .join('\n\n')
       setExtractText(allText.slice(0, 10000))
     } else {
       const chap = chapters.find((c) => c.id === chapId)
@@ -110,20 +112,14 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
   // 触发 AI 进行台词语气深度排查
   const handleAiDialogueCheck = () => {
     if (!extractText.trim()) return
-    const namesStr = characterNames.join('、') || '主要出场人物'
-    const prompt = `请作为资深小说台词编辑，对以下正文中的多角色对白进行“去千人一面”与“言语风格一致性”深度鉴别：
-【登场角色名单】：${namesStr}
-【对比目标】：重点对比【${charA || '角色A'}】与【${charB || '角色B'}】
-【正文对白截选】：
-${extractText.slice(0, 2000)}
+    const analysisInput = {
+      characters: [...characterNames],
+      compare: [charA || '角色A', charB || '角色B'],
+      text: extractText.slice(0, 2000),
+    }
 
-请给出专业诊断：
-1. 角色台词是否有明显的性格辨识度（句式长短、口头禅、攻击性、文雅度）？
-2. 是否存在“作者本人借角色的嘴在念说明书”或所有角色共用一套口吻的“千人一面”硬伤？
-3. 针对【${charA}】与【${charB}】，分别给出一句能凸显各自极致人设反差的精炼台词修改示范。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('dialogue-distiller', analysisInput)
     }
   }
 

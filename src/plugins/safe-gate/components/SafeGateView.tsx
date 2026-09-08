@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { SensitiveWord, RegexRule, GenreStyle, SafeGateScanResult } from '../types'
@@ -60,7 +60,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             ? list.find((c) => c.id === hostContext.activeChapter?.id) || list[0]
             : list[0]
           setSelectedChapterId(defaultChap.id)
-          const chapContent = htmlToPlain(defaultChap.content || '')
+      const chapContent = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
           if (chapContent.trim()) {
             setText(chapContent)
             setScanResult(engine.scan(chapContent, genre))
@@ -76,7 +76,9 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const handleSelectChapter = (chapId: string) => {
     setSelectedChapterId(chapId)
     if (chapId === 'all') {
-      const allText = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      const allText = chapters
+        .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
+        .join('\n\n')
       setText(allText.slice(0, 20000))
       setScanResult(engine.scan(allText.slice(0, 20000), genre))
     } else {
@@ -91,22 +93,18 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     setScanResult(engine.scan(text, genre))
   }
 
-  // 真实 AI 全文违规隐晦语境排查
+  // AI 全文违规隐晦语境排查
   const handleAiDeepSafeAudit = () => {
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
-    const prompt = `请作为主流网文各大发布平台（起点/晋江/番茄）资深风控合规审校员，对以下章节进行严格的【涉政/涉黄/过激暴恐及暗号谐音防封查杀】：
-【当前章节】：${chap ? `第 ${chap.order} 章《${chap.title}》` : '正文采样'}
-【正文文本】：
-${text.slice(0, 2500)}
+    const analysisInput = {
+      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
+      text: text.slice(0, 2500),
+      genre,
+    }
 
-请重点拦截：
-1. 传统正则扫描无法捕获的隐晦变体、拼音暗号或拆字谐音；
-2. 是否存在高危涉政隐喻或过激血腥残虐（容易导致单章封禁或整本下架）；
-3. 给出安全的文学修辞平替建议，确保既不丢失剧情张力，又能 100% 稳妥通过平台机审。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runAnalysis) {
+      void hostContext.aiAssistant.runAnalysis('safe-gate', analysisInput)
     }
   }
 
