@@ -1,94 +1,302 @@
-# InkPi Desktop Technical Architecture Blueprint
+# InkPi Desktop 技术架构
 
-This document details the system design, communication protocols, process topology, and component boundaries of **InkPi Desktop**.
+状态：当前实现基线。AI Runtime v1 仍是条件冻结草案，不代表所有 Phase 0–23 验收项已经完成。
 
----
+本文记录 InkPi Desktop 与 InkPi Daemon 的进程边界、数据所有权、AI 任务入口和当前实现状态。规范性契约见 inkpi/docs/specs/AI_RUNTIME_SPEC_v1.md。
 
-## 🏛️ 1. Process & Topology Overview
+## 1. 进程拓扑
 
-InkPi Desktop is structured as a dual-process architecture combining a lightweight **Tauri 2 (Rust)** desktop shell and a standalone **InkPi Daemon Sidecar**:
+~~~text
+Tauri 2 shell
+  └─ Vite + React Desktop
+       ├─ Editor / Codex / Plugins
+       ├─ IndexedDB（权威创作域状态）
+       ├─ AiAssistant.runTask(...)
+       └─ DomainSyncService
+             └─ WebSocket JSON-RPC
+                   └─ InkPi Daemon
+                         ├─ @inkpi/agent-core
+                         │    ├─ TaskRouter
+                         │    ├─ ContextPipeline
+                         │    ├─ TaskScheduler
+                         │    ├─ ToolRegistry / ExtensionHost
+                         │    └─ InstructionRegistry
+                         ├─ @inkpi/server
+                         ├─ Model handler / providers
+                         └─ SQLite（派生日志、检索和任务持久化）
+~~~
 
-```text
-┌───────────────────────────────────────────────────────────────────────────┐
-│                     InkPi Desktop App (Tauri 2 Native Window)             │
-│                                                                           │
-│   ┌──────────────────────────────────┐                                    │
-│   │       Vite + React 19 SPA        │                                    │
-│   │                                  │                                    │
-│   │  • Tiptap / Novel Editor Core    │                                    │
-│   │  • Living Codex (Entity Graph)   │                                    │
-│   │  • Aho-Corasick Keyword Engine   │                                    │
-│   │  • IndexedDB Local Persistence   │                                    │
-│   └─────────────────┬────────────────┘                                    │
-│                     │                                                     │
-│                     │ WebSocket JSON-RPC 2.0 (ws://127.0.0.1:8849)        │
-│                     ▼                                                     │
-│   ┌──────────────────────────────────┐                                    │
-│   │     Tauri Rust Runtime Host      │                                    │
-│   │                                  │                                    │
-│   │  • ExternalBin Sidecar Manager   │                                    │
-│   │  • Process Lifecycle & Cleanup   │                                    │
-│   │  • Native Window & System Menu   │                                    │
-│   └─────────────────┬────────────────┘                                    │
-│                     │                                                     │
-│                     │ Child Process Spawn (inkpi.exe daemon --port 8848)  │
-│                     ▼                                                     │
-│   ┌──────────────────────────────────┐                                    │
-│   │   InkPi Standalone Daemon        │                                    │
-│   │   (Bun Single-File Binary)       │                                    │
-│   │                                  │                                    │
-│   │  • AgentEngine Reasoning Loop    │                                    │
-│   │  • Prompt Cache & LLM Providers  │                                    │
-│   │  • SQLite & Session Storage      │                                    │
-│   └──────────────────────────────────┘                                    │
-└───────────────────────────────────────────────────────────────────────────┘
-```
+默认约定是 TCP 端口 8848，WebSocket 使用 TCP 端口加一；实际端口由 Daemon 启动结果决定。inkpi-daemon-gateway 只负责把 @inkpi/client 的连接适配到 Desktop 端口。
 
----
+## 2. 数据所有权
 
-## 📦 2. Subsystem Architecture
+| 数据 | 权威位置 | 当前实现 |
+| --- | --- | --- |
+| 项目、分卷、章节编辑结果 | Desktop IndexedDB | indexedDbProjectRepository 在写入 projects、volumes、chapters 前追加 DomainChangeSet |
+| DomainChangeSet 日志 | Desktop IndexedDB | IndexedDbDomainChangeStore，带单调 revision、校验和、幂等和快照恢复 |
+| Daemon 侧变更日志和游标 | Daemon SQLite | DomainProjectionStore 写入 domain_change_sets 和 domain_projection_cursors |
+| 文本全文检索、JIT 记忆、任务记录 | Daemon SQLite | 派生数据；不能回写成创作域事实 |
+| AI 产物 | 当前为 Desktop IndexedDB | IndexedDbArtifactStore 的 aiArtifacts store |
 
-### 1. Tauri 2 Desktop Shell (`src-tauri/`)
-- Manages the native operating system window, menus, and DPI scaling.
-- Launches `inkpi.exe` as an `externalBin` sidecar on app launch and gracefully terminates the child process on exit, ensuring zero orphaned processes and immediate port release.
-- Provides fallback to developer-specified `INKPI_DAEMON_SCRIPT` for seamless local debugging.
+SQLite 的 DomainProjectionStore 当前已经保存和校验派生变更日志及游标，但没有被本文范围内的 reducer 证明会把每个 DomainChangeSet 物化到 documents、StoryState 或其他读模型表。具体的文档/故事投影仍是待验证项。
 
-### 2. Frontend Application SPA (`src/`)
-- **Editor Desk (`src/components/editor/`)**: Built on Tiptap and Novel with custom Markdown extensions, ghost text completion, word count, and export adapters.
-- **Living Codex Plugin (`src/plugins/living-codex/`)**: Dynamic worldbuilding entity graph system backed by an Aho-Corasick automaton matcher ($O(N+M)$ multi-pattern matching across rich text).
-- **Offline Storage (`src/db/`)**: IndexedDB wrapper for instant offline document storage, auto-save debounce timers, and entity graph transactions.
+workspaceId 是协议中的同步范围标识；Desktop 项目仓储当前把 projectId 作为该值使用。协议没有另定义 projectId 字段。
 
-### 3. Protocol & Client SDK
-- Uses `@inkpi/protocol` for TypeBox JSON-RPC 2.0 schema validation.
-- Uses `@inkpi/client` for WebSocket communication with `InkPiDaemon`.
+## 3. Desktop 分层
 
----
+### 3.1 端口和适配器
 
-## 🧩 3. Frontend Layering (Hexagonal / Ports & Adapters)
+- src/ports/ 定义 AiGateway、AiAssistant、项目仓储和基础设施端口。
+- src/adapters/ 实现 IndexedDB、Daemon WebSocket、下载、剪贴板、确认框等外部访问。
+- src/domain/ 只放内容投影、故事状态、同步和提案规则。
+- src/ai/ 放 Creative Intelligence、任务工厂、结果解析、提案、产物、缓存、能力路由和插件指令。
+- src/components/ 和 src/plugins/**/components/ 不直接导入模型供应商，不直接组装 Prompt，不直接调用 IndexedDB。
 
-The React SPA follows a hexagonal architecture so that business logic never depends on infrastructure.
+src/architecture.test.ts 检查禁止的基础设施访问；src/architecture-ai.test.ts 检查 React 组件的供应商导入、Prompt 构造、直接模型调用和已移除的旧 AI 入口。
 
-- **`src/ports/`** — abstract ports (interfaces) the application depends on: `IdGenerator`, `Clock`, `RandomSource`, `KeyValueStore`, `ConfirmDialog`, `ClipboardWriter`, `FileDownloader`, `AiGateway` (connection) + `AiAssistant` (semantic RPC: `openSession` / `suggestContinuation` / `prompt`), and the repository ports (`ProjectRepository` with per-project queries `getVolumesByProject` / `getChaptersByProject`, `ChapterRepository`, `CardRecordRepository`, `TableRecordRepository`, `FormDataRepository`, `CodexEntityRepository`, `SettingsRepository`).
-- **`src/adapters/`** — the only layer permitted to touch infrastructure: the `db` IndexedDB singleton, `localStorage`, `navigator.clipboard`, `window.confirm`, `URL.createObjectURL`, and HTML rendering. Concrete implementations include `indexedDbProjectRepository`, `indexedDbCodexEntityRepository`, `indexedDbKeyValueStore`, `indexedDbSettingsRepository`, `idGenerator`, `clock`, `randomSource`, `clipboardWriter`, `confirmDialog`, `blobFileDownloader`, `inkpiDaemonGateway`, `daemonAiAssistant`, `htmlChapterRenderer`.
-- **Dependency direction (enforced by `src/architecture.test.ts`)**: `components/`, `domain/`, `core/`, `hooks/`, `plugins/**/components/` may import from `ports/` and `adapters/` only. They must **never** import `db/indexedDB`, nor call `window.confirm`, `navigator.clipboard`, `URL.createObjectURL`, `Date.now()`, or `Math.random()` directly. Non-determinism is injected via `Clock` / `IdGenerator` / `RandomSource` ports.
+### 3.2 当前 AI 端口
 
-### Editor decomposition (passive view + atomic design)
-`RichEditor` is a passive view that owns no business state. Its former 32 `useState` calls are collapsed into a single `useReducer` inside `src/components/editor/hooks/useChapterEditorModel.ts`; the autosave timer is isolated in `useChapterAutosave`; the component only consumes `state` and dispatches `actions`. The large presentational blocks are extracted into `src/components/editor/organisms/` (`ChapterTree`, `EditorToolbar`, `FindReplaceBar`, `StatusFooter`, `EditorCanvas`, `GlobalSearchPopup`, `ChapterContextMenu`, `RenameChapterDialog`, `DeleteChapterDialog`), and shared modal chrome into `src/components/ui/molecules/Modal.tsx`. The component is ~334 lines (down from 1128).
+Desktop 的 AiAssistant 实际接口是：
 
-### Seed data (no hardcoded IDs)
-`domain/seed.ts` derives volume/chapter IDs from the injected `IdGenerator` and timestamps from `Clock`; it never hardcodes `'vol-1'` / `'ch-1'`. `RichEditor` threads the first seeded volume id into `buildSeedChapters` so every chapter always attaches to its volume.
+~~~ts
+interface AiAssistant {
+  runTask(
+    task: AiTask,
+    options?: {
+      signal?: AbortSignal
+      pollIntervalMs?: number
+      onProgress?: (snapshot: TaskStatusSnapshot) => void
+    },
+  ): Promise<TaskResult | null>
+  steerTask?(taskId: string, input: unknown): Promise<boolean>
+  resumeTask?(taskId: string): Promise<void>
+  status(): Promise<{ running: boolean }>
+  close(): Promise<void>
+}
+~~~
 
-### Domain rules live in `domain/` (not in components)
-Business rules are kept as pure, environment-free functions so they are unit-testable without jsdom/IndexedDB:
-- `domain/moderation/healthCheck.ts` — `findDuplicateCodes` / `findMissingDisplayNames` (extracted from `CheckTools`, review §2.3).
-- `domain/chapter/chapterNaming.ts` (`composeChapterTitle`) + `domain/chapter/blankContent.ts` (`blankChapterContent`) — chapter defaults (review §1.6).
-- `domain/project/projectDefaults.ts` (`defaultGenreFor`) — project genre default (review §1.6).
-- `plugins/living-codex/engine/Adapters.ts` — `CodexAdapters` class replaced by pure functions; category mapping and summary formatting are now table-driven (`TAB_CATEGORY_MAP` / `SUMMARIZERS`) instead of `switch` chains (review §3.2).
+实现是 src/adapters/daemonAiAssistant.ts。它调用 task.submit，轮询 task.status，在 AbortSignal 触发时调用 task.cancel，并把状态快照交给进度回调。
 
-## 🛡️ 4. Quality Invariants
+openSession、suggestContinuation 和 prompt 已不再是 Desktop AiAssistant 端口的方法。Daemon 仍保留 session.*、agent.* 等旧会话/Agent RPC 供现有会话基础设施使用；这些 RPC 不是 Creative Task API，新的创作请求不得以它们作为入口。仓库中的其他开发说明文件仍有旧名称，未在本次文档范围内修改。
 
-- **Zero Node.js Runtime Requirement**: The end-user installer packages everything required.
-- **High Test Coverage**: Core state logic and components maintain $\ge 85\%$ line coverage and $\ge 80\%$ branch coverage.
-- **Strict Error Handling**: UI gracefully recovers if daemon is offline, falling back to local editing with IndexedDB persistence.
-- **Unified Check Gate**: `npm run check` runs `tsc -b && oxlint && vitest run` in one command; CI also runs `test:coverage`. Prettier (`.prettierrc.json`) standardizes formatting via `npm run format`.
-- **Architecture Guard**: `src/architecture.test.ts` fails the build on any forbidden-layer import of `db/indexedDB`, `window.confirm`, `navigator.clipboard`, `URL.createObjectURL`, `Date.now()`, or `Math.random()`.
+## 4. Canonical Content Representation
+
+src/domain/content/semanticDocument.ts 定义：
+
+~~~ts
+interface SemanticDocument {
+  documentId: string
+  revision: number
+  text: string
+  blocks: SemanticBlock[]
+  sourceMap: TextSourceMap
+  representation: 'prosemirror-json' | 'html' | 'text'
+}
+~~~
+
+SemanticBlock 包含稳定 block id、类型、规范化文本、semantic 范围和可选编辑器位置。当前入口：
+
+- semanticDocumentFromProseMirror
+- semanticDocumentFromHtml
+- semanticDocumentFromText
+- projectEditorContent / projectContent
+- semanticTextFromContent
+
+AI 任务使用 SemanticDocument.text、blocks 和 selection；SourceMap 保留在 Desktop，用于把提案范围映射回编辑器坐标。插件中的章节内容应先通过 semanticTextFromContent 投影。HTML 是编辑器输入格式，不是 AI 的协议输入。
+
+TextSourceMap 提供 semanticToEditor、editorToSemantic、semanticRangeToEditor 和 editorRangeToSemantic。目前是按 block 区间进行映射，复杂标记和所有编辑器节点类型的正确性仍需扩展测试。
+
+## 5. Canonical Story Model
+
+src/domain/story/storyState.ts 的 StoryState 是不可变更新风格的聚合：
+
+~~~ts
+interface StoryState {
+  revision: number
+  entities: Record<string, StoryEntity>
+  relations: Record<string, StoryRelation>
+  events: Record<string, StoryEvent>
+  scenes: Record<string, StoryScene>
+  timelines: Record<string, StoryTimeline>
+  promises: Record<string, NarrativePromise>
+  constraints: Record<string, StoryConstraint>
+}
+~~~
+
+当前提供 create、upsert、remove、revision 和 assertStoryState。每个条目必须带 provenance。实际事实等级为：
+
+canonical-fact、character-belief、rumor、hypothesis、ai-inference、proposal。
+
+Provenance 记录 sourceType、factLevel、来源文档/块/修订、confidence 和 evidence。isCanonicalFact 只把 factLevel === 'canonical-fact' 视为作者事实。StoryState 的持久化、从所有插件数据源的提取和完整运行时注册仍未形成已验证的端到端链路。
+
+## 6. Runtime 任务边界
+
+### 6.1 调用链
+
+~~~text
+UI / Plugin
+  → CreativeIntelligence 或 AiAssistant
+  → AiTask
+  → task.submit
+  → TaskRouter
+  → ContextPipeline
+  → TaskHandler / TaskModelHandler
+  → Model provider
+  → TaskResult / Artifact / Proposal reference
+~~~
+
+@inkpi/agent-core 只依赖通用协议和端口，不依赖 Creative Domain。StoryContextCompiler 位于 Desktop src/ai/context/，不能移动到 agent-core。
+
+### 6.2 AiTask 和结果
+
+协议文件是 inkpi/packages/protocol/src/task.ts。核心维度相互独立：
+
+- ExecutionStrategy：completion、reasoning、workflow、agent
+- ExecutionMode / SchedulingPolicy：interactive、foreground、background、batch
+- OutputFormat：text、structured、patch
+- OutputPersistence：ephemeral、session、artifact
+- EffectMode：read-only、proposal
+
+TaskResult.status 的终态是 waiting-user、completed、failed、cancelled。interrupted 是 TaskStatusSnapshot 和执行记录中的可恢复状态，不是当前 TaskResult 的终态联合成员。
+
+### 6.3 TaskRouter
+
+TaskRouter 位于 packages/agent-core/src/tasks/task-router.ts，当前提供：
+
+- submit、status、wait、cancel
+- steer、resume
+- replay、fork
+- execution（进程内执行记录读取）
+- TaskRegistry 精确 kind、canHandle 和 wildcard handler 解析
+- ContextPipeline 调用、超时、retry、checkpoint、任务事件和持久化
+
+事件类型包括 created、queued、started、progress、checkpointed、waiting-user、completed、failed、cancelled、interrupted。Daemon 将 TaskRouter 事件广播为 task.event。
+
+TaskModelHandler 是当前通用模型 handler。它接收 ModelConfig，调用 streamAi，支持共享 ToolRegistry 的顺序工具循环，接收公开 steering，并删除 <think> 及其他私有推理字段。TaskRouter 不提交 Proposal，也不直接修改 Desktop 域状态。
+
+TaskRouter 当前通过 Daemon 暴露的 RPC 是：
+
+task.submit、task.status、task.cancel、task.steer、task.resume、task.replay、task.fork。
+
+TaskRouter.execution 暂无对应公开 RPC。能力路由、产物持久化和缓存也没有被证明由 TaskRouter 默认自动接入。
+
+## 7. Domain Projection Sync
+
+协议 inkpi/packages/protocol/src/domain-sync.ts 的实际类型为：
+
+~~~ts
+interface DomainChangeSet {
+  id: string
+  workspaceId: string
+  sourceDeviceId: string
+  baseRevision: number
+  revision: number
+  changes: DomainChange[]
+  checksum: string
+  createdAt: number
+}
+~~~
+
+每个 DomainChange 有 id、aggregateType、aggregateId、upsert | delete、aggregate revision、可选 payload 和 occurredAt。
+
+Desktop IndexedDbDomainChangeStore.append 串行化追加，要求 baseRevision === currentRevision 且 revision === currentRevision + 1；相同 id 和相同校验和幂等返回，不同内容的 id 冲突报错。list、snapshot 和 restore 会校验 workspace、连续 revision 和 checksum。
+
+Daemon DomainProjectionStore.apply/list/createSnapshot/restoreSnapshot 使用同样的规则，并在 SQLite 中维护 domain_change_sets 和 domain_projection_cursors。domain.sync.push、domain.sync.pull、domain.sync.snapshot 和 domain.sync.restore 由 Daemon 注册。
+
+当前校验和由协议中的确定性排序序列计算 32 位 FNV-1a 风格值；它用于一致性检测，不是加密签名。多设备冲突解决、物化文档/故事投影和完整离线重连演练仍需验证。
+
+## 8. Proposal / CAS 边界
+
+AI 不直接写 Authoritative Domain State。当前有两个相关但尚未统一的 Desktop 类型：
+
+1. src/ai/proposals/domainProposal.ts 的 DomainProposal：通用目标、操作、baseRevision、可选 sourceHash、patch、evidence 和 reason。
+2. src/ai/proposals/proposalLedger.ts 的 AiProposal：面向文本重写 UI 的 TextPatch[]、状态和 inversePatches。
+
+ProposalLedger 的规则：
+
+- 新提案为 pending；accept 后才可 commit，reject 终止审阅。
+- commit 检查当前 revision 与 baseRevision；不一致则标记 stale 并抛出 ProposalConflictError。
+- 可选 currentSourceHash 与提案 sourceHash 不一致时标记 stale。
+- rebase 由调用者提供 patch transform，并把状态重置为 pending。
+- commit 的 apply 回调负责实际写入；写入成功后记录 committedRevision 和 inversePatches。
+- undo 要求当前 revision 等于 committedRevision，并以新 revision 应用 inversePatches。
+
+当前 Proposal Ledger 是 Desktop 本地逻辑，不是 Daemon RPC，也没有统一的 DomainProposal 持久化适配器。Selection Toolbar 已接入文本提案审阅路径；跨窗口/跨设备提案提交仍待验证。
+
+## 9. 五个 Vertical Slices
+
+| Slice | 当前入口与策略 | 当前状态 |
+| --- | --- | --- |
+| Continue Prose | createContinueTask；creative.continue；completion + interactive；text/ephemeral；read-only。useAiConversation.requestGhost 通过 runTask 获取文本。 | 任务和 Desktop 调用路径存在；真实 Daemon、编辑器 GhostText 全链路未验收 |
+| Selection Rewrite | createRewriteTask；creative.rewrite；completion + interactive；patch/artifact；proposal + approval。 | ProposalLedger 的 accept/reject/modify/rebase/commit/undo/CAS 逻辑存在；完整持久化与冲突 UI 集成待验收 |
+| Continuity Audit | createContinuityAuditTask；narrative.continuity.audit；workflow + background；structured/artifact；ContinuityAuditScheduler 提供 debounce/cancel/dedup。 | 编排和单元测试存在；章节保存触发、诊断到 gutter marker 的生产链路未确认 |
+| Deep Story Reasoning | createDeepReasoningTask；narrative.deep.reason；reasoning + interactive；structured/artifact；TaskModelHandler 支持工具和公开 steering。 | 本地编排、工具循环和 steering 路径存在；长任务 UI、人机介入和真实模型能力路由待验收 |
+| Project Distillation | createDistillationTask；narrative.project.distill；workflow + background；structured/artifact；ProjectDistillationWorkflow 按 chunk 顺序执行并保存 checkpoint。 | map/reduce 风格合并、断点和部分失败逻辑有测试；大项目 benchmark、Daemon 重启恢复和 lineage 端到端待验收 |
+
+任务工厂引用的 provider id 是 creative.document、creative.story、retrieval.jit。Daemon 目前在注入 JIT retriever 时注册 JitContextProvider；Desktop Story provider 和 document provider 的跨进程注册需继续核对。
+
+## 10. 扩展能力边界
+
+### Skills
+
+ProgressiveSkillRuntime 复用 ExtensionHost、DynamicPluginLoader、ToolRegistry 和 SkillDiscoveryEngine。SkillManifest 包含 id、version、title、description、intents、capabilities、taskKinds、tools 和 eager | lazy | on-demand activation。discovery 只读取 metadata；load 才读取完整 markdown body；扩展工具在加载后镜像到现有 ToolRegistry。
+
+通用 progressive disclosure runtime 已存在，但 hook、promise、character-voice、timeline-consistency 四个第一批 creative skill 的实际 manifest、加载注册和 CI 验收尚未确认。
+
+### Artifacts
+
+src/ai/artifacts/artifactStore.ts 定义 Artifact、AiArtifact、ArtifactStore、IndexedDbArtifactStore 和 ArtifactRuntime。Artifact 必须有 id、type、version、content、provenance、createdAt、updatedAt；lineage 可记录 parentArtifactId、sourceTaskId 和 sourceRevision。当前预定义类型包括 story-plan、character-state、open-threads、chapter-summary、audit-report 和 distillation-checkpoint。
+
+只有 output persistence 为 artifact 且任务结果为 completed 或 waiting-user 时，ArtifactRuntime.persistTaskResult 才写入 aiArtifacts。当前没有 Daemon Artifact RPC 或跨端同步协议。
+
+### Cache
+
+ContextCache 和 LayeredContextCache 提供 context、semantic、provider 三层缓存。键可包含 taskKind、contextFingerprint、projectRevision、model、instructionVersion、skillVersion、providerId；实现有 TTL、LRU 淘汰和 hit/miss/eviction 统计。
+
+缓存工具没有被证明已经接入 ContextPipeline 或模型调用默认路径；provider prompt cache、context compilation cache 和 retrieval cache 的实际命中率仍需测量。
+
+### Capability
+
+CapabilityRouter.select 先按任务 requirements 和 ModelCapabilities 过滤，再按 route priority、quality 和 latency 排序。当前可过滤 streaming、tool calling、structured/json schema、reasoning、vision、context、latency、cost 和输出格式。
+
+它位于 Desktop src/ai/routing/，但 Daemon 的 TaskModelHandler 当前接收固定 ModelConfig。CapabilityRouter 尚未证明已成为 TaskRouter 的强制模型选择步骤。
+
+### Instructions
+
+InstructionRegistry 位于 agent-core，支持 register、upsert、unregister、compose、composeForTask，按 priority 和 id 确定性排序，并返回 entry ids、version 和 truncation。TaskRouter 将匹配的 instructions 传给 handler，并把 instruction version/ids 放入结果 provenance。
+
+Desktop 插件指令目前由 src/ai/instructions/pluginInstructions.ts 的稳定映射提供，并通过任务 metadata 传入；这些定义没有自动注册到 Daemon InstructionRegistry 的证据。该注册边界需统一。
+
+### Observability
+
+TaskRouter observer 和 task.event 可记录 taskId、kind、状态、时间、progress、结果类型、artifact/proposal ids、checkpoint、provider/model、context fingerprint、context token count、usage、tool trace 和错误摘要。sanitizeProvenance 会删除 thinking、reasoning、chainOfThought、cot 和 rawThinking。
+
+默认协议和持久化路径不得保存完整 Prompt、原始 <think> 或私有 CoT。当前 provenance 字段还没有完整覆盖 skill 版本、cache hit/miss、统一 instruction id 和所有 checkpoint/artifact lineage；生产日志脱敏和采样策略仍待验证。
+
+## 11. 插件与 Legacy 状态
+
+src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id。当前有 22 个插件组件通过 PluginHostContext.aiAssistant.runAnalysis 生成 plugin.<id>.analysis 任务；其余 22 个插件尚未从代码证据确认属于 AI Task、Context Provider、Tool、Workflow、UI-only 或 Hybrid 分类。
+
+src/architecture-ai.test.ts 已覆盖：
+
+- 44 个插件目录完整且无重复；
+- React 组件不直接导入 LLM provider；
+- React 组件不新增 Prompt 构造；
+- Plugin UI 不直接调用模型；
+- Desktop src 不重新引入 onAiPrompt、systemPromptEnhancer、openSession、suggestContinuation。
+
+Daemon 的 session/agent 旧 RPC 仍存在，其他仓库文档也有旧接口描述，因此“全部 Legacy AI 路径已删除”尚未满足 v1 冻结条件。
+
+## 12. 质量门禁与未决条件
+
+代码仓库已有 typecheck、unit test、architecture test、Daemon RPC、同步、任务可靠性、插件生命周期和 eval runner 测试入口。本文不把一次局部测试通过解释为全量 v1 验收。
+
+在标记 Runtime v1 为最终冻结前，必须完成并记录：
+
+1. 五个 Slice 的真实 Desktop ↔ Daemon 集成测试。
+2. DomainChangeSet 到 SQLite 文档/故事读模型的明确 reducer，及重启、离线、乱序、损坏快照测试。
+3. CapabilityRouter、三层 Cache、InstructionRegistry、ArtifactStore 在生产任务路径的接入证明。
+4. 四个第一批 creative skill 的实际 manifest、lazy load 和工具注册测试。
+5. 44 个插件的分类、迁移或 UI-only 决策；清理剩余旧 session/Agent AI 入口和过期文档。
+6. Evals 进入 CI，并补充 source-map、entity contradiction、invalid state transition、mutation 和 100/300 chapter benchmark。
+7. crash/restart、模型不可用、能力不匹配、结构化输出非法、context overflow、cache invalidation、stale proposal 的可靠性报告。
