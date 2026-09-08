@@ -182,7 +182,11 @@ export class ProjectDistillationWorkflow {
   async run(input: ProjectDistillationInput, options: DistillationWorkflowOptions = {}): Promise<DistillationWorkflowResult> {
     if (!input.taskId.trim()) throw new Error('Distillation task id must not be empty')
     if (input.documents.length === 0) throw new Error('Distillation requires at least one document')
-    const chunkSize = Math.max(1, Math.floor(options.chunkSize ?? 20))
+    const requestedChunkSize = options.chunkSize ?? 20
+    if (!Number.isFinite(requestedChunkSize) || requestedChunkSize <= 0) {
+      throw new RangeError('Distillation chunk size must be a positive finite number')
+    }
+    const chunkSize = Math.max(1, Math.floor(requestedChunkSize))
     const chunks = chunk(input.documents, chunkSize)
     const totalChunks = chunks.length
     const previous = options.checkpoint

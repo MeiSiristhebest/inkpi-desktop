@@ -40,6 +40,14 @@ interface MutableBlock {
   editorTo: number
   existingId?: unknown
   metadata?: Record<string, unknown>
+  sourceSegments?: MutableSourceSegment[]
+}
+
+interface MutableSourceSegment {
+  semanticFrom: number
+  semanticTo: number
+  editorFrom: number
+  editorTo: number
 }
 
 const BLOCK_TYPES = new Set([
@@ -120,13 +128,25 @@ function createDocument(
       editorPosition,
       metadata: block.metadata,
     })
-    segments.push({
-      blockId: id,
-      semanticFrom: from,
-      semanticTo: to,
-      editorFrom: block.editorFrom,
-      editorTo: block.editorTo,
-    })
+    if (block.sourceSegments?.length) {
+      segments.push(
+        ...block.sourceSegments.map((segment) => ({
+          blockId: id,
+          semanticFrom: from + segment.semanticFrom,
+          semanticTo: from + segment.semanticTo,
+          editorFrom: segment.editorFrom,
+          editorTo: segment.editorTo,
+        })),
+      )
+    } else {
+      segments.push({
+        blockId: id,
+        semanticFrom: from,
+        semanticTo: to,
+        editorFrom: block.editorFrom,
+        editorTo: block.editorTo,
+      })
+    }
   })
 
   return {
@@ -177,16 +197,35 @@ export function semanticDocumentFromHtml(
     current = null
   }
 
+  const appendMappedText = (
+    block: MutableBlock,
+    value: string,
+    editorFrom: number,
+    editorTo: number,
+  ): void => {
+    if (!value) return
+    const semanticFrom = block.text.length
+    block.text += value
+    block.sourceSegments ??= []
+    block.sourceSegments.push({
+      semanticFrom,
+      semanticTo: block.text.length,
+      editorFrom,
+      editorTo,
+    })
+    block.editorTo = Math.max(block.editorTo, editorTo)
+  }
+
   while ((token = tokenizer.exec(html)) !== null) {
     const raw = token[0]
     const tag = raw.startsWith('<') ? parseTag(raw) : null
     if (!tag) {
+      if (raw.startsWith('<!--') || /^<\s*[!?]/.test(raw)) continue
       if (!current && raw.trim() === '') continue
       if (!current) {
         current = { type: 'paragraph', text: '', editorFrom: token.index, editorTo: token.index }
       }
-      current.text += normalizeHtmlText(raw)
-      current.editorTo = token.index + raw.length
+      appendMappedText(current, normalizeHtmlText(raw), token.index, token.index + raw.length)
       continue
     }
 
@@ -194,8 +233,7 @@ export function semanticDocumentFromHtml(
       if (!current) {
         current = { type: 'paragraph', text: '', editorFrom: token.index, editorTo: token.index }
       }
-      current.text += '\n'
-      current.editorTo = token.index + raw.length
+      appendMappedText(current, '\n', token.index, token.index + raw.length)
       continue
     }
 
@@ -208,6 +246,9 @@ export function semanticDocumentFromHtml(
         }
       } else {
         if (blockType === 'listItem' && current?.type === 'listItem') flush()
+        if (current?.type === 'blockquote' && tag.name === 'p' && current.text.length > 0) {
+          appendMappedText(current, '\n', token.index, token.index)
+        }
         if (!current) {
           current = {
             type: blockType,

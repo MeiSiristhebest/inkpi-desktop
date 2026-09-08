@@ -113,4 +113,47 @@ describe('Canonical Semantic Content Representation', () => {
     expect(projectContent('doc-6', '<p>HTML</p>').text).toBe('HTML')
     expect(projectContent('doc-7', '纯文本').text).toBe('纯文本')
   })
+
+  it('maps HTML inline text and breaks to their source ranges', () => {
+    const html = '<p>甲<strong>乙</strong><br>丙</p>'
+    const document = semanticDocumentFromHtml('doc-8', html)
+    const inlineFrom = html.indexOf('乙')
+    const inlineTo = inlineFrom + '乙'.length
+
+    expect(document.sourceMap.semanticRangeToEditor(1, 2)).toMatchObject({
+      from: inlineFrom,
+      to: inlineTo,
+    })
+    expect(document.sourceMap.editorRangeToSemantic({ from: inlineFrom, to: inlineTo })).toEqual({
+      from: 1,
+      to: 2,
+    })
+  })
+
+  it('keeps selection and patch ranges stable across empty blocks and editor gaps', () => {
+    const document = semanticDocumentFromProseMirror('doc-9', {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '甲乙' }] },
+        { type: 'paragraph' },
+        { type: 'paragraph', content: [{ type: 'text', text: '丙丁' }] },
+      ],
+    })
+    const first = document.blocks[0].editorPosition!
+    const last = document.blocks[2].editorPosition!
+    const selection = document.sourceMap.editorRangeToSemantic({ from: first.from, to: last.to })
+
+    expect(selection).toEqual({ from: document.blocks[0].from, to: document.blocks[2].to })
+    expect(document.sourceMap.semanticRangeToEditor(selection.from, selection.to)).toMatchObject({
+      from: first.from,
+      to: last.to,
+    })
+    expect(document.sourceMap.editorToSemantic({ from: first.to + 1, to: first.to + 1 })).toBe(
+      document.blocks[0].to,
+    )
+    expect(document.sourceMap.semanticRangeToEditor(4, 1)).toMatchObject({
+      from: document.sourceMap.semanticToEditor(1).from,
+      to: document.sourceMap.semanticToEditor(4).from,
+    })
+  })
 })
