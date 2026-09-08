@@ -8,6 +8,7 @@ import type { ChapterRecord, VolumeRecord } from '../../types'
 vi.mock('../../db/indexedDB', () => ({
   db: {
     getAll: vi.fn(),
+    get: vi.fn().mockResolvedValue(undefined),
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
   },
@@ -16,6 +17,7 @@ vi.mock('../../db/indexedDB', () => ({
 
 const mocked = db as unknown as {
   getAll: ReturnType<typeof vi.fn>
+  get: ReturnType<typeof vi.fn>
   put: ReturnType<typeof vi.fn>
   delete: ReturnType<typeof vi.fn>
 }
@@ -121,7 +123,8 @@ describe('WriterDesk — 卷章树导航', () => {
     fireEvent.click(screen.getByTitle('新建章节'))
     await waitFor(() => expect(screen.getByText('第一卷')).toBeInTheDocument())
     expect(screen.getAllByText('第001章 未命名').length).toBeGreaterThan(0)
-    expect(mocked.put).toHaveBeenCalledTimes(2)
+    const entityWrites = mocked.put.mock.calls.filter(([store]) => store === 'volumes' || store === 'chapters')
+    expect(entityWrites).toHaveLength(2)
   })
 
   it('appends a chapter under an existing volume without creating a new volume', async () => {
