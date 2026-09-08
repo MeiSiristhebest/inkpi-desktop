@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import type { SemanticDocument } from '../domain/content'
 import {
+  ArtifactRuntime,
+  type AiArtifact,
+  type ArtifactStore,
   CapabilityRouter,
   ContextCache,
   CREATIVE_TASK_KINDS,
@@ -79,7 +82,10 @@ describe('Creative Intelligence Layer', () => {
         taskId: 't',
         kind: CREATIVE_TASK_KINDS.continuityAudit,
         status: 'completed',
-        output: { format: 'structured', data: [{ severity: 'warning', description: '时间线冲突' }] },
+        output: {
+          format: 'structured',
+          data: [{ severity: 'warning', description: '时间线冲突' }],
+        },
       }),
     ).toHaveLength(1)
     expect(
@@ -118,7 +124,12 @@ describe('Creative Intelligence Layer', () => {
           status,
           result:
             status === 'completed'
-              ? { taskId: 't', kind: 'test', status: 'completed' as const, output: { format: 'text' as const, text: 'ok' } }
+              ? {
+                  taskId: 't',
+                  kind: 'test',
+                  status: 'completed' as const,
+                  output: { format: 'text' as const, text: 'ok' },
+                }
               : undefined,
         }
       },
@@ -138,7 +149,11 @@ describe('Creative Intelligence Layer', () => {
         submitted.push(task)
         return { taskId: task.id, status: 'queued' as const }
       },
-      cancelTask: async (taskId: string) => ({ taskId, cancelled: true, status: 'cancelled' as const }),
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
       getTaskStatus: async (taskId: string) => ({
         taskId,
         kind: CREATIVE_TASK_KINDS.continue,
@@ -226,12 +241,18 @@ describe('Creative Intelligence Layer', () => {
         submitted.push(task)
         return { taskId: task.id, status: 'queued' as const }
       },
-      cancelTask: async (taskId: string) => ({ taskId, cancelled: true, status: 'cancelled' as const }),
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
       getTaskStatus: async () => ({ taskId: 'never', kind: 'never', status: 'failed' as const }),
     }
 
     await expect(
-      new CreativeIntelligence(gateway, { routes: [] }).run(createContinueTask({ taskId: 'no-route', document })),
+      new CreativeIntelligence(gateway, { routes: [] }).run(
+        createContinueTask({ taskId: 'no-route', document }),
+      ),
     ).rejects.toThrow(NoCapableRouteError)
     await expect(
       new CreativeIntelligence(gateway, {
@@ -256,4 +277,274 @@ describe('Creative Intelligence Layer', () => {
     ).rejects.toThrow(NoCapableRouteError)
     expect(submitted).toHaveLength(0)
   })
+
+  it('persists completed artifact results with deterministic ids and full lineage', async () => {
+    const { store, artifacts } = createMemoryArtifactStore()
+    const submitted = new Map<string, AiTask>()
+    const gateway = {
+      submitTask: vi.fn(async (task: AiTask) => {
+        submitted.set(task.id, task)
+        return { taskId: task.id, status: 'queued' as const }
+      }),
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
+      getTaskStatus: async (taskId: string) => {
+        const task = submitted.get(taskId)
+        if (!task) throw new Error(`Unknown task ${taskId}`)
+        return {
+          taskId,
+          kind: task.kind,
+          status: 'completed' as const,
+          executionRunId: 'execution-1',
+          result: {
+            taskId,
+            kind: task.kind,
+            status: 'completed' as const,
+            output: {
+              format: 'structured' as const,
+              data: { summary: '摘要', entities: [], events: [], promises: [] },
+            },
+          },
+        }
+      },
+    }
+    const artifactRuntime = new ArtifactRuntime(store, () => 1)
+    const intelligence = new CreativeIntelligence(gateway, {
+      artifactRuntime,
+      artifactIdGenerator: { generate: () => 'artifact-deterministic' },
+    })
+    const baseTask = createDistillationTask({ taskId: 'artifact-task', document })
+    const task: AiTask = {
+      ...baseTask,
+      metadata: {
+        ...baseTask.metadata,
+        parentArtifactId: 'parent-artifact',
+        sourceRevision: 9,
+        sessionId: 'session-1',
+      },
+    }
+
+    const result = await intelligence.run(task, { pollIntervalMs: 0 })
+    const artifact = artifacts.get('artifact-deterministic')
+
+    expect(result.artifactIds).toEqual(['artifact-deterministic'])
+    expect(result.provenance).toMatchObject({
+      artifactId: 'artifact-deterministic',
+      artifactIds: ['artifact-deterministic'],
+    })
+    expect(artifact).toMatchObject({
+      id: 'artifact-deterministic',
+      type: 'creative.distillation-checkpoint',
+      content: { summary: '摘要', entities: [], events: [], promises: [] },
+      provenance: {
+        taskId: 'artifact-task',
+        executionRunId: 'execution-1',
+        parentArtifactId: 'parent-artifact',
+        sessionId: 'session-1',
+        sourceRevision: 9,
+      },
+      lineage: {
+        sourceTaskId: 'artifact-task',
+        executionRunId: 'execution-1',
+        parentArtifactId: 'parent-artifact',
+        sourceRevision: 9,
+      },
+    })
+    expect(artifact?.content).not.toHaveProperty('format')
+  })
+
+  it('persists waiting-user artifacts but never persists failed or ephemeral results', async () => {
+    const { store, artifacts } = createMemoryArtifactStore()
+    const submitted = new Map<string, AiTask>()
+    const gateway = {
+      submitTask: async (task: AiTask) => {
+        submitted.set(task.id, task)
+        return { taskId: task.id, status: 'queued' as const }
+      },
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
+      getTaskStatus: async (taskId: string) => {
+        const task = submitted.get(taskId)
+        if (!task) throw new Error(`Unknown task ${taskId}`)
+        const status =
+          task.id === 'waiting-user'
+            ? ('waiting-user' as const)
+            : task.id === 'failed'
+              ? ('failed' as const)
+              : ('completed' as const)
+        return {
+          taskId,
+          kind: task.kind,
+          status,
+          executionRunId: `run-${task.id}`,
+          result: {
+            taskId,
+            kind: task.kind,
+            status,
+            output: {
+              format: 'structured' as const,
+              data: { summary: task.id, entities: [], events: [], promises: [] },
+            },
+            ...(status === 'failed' ? { error: { code: 'TEST_FAILURE', message: 'failed' } } : {}),
+          },
+        }
+      },
+    }
+    const intelligence = new CreativeIntelligence(gateway, {
+      artifactStore: store,
+      artifactIdGenerator: { generate: (prefix) => `${prefix}-generated` },
+    })
+
+    const waiting = await intelligence.run(
+      createDistillationTask({ taskId: 'waiting-user', document }),
+      { pollIntervalMs: 0 },
+    )
+    const failed = await intelligence.run(createDistillationTask({ taskId: 'failed', document }), {
+      pollIntervalMs: 0,
+    })
+    const ephemeral = await intelligence.run(
+      createContinueTask({ taskId: 'ephemeral', document }),
+      { pollIntervalMs: 0 },
+    )
+
+    expect(waiting.status).toBe('waiting-user')
+    expect(waiting.artifactIds).toEqual(['artifact-generated'])
+    expect(failed.status).toBe('failed')
+    expect(failed.artifactIds).toBeUndefined()
+    expect(ephemeral.status).toBe('completed')
+    expect(ephemeral.artifactIds).toBeUndefined()
+    expect(artifacts.size).toBe(1)
+  })
+
+  it('reuses persisted artifact ids on cache hits without resubmitting or saving', async () => {
+    const { store, artifacts } = createMemoryArtifactStore()
+    const submitted = new Map<string, AiTask>()
+    const submitTask = vi.fn(async (task: AiTask) => {
+      submitted.set(task.id, task)
+      return { taskId: task.id, status: 'queued' as const }
+    })
+    const generateArtifactId = vi.fn(() => 'artifact-cache')
+    const gateway = {
+      submitTask,
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
+      getTaskStatus: async (taskId: string) => {
+        const task = submitted.get(taskId)
+        if (!task) throw new Error(`Unknown task ${taskId}`)
+        return {
+          taskId,
+          kind: task.kind,
+          status: 'completed' as const,
+          executionRunId: 'cache-run',
+          result: {
+            taskId,
+            kind: task.kind,
+            status: 'completed' as const,
+            output: {
+              format: 'structured' as const,
+              data: { summary: '可复用', entities: [], events: [], promises: [] },
+            },
+          },
+        }
+      },
+    }
+    const intelligence = new CreativeIntelligence(gateway, {
+      artifactStore: store,
+      artifactIdGenerator: { generate: generateArtifactId },
+    })
+
+    const first = await intelligence.run(
+      createDistillationTask({ taskId: 'cache-artifact-1', document }),
+      { pollIntervalMs: 0 },
+    )
+    const second = await intelligence.run(
+      createDistillationTask({ taskId: 'cache-artifact-2', document }),
+      { pollIntervalMs: 0 },
+    )
+
+    expect(first.artifactIds).toEqual(['artifact-cache'])
+    expect(second.artifactIds).toEqual(['artifact-cache'])
+    expect(second.provenance).toMatchObject({ cacheHit: true, artifactId: 'artifact-cache' })
+    expect(submitTask).toHaveBeenCalledTimes(1)
+    expect(generateArtifactId).toHaveBeenCalledTimes(1)
+    expect(artifacts.size).toBe(1)
+  })
+
+  it('surfaces a same-id content conflict instead of overwriting the first artifact', async () => {
+    const { store, artifacts } = createMemoryArtifactStore()
+    const submitted = new Map<string, AiTask>()
+    const gateway = {
+      submitTask: async (task: AiTask) => {
+        submitted.set(task.id, task)
+        return { taskId: task.id, status: 'queued' as const }
+      },
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
+      getTaskStatus: async (taskId: string) => {
+        const task = submitted.get(taskId)
+        if (!task) throw new Error(`Unknown task ${taskId}`)
+        return {
+          taskId,
+          kind: task.kind,
+          status: 'completed' as const,
+          result: {
+            taskId,
+            kind: task.kind,
+            status: 'completed' as const,
+            output: {
+              format: 'structured' as const,
+              data: { summary: task.id, entities: [], events: [], promises: [] },
+            },
+          },
+        }
+      },
+    }
+    const intelligence = new CreativeIntelligence(gateway, {
+      artifactStore: store,
+      artifactIdGenerator: () => 'artifact-same-id',
+    })
+    const firstTask = createDistillationTask({ taskId: 'conflict-1', document })
+    const secondTask = createDistillationTask({
+      taskId: 'conflict-2',
+      document: { ...document, documentId: 'chapter-2', revision: 5 },
+    })
+
+    await intelligence.run(firstTask, { pollIntervalMs: 0 })
+    await expect(intelligence.run(secondTask, { pollIntervalMs: 0 })).rejects.toThrow(
+      /incompatible content/,
+    )
+    expect(artifacts.get('artifact-same-id')?.content).toEqual({
+      summary: 'conflict-1',
+      entities: [],
+      events: [],
+      promises: [],
+    })
+  })
 })
+
+function createMemoryArtifactStore(): { store: ArtifactStore; artifacts: Map<string, AiArtifact> } {
+  const artifacts = new Map<string, AiArtifact>()
+  return {
+    artifacts,
+    store: {
+      save: async (artifact) => {
+        artifacts.set(artifact.id, artifact)
+      },
+      get: async (id) => artifacts.get(id),
+      list: async (taskId) =>
+        [...artifacts.values()].filter((artifact) => !taskId || artifact.taskId === taskId),
+    },
+  }
+}
