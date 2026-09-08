@@ -129,6 +129,34 @@ describe('Phase 21/22 local reliability boundaries', () => {
     expect(() => router.select(task)).toThrow(NoCapableRouteError)
   })
 
+  it('does not submit an offline task when no offline-capable model is available', async () => {
+    const harness = gatewayFor((task) => completed(task, { format: 'text', text: 'unreachable' }))
+    const intelligence = new CreativeIntelligence(harness.gateway, {
+      routes: [
+        {
+          id: 'online-only',
+          capabilities: ['creative-writing'],
+          online: true,
+          modelCapabilities: {
+            streaming: true,
+            toolCalling: false,
+            structuredOutput: false,
+            jsonSchema: false,
+            reasoning: false,
+            promptCaching: false,
+            maxContextTokens: 4096,
+            maxOutputTokens: 1024,
+          },
+        },
+      ],
+    })
+    const task = createContinueTask({ taskId: 'offline-unavailable', document })
+    task.requirements = { ...task.requirements, network: 'offline' }
+
+    await expect(intelligence.run(task, { pollIntervalMs: 0 })).rejects.toBeInstanceOf(NoCapableRouteError)
+    expect(harness.submitted).toHaveLength(0)
+  })
+
   it('rejects malformed structured results at the typed result boundary', () => {
     expect(() =>
       parseContinuityFindings({

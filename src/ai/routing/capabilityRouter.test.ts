@@ -74,4 +74,85 @@ describe('capability-aware routing', () => {
       }).route.id,
     ).toBe('reasoning')
   })
+
+  it('selects an explicitly offline-capable model for offline tasks', () => {
+    const router = new CapabilityRouter([
+      {
+        id: 'offline-model',
+        capabilities: ['creative-writing'],
+        online: false,
+        priority: 1,
+        modelCapabilities: {
+          streaming: true,
+          toolCalling: false,
+          structuredOutput: false,
+          jsonSchema: false,
+          reasoning: false,
+          promptCaching: false,
+          offline: true,
+          maxContextTokens: 4096,
+          maxOutputTokens: 1024,
+        },
+      },
+      {
+        id: 'cloud-model',
+        capabilities: ['creative-writing'],
+        online: true,
+        priority: 100,
+        modelCapabilities: {
+          streaming: true,
+          toolCalling: false,
+          structuredOutput: false,
+          jsonSchema: false,
+          reasoning: false,
+          promptCaching: false,
+          maxContextTokens: 4096,
+          maxOutputTokens: 1024,
+        },
+      },
+    ])
+
+    expect(
+      router.select({
+        id: 'offline-task',
+        kind: 'creative.continue',
+        input: {},
+        requirements: { capabilities: ['creative-writing'], network: 'offline' },
+      }).route.id,
+    ).toBe('offline-model')
+  })
+
+  it('fails when the only offline route cannot serve the requested model capability', () => {
+    const router = new CapabilityRouter([
+      {
+        id: 'offline-text-only',
+        capabilities: ['creative-writing'],
+        online: false,
+        modelCapabilities: {
+          streaming: false,
+          toolCalling: false,
+          structuredOutput: false,
+          jsonSchema: false,
+          reasoning: false,
+          promptCaching: false,
+          offline: true,
+          maxContextTokens: 4096,
+          maxOutputTokens: 1024,
+        },
+      },
+    ])
+
+    expect(() =>
+      router.select({
+        id: 'offline-streaming-task',
+        kind: 'creative.continue',
+        input: {},
+        requirements: {
+          capabilities: ['creative-writing'],
+          network: 'offline',
+          streaming: true,
+        },
+      }),
+    ).toThrow(NoCapableRouteError)
+  })
 })

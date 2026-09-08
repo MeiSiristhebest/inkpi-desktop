@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ContextCache, serializeKey } from './index'
+import { ContextCache, createDeterministicTaskCacheKey, serializeKey } from './index'
 
 describe('context fingerprint cache', () => {
   it('keys entries by task, context, model, and instruction version with LRU eviction', () => {
@@ -74,5 +74,46 @@ describe('context fingerprint cache', () => {
       provider: 'p1',
     })
     expect(left).toBe(right)
+  })
+
+  it('changes deterministic identity when content or execution context changes', () => {
+    const task = {
+      id: 'task-1',
+      kind: 'creative.continue',
+      input: { documentId: 'doc-1', text: '旧内容', payload: { context: { fingerprint: 'ctx-1' } } },
+      intent: '继续写作',
+      metadata: {
+        projectRevision: 3,
+        instructionId: 'instruction-1',
+        skillId: 'skill-1',
+      },
+    }
+    const route = { id: 'route-1', modelId: 'model-1', providerId: 'provider-1' }
+    const base = createDeterministicTaskCacheKey(task, route)
+
+    const changedTasks = [
+      { ...task, input: { ...task.input, text: '新内容' } },
+      { ...task, metadata: { ...task.metadata, projectRevision: 4 } },
+      { ...task, metadata: { ...task.metadata, instructionId: 'instruction-2' } },
+      { ...task, metadata: { ...task.metadata, skillId: 'skill-2' } },
+    ]
+    for (const changed of changedTasks) {
+      expect(createDeterministicTaskCacheKey(changed, route)).not.toEqual(base)
+    }
+    expect(createDeterministicTaskCacheKey(task, { ...route, modelId: 'model-2' })).not.toEqual(base)
+    expect(createDeterministicTaskCacheKey(task, { ...route, providerId: 'provider-2' })).not.toEqual(base)
+  })
+
+  it('exposes only the newest value when the same key is replaced', async () => {
+    const cache = new ContextCache<string>()
+    const key = { taskKind: 'creative.continue', contextFingerprint: 'ctx' }
+
+    await Promise.all([
+      Promise.resolve().then(() => cache.set(key, 'old')),
+      Promise.resolve().then(() => cache.set(key, 'new')),
+    ])
+
+    expect(cache.get(key)).toBe('new')
+    expect(cache.size()).toBe(1)
   })
 })
