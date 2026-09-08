@@ -6,7 +6,7 @@ export interface CreateDomainChangeSetInput {
   sourceDeviceId: string
   baseRevision: number
   changes: DomainChange[]
-  createdAt?: number
+  createdAt: number
 }
 
 export function createDomainChangeSet(input: CreateDomainChangeSetInput): DomainChangeSet {
@@ -20,7 +20,7 @@ export function createDomainChangeSet(input: CreateDomainChangeSetInput): Domain
     baseRevision: input.baseRevision,
     revision: input.baseRevision + 1,
     changes: input.changes.map((change) => ({ ...change })),
-    createdAt: input.createdAt ?? Date.now(),
+    createdAt: input.createdAt,
   }
   return { ...unsigned, checksum: calculateDomainChangeSetChecksum(unsigned) }
 }

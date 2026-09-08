@@ -1,15 +1,8 @@
 import { calculateDomainChangeSetChecksum, type DomainProjectionSnapshot, type DomainChangeSet } from '@inkpi/protocol'
 import { db } from '../db/indexedDB'
+import type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'
 
-export interface AuthoritativeDomainChangeStore {
-  append(changeSet: DomainChangeSet): Promise<void>
-  list(workspaceId: string, afterRevision?: number): Promise<DomainChangeSet[]>
-  latestRevision(workspaceId: string): Promise<number>
-  snapshot(workspaceId: string): Promise<DomainProjectionSnapshot>
-  restore(snapshot: DomainProjectionSnapshot): Promise<void>
-  createSnapshot(workspaceId: string): Promise<DomainProjectionSnapshot>
-  restoreSnapshot(snapshot: DomainProjectionSnapshot): Promise<void>
-}
+export type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'
 
 export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStore {
   private appendQueue: Promise<void> = Promise.resolve()

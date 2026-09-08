@@ -1,5 +1,5 @@
 import type { DomainProjectionSnapshot, DomainChangeSet, DomainProjectionApplyResult } from '@inkpi/protocol'
-import type { AuthoritativeDomainChangeStore } from '../../adapters/indexedDbDomainChangeStore'
+import type { AuthoritativeDomainChangeStore } from './domainChangeStore'
 
 export interface DomainSyncRemote {
   pushDomainChangeSet(changeSet: DomainChangeSet): Promise<DomainProjectionApplyResult>
