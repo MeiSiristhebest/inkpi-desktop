@@ -6,6 +6,10 @@ import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
+// DomainChangeSet revisions are allocated by reading the current workspace
+// revision. Serialize that read-and-append pair so Promise.all callers cannot
+// all observe the same base revision.
+let domainAppendQueue: Promise<void> = Promise.resolve()
 const sourceDeviceId = typeof localStorage === 'undefined'
   ? 'desktop'
   : (localStorage.getItem('inkpi-device-id') || (() => {
@@ -93,24 +97,28 @@ async function appendDomainChange(
   occurredAt: number,
   aggregateRevision = 0,
 ): Promise<void> {
-  const baseRevision = await domainChangeStore.latestRevision(workspaceId)
-  const changeId = `${aggregateType}-change-${aggregateId}-${aggregateRevision}-${occurredAt}`
-  await domainChangeStore.append(
-    createDomainChangeSet({
-      id: `${aggregateType}-${aggregateId}-${aggregateRevision}-${occurredAt}`,
-      workspaceId,
-      sourceDeviceId,
-      baseRevision,
-      changes: [{
-        id: changeId,
-        aggregateType,
-        aggregateId,
-        operation,
-        revision: aggregateRevision,
-        payload,
-        occurredAt,
-      }],
-      createdAt: occurredAt,
-    }),
-  )
+  const operationPromise = domainAppendQueue.then(async () => {
+    const baseRevision = await domainChangeStore.latestRevision(workspaceId)
+    const changeId = `${aggregateType}-change-${aggregateId}-${aggregateRevision}-${occurredAt}`
+    await domainChangeStore.append(
+      createDomainChangeSet({
+        id: `${aggregateType}-${aggregateId}-${aggregateRevision}-${occurredAt}`,
+        workspaceId,
+        sourceDeviceId,
+        baseRevision,
+        changes: [{
+          id: changeId,
+          aggregateType,
+          aggregateId,
+          operation,
+          revision: aggregateRevision,
+          payload,
+          occurredAt,
+        }],
+        createdAt: occurredAt,
+      }),
+    )
+  })
+  domainAppendQueue = operationPromise.catch(() => undefined)
+  await operationPromise
 }
