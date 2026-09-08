@@ -41,6 +41,16 @@ describe('ExpectationEngine — 爽点与期待感曲线调度器引擎', () => 
     expect(diag.overallScore).toBe(100)
   })
 
+  it('projects rich chapter content before building AI analysis input', () => {
+    const input = ExpectationEngine.buildAnalysisInput({
+      chapters: [{ order: 1, title: '开端', content: '<h1>标题</h1><p>第一段</p><p>第二段</p>' }],
+    })
+
+    expect(input.chapters).toEqual([
+      { order: 1, title: '开端', content: '标题\n第一段\n第二段' },
+    ])
+  })
+
   it('audits contracts for overdue and fulfillment rate', () => {
     const contracts: ExpectationContract[] = [
       {

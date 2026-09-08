@@ -1,4 +1,5 @@
 import type { ChapterEmotionalScore, GoldenThreeDiagnostic, ExpectationContract } from '../types'
+import { semanticTextFromContent } from '../../../domain/content'
 
 const SUPPRESSION_CUES = [
   '打压',
@@ -87,7 +88,7 @@ export class ExpectationEngine {
       chapters: params.chapters.map((chapter) => ({
         order: chapter.order,
         title: chapter.title,
-        content: chapter.content.slice(0, 1500),
+        content: semanticTextFromContent(`expectation-chapter-${chapter.order}`, chapter.content).slice(0, 1500),
       })),
       rubric: ['golden-finger-clarity', 'suppression-payoff-balance', 'long-term-hooks', 'drop-off-risk'],
       outputFields: ['score', 'claritySummary', 'hookLevel', 'sprAnalysis', 'actionableAdvice'],
