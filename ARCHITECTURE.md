@@ -227,7 +227,7 @@ ProposalLedger 的规则：
 
 | Slice | 当前入口与策略 | 当前状态 |
 | --- | --- | --- |
-| Continue Prose | createContinueTask；creative.continue；completion + interactive；text/ephemeral；read-only。useAiConversation.requestGhost 通过 runTask 获取文本。 | 任务和 Desktop 调用路径存在；真实 Daemon、编辑器 GhostText 全链路未验收 |
+| Continue Prose | createContinueTask；creative.continue；completion + interactive；text/ephemeral；read-only。useAiConversation.requestGhost 通过 runTask 获取文本。 | Desktop task assistant 已通过真实 WebSocket child process 验证 completed 和 waiting-user 两个用例；编辑器 GhostText 全链路仍未验收 |
 | Selection Rewrite | createRewriteTask；creative.rewrite；completion + interactive；patch/artifact；proposal + approval。 | ProposalLedger 的 accept/reject/modify/rebase/commit/undo/CAS 逻辑存在；完整持久化与冲突 UI 集成待验收 |
 | Continuity Audit | createContinuityAuditTask；narrative.continuity.audit；workflow + background；structured/artifact；ContinuityAuditScheduler 提供 debounce/cancel/dedup。 | 编排和单元测试存在；章节保存触发、诊断到 gutter marker 的生产链路未确认 |
 | Deep Story Reasoning | createDeepReasoningTask；narrative.deep.reason；reasoning + interactive；structured/artifact；TaskModelHandler 支持工具和公开 steering。 | 本地编排、工具循环和 steering 路径存在；长任务 UI、人机介入和真实模型能力路由待验收 |
@@ -241,7 +241,7 @@ ProposalLedger 的规则：
 
 ProgressiveSkillRuntime 复用 ExtensionHost、DynamicPluginLoader、ToolRegistry 和 SkillDiscoveryEngine。SkillManifest 包含 id、version、title、description、intents、capabilities、taskKinds、tools 和 eager | lazy | on-demand activation。discovery 只读取 metadata；load 才读取完整 markdown body；扩展工具在加载后镜像到现有 ToolRegistry。
 
-通用 progressive disclosure runtime 已存在，但 hook、promise、character-voice、timeline-consistency 四个第一批 creative skill 的实际 manifest、加载注册和 CI 验收尚未确认。
+通用 progressive disclosure runtime 已存在。hook、promise、character-voice、timeline-consistency 四个第一批 creative skill 的 manifest 已存在；Runtime 生命周期测试覆盖共享 ExtensionHost、ToolRegistry、TaskRegistry、ContextPipeline 的注册、失败回滚、重试和并发幂等。四个 first-party skill 逐个激活、Desktop 生产环境跨进程注册和 CI 验收仍未确认。
 
 ### Artifacts
 
@@ -253,25 +253,25 @@ src/ai/artifacts/artifactStore.ts 定义 Artifact、AiArtifact、ArtifactStore�
 
 ContextCache 和 LayeredContextCache 提供 context、semantic、provider 三层缓存。键可包含 taskKind、contextFingerprint、projectRevision、model、instructionVersion、skillVersion、providerId；实现有 TTL、LRU 淘汰和 hit/miss/eviction 统计。
 
-缓存工具没有被证明已经接入 ContextPipeline 或模型调用默认路径；provider prompt cache、context compilation cache 和 retrieval cache 的实际命中率仍需测量。
+daemonAiAssistant.runTask 现在经由 CreativeIntelligence，再由其接入 provider-response cache；缓存工具仍未证明已接入 ContextPipeline、context compilation 或 retrieval 的默认路径，三层缓存的实际命中率和跨重启策略仍需测量。
 
 ### Capability
 
 CapabilityRouter.select 先按任务 requirements 和 ModelCapabilities 过滤，再按 route priority、quality 和 latency 排序。当前可过滤 streaming、tool calling、structured/json schema、reasoning、vision、context、latency、cost 和输出格式。
 
-它位于 Desktop src/ai/routing/，但 Daemon 的 TaskModelHandler 当前接收固定 ModelConfig。CapabilityRouter 尚未证明已成为 TaskRouter 的强制模型选择步骤。
+Desktop 的 CreativeIntelligence 在提交前执行 CapabilityRouter.select；Daemon 的 task.submit 在入队前执行 CapabilityRouter.resolve，TaskModelHandler 使用选定 route。能力过滤、确定性排序和 mismatch-before-queue 有测试；真实 provider capability matrix、跨进程配置和生产 fallback 仍待证明。
 
 ### Instructions
 
 InstructionRegistry 位于 agent-core，支持 register、upsert、unregister、compose、composeForTask，按 priority 和 id 确定性排序，并返回 entry ids、version 和 truncation。TaskRouter 将匹配的 instructions 传给 handler，并把 instruction version/ids 放入结果 provenance。
 
-Desktop 插件指令目前由 src/ai/instructions/pluginInstructions.ts 的稳定映射提供，并通过任务 metadata 传入；这些定义没有自动注册到 Daemon InstructionRegistry 的证据。该注册边界需统一。
+Desktop 插件指令由 src/ai/instructions/pluginInstructions.ts 的稳定映射提供；daemonAiAssistant 在首个 task batch 前通过共享 promise 自动注册 6 个核心和 22 个插件指令。真实 child-process 集成已检查 instruction.status 以及两类任务的 instruction provenance；五个切片全量生产链路仍待验收。
 
 ### Observability
 
 TaskRouter observer 和 task.event 可记录 taskId、kind、状态、时间、progress、结果类型、artifact/proposal ids、checkpoint、provider/model、context fingerprint、context token count、usage、tool trace 和错误摘要。sanitizeProvenance 会删除 thinking、reasoning、chainOfThought、cot 和 rawThinking。
 
-默认协议和持久化路径不得保存完整 Prompt、原始 <think> 或私有 CoT。当前 provenance 字段还没有完整覆盖 skill 版本、cache hit/miss、统一 instruction id 和所有 checkpoint/artifact lineage；生产日志脱敏和采样策略仍待验证。
+默认协议和持久化路径不得保存完整 Prompt、原始 <think> 或私有 CoT。当前 provenance 已覆盖两类真实 child-process 集成的 instruction id、route 和 artifact/cache 相关字段，但 skill 版本、跨进程 checkpoint/artifact lineage、统一跨层 cache 统计、生产日志脱敏和采样策略仍待验证。
 
 ## 11. 插件与 Legacy 状态
 
@@ -289,7 +289,7 @@ src/architecture-ai.test.ts 已覆盖：
 
 Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线不删除这些 RPC；Desktop 新 AI 路径不直接引用它们。若未来 Desktop 必须保留旧 RPC 适配器，必须把文件登记为显式 compatibility boundary，并禁止新创作请求经该边界进入。`src/ai/artifacts/artifactStore.ts` 对 `aiArtifacts` 的写入是派生产物持久化，不属于 authoritative domain state。
 
-`src/phase21-22-reliability.test.ts` 固定覆盖本地可复现的可靠性边界：等价重复 task 的 task-id 无关缓存命中、proposal revision/source-hash stale、模型结构化输出与 context budget 能力不匹配、非法 structured output、以及 project revision 驱动的 cache invalidation。Desktop 当前没有本地模型执行器或 token-budget enforcement，因此没有伪造 context overflow 测试；真实 overflow 仍需 Desktop ↔ Daemon 集成测试。
+`src/phase21-22-reliability.test.ts` 固定覆盖本地可复现的可靠性边界：等价重复 task 的 task-id 无关缓存命中、proposal revision/source-hash stale、模型结构化输出与 context budget 能力不匹配、非法 structured output、以及 project revision 驱动的 cache invalidation。`src/adapters/desktopDaemonIntegration.test.ts` 另通过真实 child process 验证 completed/waiting-user RPC 与结果持久化。Desktop 当前没有本地模型执行器或 token-budget enforcement，因此没有伪造 context overflow 测试；完整五切片、App restart 和真实 overflow 仍需集成测试。
 
 ## 12. 质量门禁与未决条件
 
@@ -297,10 +297,10 @@ Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线�
 
 在标记 Runtime v1 为最终冻结前，必须完成并记录：
 
-1. 五个 Slice 的真实 Desktop ↔ Daemon 集成测试。
+1. 五个 Slice 的真实 Desktop ↔ Daemon 集成测试（当前只有 Continue 的 completed/waiting-user 两个 child-process 用例）。
 2. DomainChangeSet 到 SQLite 文档/故事读模型的明确 reducer，及重启、离线、乱序、损坏快照测试。
-3. CapabilityRouter、三层 Cache、InstructionRegistry、ArtifactStore 在生产任务路径的接入证明。
-4. 四个第一批 creative skill 的实际 manifest、lazy load 和工具注册测试。
+3. 三层 Cache、InstructionRegistry、ArtifactStore 在完整生产任务路径的接入证明；CapabilityRouter 的真实 provider matrix 和 fallback 证明。
+4. 四个第一批 creative skill 的逐个实际 manifest、lazy load、ExtensionHost/ToolRegistry 注册和跨进程测试。
 5. 44 个插件的分类、迁移或 UI-only 决策；清理剩余旧 session/Agent AI 入口和过期文档。
-6. Evals 进入 CI，并补充 source-map、entity contradiction、invalid state transition、mutation 和 100/300 chapter benchmark。
+6. Evals 进入 CI，并补充 source-map、entity contradiction、invalid state transition、mutation、canonical subjective fixture 和 100/300 chapter benchmark；再以真实 provider 和人类标注 gold 复核。
 7. crash/restart、模型不可用、能力不匹配、结构化输出非法、context overflow、cache invalidation、stale proposal 的可靠性报告。
