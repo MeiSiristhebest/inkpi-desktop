@@ -121,6 +121,34 @@ describe('AI artifact runtime', () => {
       createdAt: 1,
     })
   })
+
+  it('rehydrates cloned semantic content and preserves parent lineage', async () => {
+    const store = new IndexedDbArtifactStore()
+    const runtime = new ArtifactRuntime(store, () => 30)
+    const task: AiTask = {
+      id: 'task-rehydrate',
+      kind: 'narrative.project.distill',
+      input: { documentId: 'chapter-2', payload: { context: { revision: 11 } } },
+      outputContract: { format: 'structured', persistence: 'artifact' },
+      metadata: { parentArtifactId: 'artifact-parent' },
+    }
+    const payload = { summary: { text: '持久化内容' } }
+    const artifact = await runtime.persistTaskResult(task, {
+      taskId: task.id,
+      kind: task.kind,
+      status: 'completed',
+      output: { format: 'structured', data: payload },
+    }, 'artifact-child')
+
+    payload.summary.text = '调用方修改'
+    const rehydrated = await store.get('artifact-child')
+    expect(artifact).toMatchObject({
+      lineage: { parentArtifactId: 'artifact-parent', sourceTaskId: task.id, sourceRevision: 11 },
+      provenance: { parentArtifactId: 'artifact-parent', sourceRevision: 11 },
+    })
+    expect(rehydrated?.content).toEqual({ summary: { text: '持久化内容' } })
+    expect(await store.listByType('creative.distillation-checkpoint')).toHaveLength(1)
+  })
 })
 
 function makeArtifact(id: string, content: unknown, timestamp: number): AiArtifact {
