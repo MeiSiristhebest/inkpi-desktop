@@ -19,6 +19,7 @@ const SRC_ROOT = dirname(fileURLToPath(import.meta.url))
 const DESKTOP_ROOT = join(SRC_ROOT, '..')
 const COMPONENT_ROOT = join(SRC_ROOT, 'components')
 const PLUGIN_ROOT = join(SRC_ROOT, 'plugins')
+const AI_ROOT = join(SRC_ROOT, 'ai')
 
 const SOURCE_FILE = /\.(?:ts|tsx)$/
 const TEST_FILE = /(?:\.test|\.spec)\.(?:ts|tsx)$/
@@ -26,6 +27,13 @@ const DIRECT_PROMPT_ASSIGNMENT =
   /\b(?:const|let|var)\s+(?:prompt|systemPrompt|promptText|instruction|instructions)\s*=/
 const DIRECT_MODEL_CALL =
   /\b(?:aiAssistant\s*(?:\?\.|\.)prompt|streamAi|getProvider|generateText|generateObject)\s*\(/
+
+const RAW_TASK_RPC_METHOD =
+  /["'`](?:instruction\.register|task\.(?:submit|status|cancel|steer|resume))["'`]/
+const AUTHORITATIVE_IMPORT =
+  /from\s+["'][^"']*(?:indexedDb(?:Project|CodexEntity|DomainChange)|(?:project|chapter|volume|codexEntity|domainChange)Repository)[^"']*["']/
+const AUTHORITATIVE_WRITE =
+  /\b(?:saveChapter|deleteChapter|saveVolume|deleteVolume|mutateActiveChapter|mutateCodexEntity|appendDomainChange|applyDomainChange)\s*\(/
 
 const EXISTING_DIRECT_PROMPT_COMPONENTS = [] as const
 
@@ -53,6 +61,10 @@ function componentFiles(): SourceFile[] {
     file.split(/[\\/]/).includes('components'),
   )
   return [...applicationComponents, ...pluginComponents]
+}
+
+function executableSourceFiles(): SourceFile[] {
+  return walk(SRC_ROOT)
 }
 
 function stripComments(source: string): string {
@@ -97,7 +109,7 @@ function violationsForImportRule(rule: (specifier: string) => boolean): string[]
 
 function filesMatching(pattern: RegExp): string[] {
   return componentFiles()
-    .filter((file) => pattern.test(readFileSync(file, 'utf8')))
+    .filter((file) => pattern.test(stripComments(readFileSync(file, 'utf8'))))
     .map((file) => relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/'))
     .sort()
 }
@@ -121,9 +133,19 @@ describe('AI Runtime Phase 0 Desktop architecture guards', () => {
     assertFirstPartyPluginCatalog(ALL_AVAILABLE_PLUGINS.map((plugin) => plugin.id))
   })
 
-  it('React components do not import LLM providers directly', () => {
-    const violations = violationsForImportRule(isLlmProviderSpecifier)
-    expect(violations, `React component LLM provider imports:\n${violations.join('\n')}`).toEqual(
+  it('Desktop executable source does not import LLM providers directly', () => {
+    const violations = executableSourceFiles()
+      .flatMap((file) => {
+        const relativeFile = relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/')
+        const matches = new Set(
+          extractImportSpecifiers(stripComments(readFileSync(file, 'utf8'))).filter(
+            isLlmProviderSpecifier,
+          ),
+        )
+        return [...matches].map((specifier) => `${relativeFile} -> ${specifier}`)
+      })
+      .sort()
+    expect(violations, `Desktop LLM provider imports:\n${violations.join('\n')}`).toEqual(
       [],
     )
   })
@@ -143,20 +165,66 @@ describe('AI Runtime Phase 0 Desktop architecture guards', () => {
         file.split(/[\\/]/).includes('plugins') && file.split(/[\\/]/).includes('components'),
     )
     const violations = pluginComponentFiles
-      .filter((file) => DIRECT_MODEL_CALL.test(readFileSync(file, 'utf8')))
+      .filter((file) => DIRECT_MODEL_CALL.test(stripComments(readFileSync(file, 'utf8'))))
       .map((file) => relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/'))
       .sort()
     assertRatchet('Plugin UI direct model call', violations, EXISTING_PLUGIN_MODEL_CALL_COMPONENTS)
   })
 
   it('does not reintroduce removed legacy AI entry points', () => {
-    const legacyPatterns = [/onAiPrompt/, /systemPromptEnhancer/, /openSession/, /suggestContinuation/]
-    const violations = walk(SRC_ROOT)
-      .filter((file) => !TEST_FILE.test(file))
-      .filter((file) => legacyPatterns.some((pattern) => pattern.test(readFileSync(file, 'utf8'))))
+    const legacyPatterns = [
+      /onAiPrompt/,
+      /systemPromptEnhancer/,
+      /openSession/,
+      /suggestContinuation/,
+    ]
+    const violations = executableSourceFiles()
+      .filter((file) =>
+        legacyPatterns.some((pattern) => pattern.test(stripComments(readFileSync(file, 'utf8')))),
+      )
       .map((file) => relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/'))
       .sort()
     expect(violations, `Legacy AI entry points:\n${violations.join('\n')}`).toEqual([])
+  })
+
+  it('keeps raw task RPC and direct model invocation behind adapters', () => {
+    const violations = executableSourceFiles()
+      .filter((file) => !file.split(/[\\/]/).includes('adapters'))
+      .filter((file) => {
+        const source = stripComments(readFileSync(file, 'utf8'))
+        return RAW_TASK_RPC_METHOD.test(source) || DIRECT_MODEL_CALL.test(source)
+      })
+      .map((file) => relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/'))
+      .sort()
+    expect(violations, `未隔离的 AI RPC/模型调用:\n${violations.join('\n')}`).toEqual([])
+  })
+
+  it('keeps session/agent RPC as an explicit compatibility boundary', () => {
+    const compatibilityBoundary = new Set(['src/adapters/daemonAiAssistant.ts'])
+    const refs = executableSourceFiles().flatMap((file) => {
+      const source = stripComments(readFileSync(file, 'utf8'))
+      const matches = source.match(/\b(?:session|agent)\.[a-z][\w.-]*/g) || []
+      const relativeFile = relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/')
+      return matches.map((method) => ({ file: relativeFile, method }))
+    })
+    const unscoped = refs
+      .filter(({ file }) => !compatibilityBoundary.has(file))
+      .map(({ file, method }) => `${file} -> ${method}`)
+    expect(unscoped, `新 AI 路径不得直接调用旧 session/agent RPC:\n${unscoped.join('\n')}`).toEqual(
+      [],
+    )
+  })
+
+  it('does not allow the AI layer to import or invoke authoritative domain writes', () => {
+    const violations = executableSourceFiles()
+      .filter((file) => file.startsWith(AI_ROOT))
+      .filter((file) => {
+        const source = stripComments(readFileSync(file, 'utf8'))
+        return AUTHORITATIVE_IMPORT.test(source) || AUTHORITATIVE_WRITE.test(source)
+      })
+      .map((file) => relative(DESKTOP_ROOT, file).split(/[\\/]/).join('/'))
+      .sort()
+    expect(violations, `AI layer authoritative write access:\n${violations.join('\n')}`).toEqual([])
   })
 
   it('the Desktop scanner detects provider, Prompt, and model-call samples', () => {

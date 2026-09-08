@@ -280,12 +280,16 @@ src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-pa
 src/architecture-ai.test.ts 已覆盖：
 
 - 44 个插件目录完整且无重复；
-- React 组件不直接导入 LLM provider；
+- Desktop 可执行源码不直接导入 LLM provider；
 - React 组件不新增 Prompt 构造；
 - Plugin UI 不直接调用模型；
-- Desktop src 不重新引入 onAiPrompt、systemPromptEnhancer、openSession、suggestContinuation。
+- 新 AI 路径不直接调用模型或 task/instruction RPC，底层 RPC 仅在 adapter 中出现；
+- Desktop src 不重新引入 onAiPrompt、systemPromptEnhancer、openSession、suggestContinuation；
+- `src/ai` 不直接导入或调用 projects、volumes、chapters、domainChangeSets 等 authoritative store。
 
-Daemon 的 session/agent 旧 RPC 仍存在，其他仓库文档也有旧接口描述，因此“全部 Legacy AI 路径已删除”尚未满足 v1 冻结条件。
+Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线不删除这些 RPC；Desktop 新 AI 路径不直接引用它们。若未来 Desktop 必须保留旧 RPC 适配器，必须把文件登记为显式 compatibility boundary，并禁止新创作请求经该边界进入。`src/ai/artifacts/artifactStore.ts` 对 `aiArtifacts` 的写入是派生产物持久化，不属于 authoritative domain state。
+
+`src/phase21-22-reliability.test.ts` 固定覆盖本地可复现的可靠性边界：等价重复 task 的 task-id 无关缓存命中、proposal revision/source-hash stale、模型结构化输出与 context budget 能力不匹配、非法 structured output、以及 project revision 驱动的 cache invalidation。Desktop 当前没有本地模型执行器或 token-budget enforcement，因此没有伪造 context overflow 测试；真实 overflow 仍需 Desktop ↔ Daemon 集成测试。
 
 ## 12. 质量门禁与未决条件
 
