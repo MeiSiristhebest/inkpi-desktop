@@ -106,4 +106,99 @@ describe('createDaemonAiAssistant instruction registration', () => {
     expect(harness.registerCalls).toBe(1)
     expect(harness.calls.filter((call) => call.method === 'task.submit')).toHaveLength(2)
   })
+
+  it('surfaces a network failure during registration and retries the handshake', async () => {
+    let attempts = 0
+    const harness = makeClient(async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('network unavailable')
+    })
+    const assistant = createDaemonAiAssistant(harness.client)
+
+    await expect(assistant.runTask(task('network-failure'), { pollIntervalMs: 0 })).rejects.toThrow('network unavailable')
+    await expect(assistant.runTask(task('network-retry'), { pollIntervalMs: 0 })).resolves.toMatchObject({
+      output: { text: 'done:network-retry' },
+    })
+    expect(harness.registerCalls).toBe(2)
+  })
+
+  it('cancels an in-flight task when its caller aborts', async () => {
+    const calls: Array<{ method: string; params: unknown }> = []
+    const client: RpcClient = {
+      request: async <T>(method: string, params?: unknown): Promise<T> => {
+        calls.push({ method, params })
+        if (method === 'instruction.register') return { success: true } as T
+        if (method === 'task.submit') return { taskId: task('cancelled').id, status: 'queued' } as T
+        if (method === 'task.status') {
+          return {
+            taskId: task('cancelled').id,
+            kind: task('cancelled').kind,
+            status: 'running',
+          } as T
+        }
+        if (method === 'task.cancel') return { taskId: task('cancelled').id, cancelled: true, status: 'cancelled' } as T
+        throw new Error(`Unexpected RPC method: ${method}`)
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const controller = new AbortController()
+    const assistant = createDaemonAiAssistant(client)
+    const pending = assistant.runTask(task('cancelled'), { pollIntervalMs: 50, signal: controller.signal })
+    await Promise.resolve()
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(calls.map((call) => call.method)).toContain('task.cancel')
+  })
+
+  it('reports progress and returns a waiting-user result at the diagnostic boundary', async () => {
+    const statuses = [
+      { status: 'running' as const, progress: { completed: 1, total: 2 } },
+      {
+        status: 'waiting-user' as const,
+        result: {
+          taskId: 'waiting-user',
+          kind: 'plugin.demo.analysis',
+          status: 'waiting-user' as const,
+          output: { format: 'text' as const, text: '需要作者确认' },
+        },
+      },
+    ]
+    let statusIndex = 0
+    const client: RpcClient = {
+      request: async <T>(method: string, _params?: unknown): Promise<T> => {
+        if (method === 'instruction.register') return { success: true } as T
+        if (method === 'task.submit') return { taskId: 'waiting-user', status: 'queued' } as T
+        if (method === 'task.status') return { taskId: 'waiting-user', kind: task('waiting-user').kind, ...statuses[statusIndex++] } as T
+        throw new Error(`Unexpected RPC method: ${method}`)
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const progress: unknown[] = []
+    const assistant = createDaemonAiAssistant(client)
+
+    await expect(assistant.runTask(task('waiting-user'), { pollIntervalMs: 0, onProgress: (snapshot) => progress.push(snapshot) })).resolves.toMatchObject({
+      status: 'waiting-user',
+      output: { text: '需要作者确认' },
+    })
+    expect(progress).toHaveLength(2)
+    expect(progress[0]).toMatchObject({ status: 'running', progress: { completed: 1 } })
+  })
+
+  it('forwards steering and checkpoint resume requests', async () => {
+    const calls: string[] = []
+    const client: RpcClient = {
+      request: async <T>(method: string): Promise<T> => {
+        calls.push(method)
+        if (method === 'task.steer') return { accepted: true } as T
+        if (method === 'task.resume') return { taskId: 'task-1', status: 'queued' } as T
+        throw new Error(`Unexpected RPC method: ${method}`)
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const assistant = createDaemonAiAssistant(client)
+    await expect(assistant.steerTask?.('task-1', { direction: '收束' })).resolves.toBe(true)
+    await expect(assistant.resumeTask?.('task-1')).resolves.toBeUndefined()
+    expect(calls).toEqual(['task.steer', 'task.resume'])
+  })
 })

@@ -181,6 +181,22 @@ describe('vertical slice orchestration', () => {
     await expect(pending).rejects.toThrow(/cancelled|superseded/i)
   })
 
+  it('keeps the diagnostic boundary tied to the newest document revision', async () => {
+    const gateway = makeGateway()
+    const scheduler = new ContinuityAuditScheduler(
+      new CreativeIntelligence(gateway, { artifactStore: createMemoryArtifactStore() }),
+      { debounceMs: 0 },
+    )
+    const first = scheduler.schedule({ taskId: 'audit-rev-1', document: documents[0], scope: 'document' }, { pollIntervalMs: 0 })
+    const second = scheduler.schedule({ taskId: 'audit-rev-2', document: { ...documents[0], revision: 2 }, scope: 'document' }, { pollIntervalMs: 0 })
+
+    await expect(first).rejects.toThrow(/superseded/i)
+    await expect(second).resolves.toEqual([
+      expect.objectContaining({ id: 'finding-0', severity: 'warning', description: '发现冲突' }),
+    ])
+    expect(gateway.submitted).toEqual(new Set(['audit-rev-2']))
+  })
+
   it('runs VS4 Deep Story Reasoning and forwards steering through the gateway', async () => {
     const gateway = makeSliceGateway()
     const intelligence = new CreativeIntelligence(gateway, {
@@ -219,6 +235,12 @@ describe('vertical slice orchestration', () => {
     expect(first.complete).toBe(false)
     expect(first.completedChunks).toBe(1)
     expect(first.failedChunks).toEqual(['d3:d3'])
+    expect(first.checkpoint).toMatchObject({
+      nextChunk: 2,
+      completedChunkIndexes: [0],
+      failedChunkIndexes: [1],
+      failedChunks: ['d3:d3'],
+    })
     expect(checkpoints.length).toBeGreaterThan(0)
 
     gateway.failTaskIds?.delete(failedTaskId)
