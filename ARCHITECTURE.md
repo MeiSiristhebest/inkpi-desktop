@@ -38,7 +38,7 @@ Tauri 2 shell
 | 文本全文检索、JIT 记忆、任务记录 | Daemon SQLite | 派生数据；不能回写成创作域事实 |
 | AI 产物 | 当前为 Desktop IndexedDB | IndexedDbArtifactStore 的 aiArtifacts store |
 
-SQLite 的 DomainProjectionStore 当前已经保存和校验派生变更日志及游标，但没有被本文范围内的 reducer 证明会把每个 DomainChangeSet 物化到 documents、StoryState 或其他读模型表。具体的文档/故事投影仍是待验证项。
+SQLite 的 DomainProjectionStore 通过 DomainMaterializer 将 DomainChangeSet 物化到 workspaces、folders、documents 和 document_snapshots 等派生读模型；materializer 处理父子顺序、删除级联和从变更日志重建。DomainMaterializer 的增量、快照恢复、重建和持久化重启测试已覆盖这些边界。StoryState 的完整派生读模型仍不在当前 reducer 范围内。
 
 workspaceId 是协议中的同步范围标识；Desktop 项目仓储当前把 projectId 作为该值使用。协议没有另定义 projectId 字段。
 
@@ -275,7 +275,7 @@ TaskRouter observer 和 task.event 可记录 taskId、kind、状态、时间、p
 
 ## 11. 插件与 Legacy 状态
 
-src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id。当前有 22 个插件组件通过 PluginHostContext.aiAssistant.runAnalysis 生成 plugin.<id>.analysis 任务；其余 22 个插件尚未从代码证据确认属于 AI Task、Context Provider、Tool、Workflow、UI-only 或 Hybrid 分类。
+src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id；src/ai/tasks/pluginRuntimeCatalog.ts 为 44 个条目逐一标注 pure-local、ai-task、context-provider、tool、workflow、ui-only 或 hybrid 边界。当前有 22 个插件组件通过 PluginHostContext.aiAssistant.runAnalysis 生成 plugin.<id>.analysis 任务，其余条目也已显式分类和指向 Desktop、本地引擎、Story Context、Extension Tool 或 Runtime Workflow。
 
 src/architecture-ai.test.ts 已覆盖：
 

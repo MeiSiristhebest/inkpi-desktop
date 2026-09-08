@@ -114,7 +114,7 @@ InkPi Desktop 是 **InkPi** 的官方桌面工作台客户端。它将高性能�
 后端守护进程由 [Bun](https://bun.sh) 编译为单个独立的二进制文件（`inkpi.exe`）。终端用户运行桌面端**完全免装 Node.js、pnpm 或额外运行时环境**。
 
 ### 2. 沉浸式写作流与幽灵补全
-基于 Tiptap 与 Novel 深度定制，支持 AI 实时幽灵补全提示（`session.ghost.suggest`）、行内润色、实时字数统计与中文排版格式化。
+基于 Tiptap 与 Novel 深度定制，支持通过统一 Task Runtime 的 AI 实时幽灵补全、行内润色、实时字数统计与中文排版格式化。
 
 ### 3. Living Codex 设定集图谱与 AC 自动机
 - $O(N+M)$ Aho-Corasick 多模式串匹配引擎，毫秒级扫描数千个世界观词条。

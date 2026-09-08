@@ -10,7 +10,7 @@ Thank you for your interest in contributing to InkPi Desktop!
 4. **Clean Architecture & Separation of Concerns**: Maintain decoupling between Tauri Rust host, externalBin daemon sidecar, and Vite/React editor SPA.
 5. **Frontend Ports & Adapters**: Never import `db/indexedDB` or call `window.confirm` / `navigator.clipboard` / `URL.createObjectURL` / `Date.now()` / `Math.random()` from `components/`, `domain/`, `core/`, `hooks/`, `plugins/**/components/`. Depend on `src/ports/` interfaces and consume `src/adapters/` implementations. Inject non-determinism via the `Clock` / `IdGenerator` / `RandomSource` ports. The `src/architecture.test.ts` guard fails the build on any violation.
    - Repositories expose **per-project** queries (`getVolumesByProject` / `getChaptersByProject`); do not fetch the global store and filter by `projectId` in memory.
-   - Use the semantic `AiAssistant` port (`openSession` / `suggestContinuation` / `prompt`); never hand-write `'session.*'` RPC strings.
+   - Use the semantic `AiAssistant.runTask` port; never hand-write `task.*`, `session.*`, or `agent.*` RPC strings outside the adapter boundary.
    - Keep `RichEditor` a passive view: add editor interactions via `useChapterEditorModel` actions, not new `useState`; extract reusable blocks into `src/components/editor/organisms/`.
 
 ## 🚀 Development Workflow
