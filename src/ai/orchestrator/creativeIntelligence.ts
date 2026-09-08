@@ -6,6 +6,14 @@ import type {
   TaskSubmitResult,
 } from '@inkpi/protocol'
 import {
+  ContextCache,
+  createDeterministicTaskCacheKey,
+  serializeKey,
+  type DeterministicTaskCacheKey,
+  type TaskCacheKeyDefaults,
+} from '../cache'
+import { CapabilityRouter, type RuntimeRoute, type RouteDecision } from '../routing'
+import {
   createContinueTask,
   createContinuityAuditTask,
   createDeepReasoningTask,
@@ -42,15 +50,52 @@ export interface RunTaskOptions {
   onProgress?: (snapshot: TaskStatusSnapshot) => void
 }
 
+export interface CreativeIntelligenceOptions extends TaskCacheKeyDefaults {
+  cache?: ContextCache<TaskResult>
+  modelId?: string
+  providerId?: string
+  capabilityRouter?: CapabilityRouter
+  /** Short alias for callers that already expose a router property. */
+  router?: CapabilityRouter
+  /** An empty array is an explicit no-route configuration and fails at run time. */
+  routes?: RuntimeRoute[]
+}
+
 export class CreativeIntelligence {
   private readonly gateway: CreativeTaskGateway
+  private readonly cache: ContextCache<TaskResult>
+  private readonly capabilityRouter: CapabilityRouter
+  private readonly cacheKeyDefaults: TaskCacheKeyDefaults
 
-  constructor(gateway: CreativeTaskGateway) {
+  constructor(gateway: CreativeTaskGateway, options: CreativeIntelligenceOptions = {}) {
     this.gateway = gateway
+    this.cache = options.cache ?? new ContextCache<TaskResult>()
+    this.capabilityRouter =
+      options.capabilityRouter ??
+      options.router ??
+      new CapabilityRouter(options.routes === undefined ? [createDefaultGatewayRoute(options)] : options.routes)
+    this.cacheKeyDefaults = {
+      instruction: options.instruction,
+      instructionVersion: options.instructionVersion,
+      skill: options.skill,
+      skillVersion: options.skillVersion,
+      model: options.model ?? options.modelId,
+      modelId: options.modelId ?? options.model,
+      provider: options.provider ?? options.providerId,
+      providerId: options.providerId ?? options.provider,
+    }
   }
 
   async run(task: AiTask, options: RunTaskOptions = {}): Promise<TaskResult> {
-    await this.gateway.submitTask(task)
+    const decision = this.capabilityRouter.select(task)
+    const cacheKey = createDeterministicTaskCacheKey(task, decision.route, this.cacheKeyDefaults)
+    const cached = this.cache.get(cacheKey)
+    if (cached !== undefined) {
+      return decorateResult(task, cached, decision, cacheKey, true)
+    }
+
+    const routedTask = attachRouteMetadata(task, decision, cacheKey)
+    await this.gateway.submitTask(routedTask)
     const pollIntervalMs = options.pollIntervalMs ?? 100
     while (true) {
       if (options.signal?.aborted) {
@@ -61,7 +106,9 @@ export class CreativeIntelligence {
       options.onProgress?.(snapshot)
       if (isTerminal(snapshot.status)) {
         if (!snapshot.result) throw new Error(`Task ${task.id} ended without a result`)
-        return snapshot.result
+        const result = decorateResult(task, snapshot.result, decision, cacheKey, false)
+        if (result.status === 'completed') this.cache.set(cacheKey, result)
+        return result
       }
       await delay(pollIntervalMs, options.signal)
     }
@@ -108,6 +155,102 @@ export class CreativeIntelligence {
 
   status(taskId: string): Promise<TaskStatusSnapshot> {
     return this.gateway.getTaskStatus(taskId)
+  }
+}
+
+const DEFAULT_GATEWAY_CAPABILITIES = [
+  'creative-writing',
+  'creative-assistant',
+  'text-rewrite',
+  'continuity-audit',
+  'creative-reasoning',
+  'creative-distillation',
+  'plugin-analysis',
+]
+
+function createDefaultGatewayRoute(options: CreativeIntelligenceOptions): RuntimeRoute {
+  return {
+    id: 'creative-gateway',
+    modelId: options.modelId ?? options.model,
+    providerId: options.providerId ?? options.provider ?? 'creative-gateway',
+    capabilities: DEFAULT_GATEWAY_CAPABILITIES,
+    online: true,
+    modelCapabilities: {
+      streaming: true,
+      toolCalling: true,
+      parallelToolCalling: true,
+      structuredOutput: true,
+      jsonSchema: true,
+      reasoning: true,
+      promptCaching: true,
+      imageInput: true,
+      maxContextTokens: Number.MAX_SAFE_INTEGER,
+      maxOutputTokens: Number.MAX_SAFE_INTEGER,
+    },
+    metadata: {
+      providerId: options.providerId ?? options.provider ?? 'creative-gateway',
+      source: 'creative-intelligence-default',
+    },
+  }
+}
+
+function attachRouteMetadata(task: AiTask, decision: RouteDecision, cacheKey: DeterministicTaskCacheKey): AiTask {
+  const routeMetadata = decision.route.metadata ? { ...decision.route.metadata } : undefined
+  return {
+    ...task,
+    metadata: {
+      ...task.metadata,
+      routeId: decision.route.id,
+      providerId: cacheKey.provider,
+      modelId: cacheKey.model,
+      routing: {
+        routeId: decision.route.id,
+        providerId: cacheKey.provider,
+        modelId: cacheKey.model,
+        matchedCapabilities: [...decision.matchedCapabilities],
+        score: decision.score,
+        routeMetadata,
+      },
+      cache: {
+        layer: cacheKey.layer || 'provider',
+        key: serializeKey(cacheKey),
+      },
+    },
+  }
+}
+
+function decorateResult(
+  task: AiTask,
+  result: TaskResult,
+  decision: RouteDecision,
+  cacheKey: DeterministicTaskCacheKey,
+  cacheHit: boolean,
+): TaskResult {
+  const routeMetadata = decision.route.metadata ? { ...decision.route.metadata } : undefined
+  return {
+    ...result,
+    taskId: task.id,
+    kind: task.kind,
+    provenance: {
+      ...(result.provenance || {}),
+      routeId: decision.route.id,
+      providerId: cacheKey.provider,
+      modelId: cacheKey.model,
+      matchedCapabilities: [...decision.matchedCapabilities],
+      ...(decision.score === undefined ? {} : { routeScore: decision.score }),
+      ...(routeMetadata ? { routeMetadata } : {}),
+      instruction: cacheKey.instruction,
+      skill: cacheKey.skill,
+      ...(cacheKey.instructionVersion ? { instructionVersion: cacheKey.instructionVersion } : {}),
+      ...(cacheKey.skillVersion ? { skillVersion: cacheKey.skillVersion } : {}),
+      ...(cacheKey.projectRevision === undefined ? {} : { projectRevision: cacheKey.projectRevision }),
+      contextFingerprint: cacheKey.contextFingerprint,
+      intentFingerprint: cacheKey.intentFingerprint,
+      cacheKey: serializeKey(cacheKey),
+      cacheLayer: cacheKey.layer || 'provider',
+      cacheHit,
+      cache: { hit: cacheHit, key: serializeKey(cacheKey), layer: cacheKey.layer || 'provider' },
+    },
   }
 }
 

@@ -28,7 +28,10 @@ export interface RuntimeRoute {
   capabilities: string[]
   online: boolean
   priority?: number
+  providerId?: string
+  provider?: string
   modelId?: string
+  model?: string
   modelCapabilities?: ModelCapabilities
   metadata?: Record<string, unknown>
 }
@@ -93,8 +96,10 @@ function cloneRoute(route: RuntimeRoute): RuntimeRoute {
 
 function satisfiesModel(route: RuntimeRoute, task: AiTask, outputFormats: string[]): boolean {
   const capabilities = route.modelCapabilities
-  if (!capabilities) return true
   const requirements = task.requirements
+  if (!capabilities) {
+    return !requiresExplicitModelCapability(task, outputFormats)
+  }
   if ((requirements?.streaming === true || requirements?.needsStreaming === true) && capabilities.streaming !== true) return false
   if ((task.executionPolicy?.strategy === 'reasoning' || requirements?.needsReasoning === true) && capabilities.reasoning !== true) return false
   if ((requirements?.tools?.length || requirements?.needsTools === true) && capabilities.toolCalling !== true && capabilities.tools !== true) return false
@@ -111,6 +116,23 @@ function satisfiesModel(route: RuntimeRoute, task: AiTask, outputFormats: string
         ? capabilities.structuredOutput === true &&
           (task.outputContract?.schemaId === undefined || capabilities.jsonSchema === true)
         : capabilities.patchOutput === true)
+}
+
+function requiresExplicitModelCapability(task: AiTask, outputFormats: string[]): boolean {
+  const requirements = task.requirements
+  return Boolean(
+    requirements?.streaming === true ||
+      requirements?.needsStreaming === true ||
+      requirements?.needsTools === true ||
+      requirements?.tools?.length ||
+      requirements?.needsStructuredOutput === true ||
+      requirements?.needsReasoning === true ||
+      task.executionPolicy?.strategy === 'reasoning' ||
+      requirements?.modalities?.includes('vision') ||
+      requirements?.minContextTokens !== undefined ||
+      requirements?.minimumContext !== undefined ||
+      outputFormats.some((format) => format === 'structured' || format === 'patch'),
+  )
 }
 
 function routeScore(route: RuntimeRoute): number {

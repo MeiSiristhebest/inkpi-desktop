@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
 import type { SemanticDocument } from '../domain/content'
 import {
+  CapabilityRouter,
+  ContextCache,
   CREATIVE_TASK_KINDS,
   CreativeIntelligence,
+  NoCapableRouteError,
   createContinueTask,
   createContinuityAuditTask,
   createDeepReasoningTask,
@@ -125,5 +129,131 @@ describe('Creative Intelligence Layer', () => {
     )
     expect(result.status).toBe('completed')
     expect(calls).toBe(2)
+  })
+
+  it('routes task execution, reuses cache hits, and invalidates on project revision', async () => {
+    const submitted: AiTask[] = []
+    const gateway = {
+      submitTask: async (task: AiTask) => {
+        submitted.push(task)
+        return { taskId: task.id, status: 'queued' as const }
+      },
+      cancelTask: async (taskId: string) => ({ taskId, cancelled: true, status: 'cancelled' as const }),
+      getTaskStatus: async (taskId: string) => ({
+        taskId,
+        kind: CREATIVE_TASK_KINDS.continue,
+        status: 'completed' as const,
+        result: {
+          taskId,
+          kind: CREATIVE_TASK_KINDS.continue,
+          status: 'completed' as const,
+          output: { format: 'text' as const, text: 'cached continuation' },
+        },
+      }),
+    }
+    const cache = new ContextCache<TaskResult>()
+    const intelligence = new CreativeIntelligence(gateway, {
+      capabilityRouter: new CapabilityRouter([
+        {
+          id: 'preferred-route',
+          providerId: 'provider-a',
+          modelId: 'model-a',
+          capabilities: ['creative-writing'],
+          online: true,
+          priority: 10,
+          metadata: { region: 'local' },
+          modelCapabilities: {
+            streaming: true,
+            toolCalling: true,
+            structuredOutput: true,
+            jsonSchema: true,
+            reasoning: true,
+            promptCaching: true,
+            maxContextTokens: 32_000,
+            maxOutputTokens: 4_096,
+          },
+        },
+      ]),
+      cache,
+    })
+    const baseTask = createContinueTask({ taskId: 'cache-1', document })
+    const task = {
+      ...baseTask,
+      metadata: {
+        ...baseTask.metadata,
+        instructionVersion: 'instruction-v1',
+        skillVersion: 'skill-v1',
+        projectRevision: 4,
+        contextFingerprint: 'context-v1',
+      },
+    }
+
+    const first = await intelligence.run(task, { pollIntervalMs: 0 })
+    const second = await intelligence.run({ ...task, id: 'cache-2' }, { pollIntervalMs: 0 })
+    const third = await intelligence.run(
+      { ...task, id: 'cache-3', metadata: { ...task.metadata, projectRevision: 5 } },
+      { pollIntervalMs: 0 },
+    )
+
+    expect(submitted).toHaveLength(2)
+    expect(cache.stats()).toMatchObject({ hits: 1, misses: 2 })
+    expect(first.provenance).toMatchObject({
+      routeId: 'preferred-route',
+      providerId: 'provider-a',
+      modelId: 'model-a',
+      routeMetadata: { region: 'local' },
+      instructionVersion: 'instruction-v1',
+      skillVersion: 'skill-v1',
+      projectRevision: 4,
+      contextFingerprint: 'context-v1',
+      cacheHit: false,
+    })
+    expect(second.taskId).toBe('cache-2')
+    expect(second.provenance).toMatchObject({ cacheHit: true, routeId: 'preferred-route' })
+    expect(third.provenance).toMatchObject({ cacheHit: false, projectRevision: 5 })
+    expect(submitted[0].metadata).toMatchObject({
+      routeId: 'preferred-route',
+      providerId: 'provider-a',
+      modelId: 'model-a',
+      routing: { routeId: 'preferred-route', matchedCapabilities: ['creative-writing'] },
+    })
+  })
+
+  it('fails before submission when no route or model capability can satisfy a task', async () => {
+    const submitted: AiTask[] = []
+    const gateway = {
+      submitTask: async (task: AiTask) => {
+        submitted.push(task)
+        return { taskId: task.id, status: 'queued' as const }
+      },
+      cancelTask: async (taskId: string) => ({ taskId, cancelled: true, status: 'cancelled' as const }),
+      getTaskStatus: async () => ({ taskId: 'never', kind: 'never', status: 'failed' as const }),
+    }
+
+    await expect(
+      new CreativeIntelligence(gateway, { routes: [] }).run(createContinueTask({ taskId: 'no-route', document })),
+    ).rejects.toThrow(NoCapableRouteError)
+    await expect(
+      new CreativeIntelligence(gateway, {
+        capabilityRouter: new CapabilityRouter([
+          {
+            id: 'non-streaming',
+            capabilities: ['creative-writing'],
+            online: true,
+            modelCapabilities: {
+              streaming: false,
+              toolCalling: false,
+              structuredOutput: false,
+              jsonSchema: false,
+              reasoning: false,
+              promptCaching: false,
+              maxContextTokens: 4_096,
+              maxOutputTokens: 512,
+            },
+          },
+        ]),
+      }).run(createContinueTask({ taskId: 'capability-mismatch', document })),
+    ).rejects.toThrow(NoCapableRouteError)
+    expect(submitted).toHaveLength(0)
   })
 })

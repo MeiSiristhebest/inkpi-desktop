@@ -1,15 +1,52 @@
+import type { AiTask } from '@inkpi/protocol'
+
 export type CacheLayer = 'context' | 'semantic' | 'provider'
 
 export interface ContextCacheKey {
   taskKind: string
   contextFingerprint: string
+  /** Stable runtime instruction id/version. Dynamic user intent is separate. */
+  instruction?: string
+  /** Stable skill id/version. */
+  skill?: string
+  /** Hash of task input that is not represented by the compiled context. */
+  intentFingerprint?: string
   modelId?: string
   model?: string
+  providerId?: string
+  provider?: string
   instructionVersion?: string
   skillVersion?: string
   projectRevision?: number
-  providerId?: string
   layer?: CacheLayer
+}
+
+export interface CacheRouteIdentity {
+  id?: string
+  modelId?: string
+  model?: string
+  providerId?: string
+  provider?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface TaskCacheKeyDefaults {
+  instruction?: string
+  instructionVersion?: string
+  skill?: string
+  skillVersion?: string
+  model?: string
+  modelId?: string
+  provider?: string
+  providerId?: string
+}
+
+export interface DeterministicTaskCacheKey extends ContextCacheKey {
+  instruction: string
+  skill: string
+  intentFingerprint: string
+  model: string
+  provider: string
 }
 
 export interface ContextCacheEntry<T> {
@@ -118,18 +155,133 @@ export class ContextCache<T> {
 }
 
 export function serializeKey(key: ContextCacheKey): string {
-  return [
-    key.layer || 'context',
-    key.taskKind,
-    key.contextFingerprint,
-    key.projectRevision === undefined ? '' : String(key.projectRevision),
-    key.modelId || key.model || '',
-    key.instructionVersion || '',
-    key.skillVersion || '',
-    key.providerId || '',
+  const parts: Array<[string, string]> = [
+    ['layer', key.layer || 'context'],
+    ['taskKind', key.taskKind],
+    ['instruction', key.instruction || ''],
+    ['skill', key.skill || ''],
+    ['instructionVersion', key.instructionVersion || ''],
+    ['skillVersion', key.skillVersion || ''],
+    ['projectRevision', key.projectRevision === undefined ? '' : String(key.projectRevision)],
+    ['contextFingerprint', key.contextFingerprint],
+    ['intentFingerprint', key.intentFingerprint || ''],
+    ['model', key.model || key.modelId || ''],
+    ['provider', key.provider || key.providerId || ''],
   ]
-    .map((part) => encodeURIComponent(part))
-    .join('|')
+  return parts.map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join('&')
+}
+
+/**
+ * Builds the cache identity used by task execution. The task id is deliberately
+ * excluded so equivalent requests can share a provider response.
+ */
+export function createDeterministicTaskCacheKey(
+  task: AiTask,
+  route?: CacheRouteIdentity,
+  defaults: TaskCacheKeyDefaults = {},
+): DeterministicTaskCacheKey {
+  const metadata = asRecord(task.metadata) ?? {}
+  const contextMetadata = asRecord(task.contextPolicy?.metadata) ?? {}
+  const payload = asRecord(task.input.payload)
+  const context = asRecord(payload?.context) ?? {}
+  const routeMetadata = asRecord(route?.metadata) ?? {}
+
+  const instructionVersion = firstString(metadata.instructionVersion, defaults.instructionVersion)
+  const skillVersion = firstString(metadata.skillVersion, defaults.skillVersion)
+  const instruction = firstString(
+    metadata.instructionId,
+    instructionVersion,
+    metadata.instruction,
+    defaults.instruction,
+    'runtime-default',
+  ) ?? 'runtime-default'
+  const skill = firstString(
+    metadata.skillId,
+    skillVersion,
+    metadata.skill,
+    defaults.skill,
+    'skill-default',
+  ) ?? 'skill-default'
+  const projectRevision = firstNumber(
+    metadata.projectRevision,
+    contextMetadata.projectRevision,
+    context.projectRevision,
+    task.input.selection?.revision,
+  )
+  const contextFingerprint = firstString(
+    metadata.contextFingerprint,
+    contextMetadata.contextFingerprint,
+    context.fingerprint,
+    hash(stableSerialize({ input: task.input, intent: task.intent })),
+  ) ?? 'context-unknown'
+  const model =
+    firstString(route?.modelId, route?.model, metadata.modelId, metadata.model, defaults.model, defaults.modelId, 'model-unknown') ??
+    'model-unknown'
+  const provider = firstString(
+    route?.providerId,
+    route?.provider,
+    routeMetadata.providerId,
+    routeMetadata.provider,
+    metadata.providerId,
+    metadata.provider,
+    defaults.provider,
+    defaults.providerId,
+    route?.id,
+    'provider-unknown',
+  ) ?? 'provider-unknown'
+
+  return {
+    layer: 'provider',
+    taskKind: task.kind,
+    instruction,
+    skill,
+    instructionVersion,
+    skillVersion,
+    projectRevision,
+    contextFingerprint,
+    intentFingerprint: hash(stableSerialize({ input: task.input, intent: task.intent })),
+    model,
+    modelId: model,
+    provider,
+    providerId: provider,
+  }
+}
+
+/** Alias for callers that use the shorter cache-key name. */
+export const createTaskCacheKey = createDeterministicTaskCacheKey
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === 'string' && value.length > 0)
+}
+
+function firstNumber(...values: unknown[]): number | undefined {
+  return values.find((value): value is number => typeof value === 'number' && Number.isFinite(value))
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === undefined) return 'undefined'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? String(value)
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`
+  const record = value as Record<string, unknown>
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`)
+    .join(',')}}`
+}
+
+function hash(value: string): string {
+  let result = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    result ^= value.charCodeAt(index)
+    result = Math.imul(result, 0x01000193)
+  }
+  return (result >>> 0).toString(16).padStart(8, '0')
 }
 
 /** Three explicit cache layers: compiled context, semantic projections, and provider responses. */
