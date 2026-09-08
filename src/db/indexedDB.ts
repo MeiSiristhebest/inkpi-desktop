@@ -9,7 +9,7 @@
 // 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 21
+export const DB_VERSION = 23
 
 export const STORES = [
   'projects',
@@ -64,6 +64,8 @@ export const STORES = [
   'multiverseBranches',
   'voiceScriptCasts',
   'storyboardScenes',
+  'domainChangeSets',
+  'aiArtifacts',
 ] as const
 export type StoreName = (typeof STORES)[number]
 
