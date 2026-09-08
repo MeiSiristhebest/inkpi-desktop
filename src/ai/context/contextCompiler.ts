@@ -21,7 +21,6 @@ export interface CreativeContext {
   storyState?: StoryState
   storyContext?: StoryContext
   projectRevision?: number
-  instruction?: string
   fingerprint: string
 }
 
@@ -41,7 +40,6 @@ export function compileCreativeContext(input: CreativeContextInput): CreativeCon
     storyState: input.storyState,
     storyContext: compileStoryContext(input.storyState),
     projectRevision: input.projectRevision ?? input.document.revision,
-    instruction: input.instruction,
   }
   return { ...context, fingerprint: fingerprint(context) }
 }

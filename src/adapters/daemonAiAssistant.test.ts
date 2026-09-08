@@ -1,5 +1,6 @@
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { describe, expect, it, vi } from 'vitest'
+import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import type { RpcClient } from '../ports/aiGateway'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 import { createDaemonAiAssistant } from './daemonAiAssistant'
@@ -77,7 +78,10 @@ describe('createDaemonAiAssistant instruction registration', () => {
       'task.status',
     ])
     const payload = harness.calls[0].params as { instructions: Array<Record<string, unknown>> }
-    expect(payload.instructions).toEqual(listPluginInstructionDefinitions())
+    expect(payload.instructions).toEqual([
+      ...listCoreInstructionDefinitions(),
+      ...listPluginInstructionDefinitions(),
+    ])
     expect(payload.instructions.every((instruction) =>
       typeof instruction.id === 'string'
       && typeof instruction.version === 'string'

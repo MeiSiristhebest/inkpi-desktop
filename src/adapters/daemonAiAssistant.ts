@@ -1,5 +1,6 @@
 import type { AiTask, TaskResult, TaskStatusSnapshot, TaskSubmitResult } from '@inkpi/protocol'
 import type { AiAssistant, RpcClient } from '../ports/aiGateway'
+import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 
 /**
@@ -13,7 +14,10 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
     if (!pluginInstructionsReady) {
       pluginInstructionsReady = (async () => {
         await client.request('instruction.register', {
-          instructions: listPluginInstructionDefinitions(),
+          instructions: [
+            ...listCoreInstructionDefinitions(),
+            ...listPluginInstructionDefinitions(),
+          ],
         })
       })().catch((error) => {
         // A failed first handshake must be retryable, while concurrent callers

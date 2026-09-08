@@ -52,7 +52,9 @@ export function createPluginAnalysisTask(request: PluginAnalysisRequest): AiTask
       streaming: true,
     },
     metadata: {
-      instruction: getPluginInstruction(request.pluginId).systemInstruction,
+      ...(isFirstPartyPluginId(request.pluginId)
+        ? {}
+        : { instruction: getPluginInstruction(request.pluginId).systemInstruction }),
       instructionId: getPluginInstruction(request.pluginId).id,
       instructionVersion: getPluginInstruction(request.pluginId).version,
       pluginId: request.pluginId,

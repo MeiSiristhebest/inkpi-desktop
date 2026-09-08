@@ -1,5 +1,6 @@
 export interface DesktopInstructionDefinition {
   id: string
+  taskKind?: string
   version: string
   systemInstruction: string
 }

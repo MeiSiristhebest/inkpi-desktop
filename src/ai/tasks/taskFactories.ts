@@ -90,6 +90,7 @@ export function createContinueTask(input: ContinueTaskInput): AiTask {
     executionPolicy: INTERACTIVE_SINGLE_PASS,
     outputContract: TEXT_OUTPUT,
     effectPolicy: READ_ONLY_EFFECT,
+    intent: input.instruction,
     requirements: {
       capabilities: ['creative-writing'],
       modalities: ['text'],
@@ -105,6 +106,7 @@ export function createAssistantTask(input: AssistantTaskInput): AiTask {
     executionPolicy: INTERACTIVE_SINGLE_PASS,
     outputContract: TEXT_OUTPUT,
     effectPolicy: READ_ONLY_EFFECT,
+    intent: input.instruction ?? input.question,
     requirements: {
       capabilities: ['creative-assistant'],
       modalities: ['text'],
@@ -120,6 +122,7 @@ export function createRewriteTask(input: RewriteTaskInput): AiTask {
     executionPolicy: INTERACTIVE_SINGLE_PASS,
     outputContract: PATCH_OUTPUT,
     effectPolicy: PROPOSAL_EFFECT,
+    intent: input.instruction ?? input.goal,
     requirements: {
       capabilities: ['creative-writing', 'text-rewrite'],
       modalities: ['text'],
@@ -134,6 +137,7 @@ export function createContinuityAuditTask(input: ContinuityAuditTaskInput): AiTa
     executionPolicy: BACKGROUND_WORKFLOW,
     outputContract: STRUCTURED_OUTPUT,
     effectPolicy: READ_ONLY_EFFECT,
+    intent: input.instruction,
     requirements: {
       capabilities: ['continuity-audit'],
       modalities: ['text'],
@@ -148,6 +152,7 @@ export function createDeepReasoningTask(input: DeepReasoningTaskInput): AiTask {
     executionPolicy: INTERACTIVE_REASONING,
     outputContract: STRUCTURED_OUTPUT,
     effectPolicy: READ_ONLY_EFFECT,
+    intent: input.instruction ?? input.question,
     requirements: {
       capabilities: ['creative-reasoning'],
       modalities: ['text'],
@@ -163,6 +168,7 @@ export function createDistillationTask(input: DistillationTaskInput): AiTask {
     executionPolicy: BACKGROUND_WORKFLOW,
     outputContract: STRUCTURED_OUTPUT,
     effectPolicy: READ_ONLY_EFFECT,
+    intent: input.instruction,
     requirements: {
       capabilities: ['creative-distillation'],
       modalities: ['text'],
@@ -179,6 +185,7 @@ function createCreativeTask(
     executionPolicy: ExecutionPolicy
     outputContract: OutputContract
     effectPolicy: EffectPolicy
+    intent?: string
     requirements: NonNullable<AiTask['requirements']>
     extra: Record<string, unknown>
   },
@@ -206,8 +213,9 @@ function createCreativeTask(
     executionPolicy: { ...options.executionPolicy },
     outputContract: { ...options.outputContract },
     effectPolicy: { ...options.effectPolicy },
+    ...(options.intent ? { intent: options.intent } : {}),
     requirements: { ...options.requirements },
-    metadata: { ...input.metadata, contextFingerprint: context.fingerprint, instruction: input.instruction },
+    metadata: { ...input.metadata, contextFingerprint: context.fingerprint },
   }
 }
 
