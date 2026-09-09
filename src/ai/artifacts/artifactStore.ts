@@ -1,6 +1,7 @@
 import type { AiTask, TaskResult, TaskOutput } from '@inkpi/protocol'
 import { db } from '../../db/indexedDB'
 import type { IdGenerator } from '../../ports/idGenerator'
+import { normalizeArtifactForPersistence } from './artifactExport'
 
 export interface ArtifactProvenance {
   taskId?: string
@@ -91,23 +92,25 @@ export class IndexedDbArtifactStore implements ArtifactStore {
   private static readonly saveLocks = new Map<string, Promise<void>>()
 
   async save(artifact: AiArtifact): Promise<void> {
-    const previous = IndexedDbArtifactStore.saveLocks.get(artifact.id) ?? Promise.resolve()
+    const serializableArtifact = normalizeArtifactForPersistence(artifact)
+    const previous =
+      IndexedDbArtifactStore.saveLocks.get(serializableArtifact.id) ?? Promise.resolve()
     const current = previous
       .catch(() => undefined)
       .then(async () => {
-        const existing = await this.get(artifact.id)
+        const existing = await this.get(serializableArtifact.id)
         if (existing) {
-          assertCompatibleArtifact(existing, artifact)
+          assertCompatibleArtifact(existing, serializableArtifact)
           return
         }
-        await db.put('aiArtifacts', artifact)
+        await db.put('aiArtifacts', serializableArtifact)
       })
-    IndexedDbArtifactStore.saveLocks.set(artifact.id, current)
+    IndexedDbArtifactStore.saveLocks.set(serializableArtifact.id, current)
     try {
       await current
     } finally {
-      if (IndexedDbArtifactStore.saveLocks.get(artifact.id) === current) {
-        IndexedDbArtifactStore.saveLocks.delete(artifact.id)
+      if (IndexedDbArtifactStore.saveLocks.get(serializableArtifact.id) === current) {
+        IndexedDbArtifactStore.saveLocks.delete(serializableArtifact.id)
       }
     }
   }
@@ -185,7 +188,7 @@ export class ArtifactRuntime {
       readLineageString(task, 'executionRunId') ??
       readString(result.provenance, 'executionRunId')
     const createdAt = this.now()
-    const artifact: AiArtifact = {
+    const artifact = normalizeArtifactForPersistence({
       id: resolvedArtifactId,
       taskId: task.id,
       kind: task.kind,
@@ -222,7 +225,7 @@ export class ArtifactRuntime {
       createdAt,
       updatedAt: this.now(),
       metadata: cloneRecord(task.metadata),
-    }
+    })
 
     const pending = this.pendingSaves.get(artifact.id)
     if (pending) {
