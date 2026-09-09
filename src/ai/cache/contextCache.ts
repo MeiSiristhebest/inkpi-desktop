@@ -1,6 +1,18 @@
 import type { AiTask } from '@inkpi/protocol'
+import {
+  SharedCacheMetrics,
+  type CacheMetricEvent,
+  type SharedCacheMetricsPort,
+} from './sharedCacheMetrics'
 
 export type CacheLayer = 'context' | 'semantic' | 'provider'
+export const CACHE_LAYERS = ['context', 'semantic', 'provider'] as const
+
+export interface CacheInvalidationEvent {
+  reason: 'revision' | 'manual'
+  projectRevision?: number
+  layers?: readonly CacheLayer[]
+}
 
 export interface ContextCacheKey {
   taskKind: string
@@ -55,18 +67,27 @@ export interface ContextCacheEntry<T> {
   createdAt: number
   lastAccessedAt: number
   expiresAt?: number
+  projectRevision?: number
 }
 
 export interface ContextCacheOptions {
   maxEntries?: number
   ttlMs?: number
   now?: () => number
+  metrics?: SharedCacheMetricsPort
 }
 
 export interface ContextCacheStats {
   hits: number
   misses: number
   evictions: number
+  invalidations: number
+}
+
+export interface LayeredContextCacheStats {
+  context: ContextCacheStats
+  semantic: ContextCacheStats
+  provider: ContextCacheStats
 }
 
 export class ContextCache<T> {
@@ -77,11 +98,14 @@ export class ContextCache<T> {
   private hits = 0
   private misses = 0
   private evictions = 0
+  private invalidations = 0
+  private readonly metrics?: SharedCacheMetricsPort
 
   constructor(options: ContextCacheOptions = {}) {
     this.maxEntries = Math.max(1, options.maxEntries ?? 128)
     this.ttlMs = options.ttlMs
     this.now = options.now ?? Date.now
+    this.metrics = options.metrics
   }
 
   get(key: ContextCacheKey): T | undefined {
@@ -89,15 +113,18 @@ export class ContextCache<T> {
     const entry = this.entries.get(cacheKey)
     if (!entry) {
       this.misses += 1
+      this.record('miss')
       return undefined
     }
     const now = this.now()
     if (entry.expiresAt !== undefined && entry.expiresAt <= now) {
       this.entries.delete(cacheKey)
       this.misses += 1
+      this.record('miss')
       return undefined
     }
     this.hits += 1
+    this.record('hit')
     entry.lastAccessedAt = now
     this.entries.delete(cacheKey)
     this.entries.set(cacheKey, entry)
@@ -114,12 +141,14 @@ export class ContextCache<T> {
       createdAt: now,
       lastAccessedAt: now,
       expiresAt: this.ttlMs === undefined ? undefined : now + Math.max(0, this.ttlMs),
+      projectRevision: key.projectRevision,
     })
     while (this.entries.size > this.maxEntries) {
       const oldest = this.entries.keys().next().value
       if (oldest === undefined) break
       this.entries.delete(oldest)
       this.evictions += 1
+      this.record('eviction')
     }
   }
 
@@ -128,11 +157,29 @@ export class ContextCache<T> {
   }
 
   invalidate(key: ContextCacheKey): boolean {
-    return this.entries.delete(serializeKey(key))
+    return this.remove(serializeKey(key))
   }
 
-  clear(): void {
+  invalidateRevision(projectRevision?: number): number {
+    let invalidations = 0
+    for (const [cacheKey, entry] of this.entries) {
+      const stale =
+        projectRevision === undefined ||
+        !Number.isFinite(projectRevision) ||
+        entry.projectRevision === undefined ||
+        !Number.isFinite(entry.projectRevision) ||
+        entry.projectRevision < projectRevision
+      if (stale && this.remove(cacheKey)) invalidations += 1
+    }
+    return invalidations
+  }
+
+  clear(): number {
+    const invalidations = this.entries.size
     this.entries.clear()
+    this.invalidations += invalidations
+    this.record('invalidation', invalidations)
+    return invalidations
   }
 
   size(): number {
@@ -144,13 +191,31 @@ export class ContextCache<T> {
   }
 
   stats(): ContextCacheStats {
-    return { hits: this.hits, misses: this.misses, evictions: this.evictions }
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      evictions: this.evictions,
+      invalidations: this.invalidations,
+    }
   }
 
   resetStats(): void {
     this.hits = 0
     this.misses = 0
     this.evictions = 0
+    this.invalidations = 0
+  }
+
+  private remove(cacheKey: string): boolean {
+    const removed = this.entries.delete(cacheKey)
+    if (!removed) return false
+    this.invalidations += 1
+    this.record('invalidation')
+    return true
+  }
+
+  private record(event: CacheMetricEvent, count = 1): void {
+    this.metrics?.record(event, count)
   }
 }
 
@@ -289,11 +354,14 @@ export class LayeredContextCache<T> {
   readonly context: ContextCache<T>
   readonly semantic: ContextCache<T>
   readonly provider: ContextCache<T>
+  readonly metrics: SharedCacheMetricsPort
 
   constructor(options: ContextCacheOptions = {}) {
-    this.context = new ContextCache<T>(options)
-    this.semantic = new ContextCache<T>(options)
-    this.provider = new ContextCache<T>(options)
+    this.metrics = options.metrics ?? new SharedCacheMetrics()
+    const cacheOptions = { ...options, metrics: this.metrics }
+    this.context = new ContextCache<T>(cacheOptions)
+    this.semantic = new ContextCache<T>(cacheOptions)
+    this.provider = new ContextCache<T>(cacheOptions)
   }
 
   get(layer: CacheLayer, key: Omit<ContextCacheKey, 'layer'>): T | undefined {
@@ -304,17 +372,68 @@ export class LayeredContextCache<T> {
     this.forLayer(layer).set({ ...key, layer }, value)
   }
 
-  clear(): void {
-    this.context.clear()
-    this.semantic.clear()
-    this.provider.clear()
+  invalidate(event: CacheInvalidationEvent): number {
+    return selectLayers(event.layers).reduce(
+      (count, layer) =>
+        count +
+        (event.reason === 'revision'
+          ? this.forLayer(layer).invalidateRevision(event.projectRevision)
+          : this.forLayer(layer).clear()),
+      0,
+    )
   }
 
-  stats(layer: CacheLayer): ContextCacheStats {
-    return this.forLayer(layer).stats()
+  invalidateKey(layer: CacheLayer, key: Omit<ContextCacheKey, 'layer'>): boolean {
+    return this.forLayer(layer).invalidate({ ...key, layer })
+  }
+
+  clear(layer?: CacheLayer): number {
+    if (layer) return this.forLayer(layer).clear()
+    return CACHE_LAYERS.reduce(
+      (count, currentLayer) => count + this.forLayer(currentLayer).clear(),
+      0,
+    )
+  }
+
+  stats(layer: CacheLayer): ContextCacheStats
+  stats(): LayeredContextCacheStats
+  stats(layer?: CacheLayer): ContextCacheStats | LayeredContextCacheStats {
+    if (layer) return this.forLayer(layer).stats()
+    return {
+      context: this.context.stats(),
+      semantic: this.semantic.stats(),
+      provider: this.provider.stats(),
+    }
+  }
+
+  aggregateStats(): ContextCacheStats {
+    return CACHE_LAYERS.reduce(
+      (total, layer) => addStats(total, this.forLayer(layer).stats()),
+      emptyStats(),
+    )
   }
 
   private forLayer(layer: CacheLayer): ContextCache<T> {
-    return layer === 'context' ? this.context : layer === 'semantic' ? this.semantic : this.provider
+    if (layer === 'context') return this.context
+    if (layer === 'semantic') return this.semantic
+    if (layer === 'provider') return this.provider
+    throw new Error(`Unknown cache layer: ${layer}`)
+  }
+}
+
+function selectLayers(layers: readonly CacheLayer[] | undefined): CacheLayer[] {
+  return layers && layers.length > 0 ? [...new Set(layers)] : [...CACHE_LAYERS]
+}
+
+function emptyStats(): ContextCacheStats {
+  return { hits: 0, misses: 0, evictions: 0, invalidations: 0 }
+}
+
+function addStats(left: ContextCacheStats, right: ContextCacheStats): ContextCacheStats {
+  return {
+    hits: left.hits + right.hits,
+    misses: left.misses + right.misses,
+    evictions: left.evictions + right.evictions,
+    invalidations: left.invalidations + right.invalidations,
   }
 }
