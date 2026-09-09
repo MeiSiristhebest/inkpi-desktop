@@ -8,6 +8,12 @@ import { GhostText, clearGhostText as hideGhostText } from '../../extensions/gho
 import { QuoteHighlight } from '../../extensions/quote-highlight'
 import { SmartQuotes } from '../../extensions/smart-quotes'
 import { EntityHighlight, entityHighlightPluginKey } from '../../extensions/entity-highlight'
+import {
+  ContinuityDiagnostics,
+  clearContinuityDiagnostics,
+  setContinuityDiagnostics,
+} from '../../extensions/continuity-diagnostics'
+import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
 import { useChapterEditorModel } from './hooks/useChapterEditorModel'
 import { SensitiveModal } from './modals/SensitiveModal'
 import { LockModal } from './modals/LockModal'
@@ -259,6 +265,7 @@ export const RichEditor: FC<RichEditorProps> = ({
           setShowReferencesSidebar(true)
         },
       }),
+      ContinuityDiagnostics,
     ],
     content: activeChapter?.content || '',
     editorProps: {
@@ -309,6 +316,22 @@ export const RichEditor: FC<RichEditorProps> = ({
   useEffect(() => {
     editorRef.current = editor
   }, [editor])
+
+  // 连续性诊断由右侧工作流面板发布；编辑器只订阅当前章节的结构化结果。
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    const chapterId = activeChapter?.id
+    if (!chapterId) {
+      clearContinuityDiagnostics(editor)
+      return
+    }
+    const syncDiagnostics = () => {
+      setContinuityDiagnostics(editor, continuityDiagnosticsStore.get(projectId, chapterId))
+    }
+    const unsubscribe = continuityDiagnosticsStore.subscribe(projectId, chapterId, syncDiagnostics)
+    syncDiagnostics()
+    return unsubscribe
+  }, [activeChapter?.id, editor, projectId])
 
   // 组件卸载时显式销毁 editor，防止 TipTap 在 React 已卸载 DOM 后仍异步操作节点。
   useEffect(() => {

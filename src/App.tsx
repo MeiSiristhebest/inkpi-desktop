@@ -74,6 +74,7 @@ const ProjectEngine: FC<{
       rightPanel={
         <>
           <CreativeWorkflowsPanel
+            projectId={props.projectId}
             chapters={chapters}
             connected={props.isConnected}
             onContinuityAudit={props.runContinuityAudit}

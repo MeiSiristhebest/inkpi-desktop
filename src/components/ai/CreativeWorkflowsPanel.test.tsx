@@ -22,7 +22,7 @@ describe('CreativeWorkflowsPanel', () => {
       expect(input.input.text).toBe('雨停后，她没有回头。')
       return [{ id: 'finding-1', severity: 'warning' as const, description: '存在未回收伏笔' }]
     })
-    render(<CreativeWorkflowsPanel chapters={[chapter]} connected onContinuityAudit={audit} onDeepReasoning={vi.fn()} onDistillationWorkflow={vi.fn()} onSteerTask={vi.fn()} />)
+    render(<CreativeWorkflowsPanel projectId="project-1" chapters={[chapter]} connected onContinuityAudit={audit} onDeepReasoning={vi.fn()} onDistillationWorkflow={vi.fn()} onSteerTask={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
     await waitFor(() => expect(screen.getByTestId('continuity-findings')).toHaveTextContent('存在未回收伏笔'))
@@ -36,7 +36,7 @@ describe('CreativeWorkflowsPanel', () => {
       return new Promise<{ answer: string; assumptions: string[]; alternatives: string[]; risks: string[] }>((resolve) => { resolveReasoning = resolve })
     })
     const steer = vi.fn(async () => true)
-    render(<CreativeWorkflowsPanel chapters={[chapter]} connected onContinuityAudit={vi.fn()} onDeepReasoning={reasoning} onDistillationWorkflow={vi.fn()} onSteerTask={steer} />)
+    render(<CreativeWorkflowsPanel projectId="project-1" chapters={[chapter]} connected onContinuityAudit={vi.fn()} onDeepReasoning={reasoning} onDistillationWorkflow={vi.fn()} onSteerTask={steer} />)
 
     fireEvent.click(screen.getByRole('button', { name: '深度推理' }))
     fireEvent.click(screen.getByRole('button', { name: '开始深度推理' }))
@@ -61,7 +61,7 @@ describe('CreativeWorkflowsPanel', () => {
         chunkTaskIds: ['project-distillation:chunk:0'],
       }
     })
-    render(<CreativeWorkflowsPanel chapters={[chapter]} connected onContinuityAudit={vi.fn()} onDeepReasoning={vi.fn()} onDistillationWorkflow={distill} onSteerTask={vi.fn()} />)
+    render(<CreativeWorkflowsPanel projectId="project-1" chapters={[chapter]} connected onContinuityAudit={vi.fn()} onDeepReasoning={vi.fn()} onDistillationWorkflow={distill} onSteerTask={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: '项目提炼' }))
     fireEvent.click(screen.getByRole('button', { name: '开始项目提炼' }))
