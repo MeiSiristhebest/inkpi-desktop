@@ -6,6 +6,8 @@ import { htmlToPlain } from '../../domain/text'
 import { semanticDocumentFromText } from '../../domain/content'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
+import { projectContinuityFindingsToEditor, type ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
+import type { SemanticDocument } from '../../domain/content'
 import type {
   DistillationCheckpoint,
   DistillationWorkflowResult,
@@ -46,6 +48,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const [tab, setTab] = useState<WorkflowTab>('audit')
   const [selectedChapterId, setSelectedChapterId] = useState(chapters[0]?.id ?? '')
   const [auditFindings, setAuditFindings] = useState<ContinuityFinding[]>([])
+  const [auditDocument, setAuditDocument] = useState<SemanticDocument | null>(null)
   const [deepResult, setDeepResult] = useState<DeepReasoningResult | null>(null)
   const [distillation, setDistillation] = useState<DistillationWorkflowResult | null>(null)
   const [busy, setBusy] = useState(false)
@@ -72,6 +75,10 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     () => chapters.map((chapter) => semanticDocumentFromText(chapter.id, htmlToPlain(chapter.content || ''), chapter.revision ?? 0)),
     [chapters],
   )
+  const auditMarkers: ContinuityDiagnosticMarker[] = useMemo(
+    () => (auditDocument ? projectContinuityFindingsToEditor(auditDocument, auditFindings) : []),
+    [auditDocument, auditFindings],
+  )
 
   const runAudit = async () => {
     if (!selectedChapter || !connected || busy) return
@@ -82,12 +89,10 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     setBusy(true)
     setError(null)
     setProgress(null)
+    setAuditDocument(documentForAudit(selectedChapter))
+    setAuditFindings([])
     try {
-      const document = semanticDocumentFromText(
-        selectedChapter.id,
-        htmlToPlain(selectedChapter.content || ''),
-        selectedChapter.revision ?? 0,
-      )
+      const document = documentForAudit(selectedChapter)
       const result = await onContinuityAudit(
         {
           taskId: idGenerator.generate(`continuity-${selectedChapter.id}`),
@@ -96,7 +101,10 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         },
         { signal: controller.signal, onProgress: setProgress },
       )
-      if (token === runToken.current) setAuditFindings(result ?? [])
+      if (token === runToken.current) {
+        setAuditDocument(document)
+        setAuditFindings(result ?? [])
+      }
     } catch (cause) {
       if (!controller.signal.aborted && token === runToken.current) {
         setError(cause instanceof Error ? cause.message : String(cause))
@@ -215,11 +223,19 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       {busy && tab === 'audit' && <button type="button" onClick={() => auditController.current?.abort()} className="mt-2 flex items-center gap-1 text-xs text-rose-500"><Square className="h-3 w-3" />取消审计</button>}
       {progress && <div data-testid="workflow-progress" className="mt-2 text-[11px] text-[var(--ink-text-faint)]">{Math.round((progress.progress ?? 0) * 100)}% · {progress.status}</div>}
       {error && <div role="alert" className="mt-2 text-xs text-rose-500">{error}</div>}
-      {tab === 'audit' && auditFindings.length > 0 && <div data-testid="continuity-findings" className="mt-2 space-y-1">{auditFindings.map((finding) => <div key={finding.id} className="rounded border border-[var(--ink-border)] p-1.5 text-xs"><span className="mr-1 font-medium">{finding.severity}</span>{finding.description}</div>)}</div>}
-      {tab === 'audit' && !busy && auditFindings.length === 0 && <p className="mt-2 text-xs text-[var(--ink-text-faint)]">暂无诊断结果。</p>}
+      {tab === 'audit' && auditMarkers.length > 0 && <div data-testid="continuity-findings" className="mt-2 space-y-1">{auditMarkers.map((marker) => <div key={marker.findingId} data-testid="continuity-diagnostic" data-finding-id={marker.findingId} data-location-kind={marker.locationStatus} className="rounded border border-[var(--ink-border)] p-1.5 text-xs"><div><span className="mr-1 font-medium">{marker.severity}</span>{marker.description}</div>{marker.locations.length > 0 ? <div className="mt-1 flex flex-wrap gap-1" aria-label="编辑器诊断位置">{marker.locations.map((location) => <span key={`${marker.findingId}-${location.blockId}`} data-testid="continuity-diagnostic-location" data-block-id={location.blockId} data-semantic-from={location.semanticFrom} data-semantic-to={location.semanticTo} data-editor-from={location.editorFrom} data-editor-to={location.editorTo} className="rounded bg-[var(--ink-bg-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--ink-text-faint)]">编辑器位置 {location.editorFrom}–{location.editorTo}</span>)}</div> : <span data-testid="continuity-diagnostic-unlocated" className="mt-1 inline-block text-[10px] text-[var(--ink-text-faint)]">未定位到编辑器位置</span>}</div>)}</div>}
+      {tab === 'audit' && !busy && auditMarkers.length === 0 && <p className="mt-2 text-xs text-[var(--ink-text-faint)]">暂无诊断结果。</p>}
       {tab === 'reason' && deepResult && <div data-testid="deep-reasoning-result" className="mt-2 space-y-1 text-xs"><p>{deepResult.answer}</p>{deepResult.risks.length > 0 && <p className="text-rose-500">风险：{deepResult.risks.join('；')}</p>}</div>}
       {tab === 'distill' && distillation && <div data-testid="distillation-result" className="mt-2 space-y-1 text-xs"><p>{distillation.facts.summary}</p><p className="text-[var(--ink-text-faint)]">{distillation.completedChunks}/{distillation.totalChunks} chunks · 实体 {distillation.facts.entities.length} · 事件 {distillation.facts.events.length} · 伏笔 {distillation.facts.promises.length}</p>{distillation.failedChunks.length > 0 && <p className="text-amber-500">待重试：{distillation.failedChunks.length}</p>}</div>}
     </section>
+  )
+}
+
+function documentForAudit(chapter: ChapterRecord): SemanticDocument {
+  return semanticDocumentFromText(
+    chapter.id,
+    htmlToPlain(chapter.content || ''),
+    chapter.revision ?? 0,
   )
 }
 

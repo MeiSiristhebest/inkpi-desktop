@@ -18,14 +18,19 @@ const chapter: ChapterRecord = {
 
 describe('CreativeWorkflowsPanel', () => {
   it('runs continuity audit from the UI with canonical plain-text input', async () => {
-    const audit = vi.fn(async (input: { document: { text: string } }) => {
+    let auditedBlockId = ''
+    const audit = vi.fn(async (input: { document: { text: string; blocks: Array<{ id: string }> } }) => {
       expect(input.document.text).toBe('雨停后，她没有回头。')
-      return [{ id: 'finding-1', severity: 'warning' as const, description: '存在未回收伏笔' }]
+      auditedBlockId = input.document.blocks[0].id
+      return [{ id: 'finding-1', severity: 'warning' as const, description: '存在未回收伏笔', blockIds: [input.document.blocks[0].id] }]
     })
     render(<CreativeWorkflowsPanel projectId="project-1" chapters={[chapter]} connected onContinuityAudit={audit} onDeepReasoning={vi.fn()} onDistillationWorkflow={vi.fn()} onSteerTask={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
     await waitFor(() => expect(screen.getByTestId('continuity-findings')).toHaveTextContent('存在未回收伏笔'))
+    expect(screen.getByTestId('continuity-diagnostic')).toHaveAttribute('data-location-kind', 'located')
+    expect(screen.getByTestId('continuity-diagnostic-location')).toHaveAttribute('data-block-id', auditedBlockId)
+    expect(screen.getByTestId('continuity-diagnostic-location')).toHaveTextContent('编辑器位置')
     expect(audit).toHaveBeenCalledOnce()
   })
 
