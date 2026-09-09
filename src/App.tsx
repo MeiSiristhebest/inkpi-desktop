@@ -13,6 +13,7 @@ import { StoryStateProvider } from './core/storyStateContext'
 import { DesktopPluginHostProvider } from './core/pluginHostContext'
 import type { ReactNode } from 'react'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
+import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
 
 const ProjectWorkspace: FC<{
   projectId: string
@@ -153,6 +154,12 @@ const AppShell: FC = () => {
     runDeepReasoning,
     runDistillationWorkflow,
     steerTask,
+    taskRecovery,
+    taskRecoveryLoading,
+    taskRecoveryError,
+    resumeTask,
+    cancelTask,
+    dismissTask,
   } = ai
 
   const content = !activeProjectId ? (
@@ -206,7 +213,21 @@ const AppShell: FC = () => {
     </ErrorBoundary>
   )
 
-  return <PluginProvider>{content}</PluginProvider>
+  return (
+    <PluginProvider>
+      {content}
+      {activeProjectId && (
+        <TaskRecoveryPanel
+          records={taskRecovery}
+          loading={taskRecoveryLoading}
+          error={taskRecoveryError}
+          onResume={resumeTask}
+          onCancel={cancelTask}
+          onDismiss={dismissTask}
+        />
+      )}
+    </PluginProvider>
+  )
 }
 
 export default App

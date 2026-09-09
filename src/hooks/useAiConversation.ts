@@ -2,9 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { connectToDaemon } from '../core/daemonConnection'
 import { inkpiDaemonGateway } from '../adapters/inkpiDaemonGateway'
 import type { AiAssistant } from '../ports/aiGateway'
+import type { Clock } from '../ports/clock'
+import { clock } from '../adapters/clock'
 import type { ModelConfig } from '../core/settings'
 import { DEFAULT_DAEMON_URL } from '../config'
-import type { AiTask, TaskResult } from '@inkpi/protocol'
+import type { AiTask, TaskResult, TaskStatus, TaskStatusSnapshot } from '@inkpi/protocol'
 import { semanticDocumentFromText } from '../domain/content'
 import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
 import { taskResultText } from '../ai/tasks/pluginTasks'
@@ -14,6 +16,11 @@ import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tas
 import type { ProjectDistillationInput, DistillationWorkflowOptions } from '../ai/orchestrator/verticalSlices'
 import type { ContinuityFinding, DeepReasoningResult } from '../ai/results/taskResults'
 import type { DistillationWorkflowResult } from '../ai/orchestrator/verticalSlices'
+import {
+  indexedDbTaskRecoveryStore,
+  type TaskRecoveryRecord,
+  type TaskRecoveryStore,
+} from '../db/taskRecoveryStore'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -31,6 +38,72 @@ interface AiMessage {
   text: string
 }
 
+const RESTART_RESUMABLE_STATUSES: readonly TaskStatus[] = [
+  'created',
+  'queued',
+  'running',
+  'checkpointed',
+]
+
+const RECOVERY_STATUSES: readonly TaskStatus[] = [
+  'interrupted',
+  'failed',
+  'cancelled',
+  'waiting-user',
+]
+
+const isRecoveryStatus = (status: TaskStatus): boolean => RECOVERY_STATUSES.includes(status)
+
+const isAbortError = (error: unknown): boolean =>
+  Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError')
+
+const errorSnapshot = (error: unknown, code: string) => ({
+  code,
+  message: error instanceof Error ? error.message : String(error),
+})
+
+const recoverySnapshot = (snapshot: TaskStatusSnapshot): TaskStatusSnapshot => ({
+  taskId: snapshot.taskId,
+  kind: snapshot.kind,
+  status: snapshot.status,
+  ...(typeof snapshot.progress === 'number' ? { progress: snapshot.progress } : {}),
+  ...(snapshot.startedAt === undefined ? {} : { startedAt: snapshot.startedAt }),
+  ...(snapshot.finishedAt === undefined ? {} : { finishedAt: snapshot.finishedAt }),
+  ...(snapshot.executionRunId ? { executionRunId: snapshot.executionRunId } : {}),
+  ...(snapshot.attempts === undefined ? {} : { attempts: snapshot.attempts }),
+  ...(snapshot.checkpoint ? { checkpoint: { ...snapshot.checkpoint } } : {}),
+  ...(snapshot.error
+    ? {
+        error: {
+          code: snapshot.error.code,
+          message: snapshot.error.message,
+          ...(snapshot.error.retryable === undefined ? {} : { retryable: snapshot.error.retryable }),
+        },
+      }
+    : {}),
+})
+
+const initialTaskSnapshot = (task: AiTask): TaskStatusSnapshot => ({
+  taskId: task.id,
+  kind: task.kind,
+  status: 'queued',
+  attempts: 0,
+})
+
+const normalizeRestartRecord = (record: TaskRecoveryRecord, now: number): TaskRecoveryRecord => {
+  if (!RESTART_RESUMABLE_STATUSES.includes(record.snapshot.status)) return record
+  return {
+    ...record,
+    snapshot: {
+      ...record.snapshot,
+      status: 'interrupted',
+      finishedAt: undefined,
+      error: undefined,
+    },
+    updatedAt: now,
+  }
+}
+
 export interface AiConversation {
   isConnected: boolean
   isReconnecting: boolean
@@ -44,6 +117,12 @@ export interface AiConversation {
   requestGhost: (chapterId: string, text: string) => Promise<string | null>
   sendAiPrompt: (prompt: string, chapterId?: string) => void
   runAiTask: (task: AiTask) => Promise<TaskResult | null>
+  taskRecovery: TaskRecoveryRecord[]
+  taskRecoveryLoading: boolean
+  taskRecoveryError?: string
+  resumeTask: (taskId: string) => Promise<boolean>
+  cancelTask: (taskId: string) => Promise<boolean>
+  dismissTask: (taskId: string) => Promise<boolean>
   steerTask: (taskId: string, input: unknown) => Promise<boolean>
   runContinuityAudit: (input: ContinuityAuditTaskInput, options?: Parameters<NonNullable<AiAssistant['runContinuityAudit']>>[1]) => Promise<ContinuityFinding[] | null>
   runDeepReasoning: (input: DeepReasoningTaskInput, options?: Parameters<NonNullable<AiAssistant['runDeepReasoning']>>[1]) => Promise<DeepReasoningResult | null>
@@ -54,6 +133,10 @@ export interface AiConversation {
 export interface UseAiConversationOptions {
   /** 初始右侧 AI 面板是否开启（默认关闭，保持专注写作） */
   initialPanelOpen?: boolean
+  /** 任务恢复存储可注入，便于验证重启/失败/取消路径。 */
+  taskRecoveryStore?: TaskRecoveryStore
+  /** 时间源可注入，避免恢复快照测试依赖系统时钟。 */
+  clock?: Clock
 }
 
 export function useAiConversation(
@@ -63,15 +146,70 @@ export function useAiConversation(
   options: UseAiConversationOptions = {},
 ): AiConversation {
   const { initialPanelOpen = false } = options
+  const taskStore = options.taskRecoveryStore ?? indexedDbTaskRecoveryStore
+  const clockPort = options.clock ?? clock
   const [isConnected, setIsConnected] = useState(false)
   const [isReconnecting, setIsReconnecting] = useState(false)
   const clientRef = useRef<AiAssistant | null>(null)
   const mountedRef = useRef(false)
+  const workspaceIdRef = useRef(workspaceId)
+  const activeTasksRef = useRef(new Map<string, { projectId?: string; controller: AbortController; task: AiTask }>())
+  const recoveryRecordsRef = useRef<TaskRecoveryRecord[]>([])
 
   const [aiPanelOpen, setAiPanelOpen] = useState(initialPanelOpen)
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
   const [aiInput, setAiInput] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
+  const [taskRecovery, setTaskRecovery] = useState<TaskRecoveryRecord[]>([])
+  const [taskRecoveryLoading, setTaskRecoveryLoading] = useState(Boolean(workspaceId))
+  const [taskRecoveryError, setTaskRecoveryError] = useState<string>()
+
+  const replaceRecoveryRecords = useCallback((records: TaskRecoveryRecord[]) => {
+    const sorted = [...records].sort((left, right) => right.updatedAt - left.updatedAt)
+    recoveryRecordsRef.current = sorted
+    setTaskRecovery(sorted)
+  }, [])
+
+  const upsertRecoveryRecord = useCallback((record: TaskRecoveryRecord) => {
+    if (record.projectId !== workspaceIdRef.current) return
+    const records = recoveryRecordsRef.current.filter((item) => item.task.id !== record.task.id)
+    replaceRecoveryRecords([...records, record])
+  }, [replaceRecoveryRecords])
+
+  const removeRecoveryRecord = useCallback((taskId: string) => {
+    replaceRecoveryRecords(recoveryRecordsRef.current.filter((record) => record.task.id !== taskId))
+  }, [replaceRecoveryRecords])
+
+  const persistRecoveryRecord = useCallback((record: TaskRecoveryRecord) => {
+    void taskStore.save(record).catch((error: unknown) => {
+      if (mountedRef.current && record.projectId === workspaceIdRef.current) {
+        setTaskRecoveryError(error instanceof Error ? error.message : String(error))
+      }
+    })
+  }, [taskStore])
+
+  const removePersistedRecoveryRecord = useCallback((record: TaskRecoveryRecord) => {
+    void taskStore.remove(record.projectId, record.task.id).catch((error: unknown) => {
+      if (mountedRef.current && record.projectId === workspaceIdRef.current) {
+        setTaskRecoveryError(error instanceof Error ? error.message : String(error))
+      }
+    })
+  }, [taskStore])
+
+  const trackTaskSnapshot = useCallback((task: AiTask, snapshot: TaskStatusSnapshot) => {
+    const projectId = workspaceIdRef.current
+    if (!projectId) return
+    const record: TaskRecoveryRecord = {
+      projectId,
+      task,
+      snapshot: recoverySnapshot(snapshot),
+      updatedAt: clockPort.now(),
+    }
+    upsertRecoveryRecord(record)
+    if (isRecoveryStatus(record.snapshot.status) || record.snapshot.status === 'queued' || record.snapshot.status === 'running' || record.snapshot.status === 'checkpointed') {
+      persistRecoveryRecord(record)
+    }
+  }, [clockPort, persistRecoveryRecord, upsertRecoveryRecord])
 
   const initConnection = useCallback(async (url: string = DEFAULT_DAEMON_URL) => {
     setIsReconnecting(true)
@@ -103,11 +241,108 @@ export function useAiConversation(
   }, [])
 
   useEffect(() => {
+    workspaceIdRef.current = workspaceId
+    recoveryRecordsRef.current = []
+    setTaskRecovery([])
+    setTaskRecoveryError(undefined)
+    if (!workspaceId) {
+      setTaskRecoveryLoading(false)
+      return
+    }
+
+    let alive = true
+    setTaskRecoveryLoading(true)
+    void taskStore.list(workspaceId).then((storedRecords) => {
+      if (!alive) return
+      const normalized = storedRecords.map((record) => normalizeRestartRecord(record, clockPort.now()))
+      const recordsById = new Map(normalized.map((record) => [record.task.id, record]))
+      for (const record of recoveryRecordsRef.current) {
+        if (record.projectId !== workspaceId) continue
+        const stored = recordsById.get(record.task.id)
+        if (!stored || record.updatedAt >= stored.updatedAt) recordsById.set(record.task.id, record)
+      }
+      replaceRecoveryRecords([...recordsById.values()])
+      setTaskRecoveryLoading(false)
+      for (const record of normalized) {
+        if (record.snapshot.status === 'interrupted') persistRecoveryRecord(record)
+      }
+    }).catch((error: unknown) => {
+      if (!alive) return
+      setTaskRecoveryLoading(false)
+      setTaskRecoveryError(error instanceof Error ? error.message : String(error))
+    })
+
+    return () => {
+      alive = false
+    }
+  }, [clockPort, persistRecoveryRecord, replaceRecoveryRecords, taskStore, workspaceId])
+
+  useEffect(() => {
     if (!workspaceId || !isConnected || !clientRef.current?.syncDomain) return
     void clientRef.current.syncDomain(workspaceId).catch((error) => {
       console.warn('[InkPi Desktop] Domain projection sync failed:', error)
     })
   }, [isConnected, workspaceId])
+
+  const runTrackedTask = useCallback(
+    async (task: AiTask): Promise<TaskResult | null> => {
+      const client = clientRef.current
+      if (!client || !isConnected || !client.runTask) return null
+
+      const controller = new AbortController()
+      const projectId = workspaceIdRef.current
+      activeTasksRef.current.set(task.id, { projectId: projectId ?? undefined, controller, task })
+      let latestSnapshot = initialTaskSnapshot(task)
+      trackTaskSnapshot(task, latestSnapshot)
+
+      try {
+        const result = await client.runTask(task, {
+          signal: controller.signal,
+          onProgress: (snapshot) => {
+            latestSnapshot = snapshot
+            trackTaskSnapshot(task, snapshot)
+          },
+        })
+        if (!result) {
+          const failedSnapshot: TaskStatusSnapshot = {
+            ...latestSnapshot,
+            status: 'failed',
+            finishedAt: clockPort.now(),
+            error: errorSnapshot(new Error('Task runtime returned no result'), 'no-result'),
+          }
+          trackTaskSnapshot(task, failedSnapshot)
+          return null
+        }
+
+        const terminalSnapshot: TaskStatusSnapshot = {
+          ...latestSnapshot,
+          status: result.status,
+          finishedAt: latestSnapshot.finishedAt ?? clockPort.now(),
+          ...(result.error ? { error: result.error } : {}),
+        }
+        if (result.status === 'completed') {
+          const record = recoveryRecordsRef.current.find((item) => item.task.id === task.id)
+          if (record) {
+            removeRecoveryRecord(task.id)
+            removePersistedRecoveryRecord(record)
+          }
+        } else {
+          trackTaskSnapshot(task, terminalSnapshot)
+        }
+        return result
+      } catch (error: unknown) {
+        const cancelled = controller.signal.aborted || isAbortError(error)
+        trackTaskSnapshot(task, {
+          ...latestSnapshot,
+          status: cancelled ? 'cancelled' : 'failed',
+          finishedAt: clockPort.now(),
+          error: cancelled ? undefined : errorSnapshot(error, 'desktop-task-failed'),
+        })
+        throw error
+      } finally {
+        activeTasksRef.current.delete(task.id)
+      }
+    }, [clockPort, isConnected, removePersistedRecoveryRecord, removeRecoveryRecord, trackTaskSnapshot])
 
   const requestGhost = useCallback(
     async (chapterId: string, text: string): Promise<string | null> => {
@@ -120,12 +355,12 @@ export function useAiConversation(
           selection: { from: document.text.length, to: document.text.length },
           metadata: { modelId: aiModel?.id },
         })
-        return taskResultText(await clientRef.current.runTask(task))
+        return taskResultText(await runTrackedTask(task))
       } catch {
         return null
       }
     },
-    [aiModel?.id, isConnected],
+    [aiModel?.id, isConnected, runTrackedTask],
   )
 
   const sendAiPrompt = useCallback(
@@ -158,7 +393,7 @@ export function useAiConversation(
           question: trimmed,
           metadata: { modelId: aiModel?.id },
         })
-        const result = await clientRef.current.runTask(task)
+        const result = await runTrackedTask(task)
         const text = taskResultText(result) || (result?.error?.message ?? '')
         setAiMessages((prev) => [...prev, { role: 'assistant', text }])
       } catch (err: unknown) {
@@ -173,20 +408,59 @@ export function useAiConversation(
         setAiBusy(false)
       }
     },
-    [aiBusy, aiModel?.id, isConnected],
+    [aiBusy, aiModel?.id, isConnected, runTrackedTask],
   )
 
   const reconnect = useCallback(() => {
     initConnection(wsUrl)
   }, [initConnection, wsUrl])
 
-  const runAiTask = useCallback(
-    async (task: AiTask): Promise<TaskResult | null> => {
-      if (!clientRef.current || !isConnected || !clientRef.current.runTask) return null
-      return clientRef.current.runTask(task)
-    },
-    [isConnected],
-  )
+  const resumeTask = useCallback(async (taskId: string): Promise<boolean> => {
+    const record = recoveryRecordsRef.current.find((item) => item.task.id === taskId)
+    if (!record || !clientRef.current?.resumeTask || !isConnected) return false
+    try {
+      await clientRef.current.resumeTask(taskId)
+      trackTaskSnapshot(record.task, {
+        ...record.snapshot,
+        status: 'queued',
+        finishedAt: undefined,
+        error: undefined,
+      })
+      return true
+    } catch (error: unknown) {
+      trackTaskSnapshot(record.task, {
+        ...record.snapshot,
+        status: 'failed',
+        finishedAt: clockPort.now(),
+        error: errorSnapshot(error, 'resume-failed'),
+      })
+      return false
+    }
+  }, [clockPort, isConnected, trackTaskSnapshot])
+
+  const cancelTask = useCallback(async (taskId: string): Promise<boolean> => {
+    const active = activeTasksRef.current.get(taskId)
+    if (!active) return false
+    active.controller.abort()
+    trackTaskSnapshot(active.task, {
+      taskId,
+      kind: active.task.kind,
+      status: 'cancelled',
+      finishedAt: clockPort.now(),
+    })
+    return true
+  }, [clockPort, trackTaskSnapshot])
+
+  const dismissTask = useCallback(async (taskId: string): Promise<boolean> => {
+    if (activeTasksRef.current.has(taskId)) return false
+    const record = recoveryRecordsRef.current.find((item) => item.task.id === taskId)
+    if (!record) return false
+    removeRecoveryRecord(taskId)
+    removePersistedRecoveryRecord(record)
+    return true
+  }, [removePersistedRecoveryRecord, removeRecoveryRecord])
+
+  const runAiTask = runTrackedTask
 
   const steerTask = useCallback(async (taskId: string, input: unknown) => {
     if (!clientRef.current?.steerTask || !isConnected) return false
@@ -226,6 +500,12 @@ export function useAiConversation(
     requestGhost,
     sendAiPrompt,
     runAiTask,
+    taskRecovery,
+    taskRecoveryLoading,
+    taskRecoveryError,
+    resumeTask,
+    cancelTask,
+    dismissTask,
     steerTask,
     runContinuityAudit,
     runDeepReasoning,
