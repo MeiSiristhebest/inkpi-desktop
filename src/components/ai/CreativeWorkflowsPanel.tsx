@@ -52,6 +52,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   onDeepReasoning,
   onDistillationWorkflow,
   onSteerTask,
+  distillationCheckpointStore = indexedDbDistillationCheckpointStore,
 }) => {
   const [tab, setTab] = useState<WorkflowTab>('audit')
   const [selectedChapterId, setSelectedChapterId] = useState(chapters[0]?.id ?? '')
