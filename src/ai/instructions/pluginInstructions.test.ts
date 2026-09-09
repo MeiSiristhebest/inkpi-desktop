@@ -33,6 +33,23 @@ describe('plugin instruction definitions', () => {
     expect(task.metadata).not.toHaveProperty('instruction')
   })
 
+  it('projects HTML plugin input to canonical semantic text before task construction', () => {
+    const task = createPluginAnalysisTask({
+      pluginId: 'reader-hook',
+      documentId: 'doc-html',
+      input: '<h2>标题</h2><p>甲<strong>乙</strong><br>丙</p>',
+    })
+
+    expect(task.input).toMatchObject({
+      text: '标题\n甲乙\n丙',
+      documentId: 'doc-html',
+      payload: {
+        pluginId: 'reader-hook',
+        analysisInput: '标题\n甲乙\n丙',
+      },
+    })
+  })
+
   it('provides a lazy generic instruction for an extension id', () => {
     const definition = getPluginInstruction('extension-only')
     expect(definition).toEqual({
