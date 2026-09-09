@@ -127,7 +127,7 @@ interface StoryState {
 
 canonical-fact、character-belief、rumor、hypothesis、ai-inference、proposal。
 
-Provenance 记录 sourceType、factLevel、来源文档/块/修订、confidence 和 evidence。isCanonicalFact 只把 factLevel === 'canonical-fact' 视为作者事实。StoryState 的持久化、从所有插件数据源的提取和完整运行时注册仍未形成已验证的端到端链路。
+Provenance 记录 sourceType、factLevel、来源文档/块/修订、confidence 和 evidence。isCanonicalFact 只把 factLevel === 'canonical-fact' 视为作者事实。`StoryStateStore` 与 `IndexedDbStoryStateStore` 已提供 Desktop authoritative 持久化；从所有插件数据源的提取和完整运行时注册仍未形成已验证的端到端链路。
 
 ## 6. Runtime 任务边界
 
@@ -221,19 +221,19 @@ ProposalLedger 的规则：
 - commit 的 apply 回调负责实际写入；写入成功后记录 committedRevision 和 inversePatches。
 - undo 要求当前 revision 等于 committedRevision，并以新 revision 应用 inversePatches。
 
-当前 Proposal Ledger 是 Desktop 本地逻辑，不是 Daemon RPC，也没有统一的 DomainProposal 持久化适配器。Selection Toolbar 已接入文本提案审阅路径；跨窗口/跨设备提案提交仍待验证。
+Proposal Ledger 以 IndexedDB 为 Desktop authoritative store；`RemoteProposalStore` 只把状态投影到 Daemon `proposal.sync.*` RPC，并携带 expectedRevision/stateHash。Selection Toolbar 已接入文本提案审阅路径；跨窗口/跨设备提案提交和完整冲突 UI 仍待验证。
 
 ## 9. 五个 Vertical Slices
 
 | Slice | 当前入口与策略 | 当前状态 |
 | --- | --- | --- |
 | Continue Prose | createContinueTask；creative.continue；completion + interactive；text/ephemeral；read-only。useAiConversation.requestGhost 通过 runTask 获取文本。 | Desktop task assistant 已通过真实 WebSocket child process 验证 completed 和 waiting-user；新增 headless 编辑器集成覆盖 useAiConversation→GhostText→Proposal CAS commit |
-| Selection Rewrite | createRewriteTask；creative.rewrite；completion + interactive；patch/artifact；proposal + approval。 | ProposalLedger 的 accept/reject/modify/rebase/commit/undo/CAS 逻辑存在；完整持久化与冲突 UI 集成待验收 |
+| Selection Rewrite | createRewriteTask；creative.rewrite；completion + interactive；patch/artifact；proposal + approval。 | ProposalLedger 的 accept/reject/modify/rebase/commit/undo/CAS 逻辑、IndexedDB 持久化和 Daemon derived projection 同步已接入；跨窗口/设备冲突 UI 仍待验收 |
 | Continuity Audit | createContinuityAuditTask；narrative.continuity.audit；workflow + background；structured/artifact；ContinuityAuditScheduler 提供 debounce/cancel/dedup。 | 编排和单元测试存在；章节保存触发、诊断到 gutter marker 的生产链路未确认 |
 | Deep Story Reasoning | createDeepReasoningTask；narrative.deep.reason；reasoning + interactive；structured/artifact；TaskModelHandler 支持工具和公开 steering。 | 本地编排、工具循环和 steering 路径存在；长任务 UI、人机介入和真实模型能力路由待验收 |
 | Project Distillation | createDistillationTask；narrative.project.distill；workflow + background；structured/artifact；ProjectDistillationWorkflow 按 chunk 顺序执行并保存 checkpoint。 | map/reduce 风格合并、断点和部分失败逻辑有测试；大项目 benchmark、Daemon 重启恢复和 lineage 端到端待验收 |
 
-`src/adapters/desktopDaemonIntegration.test.ts` 覆盖 Continue 的 completed/waiting-user；`src/adapters/desktopDaemonVerticalSlices.test.ts` 通过另一个真实 child process 覆盖 Rewrite、Continuity Audit、Deep Reasoning 和 Distillation；`src/adapters/editor-ai-chain.integration.test.ts` 进一步通过真实 Daemon/WebSocket、useAiConversation、TipTap GhostText 和 ProposalLedger 覆盖正文写回及 CAS 冲突。五个 task factory 的 RPC、output contract、instruction provenance 和结果持久化已有集成证据；gutter marker、长任务 UI 和完整编辑器链路仍待验收。
+`src/adapters/desktopDaemonIntegration.test.ts` 覆盖 Continue 的 completed/waiting-user；`src/adapters/desktopDaemonVerticalSlices.test.ts` 通过另一个真实 child process 覆盖 Rewrite、Continuity Audit、Deep Reasoning 和 Distillation；`src/adapters/editor-ai-chain.integration.test.ts` 进一步通过真实 Daemon/WebSocket、useAiConversation、TipTap GhostText 和 ProposalLedger 覆盖正文写回及 CAS 冲突。五个 task factory 的 RPC、output contract、instruction provenance 和 Artifact/Proposal 持久化已有集成证据；gutter marker、长任务 UI 和完整编辑器链路仍待验收。
 
 任务工厂引用的 provider id 是 creative.document、creative.story、retrieval.jit。Daemon 目前在注入 JIT retriever 时注册 JitContextProvider；Desktop Story provider 和 document provider 的跨进程注册需继续核对。
 
@@ -249,13 +249,13 @@ ProgressiveSkillRuntime 复用 ExtensionHost、DynamicPluginLoader、ToolRegistr
 
 src/ai/artifacts/artifactStore.ts 定义 Artifact、AiArtifact、ArtifactStore、IndexedDbArtifactStore 和 ArtifactRuntime。Artifact 必须有 id、type、version、content、provenance、createdAt、updatedAt；lineage 可记录 parentArtifactId、sourceTaskId 和 sourceRevision。当前预定义类型包括 story-plan、character-state、open-threads、chapter-summary、audit-report 和 distillation-checkpoint。
 
-只有 output persistence 为 artifact 且任务结果为 completed 或 waiting-user 时，ArtifactRuntime.persistTaskResult 才写入 aiArtifacts。当前没有 Daemon Artifact RPC 或跨端同步协议。
+只有 output persistence 为 artifact 且任务结果为 completed 或 waiting-user 时，ArtifactRuntime.persistTaskResult 才写入 ArtifactStore。Desktop 本地实现为 IndexedDB；Daemon 路径通过 `DaemonArtifactStore` 调用 `artifact.save/get/list`，由 Runtime SQLite context 保存派生产物及 lineage。
 
 ### Cache
 
 ContextCache 和 LayeredContextCache 提供 context、semantic、provider 三层缓存。键可包含 taskKind、contextFingerprint、projectRevision、model、instructionVersion、skillVersion、providerId；实现有 TTL、LRU 淘汰和 hit/miss/eviction 统计。
 
-daemonAiAssistant.runTask 现在经由 CreativeIntelligence，再由其接入 provider-response cache；Runtime ContextPipeline 已有按 task/provider/revision 缓存编译结果并接入 JIT/SQLite retrieval 的集成用例。Desktop provider-response cache 与 Runtime 编译缓存尚未合并为三层默认调用链，semantic/retrieval 统计和跨重启策略仍需测量。
+daemonAiAssistant.runTask 现在经由 CreativeIntelligence，再由其接入 provider-response cache 和计数型 SharedCacheMetrics；Runtime ContextPipeline 已有按 task/provider/revision 缓存编译结果并接入 JIT/SQLite retrieval 的集成用例。Desktop provider-response cache 与 Runtime 编译缓存尚未合并为三层默认调用链，semantic/retrieval 统计和跨重启策略仍需测量。
 
 ### Capability
 
@@ -273,7 +273,7 @@ Desktop 插件指令由 src/ai/instructions/pluginInstructions.ts 的稳定映�
 
 TaskRouter observer 和 task.event 可记录 taskId、kind、状态、时间、progress、结果类型、artifact/proposal ids、checkpoint、provider/model、context fingerprint、context token count、usage、tool trace 和错误摘要。sanitizeProvenance 会删除 thinking、reasoning、chainOfThought、cot 和 rawThinking。
 
-默认协议和持久化路径不得保存完整 Prompt、原始 <think> 或私有 CoT。当前 provenance 已覆盖两类真实 child-process 集成的 instruction id、route 和 artifact/cache 相关字段，但 skill 版本、跨进程 checkpoint/artifact lineage、统一跨层 cache 统计、生产日志脱敏和采样策略仍待验证。
+默认协议和持久化路径不得保存完整 Prompt、原始 <think> 或私有 CoT。当前 provenance 已覆盖真实 child-process 集成的 instruction id、route、Artifact lineage 和 cache 相关字段；skill 版本、跨进程 checkpoint lineage、统一跨层 cache 统计、生产日志脱敏和采样策略仍待验证。
 
 ## 11. 插件与 Legacy 状态
 
@@ -299,7 +299,7 @@ Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线�
 
 在标记 Runtime v1 为最终冻结前，必须完成并记录：
 
-1. 五个 Slice 的完整真实 Desktop ↔ Daemon 集成链路（五个 task factory 的 child-process RPC 和 Continue 的 GhostText→Proposal/CAS headless 链路已覆盖；gutter marker 和长任务 UI 仍待验收）。
+1. 五个 Slice 的完整真实 Desktop ↔ Daemon 集成链路（五个 task factory 的 child-process RPC、Artifact/Proposal 持久化和 Continue 的 GhostText→Proposal/CAS headless 链路已覆盖；gutter marker 和长任务 UI 仍待验收）。
 2. DomainChangeSet 到 SQLite 文档/故事读模型的明确 reducer，及重启、离线、乱序、损坏快照测试。
 3. 三层 Cache、InstructionRegistry、ArtifactStore 在完整生产任务路径的接入证明；Daemon 本地 retryable fallback 已测，真实 provider matrix、跨进程配置和生产 fallback 仍需证明。
 4. 四个第一批 creative skill 的逐个实际 manifest、lazy load、ExtensionHost/ToolRegistry 注册和跨进程测试（逐个 Runtime 激活已测，跨进程仍缺）。
