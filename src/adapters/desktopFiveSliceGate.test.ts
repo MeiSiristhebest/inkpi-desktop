@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import type { Artifact as RuntimeArtifact, TaskOutput, TaskStatusSnapshot } from '@inkpi/protocol'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -50,6 +52,7 @@ interface GateCase {
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const fixturePath = resolve(desktopRoot, 'tests/fixtures/desktopFiveSliceGateHarness.mjs')
 const workspaceId = 'desktop-five-slice-gate-workspace'
+const databasePath = resolve(tmpdir(), `inkpi-five-slice-gate-${randomUUID()}.sqlite`)
 let harness: DaemonHarness | undefined
 let daemon: DaemonReadyMessage
 
@@ -247,8 +250,24 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
       await first.client.close()
     }
 
+    await stopDaemonHarness(harness!.child)
+    harness = startDaemonHarness()
+    daemon = await harness.ready
+
     const second = await connectClient()
     try {
+      for (const item of cases) {
+        const persistedTask = await second.request<TaskStatusSnapshot>('task.status', {
+          taskId: item.task.id,
+        })
+        expect(persistedTask).toMatchObject({
+          taskId: item.task.id,
+          kind: item.task.kind,
+          status: 'completed',
+          result: { output: item.expectedOutput },
+        })
+      }
+
       const proposalRemote = createDaemonProposalSyncRemote(second)
       for (const expected of artifacts) {
         const artifact = await second.request<RuntimeArtifact>('artifact.get', { id: expected.id })
@@ -303,6 +322,10 @@ async function connectClient(): Promise<RpcClient> {
 function startDaemonHarness(): DaemonHarness {
   const child = spawn(process.execPath, [fixturePath], {
     cwd: desktopRoot,
+    env: {
+      ...process.env,
+      INKPI_FIVE_SLICE_GATE_DB: databasePath,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })

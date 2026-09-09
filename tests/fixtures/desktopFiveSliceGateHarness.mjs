@@ -5,17 +5,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const fixtureDirectory = resolve(fileURLToPath(new URL('.', import.meta.url)))
 const inkpiRoot = resolve(fixtureDirectory, '../../../inkpi')
 const serverEntry = pathToFileURL(resolve(inkpiRoot, 'packages/server/dist/index.js')).href
-const storageEntry = pathToFileURL(resolve(inkpiRoot, 'packages/storage/dist/index.js')).href
 const { InkPiDaemon } = await import(serverEntry)
-const { InkDb, ProposalProjectionStore, SqliteArtifactStore } = await import(storageEntry)
+const { createDaemonPersistence } = await import(serverEntry)
 
-const artifactDb = new InkDb(':memory:')
+const persistence = createDaemonPersistence({
+  dbPath: process.env.INKPI_FIVE_SLICE_GATE_DB?.trim() || ':memory:',
+})
 const daemon = new InkPiDaemon({
   host: '127.0.0.1',
   port: 0,
   context: {
-    artifactStore: new SqliteArtifactStore(artifactDb),
-    proposalProjection: new ProposalProjectionStore(artifactDb),
+    ...persistence.context,
   },
 })
 
@@ -106,7 +106,7 @@ const shutdown = async () => {
   if (stopping) return
   stopping = true
   await daemon.stop()
-  artifactDb.close()
+  persistence.close()
   process.exit(0)
 }
 
