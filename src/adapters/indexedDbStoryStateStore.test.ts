@@ -5,7 +5,9 @@ import {
   createStoryState,
   upsertEntity,
   type StoryState,
+  withStoryRevision,
 } from '../domain/story'
+import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { IndexedDbStoryStateStore } from './indexedDbStoryStateStore'
 
 describe('IndexedDbStoryStateStore', () => {
@@ -31,6 +33,49 @@ describe('IndexedDbStoryStateStore', () => {
     await store.remove(workspaceId)
 
     expect(await store.load(workspaceId)).toBeUndefined()
+    const changes = await new IndexedDbDomainChangeStore().list(workspaceId)
+    expect(changes.map((changeSet) => changeSet.changes[0].operation)).toEqual(['upsert', 'delete'])
+  })
+
+  it('writes StoryState changes to the authoritative log and deduplicates identical saves', async () => {
+    const store = new IndexedDbStoryStateStore()
+    const workspaceId = `story-state-log-${crypto.randomUUID()}`
+    const initial = createStoryState()
+    const next = withStoryRevision(initial, 1)
+
+    await store.save(workspaceId, initial)
+    await store.save(workspaceId, initial)
+    await store.save(workspaceId, next)
+
+    const changeSets = await new IndexedDbDomainChangeStore().list(workspaceId)
+    expect(changeSets).toHaveLength(2)
+    expect(changeSets.map((changeSet) => changeSet.revision)).toEqual([1, 2])
+    expect(changeSets[0].changes[0]).toMatchObject({
+      aggregateType: 'story-state',
+      aggregateId: workspaceId,
+      operation: 'upsert',
+      revision: 0,
+      payload: initial,
+    })
+    expect(changeSets[1].changes[0]).toMatchObject({
+      aggregateType: 'story-state',
+      operation: 'upsert',
+      revision: 1,
+      payload: next,
+    })
+  })
+
+  it('serializes concurrent saves and rejects a stale StoryState revision', async () => {
+    const store = new IndexedDbStoryStateStore()
+    const workspaceId = `story-state-concurrency-${crypto.randomUUID()}`
+    await store.save(workspaceId, createStoryState())
+
+    const stale = withStoryRevision(createStoryState(), 1)
+    const current = withStoryRevision(createStoryState(), 2)
+    await expect(
+      Promise.all([store.save(workspaceId, current), store.save(workspaceId, stale)]),
+    ).rejects.toThrow('revision conflict')
+    expect((await store.load(workspaceId))?.revision).toBe(2)
   })
 
   it('rejects empty workspace ids and invalid states', async () => {
