@@ -14,7 +14,14 @@ import type {
   ProjectDistillationInput,
   DistillationWorkflowOptions,
 } from '../../ai/orchestrator/verticalSlices'
+import {
+  createDistillationSourceFingerprint,
+  indexedDbDistillationCheckpointStore,
+  type DistillationCheckpointStore,
+} from '../../ai/orchestrator/distillationCheckpointStore'
 import { idGenerator } from '../../adapters/idGenerator'
+
+const DISTILLATION_TASK_ID = 'project-distillation'
 
 interface CreativeWorkflowsPanelProps {
   chapters: ChapterRecord[]
