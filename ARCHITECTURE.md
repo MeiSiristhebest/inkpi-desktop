@@ -233,6 +233,8 @@ ProposalLedger 的规则：
 | Deep Story Reasoning | createDeepReasoningTask；narrative.deep.reason；reasoning + interactive；structured/artifact；TaskModelHandler 支持工具和公开 steering。 | 本地编排、工具循环和 steering 路径存在；长任务 UI、人机介入和真实模型能力路由待验收 |
 | Project Distillation | createDistillationTask；narrative.project.distill；workflow + background；structured/artifact；ProjectDistillationWorkflow 按 chunk 顺序执行并保存 checkpoint。 | map/reduce 风格合并、断点和部分失败逻辑有测试；大项目 benchmark、Daemon 重启恢复和 lineage 端到端待验收 |
 
+`src/adapters/desktopDaemonIntegration.test.ts` 覆盖 Continue 的 completed/waiting-user；`src/adapters/desktopDaemonVerticalSlices.test.ts` 通过另一个真实 child process 覆盖 Rewrite、Continuity Audit、Deep Reasoning 和 Distillation。五个 task factory 的 RPC、output contract、instruction provenance 和结果持久化已有集成证据，但 GhostText、Proposal Review/CAS、gutter marker、长任务 UI 和完整编辑器链路仍待验收。
+
 任务工厂引用的 provider id 是 creative.document、creative.story、retrieval.jit。Daemon 目前在注入 JIT retriever 时注册 JitContextProvider；Desktop Story provider 和 document provider 的跨进程注册需继续核对。
 
 ## 10. 扩展能力边界
@@ -289,7 +291,7 @@ src/architecture-ai.test.ts 已覆盖：
 
 Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线不删除这些 RPC；Desktop 新 AI 路径不直接引用它们。若未来 Desktop 必须保留旧 RPC 适配器，必须把文件登记为显式 compatibility boundary，并禁止新创作请求经该边界进入。`src/ai/artifacts/artifactStore.ts` 对 `aiArtifacts` 的写入是派生产物持久化，不属于 authoritative domain state。
 
-`src/phase21-22-reliability.test.ts` 固定覆盖本地可复现的可靠性边界：等价重复 task 的 task-id 无关缓存命中、proposal revision/source-hash stale、模型结构化输出与 context budget 能力不匹配、非法 structured output、以及 project revision 驱动的 cache invalidation。`src/adapters/desktopDaemonIntegration.test.ts` 另通过真实 child process 验证 completed/waiting-user RPC 与结果持久化。Desktop 当前没有本地模型执行器或 token-budget enforcement，因此没有伪造 context overflow 测试；完整五切片、App restart 和真实 overflow 仍需集成测试。
+`src/phase21-22-reliability.test.ts` 固定覆盖本地可复现的可靠性边界：等价重复 task 的 task-id 无关缓存命中、proposal revision/source-hash stale、模型结构化输出与 context budget 能力不匹配、非法 structured output、以及 project revision 驱动的 cache invalidation。两个 Desktop↔Daemon 集成测试文件另通过真实 child process 覆盖五个 task factory 的 RPC、结果状态和持久化。Desktop 当前没有本地模型执行器或 token-budget enforcement，因此没有伪造 context overflow 测试；App restart 和真实 overflow 仍需集成测试。
 
 ## 12. 质量门禁与未决条件
 
@@ -297,10 +299,10 @@ Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线�
 
 在标记 Runtime v1 为最终冻结前，必须完成并记录：
 
-1. 五个 Slice 的真实 Desktop ↔ Daemon 集成测试（当前只有 Continue 的 completed/waiting-user 两个 child-process 用例）。
+1. 五个 Slice 的完整真实 Desktop ↔ Daemon 集成链路（五个 task factory 的 child-process RPC 已覆盖；GhostText、Proposal/CAS、gutter marker 和长任务 UI 仍待验收）。
 2. DomainChangeSet 到 SQLite 文档/故事读模型的明确 reducer，及重启、离线、乱序、损坏快照测试。
 3. 三层 Cache、InstructionRegistry、ArtifactStore 在完整生产任务路径的接入证明；CapabilityRouter 的真实 provider matrix 和 fallback 证明。
 4. 四个第一批 creative skill 的逐个实际 manifest、lazy load、ExtensionHost/ToolRegistry 注册和跨进程测试。
 5. 44 个插件的分类、迁移或 UI-only 决策；清理剩余旧 session/Agent AI 入口和过期文档。
 6. Evals 进入 CI，并补充 source-map、entity contradiction、invalid state transition、mutation、canonical subjective fixture 和 100/300 chapter benchmark；再以真实 provider 和人类标注 gold 复核。
-7. crash/restart、模型不可用、能力不匹配、结构化输出非法、context overflow、cache invalidation、stale proposal 的可靠性报告。
+7. crash/restart、App restart、模型不可用、能力不匹配、结构化输出非法、context overflow、cache invalidation、stale proposal 和生产级 fault injection 的可靠性报告。
