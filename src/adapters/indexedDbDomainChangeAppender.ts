@@ -1,5 +1,6 @@
 import type { DomainChangeSet } from '@inkpi/protocol'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 
 export interface AppendIndexedDbDomainChangeInput {
@@ -44,6 +45,7 @@ export async function appendIndexedDbDomainChange(
       createdAt: input.occurredAt,
     })
     await domainChangeStore.append(changeSet)
+    domainChangeEvents.publish(input.workspaceId)
     return changeSet
   })
   domainAppendQueue = operationPromise.then(
