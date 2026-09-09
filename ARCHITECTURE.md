@@ -176,9 +176,9 @@ TaskModelHandler 是当前通用模型 handler。它接收 ModelConfig，调用 
 
 TaskRouter 当前通过 Daemon 暴露的 RPC 是：
 
-task.submit、task.status、task.cancel、task.steer、task.resume、task.replay、task.fork。
+task.submit、task.status、task.cancel、task.steer、task.resume、task.replay、task.fork、task.execution。
 
-TaskRouter.execution 暂无对应公开 RPC。能力路由、产物持久化和缓存也没有被证明由 TaskRouter 默认自动接入。
+其中 task.execution 是公开的进程内执行记录读取 RPC；Desktop 的 AiAssistant 高层端口仍不把它暴露为独立方法，当前 Desktop adapter 只映射创作任务的提交、状态轮询、取消、steer 和 resume。能力路由、产物持久化和缓存也没有被证明由 TaskRouter 默认自动接入。
 
 ## 7. Domain Projection Sync
 
@@ -205,6 +205,8 @@ Daemon DomainProjectionStore.apply/list/createSnapshot/restoreSnapshot 使用同
 
 当前校验和由协议中的确定性排序序列计算 32 位 FNV-1a 风格值；它用于一致性检测，不是加密签名。多设备冲突解决、物化文档/故事投影和完整离线重连演练仍需验证。
 
+Desktop 的本地权威追加成功后，IndexedDB 适配器发布 `domainChangeEvents`；已连接的 `useAiConversation` 对同一 workspace 的事件做短暂 debounce 后调用 `syncDomain`。`domainChangeEvents` 还通过 `BroadcastChannel('inkpi-authoritative-domain-changes')` 做 best-effort 跨窗口通知；`StoryStateProvider` 监听匹配 workspace 的事件并从 IndexedDB debounce reload。`src/ports/domainChangeEvents.test.ts` 覆盖 workspace 过滤和外部 BroadcastChannel 事件，`src/core/storyStateContext.test.tsx` 覆盖事件后加载新 revision。这证明了 Desktop 的通知和 StoryState reload 边界，不等同于真实多窗口/Tauri 离线重连演练。
+
 ## 8. Proposal / CAS 边界
 
 AI 不直接写 Authoritative Domain State。当前有两个相关但尚未统一的 Desktop 类型：
@@ -229,11 +231,11 @@ Proposal Ledger 以 IndexedDB 为 Desktop authoritative store；`RemoteProposalS
 | --- | --- | --- |
 | Continue Prose | createContinueTask；creative.continue；completion + interactive；text/ephemeral；read-only。useAiConversation.requestGhost 通过 runTask 获取文本。 | Desktop task assistant 已通过真实 WebSocket child process 验证 completed 和 waiting-user；新增 headless 编辑器集成覆盖 useAiConversation→GhostText→Proposal CAS commit |
 | Selection Rewrite | createRewriteTask；creative.rewrite；completion + interactive；patch/artifact；proposal + approval。 | ProposalLedger 的 accept/reject/modify/rebase/commit/undo/CAS 逻辑、IndexedDB 持久化和 Daemon derived projection 同步已接入；跨窗口/设备冲突 UI 仍待验收 |
-| Continuity Audit | createContinuityAuditTask；narrative.continuity.audit；workflow + background；structured/artifact；ContinuityAuditScheduler 提供 debounce/cancel/dedup。 | 编排和单元测试存在；章节保存触发、诊断到 gutter marker 的生产链路未确认 |
-| Deep Story Reasoning | createDeepReasoningTask；narrative.deep.reason；reasoning + interactive；structured/artifact；TaskModelHandler 支持工具和公开 steering。 | 本地编排、工具循环和 steering 路径存在；长任务 UI、人机介入和真实模型能力路由待验收 |
+| Continuity Audit | createContinuityAuditTask；narrative.continuity.audit；workflow + background；structured/artifact；ContinuityAuditScheduler 提供 debounce/cancel/dedup。 | 保存成功发布 `chapterSaveEvents`；CreativeWorkflowsPanel 对当前项目/章节 debounce 后调用 scheduler，结果写入 `continuityDiagnosticsStore`；RichEditor 订阅 store 并由 TipTap `ContinuityDiagnostics` 渲染 inline/widget marker。保存触发、映射和 marker 有聚焦测试；完整真实 Desktop↔Daemon 链路仍待验收 |
+| Deep Story Reasoning | createDeepReasoningTask；narrative.deep.reason；reasoning + interactive；structured/artifact；TaskModelHandler 支持工具和公开 steering。 | 本地编排、工具循环、steering、AbortSignal 取消和 `waiting-user` UI 已接入；面板和 adapter 有取消/进度测试；真实 provider 能力矩阵和生产路由仍待验收 |
 | Project Distillation | createDistillationTask；narrative.project.distill；workflow + background；structured/artifact；ProjectDistillationWorkflow 按 chunk 顺序执行并保存 checkpoint。 | map/reduce 风格合并、断点和部分失败逻辑有测试；大项目 benchmark、Daemon 重启恢复和 lineage 端到端待验收 |
 
-`src/adapters/desktopDaemonIntegration.test.ts` 覆盖 Continue 的 completed/waiting-user；`src/adapters/desktopDaemonVerticalSlices.test.ts` 通过另一个真实 child process 覆盖 Rewrite、Continuity Audit、Deep Reasoning 和 Distillation；`src/adapters/editor-ai-chain.integration.test.ts` 进一步通过真实 Daemon/WebSocket、useAiConversation、TipTap GhostText 和 ProposalLedger 覆盖正文写回及 CAS 冲突。五个 task factory 的 RPC、output contract、instruction provenance 和 Artifact/Proposal 持久化已有集成证据；gutter marker、长任务 UI 和完整编辑器链路仍待验收。
+`src/adapters/desktopDaemonIntegration.test.ts` 覆盖 Continue 的 completed/waiting-user；`src/adapters/desktopDaemonVerticalSlices.test.ts` 通过另一个真实 child process 覆盖 Rewrite、Continuity Audit、Deep Reasoning 和 Distillation；`src/adapters/editor-ai-chain.integration.test.ts` 进一步通过真实 Daemon/WebSocket、useAiConversation、TipTap GhostText 和 ProposalLedger 覆盖正文写回及 CAS 冲突。五个 task factory 的 RPC、output contract、instruction provenance 和 Artifact/Proposal 持久化已有集成证据；`src/components/ai/CreativeWorkflowsPanel.test.tsx`、`src/ports/chapterSaveEvents.test.ts` 和 `src/extensions/continuity-diagnostics.test.ts` 覆盖保存触发到诊断 marker 的 Desktop 边界，`src/adapters/daemonAiAssistant.test.ts` 和面板测试覆盖 AbortSignal 取消、进度和 `waiting-user`。这些证据关闭了“本地 gutter marker/长任务 UI 未实现”的陈旧描述，但不替代五个 Slice 的完整真实验收。
 
 任务工厂引用的 provider id 是 creative.document、creative.story、retrieval.jit。Daemon 目前在注入 JIT retriever 时注册 JitContextProvider；Desktop Story provider 和 document provider 的跨进程注册需继续核对。
 
@@ -299,7 +301,7 @@ Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线�
 
 在标记 Runtime v1 为最终冻结前，必须完成并记录：
 
-1. 五个 Slice 的完整真实 Desktop ↔ Daemon 集成链路（五个 task factory 的 child-process RPC、Artifact/Proposal 持久化和 Continue 的 GhostText→Proposal/CAS headless 链路已覆盖；gutter marker 和长任务 UI 仍待验收）。
+1. 五个 Slice 的完整真实 Desktop ↔ Daemon 集成链路（五个 task factory 的 child-process RPC、Artifact/Proposal 持久化和 Continue 的 GhostText→Proposal/CAS headless 链路已覆盖；章节保存→scheduler→diagnostic store→TipTap marker 的 Desktop 边界以及长任务取消/`waiting-user` UI 已有聚焦证据，但五个 Slice 的完整真实验收仍未关闭）。
 2. DomainChangeSet 到 SQLite 文档/故事读模型的明确 reducer，及重启、离线、乱序、损坏快照测试。
 3. 三层 Cache、InstructionRegistry、ArtifactStore 在完整生产任务路径的接入证明；Daemon 本地 retryable fallback 已测，真实 provider matrix、跨进程配置和生产 fallback 仍需证明。
 4. 四个第一批 creative skill 的逐个实际 manifest、lazy load、ExtensionHost/ToolRegistry 注册和跨进程测试（逐个 Runtime 激活已测，跨进程仍缺）。
