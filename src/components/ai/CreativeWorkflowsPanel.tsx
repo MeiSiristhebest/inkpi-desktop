@@ -32,6 +32,7 @@ interface CreativeWorkflowsPanelProps {
     options?: DistillationWorkflowOptions,
   ) => Promise<DistillationWorkflowResult | null>
   onSteerTask: (taskId: string, input: unknown) => Promise<boolean>
+  distillationCheckpointStore?: DistillationCheckpointStore
 }
 
 type WorkflowTab = 'audit' | 'reason' | 'distill'
