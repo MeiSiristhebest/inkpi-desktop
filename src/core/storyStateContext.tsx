@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -42,33 +43,68 @@ export const StoryStateProvider: FC<StoryStateProviderProps> = ({
   const [storyState, setStoryState] = useState<StoryState | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const storyStateRef = useRef<StoryState | undefined>(undefined)
+  const updateQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const reloadPromiseRef = useRef<Promise<void> | null>(null)
+  const workspaceSession = useMemo(() => ({ workspaceId }), [workspaceId])
+  const workspaceSessionRef = useRef(workspaceSession)
   const operationId = useRef(0)
 
   const reloadStoryState = useCallback(async () => {
+    if (workspaceSessionRef.current !== workspaceSession) return
     const currentOperation = ++operationId.current
-    if (!workspaceId) {
-      setStoryState(undefined)
-      setIsLoading(false)
-      setError(null)
-      return
-    }
+    const reloadPromise = (async () => {
+      if (!workspaceId) {
+        storyStateRef.current = undefined
+        setStoryState(undefined)
+        setIsLoading(false)
+        setError(null)
+        return
+      }
 
-    setIsLoading(true)
-    setError(null)
-    try {
-      const loaded = await store.load(workspaceId)
-      if (currentOperation !== operationId.current) return
-      setStoryState(loaded)
-    } catch (cause) {
-      if (currentOperation !== operationId.current) return
-      setStoryState(undefined)
-      setError(toError(cause))
-    } finally {
-      if (currentOperation === operationId.current) setIsLoading(false)
-    }
-  }, [store, workspaceId])
+      setIsLoading(true)
+      setError(null)
+      try {
+        const loaded = await store.load(workspaceId)
+        if (
+          currentOperation !== operationId.current ||
+          workspaceSessionRef.current !== workspaceSession
+        )
+          return
+        storyStateRef.current = loaded
+        setStoryState(loaded)
+      } catch (cause) {
+        if (
+          currentOperation !== operationId.current ||
+          workspaceSessionRef.current !== workspaceSession
+        )
+          return
+        storyStateRef.current = undefined
+        setStoryState(undefined)
+        setError(toError(cause))
+      } finally {
+        if (
+          currentOperation === operationId.current &&
+          workspaceSessionRef.current === workspaceSession
+        ) {
+          setIsLoading(false)
+        }
+      }
+    })()
+    reloadPromiseRef.current = reloadPromise
+    await reloadPromise
+    if (reloadPromiseRef.current === reloadPromise) reloadPromiseRef.current = null
+  }, [store, workspaceId, workspaceSession])
+
+  useLayoutEffect(() => {
+    workspaceSessionRef.current = workspaceSession
+    storyStateRef.current = undefined
+    updateQueueRef.current = Promise.resolve()
+    reloadPromiseRef.current = null
+  }, [workspaceSession])
 
   useEffect(() => {
+    storyStateRef.current = undefined
     setStoryState(undefined)
     setError(null)
     void reloadStoryState()
@@ -80,30 +116,49 @@ export const StoryStateProvider: FC<StoryStateProviderProps> = ({
   const saveStoryState = useCallback(
     async (nextState: StoryState) => {
       if (!workspaceId) throw new Error('Cannot save StoryState without a workspace id')
+      if (workspaceSessionRef.current !== workspaceSession) return
       const currentOperation = ++operationId.current
       setError(null)
       try {
         await store.save(workspaceId, nextState)
-        if (currentOperation !== operationId.current) return
+        if (
+          currentOperation !== operationId.current ||
+          workspaceSessionRef.current !== workspaceSession
+        )
+          return
+        storyStateRef.current = nextState
         setStoryState(nextState)
         setIsLoading(false)
       } catch (cause) {
-        if (currentOperation === operationId.current) {
+        if (
+          currentOperation === operationId.current &&
+          workspaceSessionRef.current === workspaceSession
+        ) {
           setError(toError(cause))
           setIsLoading(false)
         }
         throw cause
       }
     },
-    [store, workspaceId],
+    [store, workspaceId, workspaceSession],
   )
 
   const updateStoryState = useCallback(
     async (next: StoryState | StoryStateUpdater) => {
-      const nextState = typeof next === 'function' ? next(storyState) : next
-      await saveStoryState(nextState)
+      const targetWorkspaceSession = workspaceSession
+      const queued = updateQueueRef.current.then(async () => {
+        if (workspaceSessionRef.current !== targetWorkspaceSession) return
+        const pendingReload = reloadPromiseRef.current
+        if (pendingReload) await pendingReload
+        if (workspaceSessionRef.current !== targetWorkspaceSession) return
+        const current = storyStateRef.current
+        const nextState = typeof next === 'function' ? next(current) : next
+        await saveStoryState(nextState)
+      })
+      updateQueueRef.current = queued.catch(() => undefined)
+      await queued
     },
-    [saveStoryState, storyState],
+    [saveStoryState, workspaceSession],
   )
 
   const value = useMemo<StoryStateContextValue>(
