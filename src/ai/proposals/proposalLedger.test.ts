@@ -161,6 +161,42 @@ describe('AI proposal to commit flow', () => {
     expect(ledger.get('undo-conflict')?.status).toBe('stale')
   })
 
+  it('rejects concurrent undo calls before applying the inverse twice', async () => {
+    const ledger = new ProposalLedger()
+    ledger.create(proposalFromPatch(
+      {
+        taskId: 'duplicate-undo-task',
+        kind: 'creative.rewrite',
+        status: 'completed',
+        output: { format: 'patch', patch: { from: 0, to: 1, text: '改' } },
+      },
+      { id: 'duplicate-undo-proposal', documentId: 'chapter-1', baseRevision: 1 },
+    ))
+    ledger.accept('duplicate-undo-proposal')
+    await ledger.commit('duplicate-undo-proposal', 1, () => ({
+      inversePatches: [{ documentId: 'chapter-1', from: 0, to: 1, text: '原' }],
+    }))
+
+    let release!: () => void
+    let applyCalls = 0
+    const firstUndo = ledger.undo('duplicate-undo-proposal', 2, () => {
+      applyCalls += 1
+      return new Promise<void>((resolve) => {
+        release = resolve
+      })
+    })
+
+    expect(applyCalls).toBe(1)
+    await expect(ledger.undo('duplicate-undo-proposal', 2, async () => undefined)).rejects.toThrow(
+      /already being committed/,
+    )
+
+    release()
+    await expect(firstUndo).resolves.toMatchObject({ revision: 3 })
+    expect(applyCalls).toBe(1)
+    expect(ledger.get('duplicate-undo-proposal')?.status).toBe('undone')
+  })
+
   it('rehydrates proposal review and CAS state from IndexedDB', async () => {
     const proposalId = 'indexed-db-proposal-ledger-test'
     await db.delete('aiProposals', proposalId)

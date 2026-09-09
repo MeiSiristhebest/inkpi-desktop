@@ -253,6 +253,7 @@ export class ProposalLedger {
     apply: (patches: TextPatch[], nextRevision: number) => void | Promise<void>,
   ): Promise<CommitReceipt> {
     const proposal = this.require(proposalId)
+    if (this.committing.has(proposalId)) throw new Error(`Proposal ${proposalId} is already being committed`)
     if (proposal.status !== 'committed') throw new Error(`Proposal ${proposalId} is not committed`)
     if (!proposal.inversePatches?.length) throw new Error(`Proposal ${proposalId} has no inverse patches`)
     if (currentRevision !== proposal.committedRevision) {
@@ -262,15 +263,20 @@ export class ProposalLedger {
       throw new ProposalConflictError(proposal.id, proposal.committedRevision ?? currentRevision, currentRevision)
     }
     const nextRevision = currentRevision + 1
-    await apply(proposal.inversePatches.map((patch) => ({ ...patch })), nextRevision)
-    proposal.status = 'undone'
-    proposal.updatedAt = this.now()
-    await this.persistAndWait(proposal)
-    return {
-      proposalId: proposal.id,
-      documentId: proposal.documentId,
-      revision: nextRevision,
-      patches: proposal.inversePatches.map((patch) => ({ ...patch })),
+    this.committing.add(proposalId)
+    try {
+      await apply(proposal.inversePatches.map((patch) => ({ ...patch })), nextRevision)
+      proposal.status = 'undone'
+      proposal.updatedAt = this.now()
+      await this.persistAndWait(proposal)
+      return {
+        proposalId: proposal.id,
+        documentId: proposal.documentId,
+        revision: nextRevision,
+        patches: proposal.inversePatches.map((patch) => ({ ...patch })),
+      }
+    } finally {
+      this.committing.delete(proposalId)
     }
   }
 
