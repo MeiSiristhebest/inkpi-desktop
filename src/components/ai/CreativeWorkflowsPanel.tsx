@@ -84,6 +84,35 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     () => chapters.map((chapter) => semanticDocumentFromText(chapter.id, htmlToPlain(chapter.content || ''), chapter.revision ?? 0)),
     [chapters],
   )
+  const distillationSourceFingerprint = useMemo(
+    () => createDistillationSourceFingerprint(documents),
+    [documents],
+  )
+  const distillationCheckpointRef = useRef<DistillationCheckpoint | undefined>(undefined)
+  const checkpointLoadRef = useRef<Promise<void>>(Promise.resolve())
+
+  useEffect(() => {
+    let active = true
+    distillationCheckpointRef.current = undefined
+    setCheckpoint(undefined)
+    const load = distillationCheckpointStore
+      .load(projectId, DISTILLATION_TASK_ID, distillationSourceFingerprint)
+      .then((stored) => {
+        if (!active) return
+        distillationCheckpointRef.current = stored
+        setCheckpoint(stored)
+      })
+      .catch(() => {
+        if (active) {
+          distillationCheckpointRef.current = undefined
+          setCheckpoint(undefined)
+        }
+      })
+    checkpointLoadRef.current = load
+    return () => {
+      active = false
+    }
+  }, [distillationCheckpointStore, distillationSourceFingerprint, projectId])
   const auditMarkers: ContinuityDiagnosticMarker[] = useMemo(
     () => (auditDocument ? projectContinuityFindingsToEditor(auditDocument, auditFindings) : []),
     [auditDocument, auditFindings],
