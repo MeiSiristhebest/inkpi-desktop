@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord } from '../../types'
+import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
 import { CreativeWorkflowsPanel } from './CreativeWorkflowsPanel'
 
 const chapter: ChapterRecord = {
@@ -32,6 +33,38 @@ describe('CreativeWorkflowsPanel', () => {
     expect(screen.getByTestId('continuity-diagnostic-location')).toHaveAttribute('data-block-id', auditedBlockId)
     expect(screen.getByTestId('continuity-diagnostic-location')).toHaveTextContent('编辑器位置')
     expect(audit).toHaveBeenCalledOnce()
+  })
+
+  it('debounces a continuity audit after the selected chapter is saved', async () => {
+    const audit = vi.fn(
+      async (input: { document: { text: string; blocks: Array<{ id: string }> } }) => [
+        {
+          id: 'saved-finding',
+          severity: 'info' as const,
+          description: '保存后诊断',
+          blockIds: [input.document.blocks[0].id],
+        },
+      ],
+    )
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={audit}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn()}
+        onSteerTask={vi.fn()}
+      />,
+    )
+
+    act(() => {
+      chapterSaveEvents.publish({ ...chapter, content: '<p>保存后的正文</p>', revision: 4 })
+    })
+
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce(), { timeout: 3000 })
+    expect(audit.mock.calls[0][0].document.text).toBe('保存后的正文')
+    expect(screen.getByTestId('continuity-findings')).toHaveTextContent('保存后诊断')
   })
 
   it('runs deep reasoning and forwards interactive steering while the task is pending', async () => {

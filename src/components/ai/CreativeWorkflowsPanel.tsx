@@ -21,6 +21,7 @@ import {
   type DistillationCheckpointStore,
 } from '../../ai/orchestrator/distillationCheckpointStore'
 import { idGenerator } from '../../adapters/idGenerator'
+import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
 
 const DISTILLATION_TASK_ID = 'project-distillation'
 
@@ -70,6 +71,8 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const [checkpoint, setCheckpoint] = useState<DistillationCheckpoint | undefined>()
   const auditController = useRef<AbortController | null>(null)
   const runToken = useRef(0)
+  const autoAuditTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastAutoAuditRevision = useRef<string | null>(null)
 
   useEffect(() => {
     if (!chapters.some((chapter) => chapter.id === selectedChapterId)) {
@@ -128,8 +131,9 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     return () => continuityDiagnosticsStore.clear(projectId, chapterId)
   }, [auditMarkers, projectId, selectedChapter?.id])
 
-  const runAudit = async () => {
-    if (!selectedChapter || !connected || busy) return
+  const runAudit = async (chapterOverride?: ChapterRecord) => {
+    const chapter = chapterOverride ?? selectedChapter
+    if (!chapter || !connected || busy) return
     auditController.current?.abort()
     const controller = new AbortController()
     auditController.current = controller
@@ -137,13 +141,13 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     setBusy(true)
     setError(null)
     setProgress(null)
-    setAuditDocument(documentForAudit(selectedChapter))
+    setAuditDocument(documentForAudit(chapter))
     setAuditFindings([])
     try {
-      const document = documentForAudit(selectedChapter)
+      const document = documentForAudit(chapter)
       const result = await onContinuityAudit(
         {
-          taskId: idGenerator.generate(`continuity-${selectedChapter.id}`),
+          taskId: idGenerator.generate(`continuity-${chapter.id}`),
           document,
           scope: 'document',
         },
@@ -161,6 +165,30 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       if (token === runToken.current) setBusy(false)
     }
   }
+
+  const runAuditRef = useRef<(chapter?: ChapterRecord) => Promise<void>>(async () => {})
+  runAuditRef.current = runAudit
+
+  useEffect(() => {
+    const unsubscribe = chapterSaveEvents.subscribe(({ chapter }) => {
+      if (!connected || chapter.projectId !== projectId || chapter.id !== selectedChapterId) return
+      const revisionKey = `${chapter.id}:${chapter.revision ?? 0}`
+      if (lastAutoAuditRevision.current === revisionKey) return
+      if (autoAuditTimer.current) clearTimeout(autoAuditTimer.current)
+      autoAuditTimer.current = setTimeout(() => {
+        autoAuditTimer.current = null
+        lastAutoAuditRevision.current = revisionKey
+        void runAuditRef.current(chapter)
+      }, 500)
+    })
+    return () => {
+      unsubscribe()
+      if (autoAuditTimer.current) {
+        clearTimeout(autoAuditTimer.current)
+        autoAuditTimer.current = null
+      }
+    }
+  }, [connected, projectId, selectedChapterId])
 
   const runReasoning = async () => {
     if (!selectedChapter || !connected || busy) return
