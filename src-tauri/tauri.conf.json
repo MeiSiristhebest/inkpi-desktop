@@ -32,6 +32,7 @@
     "targets": ["nsis"],
     "externalBin": ["binaries/inkpi"],
     "resources": {
+      "binaries/skills": "skills",
       "dlls/WebView2Loader.dll": "WebView2Loader.dll",
       "dlls/libgcc_s_seh-1.dll": "libgcc_s_seh-1.dll",
       "dlls/libwinpthread-1.dll": "libwinpthread-1.dll"

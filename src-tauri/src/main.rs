@@ -69,6 +69,13 @@ fn spawn_daemon(app: &tauri::AppHandle) {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let skills_dir = resource_dir.join("skills");
+        if skills_dir.exists() {
+            cmd.env("INKPI_SKILLS_DIR", skills_dir);
+        }
+    }
+
     #[cfg(windows)]
     {
         const CREATE_NO_WINDOW: u32 = 0x08000000;

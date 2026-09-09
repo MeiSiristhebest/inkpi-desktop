@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 const src = path.resolve('..', 'inkpi', 'dist-bin', 'inkpi.exe');
+const skillsSrc = path.resolve('..', 'inkpi', 'skills');
 const outDir = path.resolve('src-tauri', 'binaries');
 
 if (!fs.existsSync(src)) {
@@ -19,7 +20,20 @@ if (!fs.existsSync(src)) {
   process.exit(1);
 }
 
+if (!fs.existsSync(skillsSrc)) {
+  console.error(`[copy-daemon-sidecar] 未找到 Skill manifest 目录: ${skillsSrc}`);
+  process.exit(1);
+}
+
 fs.mkdirSync(outDir, { recursive: true });
+const skillsOutDir = path.join(outDir, 'skills');
+fs.mkdirSync(skillsOutDir, { recursive: true });
+
+for (const entry of fs.readdirSync(skillsSrc, { withFileTypes: true })) {
+  if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+  fs.copyFileSync(path.join(skillsSrc, entry.name), path.join(skillsOutDir, entry.name));
+  console.log(`[copy-daemon-sidecar] 已复制 Skill manifest -> ${path.join(skillsOutDir, entry.name)}`);
+}
 
 const targetTriples = process.env.TARGET_TRIPLE
   ? [process.env.TARGET_TRIPLE]
