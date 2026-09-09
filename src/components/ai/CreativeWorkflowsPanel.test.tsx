@@ -18,8 +18,8 @@ const chapter: ChapterRecord = {
 
 describe('CreativeWorkflowsPanel', () => {
   it('runs continuity audit from the UI with canonical plain-text input', async () => {
-    const audit = vi.fn(async (input: { input: { text: string } }) => {
-      expect(input.input.text).toBe('雨停后，她没有回头。')
+    const audit = vi.fn(async (input: { document: { text: string } }) => {
+      expect(input.document.text).toBe('雨停后，她没有回头。')
       return [{ id: 'finding-1', severity: 'warning' as const, description: '存在未回收伏笔' }]
     })
     render(<CreativeWorkflowsPanel projectId="project-1" chapters={[chapter]} connected onContinuityAudit={audit} onDeepReasoning={vi.fn()} onDistillationWorkflow={vi.fn()} onSteerTask={vi.fn()} />)
