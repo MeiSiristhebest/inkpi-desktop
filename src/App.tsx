@@ -9,6 +9,7 @@ import { useAiConversation } from './hooks/useAiConversation'
 import { useProjectLibrary } from './hooks/useProjectLibrary'
 import { PluginProvider } from './core/pluginRegistry'
 import { ProjectDataProvider, useProjectData } from './core/projectDataContext'
+import { StoryStateProvider } from './core/storyStateContext'
 import { DesktopPluginHostProvider } from './core/pluginHostContext'
 import type { ReactNode } from 'react'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
@@ -170,35 +171,37 @@ const AppShell: FC = () => {
   ) : (
     <ErrorBoundary label="应用主框架">
       <ProjectDataProvider projectId={activeProjectId}>
-        <ProjectWorkspace
-          projectId={activeProjectId}
-          projectName={projects.find((p) => p.id === activeProjectId)?.name}
-          isConnected={isConnected}
-          onAiTask={runAiTask}
-        >
-          <ProjectEngine
+        <StoryStateProvider workspaceId={activeProjectId}>
+          <ProjectWorkspace
             projectId={activeProjectId}
             projectName={projects.find((p) => p.id === activeProjectId)?.name}
             isConnected={isConnected}
-            isReconnecting={isReconnecting}
-            onReconnect={reconnect}
-            onRequestGhost={requestGhost}
             onAiTask={runAiTask}
-            onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
-            onHome={() => setActiveProjectId(null)}
-            aiPanelOpen={aiPanelOpen}
-            setAiPanelOpen={setAiPanelOpen}
-            aiMessages={aiMessages}
-            aiInput={aiInput}
-            setAiInput={setAiInput}
-            aiBusy={aiBusy}
-            sendAiPrompt={sendAiPrompt}
-            runContinuityAudit={runContinuityAudit}
-            runDeepReasoning={runDeepReasoning}
-            runDistillationWorkflow={runDistillationWorkflow}
-            steerTask={steerTask}
-          />
-        </ProjectWorkspace>
+          >
+            <ProjectEngine
+              projectId={activeProjectId}
+              projectName={projects.find((p) => p.id === activeProjectId)?.name}
+              isConnected={isConnected}
+              isReconnecting={isReconnecting}
+              onReconnect={reconnect}
+              onRequestGhost={requestGhost}
+              onAiTask={runAiTask}
+              onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
+              onHome={() => setActiveProjectId(null)}
+              aiPanelOpen={aiPanelOpen}
+              setAiPanelOpen={setAiPanelOpen}
+              aiMessages={aiMessages}
+              aiInput={aiInput}
+              setAiInput={setAiInput}
+              aiBusy={aiBusy}
+              sendAiPrompt={sendAiPrompt}
+              runContinuityAudit={runContinuityAudit}
+              runDeepReasoning={runDeepReasoning}
+              runDistillationWorkflow={runDistillationWorkflow}
+              steerTask={steerTask}
+            />
+          </ProjectWorkspace>
+        </StoryStateProvider>
       </ProjectDataProvider>
     </ErrorBoundary>
   )
