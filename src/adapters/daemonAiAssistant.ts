@@ -8,6 +8,7 @@ import { createDaemonDomainSyncRemote, createDaemonProposalSyncRemote } from './
 import { DomainSyncService } from '../domain/sync/domainSyncService'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { attachProposalSyncRemote } from '../ai/proposals/remoteProposalStore'
+import { DaemonArtifactStore } from './daemonArtifactStore'
 
 /**
  * 把底层 RpcClient（字符串方法 JSON-RPC）封装成语义化 AiAssistant。
@@ -23,7 +24,9 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
     steerTask: (taskId, input) => client.request<{ accepted: boolean }>('task.steer', { taskId, input }),
     resumeTask: (taskId) => client.request<TaskSubmitResult>('task.resume', { taskId }),
   }
-  const creativeIntelligence = new CreativeIntelligence(taskGateway)
+  const creativeIntelligence = new CreativeIntelligence(taskGateway, {
+    artifactStore: new DaemonArtifactStore(client),
+  })
   const continuityScheduler = new ContinuityAuditScheduler(creativeIntelligence)
   const distillationWorkflow = new ProjectDistillationWorkflow(creativeIntelligence)
 

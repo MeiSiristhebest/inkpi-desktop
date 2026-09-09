@@ -5,9 +5,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const fixtureDirectory = resolve(fileURLToPath(new URL('.', import.meta.url)))
 const inkpiRoot = resolve(fixtureDirectory, '../../../inkpi')
 const serverEntry = pathToFileURL(resolve(inkpiRoot, 'packages/server/dist/index.js')).href
+const storageEntry = pathToFileURL(resolve(inkpiRoot, 'packages/storage/dist/index.js')).href
 const { InkPiDaemon } = await import(serverEntry)
+const { InkDb, SqliteArtifactStore } = await import(storageEntry)
 
-const daemon = new InkPiDaemon({ host: '127.0.0.1', port: 0 })
+const artifactDb = new InkDb(':memory:')
+const daemon = new InkPiDaemon({
+  host: '127.0.0.1',
+  port: 0,
+  context: { artifactStore: new SqliteArtifactStore(artifactDb) },
+})
 daemon.getTaskRouter().registry.register({
   id: 'desktop-vertical-slices-fixture',
   kinds: [
@@ -89,6 +96,7 @@ const shutdown = async () => {
   if (stopping) return
   stopping = true
   await daemon.stop()
+  artifactDb.close()
   process.exit(0)
 }
 
