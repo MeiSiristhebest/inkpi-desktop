@@ -24,6 +24,7 @@ import { buildSeedVolumes, buildSeedChapters } from '../../../domain/seed'
 import { composeChapterTitle } from '../../../domain/chapter/chapterNaming'
 import { blankChapterContent } from '../../../domain/chapter/blankContent'
 import { useSettings, type AppSettings } from '../../../core/settings'
+import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 import { useChapterAutosave } from './useChapterAutosave'
 
 export interface GlobalSearchResult {
@@ -354,6 +355,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       const target = ch ?? activeChapterRef.current
       if (!target) return
       await indexedDbProjectRepository.saveChapter(target)
+      chapterSaveEvents.publish(target)
       saveSnapshot(target)
       patch({ isSaved: true })
       onStats?.({ title: target.title, wordCount: target.wordCount, updatedAt: target.updatedAt })
