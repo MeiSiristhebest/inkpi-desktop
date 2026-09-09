@@ -86,11 +86,11 @@ function buildDecorations(doc: any, markers: readonly ContinuityDiagnosticMarker
       }
 
       const widgetPosition = Math.max(1, Math.min(safeFrom, doc.content.size))
-      const widgetKey = `${marker.findingId}:${widgetPosition}`
+      const widgetKey = `${marker.findingId}:${location.blockId}:${widgetPosition}`
       if (widgetPositions.has(widgetKey)) continue
       widgetPositions.add(widgetKey)
       decorations.push(
-        Decoration.widget(widgetPosition, () => createMarkerElement(marker), {
+        Decoration.widget(widgetPosition, () => createMarkerElement(marker, location), {
           side: -1,
           key: widgetKey,
         }),
@@ -157,13 +157,27 @@ function mapTextOffset(
   return Math.max(1, Math.min(position, maxPosition))
 }
 
-function createMarkerElement(marker: ContinuityDiagnosticMarker): HTMLElement {
+function createMarkerElement(
+  marker: ContinuityDiagnosticMarker,
+  location: ContinuityDiagnosticMarker['locations'][number],
+): HTMLElement {
   const element = document.createElement('span')
-  element.className = `ink-continuity-marker ink-continuity-marker-${marker.severity}`
+  element.className = `ink-continuity-marker ink-continuity-gutter-marker ink-continuity-marker-${marker.severity}`
   element.setAttribute('data-ink-continuity-marker', marker.findingId)
+  element.setAttribute('data-ink-continuity-gutter-marker', marker.findingId)
+  element.setAttribute('data-ink-continuity-block-id', location.blockId)
+  element.setAttribute('data-ink-continuity-severity', marker.severity)
+  element.setAttribute('data-ink-continuity-editor-from', String(location.editorFrom))
+  element.setAttribute('data-ink-continuity-editor-to', String(location.editorTo))
   element.setAttribute('role', 'img')
   element.setAttribute('aria-label', `连续性诊断：${marker.description}`)
   element.title = marker.description
+  // Keep the text flow unchanged while moving the widget into the paragraph's
+  // left gutter. The surrounding editor already provides the gutter padding.
+  element.style.marginLeft = '0'
+  element.style.marginRight = '-0.45em'
+  element.style.position = 'relative'
+  element.style.left = '-1.25rem'
   element.textContent =
     marker.severity === 'error' ? '!' : marker.severity === 'warning' ? '⚠' : 'i'
   return element

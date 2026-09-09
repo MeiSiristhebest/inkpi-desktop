@@ -3,6 +3,10 @@ import { render as baseRender, screen, fireEvent, cleanup, waitFor, act } from '
 import { RichEditor } from './RichEditor'
 import { db } from '../../db/indexedDB'
 import { SettingsProvider } from '../../core/settings'
+import type { TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
+import type { ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
+import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
+import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diagnostics'
 
 // RichEditor 依赖 useSettings（§12.3：Provider 内才能使用），统一在此包裹 SettingsProvider。
 // rerender 也会落到 Provider 之外，故对 rerender 一并包裹。
@@ -388,6 +392,103 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-progress" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     expect(screen.getByTestId('chapter-progress')).toBeInTheDocument()
+  })
+
+  it('renders an externally supplied long-task snapshot with progress and waiting state', () => {
+    const snapshot: TaskStatusSnapshot = {
+      taskId: 'deep-task',
+      kind: 'narrative.deep.reason',
+      status: 'waiting-user',
+      progress: 0.5,
+    }
+
+    render(<RichEditor projectId="p-long-task" taskProgress={snapshot} />)
+
+    const status = screen.getByTestId('editor-long-task-status')
+    expect(status).toHaveAttribute('data-task-id', 'deep-task')
+    expect(status).toHaveAttribute('data-task-status', 'waiting-user')
+    expect(status).toHaveAttribute('aria-busy', 'false')
+    expect(screen.getByTestId('editor-long-task-progress')).toHaveValue(0.5)
+    expect(screen.getByTestId('editor-long-task-waiting')).toHaveTextContent('等待人工输入')
+  })
+
+  it('tracks an editor AI task while the runtime Promise is pending', async () => {
+    let resolveTask!: (result: TaskResult | null) => void
+    const pendingTask = new Promise<TaskResult | null>((resolve) => {
+      resolveTask = resolve
+    })
+    const onAiTask = vi.fn(() => pendingTask)
+    h.selectedText = '需要长任务处理的选中文本'
+
+    render(<RichEditor projectId="p-editor-task" onAiTask={onAiTask} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    act(() => {
+      editorInstance.state.selection = { from: 0, to: 5 }
+      editorInstance._fire('selectionUpdate')
+    })
+    fireEvent.click(screen.getByText('AI 润色'))
+
+    const status = await screen.findByTestId('editor-long-task-status')
+    expect(status).toHaveAttribute('data-task-status', 'running')
+    expect(status).toHaveAttribute('aria-busy', 'true')
+    expect(status).toHaveTextContent('AI 长任务运行中')
+
+    await act(async () => {
+      resolveTask(null)
+      await pendingTask
+    })
+    await waitFor(() => expect(screen.queryByTestId('editor-long-task-status')).not.toBeInTheDocument())
+  })
+
+  it('only publishes current-chapter diagnostics with the matching revision', async () => {
+    render(<RichEditor projectId="p-diagnostics" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    const chapter = (await db.getAll('chapters')).find((item) => item.title === '第001章 寒潭惊变')
+    if (!chapter) throw new Error('seed chapter not found')
+    const revision = chapter.revision ?? 0
+    const marker: ContinuityDiagnosticMarker = {
+      findingId: 'current-finding',
+      severity: 'warning',
+      description: '当前版本的连续性风险',
+      documentId: chapter.id,
+      revision,
+      locationStatus: 'located',
+      unresolvedBlockIds: [],
+      locations: [
+        {
+          blockId: 'block-1',
+          semanticFrom: 0,
+          semanticTo: 2,
+          editorFrom: 0,
+          editorTo: 2,
+        },
+      ],
+    }
+    const setMeta = editorInstance.view.state.tr.setMeta
+
+    try {
+      continuityDiagnosticsStore.set('p-diagnostics', chapter.id, [marker])
+      await waitFor(() => {
+        const call = [...setMeta.mock.calls]
+          .reverse()
+          .find(([key]) => key === continuityDiagnosticsPluginKey)
+        expect(call?.[1]).toEqual([marker])
+      })
+
+      continuityDiagnosticsStore.set('p-diagnostics', chapter.id, [
+        { ...marker, revision: revision + 1 },
+      ])
+      await waitFor(() => {
+        const call = [...setMeta.mock.calls]
+          .reverse()
+          .find(([key]) => key === continuityDiagnosticsPluginKey)
+        expect(call?.[1]).toEqual([])
+      })
+    } finally {
+      continuityDiagnosticsStore.clear('p-diagnostics', chapter.id)
+    }
   })
 
   it('toggles typewriter mode via the status bar and notifies the parent', async () => {

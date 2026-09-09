@@ -46,7 +46,7 @@ import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
 import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
-import type { AiTask, TaskResult } from '@inkpi/protocol'
+import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 
 export interface RichEditorProps {
   projectId: string
@@ -63,6 +63,8 @@ export interface RichEditorProps {
   /** 请求 Daemon 行内续写建议（按章节隔离会话） */
   onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
+  /** 可选的长任务快照；未提供时，编辑器追踪自身发起的任务直到 Promise 结束。 */
+  taskProgress?: TaskStatusSnapshot | null
   /** 顶栏单层合一注入 */
   onHome?: () => void
   onToggleFocus?: () => void
@@ -92,6 +94,7 @@ export const RichEditor: FC<RichEditorProps> = ({
   onReconnect = () => {},
   onRequestGhost = async () => null,
   onAiTask,
+  taskProgress,
   onHome,
   onToggleFocus,
   isFullscreen = false,
@@ -135,6 +138,23 @@ export const RichEditor: FC<RichEditorProps> = ({
 
   const effectiveZen = focusMode
   const effectiveTypewriter = isTypewriter || defaultTypewriter
+
+  const [localTaskProgress, setLocalTaskProgress] = useState<TaskStatusSnapshot | null>(null)
+  const handleAiTask = useCallback(
+    async (task: AiTask): Promise<TaskResult | null> => {
+      if (!onAiTask) return null
+      setLocalTaskProgress({ taskId: task.id, kind: task.kind, status: 'running' })
+      try {
+        return await onAiTask(task)
+      } finally {
+        setLocalTaskProgress((current) => (current?.taskId === task.id ? null : current))
+      }
+    },
+    [onAiTask],
+  )
+  const aiTaskHandler = onAiTask ? handleAiTask : undefined
+  const visibleTaskProgress = taskProgress === undefined ? localTaskProgress : taskProgress
+  const visibleProgress = normalizeTaskProgress(visibleTaskProgress?.progress)
 
   // 会话打字统计 hook：作品级当天连续累计、防粘贴虚假增量、空闲持续累加
   const sessionStats = useWritingSessionStats({
@@ -325,13 +345,20 @@ export const RichEditor: FC<RichEditorProps> = ({
       clearContinuityDiagnostics(editor)
       return
     }
+    const revision = activeChapter?.revision ?? 0
     const syncDiagnostics = () => {
-      setContinuityDiagnostics(editor, continuityDiagnosticsStore.get(projectId, chapterId))
+      const markers = continuityDiagnosticsStore
+        .get(projectId, chapterId)
+        .filter((marker) => marker.documentId === chapterId && marker.revision === revision)
+      setContinuityDiagnostics(editor, markers)
     }
     const unsubscribe = continuityDiagnosticsStore.subscribe(projectId, chapterId, syncDiagnostics)
     syncDiagnostics()
-    return unsubscribe
-  }, [activeChapter?.id, editor, projectId])
+    return () => {
+      unsubscribe()
+      if (!editor.isDestroyed) clearContinuityDiagnostics(editor)
+    }
+  }, [activeChapter?.id, activeChapter?.revision, editor, projectId])
 
   // 组件卸载时显式销毁 editor，防止 TipTap 在 React 已卸载 DOM 后仍异步操作节点。
   useEffect(() => {
@@ -461,7 +488,7 @@ export const RichEditor: FC<RichEditorProps> = ({
       activeChapter={activeChapter}
       volumes={model.volumes}
       chapters={model.chapters}
-      onAiTask={onAiTask}
+      onAiTask={aiTaskHandler}
       isAiConnected={isConnected}
       onRefreshHierarchy={async () => {
         await model.actions.refreshData()
@@ -479,6 +506,35 @@ export const RichEditor: FC<RichEditorProps> = ({
       }}
     >
       <div className="flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+        {visibleTaskProgress && (
+          <div
+            data-testid="editor-long-task-status"
+            data-task-id={visibleTaskProgress.taskId}
+            data-task-kind={visibleTaskProgress.kind}
+            data-task-status={visibleTaskProgress.status}
+            role="status"
+            aria-live="polite"
+            aria-busy={isTaskInFlight(visibleTaskProgress.status)}
+            className="absolute right-3 top-2 z-30 flex max-w-[min(30rem,calc(100%-1.5rem))] items-center gap-2 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]/95 px-2 py-1 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
+          >
+            <span>{taskStatusLabel(visibleTaskProgress.status)}</span>
+            {visibleProgress !== undefined && (
+              <>
+                <progress
+                  data-testid="editor-long-task-progress"
+                  aria-label="任务进度"
+                  max={1}
+                  value={visibleProgress}
+                  className="h-1.5 w-20"
+                />
+                <span>{Math.round(visibleProgress * 100)}%</span>
+              </>
+            )}
+            {visibleTaskProgress.status === 'waiting-user' && (
+              <span data-testid="editor-long-task-waiting">等待人工输入</span>
+            )}
+          </div>
+        )}
         {/* 左侧分卷/章节目录树（聚焦模式下隐藏） */}
         {!effectiveZen && model.isSidebarOpen && (
           <ChapterTree
@@ -536,7 +592,7 @@ export const RichEditor: FC<RichEditorProps> = ({
               effectiveZen={effectiveZen}
               effectiveTypewriter={effectiveTypewriter}
               projectId={projectId}
-              onAiTask={onAiTask}
+              onAiTask={aiTaskHandler}
               activeChapterRevision={activeChapter?.revision}
               onOpenAssistant={onOpenAssistant}
               bgConfig={bgConfig}
@@ -688,6 +744,38 @@ export const RichEditor: FC<RichEditorProps> = ({
       </div>
     </DesktopPluginHostProvider>
   )
+}
+
+function normalizeTaskProgress(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.min(1, Math.max(0, value))
+}
+
+function isTaskInFlight(status: TaskStatusSnapshot['status']): boolean {
+  return status === 'created' || status === 'queued' || status === 'running' || status === 'checkpointed' || status === 'interrupted'
+}
+
+function taskStatusLabel(status: TaskStatusSnapshot['status']): string {
+  switch (status) {
+    case 'created':
+      return 'AI 任务已创建'
+    case 'queued':
+      return 'AI 任务排队中…'
+    case 'running':
+      return 'AI 长任务运行中…'
+    case 'checkpointed':
+      return 'AI 任务已保存检查点'
+    case 'waiting-user':
+      return 'AI 任务等待输入'
+    case 'interrupted':
+      return 'AI 任务已中断，可恢复'
+    case 'completed':
+      return 'AI 任务已完成'
+    case 'failed':
+      return 'AI 任务失败'
+    case 'cancelled':
+      return 'AI 任务已取消'
+  }
 }
 
 export default RichEditor
