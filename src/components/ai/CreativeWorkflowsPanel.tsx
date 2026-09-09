@@ -4,12 +4,7 @@ import type { TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ChapterRecord } from '../../types'
 import { htmlToPlain } from '../../domain/text'
 import { semanticDocumentFromText } from '../../domain/content'
-import {
-  createContinuityAuditTask,
-  createDeepReasoningTask,
-  type ContinuityAuditTaskInput,
-  type DeepReasoningTaskInput,
-} from '../../ai/tasks/taskFactories'
+import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
 import type {
   DistillationCheckpoint,
@@ -94,11 +89,11 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         selectedChapter.revision ?? 0,
       )
       const result = await onContinuityAudit(
-        createContinuityAuditTask({
+        {
           taskId: idGenerator.generate(`continuity-${selectedChapter.id}`),
           document,
           scope: 'document',
-        }),
+        },
         { signal: controller.signal, onProgress: setProgress },
       )
       if (token === runToken.current) setAuditFindings(result ?? [])
@@ -127,11 +122,11 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         selectedChapter.revision ?? 0,
       )
       const result = await onDeepReasoning(
-        createDeepReasoningTask({
+        {
           taskId,
           document,
           question: '分析当前章节的关键约束、角色动机和下一步剧情风险。',
-        }),
+        },
         { onProgress: setProgress },
       )
       if (token === runToken.current) setDeepResult(result)
