@@ -4,6 +4,7 @@ import type { TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ChapterRecord } from '../../types'
 import { htmlToPlain } from '../../domain/text'
 import { semanticDocumentFromText } from '../../domain/content'
+import { clock } from '../../adapters/clock'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
 import { projectContinuityFindingsToEditor, type ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
@@ -245,7 +246,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
               kind: 'narrative.project.distill',
               status: completedChunks === totalChunks ? 'completed' : 'running',
               progress: totalChunks ? completedChunks / totalChunks : 0,
-              checkpoint: failedChunks.length ? { step: 'retry-failed-chunks', updatedAt: Date.now() } : undefined,
+              checkpoint: failedChunks.length ? { step: 'retry-failed-chunks', updatedAt: clock.now() } : undefined,
             }),
         },
       )
