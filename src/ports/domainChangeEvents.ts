@@ -57,7 +57,7 @@ function getChannel(): DomainChangeChannel | undefined {
       const workspaceId = (data as { workspaceId: string }).workspaceId
       if (workspaceId.trim()) notify({ workspaceId })
     })
-    next.unref?.()
+    ;(next as BroadcastChannel & { unref?: () => void }).unref?.()
     channel = next
     return channel
   } catch {
