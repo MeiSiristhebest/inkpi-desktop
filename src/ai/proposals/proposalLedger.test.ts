@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { db } from '../../db/indexedDB'
 import {
+  IndexedDbProposalStore,
   ProposalConflictError,
   ProposalLedger,
   proposalFromContinuation,
@@ -126,5 +128,46 @@ describe('AI proposal to commit flow', () => {
     }))
     await expect(ledger.undo('undo-conflict', 3, () => undefined)).rejects.toBeInstanceOf(ProposalConflictError)
     expect(ledger.get('undo-conflict')?.status).toBe('stale')
+  })
+
+  it('rehydrates proposal review and CAS state from IndexedDB', async () => {
+    const proposalId = 'indexed-db-proposal-ledger-test'
+    await db.delete('aiProposals', proposalId)
+    try {
+      const proposal = proposalFromPatch(
+        {
+          taskId: 'indexed-db-proposal-task',
+          kind: 'creative.rewrite',
+          status: 'completed',
+          output: { format: 'patch', patch: { from: 0, to: 1, text: '改' } },
+        },
+        { id: proposalId, documentId: 'chapter-1', baseRevision: 1 },
+      )
+      const first = new ProposalLedger({ store: new IndexedDbProposalStore() })
+      await first.ready
+      first.create(proposal)
+      await first.flush()
+
+      const second = new ProposalLedger({ store: new IndexedDbProposalStore() })
+      await second.ready
+      expect(second.get(proposalId)?.status).toBe('pending')
+      second.accept(proposalId)
+      await second.commit(proposalId, 1, () => ({
+        inversePatches: [{ documentId: 'chapter-1', from: 0, to: 1, text: '原' }],
+      }))
+      await second.flush()
+
+      const committed = new ProposalLedger({ store: new IndexedDbProposalStore() })
+      await committed.ready
+      expect(committed.get(proposalId)).toMatchObject({ status: 'committed', committedRevision: 2 })
+      await committed.undo(proposalId, 2, async () => undefined)
+      await committed.flush()
+
+      const rehydrated = new ProposalLedger({ store: new IndexedDbProposalStore() })
+      await rehydrated.ready
+      expect(rehydrated.get(proposalId)?.status).toBe('undone')
+    } finally {
+      await db.delete('aiProposals', proposalId)
+    }
   })
 })

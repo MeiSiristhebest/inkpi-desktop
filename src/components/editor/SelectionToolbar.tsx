@@ -4,7 +4,14 @@ import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createRewriteTask } from '../../ai'
 import { semanticDocumentFromProseMirror, semanticDocumentFromText } from '../../domain/content'
-import { hashText, ProposalConflictError, ProposalLedger, proposalFromPatch, type AiProposal } from '../../ai/proposals'
+import {
+  hashText,
+  IndexedDbProposalStore,
+  ProposalConflictError,
+  ProposalLedger,
+  proposalFromPatch,
+  type AiProposal,
+} from '../../ai/proposals'
 import { idGenerator } from '../../adapters/idGenerator'
 
 interface SelectionToolbarProps {
@@ -55,7 +62,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     error?: string
   } | null>(null)
   const [rewriteBusy, setRewriteBusy] = useState(false)
-  const proposalLedger = useState(() => new ProposalLedger())[0]
+  const proposalLedger = useState(() => new ProposalLedger({ store: new IndexedDbProposalStore() }))[0]
 
   useEffect(() => {
     if (

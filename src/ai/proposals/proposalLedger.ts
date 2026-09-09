@@ -1,4 +1,5 @@
 import type { TaskResult } from '@inkpi/protocol'
+import { db } from '../../db/indexedDB'
 import { requirePatchResult, requireTextResult } from '../results/taskResults'
 import type { DomainProposalEvidence } from './domainProposal'
 
@@ -38,6 +39,16 @@ export interface CommitReceipt {
 
 type CommitApplyResult = void | { inversePatches?: TextPatch[] }
 
+export interface ProposalStore {
+  list(): Promise<AiProposal[]>
+  save(proposal: AiProposal): Promise<void>
+}
+
+export interface ProposalLedgerOptions {
+  now?: () => number
+  store?: ProposalStore
+}
+
 export class ProposalConflictError extends Error {
   constructor(proposalId: string, expected: number, actual: number) {
     super(`Proposal ${proposalId} is stale: expected revision ${expected}, received ${actual}`)
@@ -48,12 +59,36 @@ export class ProposalConflictError extends Error {
 export class ProposalLedger {
   private readonly proposals = new Map<string, AiProposal>()
   private readonly committing = new Set<string>()
+  private readonly now: () => number
+  private readonly store?: ProposalStore
+  private persistenceTail: Promise<void> = Promise.resolve()
+  readonly ready: Promise<void>
+
+  constructor(options: ProposalLedgerOptions = {}) {
+    this.now = options.now ?? Date.now
+    this.store = options.store
+    this.ready = this.store
+      ? this.store.list().then((proposals) => {
+          for (const proposal of proposals) {
+            validateProposal(proposal)
+            if (!this.proposals.has(proposal.id)) this.proposals.set(proposal.id, cloneProposal(proposal))
+          }
+        })
+      : Promise.resolve()
+    void this.ready.catch(() => undefined)
+  }
+
+  async flush(): Promise<void> {
+    await this.ready
+    await this.persistenceTail
+  }
 
   create(proposal: AiProposal): AiProposal {
     if (this.proposals.has(proposal.id)) throw new Error(`Proposal already exists: ${proposal.id}`)
     validateProposal(proposal)
     const stored = cloneProposal(proposal)
     this.proposals.set(stored.id, stored)
+    this.persist(stored)
     return cloneProposal(stored)
   }
 
@@ -72,7 +107,8 @@ export class ProposalLedger {
     const proposal = this.require(proposalId)
     if (proposal.status !== 'pending') throw new Error(`Proposal ${proposalId} is not pending`)
     proposal.status = 'accepted'
-    proposal.updatedAt = Date.now()
+    proposal.updatedAt = this.now()
+    this.persist(proposal)
     return cloneProposal(proposal)
   }
 
@@ -80,7 +116,8 @@ export class ProposalLedger {
     const proposal = this.require(proposalId)
     if (proposal.status !== 'pending') throw new Error(`Proposal ${proposalId} is not pending`)
     proposal.status = 'rejected'
-    proposal.updatedAt = Date.now()
+    proposal.updatedAt = this.now()
+    this.persist(proposal)
     return cloneProposal(proposal)
   }
 
@@ -106,7 +143,8 @@ export class ProposalLedger {
       proposal.baseRevision = change.baseRevision
     }
     proposal.status = 'pending'
-    proposal.updatedAt = Date.now()
+    proposal.updatedAt = this.now()
+    this.persist(proposal)
     return cloneProposal(proposal)
   }
 
@@ -127,7 +165,8 @@ export class ProposalLedger {
     proposal.baseRevision = currentRevision
     proposal.sourceHash = currentSourceHash
     proposal.status = 'pending'
-    proposal.updatedAt = Date.now()
+    proposal.updatedAt = this.now()
+    this.persist(proposal)
     return cloneProposal(proposal)
   }
 
@@ -142,11 +181,14 @@ export class ProposalLedger {
     if (proposal.status !== 'accepted') throw new Error(`Proposal ${proposalId} must be accepted before commit`)
     if (currentRevision !== proposal.baseRevision) {
       proposal.status = 'stale'
+      proposal.updatedAt = this.now()
+      await this.persistAndWait(proposal)
       throw new ProposalConflictError(proposal.id, proposal.baseRevision, currentRevision)
     }
     if (currentSourceHash !== undefined && proposal.sourceHash !== undefined && currentSourceHash !== proposal.sourceHash) {
       proposal.status = 'stale'
-      proposal.updatedAt = Date.now()
+      proposal.updatedAt = this.now()
+      await this.persistAndWait(proposal)
       throw new Error(`Proposal ${proposal.id} source hash does not match the current document`)
     }
     const nextRevision = currentRevision + 1
@@ -162,7 +204,8 @@ export class ProposalLedger {
       : proposal.inversePatches
     proposal.status = 'committed'
     proposal.committedRevision = nextRevision
-    proposal.updatedAt = Date.now()
+    proposal.updatedAt = this.now()
+    await this.persistAndWait(proposal)
     return {
       proposalId: proposal.id,
       documentId: proposal.documentId,
@@ -182,13 +225,15 @@ export class ProposalLedger {
     if (!proposal.inversePatches?.length) throw new Error(`Proposal ${proposalId} has no inverse patches`)
     if (currentRevision !== proposal.committedRevision) {
       proposal.status = 'stale'
-      proposal.updatedAt = Date.now()
+      proposal.updatedAt = this.now()
+      await this.persistAndWait(proposal)
       throw new ProposalConflictError(proposal.id, proposal.committedRevision ?? currentRevision, currentRevision)
     }
     const nextRevision = currentRevision + 1
     await apply(proposal.inversePatches.map((patch) => ({ ...patch })), nextRevision)
     proposal.status = 'undone'
-    proposal.updatedAt = Date.now()
+    proposal.updatedAt = this.now()
+    await this.persistAndWait(proposal)
     return {
       proposalId: proposal.id,
       documentId: proposal.documentId,
@@ -201,6 +246,29 @@ export class ProposalLedger {
     const proposal = this.proposals.get(proposalId)
     if (!proposal) throw new Error(`Unknown proposal: ${proposalId}`)
     return proposal
+  }
+
+  private persist(proposal: AiProposal): void {
+    if (!this.store) return
+    const write = this.persistenceTail.then(() => this.ready).then(() => this.store!.save(cloneProposal(proposal)))
+    this.persistenceTail = write
+    void write.catch(() => undefined)
+  }
+
+  private async persistAndWait(proposal: AiProposal): Promise<void> {
+    this.persist(proposal)
+    await this.persistenceTail
+  }
+}
+
+export class IndexedDbProposalStore implements ProposalStore {
+  async list(): Promise<AiProposal[]> {
+    const proposals = await db.getAll<AiProposal>('aiProposals')
+    return proposals.map(cloneProposal)
+  }
+
+  save(proposal: AiProposal): Promise<void> {
+    return db.put('aiProposals', cloneProposal(proposal))
   }
 }
 
