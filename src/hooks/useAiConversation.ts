@@ -6,7 +6,8 @@ import type { ModelConfig } from '../core/settings'
 import { DEFAULT_DAEMON_URL } from '../config'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { semanticDocumentFromText } from '../domain/content'
-import { createAssistantTask, createContinueTask, taskResultText } from '../ai'
+import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
+import { taskResultText } from '../ai/tasks/pluginTasks'
 import { idGenerator } from '../adapters/idGenerator'
 
 /**
