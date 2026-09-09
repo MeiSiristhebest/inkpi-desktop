@@ -4,6 +4,7 @@ import type { ProjectRepository } from '../ports/projectRepository'
 import { indexedDbDailyStatsRepository } from './indexedDbDailyStatsRepository'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
 // DomainChangeSet revisions are allocated by reading the current workspace
@@ -118,6 +119,7 @@ async function appendDomainChange(
         createdAt: occurredAt,
       }),
     )
+    domainChangeEvents.publish(workspaceId)
   })
   domainAppendQueue = operationPromise.catch(() => undefined)
   await operationPromise
