@@ -3,6 +3,10 @@ import type { AiAssistant, RpcClient } from '../ports/aiGateway'
 import { CreativeIntelligence, type CreativeTaskGateway } from '../ai/orchestrator/creativeIntelligence'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
+import { ContinuityAuditScheduler, ProjectDistillationWorkflow } from '../ai/orchestrator/verticalSlices'
+import { createDaemonDomainSyncRemote } from './daemonDomainSyncRemote'
+import { DomainSyncService } from '../domain/sync/domainSyncService'
+import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 
 /**
  * 把底层 RpcClient（字符串方法 JSON-RPC）封装成语义化 AiAssistant。
@@ -18,6 +22,8 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
     resumeTask: (taskId) => client.request<TaskSubmitResult>('task.resume', { taskId }),
   }
   const creativeIntelligence = new CreativeIntelligence(taskGateway)
+  const continuityScheduler = new ContinuityAuditScheduler(creativeIntelligence)
+  const distillationWorkflow = new ProjectDistillationWorkflow(creativeIntelligence)
 
   const ensurePluginInstructionsRegistered = (): Promise<void> => {
     if (!pluginInstructionsReady) {
@@ -44,6 +50,21 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
       return creativeIntelligence.run(task, options)
     },
 
+    runContinuityAudit: async (input, options = {}) => {
+      await ensurePluginInstructionsRegistered()
+      return continuityScheduler.schedule(input, options)
+    },
+
+    runDeepReasoning: async (input, options = {}) => {
+      await ensurePluginInstructionsRegistered()
+      return creativeIntelligence.runDeepReasoning(input, options)
+    },
+
+    runDistillationWorkflow: async (input, options = {}) => {
+      await ensurePluginInstructionsRegistered()
+      return distillationWorkflow.run(input, options)
+    },
+
     steerTask: async (taskId: string, input: unknown): Promise<boolean> => {
       const result = await client.request<{ accepted: boolean }>('task.steer', { taskId, input })
       return result.accepted
@@ -52,6 +73,12 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
     resumeTask: async (taskId: string): Promise<void> => {
       await client.request('task.resume', { taskId })
     },
+
+    syncDomain: (workspaceId: string) =>
+      new DomainSyncService(
+        new IndexedDbDomainChangeStore(),
+        createDaemonDomainSyncRemote(client),
+      ).sync(workspaceId),
 
     status: () => client.request<{ running: boolean }>('daemon.status'),
 

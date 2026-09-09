@@ -11,6 +11,7 @@ import { PluginProvider } from './core/pluginRegistry'
 import { ProjectDataProvider, useProjectData } from './core/projectDataContext'
 import { DesktopPluginHostProvider } from './core/pluginHostContext'
 import type { ReactNode } from 'react'
+import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 
 const ProjectWorkspace: FC<{
   projectId: string
@@ -36,6 +37,67 @@ const ProjectWorkspace: FC<{
   )
 }
 
+const ProjectEngine: FC<{
+  projectId: string
+  projectName?: string
+  isConnected: boolean
+  isReconnecting: boolean
+  onReconnect: () => void
+  onRequestGhost: (chapterId: string, text: string) => Promise<string | null>
+  onAiTask: (task: import('@inkpi/protocol').AiTask) => Promise<import('@inkpi/protocol').TaskResult | null>
+  onOpenAssistant: () => void
+  aiPanelOpen: boolean
+  setAiPanelOpen: (open: boolean) => void
+  aiMessages: Array<{ role: 'user' | 'assistant'; text: string }>
+  aiInput: string
+  setAiInput: (value: string) => void
+  aiBusy: boolean
+  sendAiPrompt: (prompt: string) => void
+  runContinuityAudit: import('./hooks/useAiConversation').AiConversation['runContinuityAudit']
+  runDeepReasoning: import('./hooks/useAiConversation').AiConversation['runDeepReasoning']
+  runDistillationWorkflow: import('./hooks/useAiConversation').AiConversation['runDistillationWorkflow']
+  steerTask: import('./hooks/useAiConversation').AiConversation['steerTask']
+  onHome: () => void
+}> = (props) => {
+  const { chapters } = useProjectData()
+  return (
+    <Engine
+      projectId={props.projectId}
+      projectName={props.projectName}
+      isConnected={props.isConnected}
+      isReconnecting={props.isReconnecting}
+      onReconnect={props.onReconnect}
+      onRequestGhost={props.onRequestGhost}
+      onAiTask={props.onAiTask}
+      onOpenAssistant={props.onOpenAssistant}
+      onHome={props.onHome}
+      rightPanel={
+        <>
+          <CreativeWorkflowsPanel
+            chapters={chapters}
+            connected={props.isConnected}
+            onContinuityAudit={props.runContinuityAudit}
+            onDeepReasoning={props.runDeepReasoning}
+            onDistillationWorkflow={props.runDistillationWorkflow}
+            onSteerTask={props.steerTask}
+          />
+          {props.aiPanelOpen && (
+            <AiAssistantPanel
+              messages={props.aiMessages}
+              input={props.aiInput}
+              busy={props.aiBusy}
+              connected={props.isConnected}
+              onInputChange={props.setAiInput}
+              onSend={() => props.sendAiPrompt(props.aiInput)}
+              onClose={() => props.setAiPanelOpen(false)}
+            />
+          )}
+        </>
+      }
+    />
+  )
+}
+
 /**
  * 应用根组件（组合根）：只负责 Provider 装配（SettingsProvider / ThemeController），
  * 自身不直接消费 useSettings（否则会落在 Provider 之外而报错，§12.3）。业务编排交给 AppShell。
@@ -57,7 +119,6 @@ const AppShell: FC = () => {
   const [settings] = useSettings()
 
   const library = useProjectLibrary()
-  const ai = useAiConversation(settings.daemonWsUrl, settings.aiModel)
 
   const {
     projects,
@@ -70,6 +131,8 @@ const AppShell: FC = () => {
     updateProject,
     deleteProject,
   } = library
+
+  const ai = useAiConversation(settings.daemonWsUrl, settings.aiModel, activeProjectId)
 
   const {
     isConnected,
@@ -84,6 +147,10 @@ const AppShell: FC = () => {
     requestGhost,
     sendAiPrompt,
     runAiTask,
+    runContinuityAudit,
+    runDeepReasoning,
+    runDistillationWorkflow,
+    steerTask,
   } = ai
 
   const content = !activeProjectId ? (
@@ -108,7 +175,7 @@ const AppShell: FC = () => {
           isConnected={isConnected}
           onAiTask={runAiTask}
         >
-          <Engine
+          <ProjectEngine
             projectId={activeProjectId}
             projectName={projects.find((p) => p.id === activeProjectId)?.name}
             isConnected={isConnected}
@@ -118,19 +185,17 @@ const AppShell: FC = () => {
             onAiTask={runAiTask}
             onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
             onHome={() => setActiveProjectId(null)}
-            rightPanel={
-              aiPanelOpen ? (
-                <AiAssistantPanel
-                  messages={aiMessages}
-                  input={aiInput}
-                  busy={aiBusy}
-                  connected={isConnected}
-                  onInputChange={setAiInput}
-                  onSend={() => sendAiPrompt(aiInput)}
-                  onClose={() => setAiPanelOpen(false)}
-                />
-              ) : null
-            }
+            aiPanelOpen={aiPanelOpen}
+            setAiPanelOpen={setAiPanelOpen}
+            aiMessages={aiMessages}
+            aiInput={aiInput}
+            setAiInput={setAiInput}
+            aiBusy={aiBusy}
+            sendAiPrompt={sendAiPrompt}
+            runContinuityAudit={runContinuityAudit}
+            runDeepReasoning={runDeepReasoning}
+            runDistillationWorkflow={runDistillationWorkflow}
+            steerTask={steerTask}
           />
         </ProjectWorkspace>
       </ProjectDataProvider>

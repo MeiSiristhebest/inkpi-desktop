@@ -9,6 +9,11 @@ import { semanticDocumentFromText } from '../domain/content'
 import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
 import { taskResultText } from '../ai/tasks/pluginTasks'
 import { idGenerator } from '../adapters/idGenerator'
+import type { DomainSyncResult } from '../domain/sync/domainSyncService'
+import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tasks/taskFactories'
+import type { ProjectDistillationInput, DistillationWorkflowOptions } from '../ai/orchestrator/verticalSlices'
+import type { ContinuityFinding, DeepReasoningResult } from '../ai/results/taskResults'
+import type { DistillationWorkflowResult } from '../ai/orchestrator/verticalSlices'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -39,6 +44,11 @@ export interface AiConversation {
   requestGhost: (chapterId: string, text: string) => Promise<string | null>
   sendAiPrompt: (prompt: string, chapterId?: string) => void
   runAiTask: (task: AiTask) => Promise<TaskResult | null>
+  steerTask: (taskId: string, input: unknown) => Promise<boolean>
+  runContinuityAudit: (input: ContinuityAuditTaskInput, options?: Parameters<NonNullable<AiAssistant['runContinuityAudit']>>[1]) => Promise<ContinuityFinding[] | null>
+  runDeepReasoning: (input: DeepReasoningTaskInput, options?: Parameters<NonNullable<AiAssistant['runDeepReasoning']>>[1]) => Promise<DeepReasoningResult | null>
+  runDistillationWorkflow: (input: ProjectDistillationInput, options?: DistillationWorkflowOptions) => Promise<DistillationWorkflowResult | null>
+  syncDomain: (workspaceId: string) => Promise<DomainSyncResult | null>
 }
 
 export interface UseAiConversationOptions {
@@ -49,6 +59,7 @@ export interface UseAiConversationOptions {
 export function useAiConversation(
   wsUrl: string,
   aiModel: ModelConfig | null,
+  workspaceId?: string | null,
   options: UseAiConversationOptions = {},
 ): AiConversation {
   const { initialPanelOpen = false } = options
@@ -72,9 +83,9 @@ export function useAiConversation(
       result.client?.close().catch(() => {})
       return
     }
-    clientRef.current = result.client
+      clientRef.current = result.client
     setIsConnected(result.connected)
-    setIsReconnecting(false)
+      setIsReconnecting(false)
     if (!result.connected) {
       console.warn('[InkPi Desktop] Daemon 连接失败，进入离线沙盒模式')
     }
@@ -90,6 +101,13 @@ export function useAiConversation(
     // 仅在挂载时连接；wsUrl 变化由 reconnect 显式触发（与原 App 行为一致）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!workspaceId || !isConnected || !clientRef.current?.syncDomain) return
+    void clientRef.current.syncDomain(workspaceId).catch((error) => {
+      console.warn('[InkPi Desktop] Domain projection sync failed:', error)
+    })
+  }, [isConnected, workspaceId])
 
   const requestGhost = useCallback(
     async (chapterId: string, text: string): Promise<string | null> => {
@@ -170,6 +188,31 @@ export function useAiConversation(
     [isConnected],
   )
 
+  const steerTask = useCallback(async (taskId: string, input: unknown) => {
+    if (!clientRef.current?.steerTask || !isConnected) return false
+    return clientRef.current.steerTask(taskId, input)
+  }, [isConnected])
+
+  const runContinuityAudit = useCallback(async (input: ContinuityAuditTaskInput, options = {}) => {
+    if (!clientRef.current?.runContinuityAudit || !isConnected) return null
+    return clientRef.current.runContinuityAudit(input, options)
+  }, [isConnected])
+
+  const runDeepReasoning = useCallback(async (input: DeepReasoningTaskInput, options = {}) => {
+    if (!clientRef.current?.runDeepReasoning || !isConnected) return null
+    return clientRef.current.runDeepReasoning(input, options)
+  }, [isConnected])
+
+  const runDistillationWorkflow = useCallback(async (input: ProjectDistillationInput, options: DistillationWorkflowOptions = {}) => {
+    if (!clientRef.current?.runDistillationWorkflow || !isConnected) return null
+    return clientRef.current.runDistillationWorkflow(input, options)
+  }, [isConnected])
+
+  const syncDomain = useCallback(async (id: string) => {
+    if (!clientRef.current?.syncDomain || !isConnected) return null
+    return clientRef.current.syncDomain(id)
+  }, [isConnected])
+
   return {
     isConnected,
     isReconnecting,
@@ -183,5 +226,10 @@ export function useAiConversation(
     requestGhost,
     sendAiPrompt,
     runAiTask,
+    steerTask,
+    runContinuityAudit,
+    runDeepReasoning,
+    runDistillationWorkflow,
+    syncDomain,
   }
 }

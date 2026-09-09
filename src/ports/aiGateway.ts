@@ -1,4 +1,15 @@
 import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
+import type {
+  ContinuityAuditTaskInput,
+  DeepReasoningTaskInput,
+} from '../ai/tasks/taskFactories'
+import type {
+  ProjectDistillationInput,
+  DistillationWorkflowOptions,
+  DistillationWorkflowResult,
+} from '../ai/orchestrator/verticalSlices'
+import type { ContinuityFinding, DeepReasoningResult } from '../ai/results/taskResults'
+import type { DomainSyncResult } from '../domain/sync/domainSyncService'
 
 /**
  * AI 网关端口（抽象）。
@@ -21,8 +32,12 @@ export interface AiGateway {
  */
 export interface AiAssistant {
   runTask(task: AiTask, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<TaskResult | null>
+  runContinuityAudit?(input: ContinuityAuditTaskInput, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<ContinuityFinding[]>
+  runDeepReasoning?(input: DeepReasoningTaskInput, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<DeepReasoningResult>
+  runDistillationWorkflow?(input: ProjectDistillationInput, options?: DistillationWorkflowOptions): Promise<DistillationWorkflowResult>
   steerTask?(taskId: string, input: unknown): Promise<boolean>
   resumeTask?(taskId: string): Promise<void>
+  syncDomain?(workspaceId: string): Promise<DomainSyncResult>
   /** daemon 存活状态 */
   status(): Promise<{ running: boolean }>
   close(): Promise<void>
