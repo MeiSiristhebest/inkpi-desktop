@@ -13,6 +13,7 @@ import {
 import type { StoryState } from '../domain/story'
 import { indexedDbStoryStateStore } from '../adapters/indexedDbStoryStateStore'
 import type { StoryStateStore } from '../ports/storyStateStore'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 
 export type StoryStateUpdater = (current: StoryState | undefined) => StoryState
 
@@ -112,6 +113,23 @@ export const StoryStateProvider: FC<StoryStateProviderProps> = ({
       operationId.current += 1
     }
   }, [reloadStoryState])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer)
+      reloadTimer = setTimeout(() => {
+        reloadTimer = null
+        void reloadStoryState()
+      }, 50)
+    }
+    const unsubscribe = domainChangeEvents.subscribe(workspaceId, scheduleReload)
+    return () => {
+      unsubscribe()
+      if (reloadTimer) clearTimeout(reloadTimer)
+    }
+  }, [reloadStoryState, workspaceId])
 
   const saveStoryState = useCallback(
     async (nextState: StoryState) => {

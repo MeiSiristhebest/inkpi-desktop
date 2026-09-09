@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { StoryState } from '../domain/story'
 import { createStoryState } from '../domain/story/storyState'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { StoryStateProvider, useStoryState } from './storyStateContext'
 
 interface Deferred<T> {
@@ -114,5 +115,23 @@ describe('StoryStateProvider', () => {
     await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('indexeddb unavailable'))
     expect(screen.getByTestId('revision')).toHaveTextContent('empty')
     expect(screen.getByTestId('loading')).toHaveTextContent('idle')
+  })
+
+  it('reloads the authoritative state after a domain change event', async () => {
+    let current = createStoryState(1)
+    const store = createStore(async () => current)
+
+    render(
+      <StoryStateProvider workspaceId="project-a" store={store}>
+        <StateProbe />
+      </StoryStateProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('revision')).toHaveTextContent('1'))
+    current = createStoryState(2)
+    act(() => domainChangeEvents.publish('project-a'))
+
+    await waitFor(() => expect(screen.getByTestId('revision')).toHaveTextContent('2'))
+    expect(store.load).toHaveBeenCalledWith('project-a')
   })
 })
