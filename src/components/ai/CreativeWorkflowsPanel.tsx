@@ -70,7 +70,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const [steering, setSteering] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [checkpoint, setCheckpoint] = useState<DistillationCheckpoint | undefined>()
-  const auditController = useRef<AbortController | null>(null)
+  const activeController = useRef<AbortController | null>(null)
   const runToken = useRef(0)
   const autoAuditTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastAutoAuditRevision = useRef<string | null>(null)
@@ -81,7 +81,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     }
   }, [chapters, selectedChapterId])
 
-  useEffect(() => () => auditController.current?.abort(), [])
+  useEffect(() => () => activeController.current?.abort(), [])
 
   const selectedChapter = useMemo(
     () => chapters.find((chapter) => chapter.id === selectedChapterId) ?? chapters[0],
@@ -135,9 +135,9 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const runAudit = async (chapterOverride?: ChapterRecord) => {
     const chapter = chapterOverride ?? selectedChapter
     if (!chapter || !connected || busy) return
-    auditController.current?.abort()
+    activeController.current?.abort()
     const controller = new AbortController()
-    auditController.current = controller
+    activeController.current = controller
     const token = ++runToken.current
     setBusy(true)
     setError(null)
@@ -163,7 +163,10 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         setError(cause instanceof Error ? cause.message : String(cause))
       }
     } finally {
-      if (token === runToken.current) setBusy(false)
+      if (token === runToken.current) {
+        setBusy(false)
+        if (activeController.current === controller) activeController.current = null
+      }
     }
   }
 
@@ -193,6 +196,9 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
 
   const runReasoning = async () => {
     if (!selectedChapter || !connected || busy) return
+    activeController.current?.abort()
+    const controller = new AbortController()
+    activeController.current = controller
     const token = ++runToken.current
     setBusy(true)
     setError(null)
@@ -212,18 +218,26 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           document,
           question: '分析当前章节的关键约束、角色动机和下一步剧情风险。',
         },
-        { onProgress: setProgress },
+        { signal: controller.signal, onProgress: setProgress },
       )
       if (token === runToken.current) setDeepResult(result)
     } catch (cause) {
-      if (token === runToken.current) setError(cause instanceof Error ? cause.message : String(cause))
+      if (!controller.signal.aborted && token === runToken.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
     } finally {
-      if (token === runToken.current) setBusy(false)
+      if (token === runToken.current) {
+        setBusy(false)
+        if (activeController.current === controller) activeController.current = null
+      }
     }
   }
 
   const runDistillation = async () => {
     if (documents.length === 0 || !connected || busy) return
+    activeController.current?.abort()
+    const controller = new AbortController()
+    activeController.current = controller
     const token = ++runToken.current
     setBusy(true)
     setError(null)
@@ -240,6 +254,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           chunkSize: 10,
           checkpoint,
           continueOnError: true,
+          signal: controller.signal,
           onProgress: ({ completedChunks, totalChunks, failedChunks }) =>
             setProgress({
               taskId: 'project-distillation',
@@ -255,9 +270,14 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         setCheckpoint(result.checkpoint)
       }
     } catch (cause) {
-      if (token === runToken.current) setError(cause instanceof Error ? cause.message : String(cause))
+      if (!controller.signal.aborted && token === runToken.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
     } finally {
-      if (token === runToken.current) setBusy(false)
+      if (token === runToken.current) {
+        setBusy(false)
+        if (activeController.current === controller) activeController.current = null
+      }
     }
   }
 
@@ -297,7 +317,8 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           <button type="button" onClick={() => void steer()} disabled={!steering.trim()} className="rounded border border-[var(--ink-border)] px-2 py-1 text-xs disabled:opacity-40">引导</button>
         </div>
       )}
-      {busy && tab === 'audit' && <button type="button" onClick={() => auditController.current?.abort()} className="mt-2 flex items-center gap-1 text-xs text-rose-500"><Square className="h-3 w-3" />取消审计</button>}
+      {busy && <button type="button" onClick={() => activeController.current?.abort()} className="mt-2 flex items-center gap-1 text-xs text-rose-500"><Square className="h-3 w-3" />取消{tab === 'audit' ? '审计' : tab === 'reason' ? '深度推理' : '项目提炼'}</button>}
+      {progress?.status === 'waiting-user' && <div data-testid="workflow-waiting-user" className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 p-1.5 text-xs text-amber-600">Runtime 等待人工输入，可继续提供 steering。</div>}
       {progress && <div data-testid="workflow-progress" className="mt-2 text-[11px] text-[var(--ink-text-faint)]">{Math.round((progress.progress ?? 0) * 100)}% · {progress.status}</div>}
       {error && <div role="alert" className="mt-2 text-xs text-rose-500">{error}</div>}
       {tab === 'audit' && auditMarkers.length > 0 && <div data-testid="continuity-findings" className="mt-2 space-y-1">{auditMarkers.map((marker) => <div key={marker.findingId} data-testid="continuity-diagnostic" data-finding-id={marker.findingId} data-location-kind={marker.locationStatus} className="rounded border border-[var(--ink-border)] p-1.5 text-xs"><div><span className="mr-1 font-medium">{marker.severity}</span>{marker.description}</div>{marker.locations.length > 0 ? <div className="mt-1 flex flex-wrap gap-1" aria-label="编辑器诊断位置">{marker.locations.map((location) => <span key={`${marker.findingId}-${location.blockId}`} data-testid="continuity-diagnostic-location" data-block-id={location.blockId} data-semantic-from={location.semanticFrom} data-semantic-to={location.semanticTo} data-editor-from={location.editorFrom} data-editor-to={location.editorTo} className="rounded bg-[var(--ink-bg-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--ink-text-faint)]">编辑器位置 {location.editorFrom}–{location.editorTo}</span>)}</div> : <span data-testid="continuity-diagnostic-unlocated" className="mt-1 inline-block text-[10px] text-[var(--ink-text-faint)]">未定位到编辑器位置</span>}</div>)}</div>}

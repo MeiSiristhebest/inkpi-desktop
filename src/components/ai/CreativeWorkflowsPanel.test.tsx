@@ -86,6 +86,38 @@ describe('CreativeWorkflowsPanel', () => {
     await waitFor(() => expect(screen.getByTestId('deep-reasoning-result')).toHaveTextContent('保留冷色意象'))
   })
 
+  it('cancels a running deep reasoning task through its AbortSignal', async () => {
+    const reasoning = vi.fn((_input: unknown, options?: { signal?: AbortSignal }) =>
+      new Promise<never>((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
+      }))
+    render(<CreativeWorkflowsPanel projectId="project-1" chapters={[chapter]} connected onContinuityAudit={vi.fn()} onDeepReasoning={reasoning} onDistillationWorkflow={vi.fn()} onSteerTask={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '深度推理' }))
+    fireEvent.click(screen.getByRole('button', { name: '开始深度推理' }))
+    await waitFor(() => expect(reasoning).toHaveBeenCalledOnce())
+    expect(reasoning.mock.calls[0][1]?.signal?.aborted).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: '取消深度推理' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '开始深度推理' })).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows a human-intervention state reported by the Runtime', async () => {
+    let resolveReasoning!: (value: { answer: string; assumptions: string[]; alternatives: string[]; risks: string[] }) => void
+    const reasoning = vi.fn((_input: unknown, options?: { onProgress?: (snapshot: { taskId: string; kind: string; status: 'waiting-user' }) => void }) => {
+      options?.onProgress?.({ taskId: 'deep-waiting', kind: 'narrative.deep.reason', status: 'waiting-user' })
+      return new Promise<{ answer: string; assumptions: string[]; alternatives: string[]; risks: string[] }>((resolve) => { resolveReasoning = resolve })
+    })
+    render(<CreativeWorkflowsPanel projectId="project-1" chapters={[chapter]} connected onContinuityAudit={vi.fn()} onDeepReasoning={reasoning} onDistillationWorkflow={vi.fn()} onSteerTask={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '深度推理' }))
+    fireEvent.click(screen.getByRole('button', { name: '开始深度推理' }))
+    await waitFor(() => expect(screen.getByTestId('workflow-waiting-user')).toHaveTextContent('等待人工输入'))
+    resolveReasoning({ answer: '继续', assumptions: [], alternatives: [], risks: [] })
+    await waitFor(() => expect(screen.getByTestId('deep-reasoning-result')).toHaveTextContent('继续'))
+  })
+
   it('runs project distillation with a resumable checkpoint', async () => {
     const distill = vi.fn(async (_input: unknown, options: { onProgress?: (progress: { completedChunks: number; totalChunks: number; failedChunks: string[] }) => void; checkpoint?: unknown }) => {
       options.onProgress?.({ completedChunks: 1, totalChunks: 1, failedChunks: [] })
