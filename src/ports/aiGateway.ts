@@ -10,6 +10,7 @@ import type {
 } from '../ai/orchestrator/verticalSlices'
 import type { ContinuityFinding, DeepReasoningResult } from '../ai/results/taskResults'
 import type { DomainSyncResult } from '../domain/sync/domainSyncService'
+import type { ProposalSyncRemote } from '../adapters/daemonDomainSyncRemote'
 
 /**
  * AI 网关端口（抽象）。
@@ -32,6 +33,8 @@ export interface AiGateway {
  */
 export interface AiAssistant {
   runTask(task: AiTask, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<TaskResult | null>
+  /** Optional daemon projection capability for proposal review state. */
+  proposalSyncRemote?: ProposalSyncRemote
   runContinuityAudit?(input: ContinuityAuditTaskInput, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<ContinuityFinding[]>
   runDeepReasoning?(input: DeepReasoningTaskInput, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<DeepReasoningResult>
   runDistillationWorkflow?(input: ProjectDistillationInput, options?: DistillationWorkflowOptions): Promise<DistillationWorkflowResult>

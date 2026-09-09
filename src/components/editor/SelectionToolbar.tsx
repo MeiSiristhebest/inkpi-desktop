@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Bold, Italic, Wand2, Anchor, CheckCircle2 } from 'lucide-react'
 import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
@@ -13,6 +13,8 @@ import {
   type AiProposal,
 } from '../../ai/proposals'
 import { idGenerator } from '../../adapters/idGenerator'
+import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
+import { getProposalSyncRemote, isProposalSyncError, RemoteProposalStore } from '../../ai/proposals'
 
 interface SelectionToolbarProps {
   /** TipTap 编辑器实例（任意结构，仅在具备 on/off/view 时生效） */
@@ -27,6 +29,10 @@ interface SelectionToolbarProps {
   activeChapterId?: string
   /** 当前章节版本，用于 Proposal 的 CAS 校验 */
   activeChapterRevision?: number
+  /** projectId/workspaceId scopes the daemon's derived proposal projection */
+  workspaceId?: string
+  /** Optional direct daemon projection capability; task results provide the production fallback. */
+  proposalSyncRemote?: ProposalSyncRemote
 }
 
 interface ToolbarState {
@@ -51,6 +57,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   onOpenAssistant,
   activeChapterId,
   activeChapterRevision = 0,
+  workspaceId,
+  proposalSyncRemote,
 }) => {
   const host = useOptionalPluginHostContext()
   const [state, setState] = useState<ToolbarState>({ show: false, top: 0, left: 0 })
@@ -62,7 +70,22 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     error?: string
   } | null>(null)
   const [rewriteBusy, setRewriteBusy] = useState(false)
-  const proposalLedger = useState(() => new ProposalLedger({ store: new IndexedDbProposalStore() }))[0]
+  const explicitProposalSyncRemoteRef = useRef(proposalSyncRemote)
+  const taskProposalSyncRemoteRef = useRef<ProposalSyncRemote | undefined>(undefined)
+  const proposalWorkspaceIdRef = useRef(workspaceId ?? host?.projectId)
+  explicitProposalSyncRemoteRef.current = proposalSyncRemote
+  const [proposalLedger] = useState(() => {
+    const localStore = new IndexedDbProposalStore()
+    const scopedWorkspaceId = proposalWorkspaceIdRef.current?.trim()
+    if (!scopedWorkspaceId) return new ProposalLedger({ store: localStore })
+    return new ProposalLedger({
+      store: new RemoteProposalStore({
+        local: localStore,
+        workspaceId: scopedWorkspaceId,
+        remote: () => explicitProposalSyncRemoteRef.current ?? taskProposalSyncRemoteRef.current,
+      }),
+    })
+  })
 
   useEffect(() => {
     if (
@@ -148,6 +171,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         }),
       )
       if (!result) return
+      const resultRemote = getProposalSyncRemote(result)
+      if (resultRemote) taskProposalSyncRemoteRef.current = resultRemote
       const proposal = proposalFromPatch(result, {
         id: `proposal-${result.taskId}`,
         documentId: semanticDocument.documentId,
@@ -197,7 +222,10 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       )
       setRewriteProposal((value) => value ? { ...value, status: 'committed', error: undefined } : value)
     } catch (error) {
-      const stale = error instanceof ProposalConflictError || /source hash|stale/i.test(String(error))
+      const stale =
+        error instanceof ProposalConflictError ||
+        isProposalSyncError(error) ||
+        /source hash|stale/i.test(String(error))
       setRewriteProposal((value) => value ? {
         ...value,
         status: stale ? 'stale' : value.status,

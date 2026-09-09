@@ -8,6 +8,7 @@ import type { ChapterRecord, VolumeRecord } from '../../../types'
 import type { EditorBackgroundConfig } from '../modals/BackgroundModal'
 import { PRESET_SKINS } from '../modals/BackgroundModal'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
+import type { ProposalSyncRemote } from '../../../adapters/daemonDomainSyncRemote'
 
 interface EditorCanvasProps {
   model: EditorModel
@@ -17,6 +18,7 @@ interface EditorCanvasProps {
   effectiveTypewriter?: boolean
   projectId: string
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
+  proposalSyncRemote?: ProposalSyncRemote
   activeChapterRevision?: number
   onOpenAssistant?: () => void
   bgConfig?: EditorBackgroundConfig
@@ -30,6 +32,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
   effectiveTypewriter = false,
   projectId,
   onAiTask,
+  proposalSyncRemote,
   activeChapterRevision,
   onOpenAssistant,
   bgConfig,
@@ -160,6 +163,8 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
                 editor={editor}
                 containerRef={canvasRef}
                 onAiTask={onAiTask}
+                workspaceId={projectId}
+                proposalSyncRemote={proposalSyncRemote}
                 activeChapterRevision={activeChapterRevision}
                 onOpenAssistant={onOpenAssistant}
                 activeChapterId={activeChapter?.id}

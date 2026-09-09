@@ -4,15 +4,17 @@ import { CreativeIntelligence, type CreativeTaskGateway } from '../ai/orchestrat
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 import { ContinuityAuditScheduler, ProjectDistillationWorkflow } from '../ai/orchestrator/verticalSlices'
-import { createDaemonDomainSyncRemote } from './daemonDomainSyncRemote'
+import { createDaemonDomainSyncRemote, createDaemonProposalSyncRemote } from './daemonDomainSyncRemote'
 import { DomainSyncService } from '../domain/sync/domainSyncService'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
+import { attachProposalSyncRemote } from '../ai/proposals/remoteProposalStore'
 
 /**
  * 把底层 RpcClient（字符串方法 JSON-RPC）封装成语义化 AiAssistant。
  * 传输层方法名集中在此处，视图层 / 根组件不再出现 'session.create' 等字符串（§14.4）。
  */
 export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
+  const proposalSyncRemote = createDaemonProposalSyncRemote(client)
   let pluginInstructionsReady: Promise<void> | undefined
   const taskGateway: CreativeTaskGateway = {
     submitTask: (task) => client.request<TaskSubmitResult>('task.submit', { task }),
@@ -47,8 +49,10 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   return {
     runTask: async (task: AiTask, options = {}): Promise<TaskResult | null> => {
       await ensurePluginInstructionsRegistered()
-      return creativeIntelligence.run(task, options)
+      return attachProposalSyncRemote(await creativeIntelligence.run(task, options), proposalSyncRemote)
     },
+
+    proposalSyncRemote,
 
     runContinuityAudit: async (input, options = {}) => {
       await ensurePluginInstructionsRegistered()
