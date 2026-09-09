@@ -7,7 +7,11 @@ const inkpiRoot = resolve(fixtureDirectory, '../../../inkpi')
 const serverEntry = pathToFileURL(resolve(inkpiRoot, 'packages/server/dist/index.js')).href
 const { InkPiDaemon } = await import(serverEntry)
 
-const daemon = new InkPiDaemon({ host: '127.0.0.1', port: 0 })
+const daemon = new InkPiDaemon({
+  host: '127.0.0.1',
+  port: 0,
+  skillSearchDirs: [resolve(inkpiRoot, 'skills')],
+})
 daemon.getTaskRouter().registry.register({
   id: 'editor-ai-chain-fixture',
   kinds: ['creative.continue'],
