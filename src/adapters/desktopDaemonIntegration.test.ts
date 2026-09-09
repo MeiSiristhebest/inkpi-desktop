@@ -89,6 +89,10 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
           },
         },
       })
+      expect(JSON.stringify(result.provenance)).not.toContain('private reasoning')
+      expect(JSON.stringify(result.provenance)).not.toContain('private trace')
+      expect(JSON.stringify(persisted.result?.provenance)).not.toContain('private reasoning')
+      expect(JSON.stringify(persisted.result?.provenance)).not.toContain('private trace')
 
       const instructionStatus = await client.request<{
         ready: boolean

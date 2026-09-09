@@ -17,12 +17,20 @@ daemon.getTaskRouter().registry.register({
       return {
         status: 'waiting-user',
         output: { format: 'text', text: 'desktop-daemon-fixture:waiting-user' },
-        provenance: { fixture: 'desktop-daemon-harness' },
+        provenance: {
+          fixture: 'desktop-daemon-harness',
+          trace: { reasoning: 'private reasoning must not cross the daemon boundary' },
+          calls: [{ rawThinking: 'private trace must not be persisted' }],
+        },
       }
     }
     return {
       output: { format: 'text', text: 'desktop-daemon-fixture:completed' },
-      provenance: { fixture: 'desktop-daemon-harness' },
+      provenance: {
+        fixture: 'desktop-daemon-harness',
+        trace: { reasoning: 'private reasoning must not cross the daemon boundary' },
+        calls: [{ rawThinking: 'private trace must not be persisted' }],
+      },
     }
   },
 })
