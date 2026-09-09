@@ -7,6 +7,7 @@ import { semanticDocumentFromText } from '../../domain/content'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
 import { projectContinuityFindingsToEditor, type ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
+import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
 import type { SemanticDocument } from '../../domain/content'
 import type {
   DistillationCheckpoint,
@@ -24,6 +25,7 @@ import { idGenerator } from '../../adapters/idGenerator'
 const DISTILLATION_TASK_ID = 'project-distillation'
 
 interface CreativeWorkflowsPanelProps {
+  projectId: string
   chapters: ChapterRecord[]
   connected: boolean
   onContinuityAudit: (
@@ -46,6 +48,7 @@ type WorkflowTab = 'audit' | 'reason' | 'distill'
 
 /** Real UI entry point for the remaining creative vertical slices. */
 export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
+  projectId,
   chapters,
   connected,
   onContinuityAudit,
@@ -117,6 +120,13 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     () => (auditDocument ? projectContinuityFindingsToEditor(auditDocument, auditFindings) : []),
     [auditDocument, auditFindings],
   )
+
+  useEffect(() => {
+    const chapterId = selectedChapter?.id
+    if (!chapterId) return
+    continuityDiagnosticsStore.set(projectId, chapterId, auditMarkers)
+    return () => continuityDiagnosticsStore.clear(projectId, chapterId)
+  }, [auditMarkers, projectId, selectedChapter?.id])
 
   const runAudit = async () => {
     if (!selectedChapter || !connected || busy) return
