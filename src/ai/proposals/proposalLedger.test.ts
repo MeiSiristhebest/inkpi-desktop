@@ -1,12 +1,43 @@
 import { describe, expect, it } from 'vitest'
 import { db } from '../../db/indexedDB'
+import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
 import {
   IndexedDbProposalStore,
   ProposalConflictError,
   ProposalLedger,
   proposalFromContinuation,
   proposalFromPatch,
+  type AiProposal,
+  type ProposalStore,
 } from './index'
+
+class MemoryProposalStore implements ProposalStore {
+  private readonly values = new Map<string, AiProposal>()
+
+  constructor(seed: AiProposal[] = []) {
+    for (const proposal of seed) this.values.set(proposal.id, cloneProposal(proposal))
+  }
+
+  async list(): Promise<AiProposal[]> {
+    return [...this.values.values()].map(cloneProposal)
+  }
+
+  async save(proposal: AiProposal): Promise<void> {
+    this.values.set(proposal.id, cloneProposal(proposal))
+  }
+
+  replace(proposal: AiProposal): void {
+    this.values.set(proposal.id, cloneProposal(proposal))
+  }
+}
+
+function cloneProposal(proposal: AiProposal): AiProposal {
+  return {
+    ...proposal,
+    patches: proposal.patches.map((patch) => ({ ...patch })),
+    inversePatches: proposal.inversePatches?.map((patch) => ({ ...patch })),
+  }
+}
 
 describe('AI proposal to commit flow', () => {
   it('requires explicit acceptance and commits only against the base revision', async () => {
@@ -169,5 +200,55 @@ describe('AI proposal to commit flow', () => {
     } finally {
       await db.delete('aiProposals', proposalId)
     }
+  })
+
+  it('reloads the authoritative store after a scoped state event', async () => {
+    const scope: ProposalEventScope = { workspaceId: 'workspace-reload', projectId: 'project-reload' }
+    const proposal = proposalFromPatch(
+      {
+        taskId: 'reload-task',
+        kind: 'creative.rewrite',
+        status: 'completed',
+        output: { format: 'patch', patch: { from: 0, to: 1, text: '改' } },
+      },
+      { id: 'reload-proposal', documentId: 'chapter-reload', baseRevision: 1 },
+    )
+    const store = new MemoryProposalStore()
+    const ledger = new ProposalLedger({ store, eventScope: scope })
+    await ledger.ready
+
+    ledger.create(proposal)
+    await ledger.flush()
+    store.replace({ ...proposal, status: 'committed', committedRevision: 2, updatedAt: 2 })
+
+    await ledger.reload()
+
+    expect(ledger.get(proposal.id)).toMatchObject({ status: 'committed', committedRevision: 2 })
+  })
+
+  it('emits a conflict event when a CAS commit marks a proposal stale', async () => {
+    const scope: ProposalEventScope = { workspaceId: 'workspace-conflict', projectId: 'project-conflict' }
+    const changes: Array<{ status: string; kind: string }> = []
+    const unsubscribe = proposalStateEvents.subscribe(scope, (event) => {
+      changes.push({ status: event.status, kind: event.kind })
+    })
+    const store = new MemoryProposalStore()
+    const ledger = new ProposalLedger({ store, eventScope: scope })
+    await ledger.ready
+    ledger.create(proposalFromPatch(
+      {
+        taskId: 'conflict-task',
+        kind: 'creative.rewrite',
+        status: 'completed',
+        output: { format: 'patch', patch: { from: 0, to: 1, text: '改' } },
+      },
+      { id: 'conflict-proposal', documentId: 'chapter-conflict', baseRevision: 1 },
+    ))
+    ledger.accept('conflict-proposal')
+
+    await expect(ledger.commit('conflict-proposal', 2, () => undefined)).rejects.toBeInstanceOf(ProposalConflictError)
+
+    expect(changes[changes.length - 1]).toEqual({ status: 'stale', kind: 'conflict' })
+    unsubscribe()
   })
 })

@@ -15,6 +15,7 @@ import {
 import { idGenerator } from '../../adapters/idGenerator'
 import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
 import { getProposalSyncRemote, isProposalSyncError, RemoteProposalStore } from '../../ai/proposals'
+import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
 
 interface SelectionToolbarProps {
   /** TipTap 编辑器实例（任意结构，仅在具备 on/off/view 时生效） */
@@ -41,6 +42,14 @@ interface ToolbarState {
   left: number
 }
 
+interface RewriteProposalState {
+  proposal: AiProposal
+  originalText: string
+  proposedText: string
+  status: AiProposal['status']
+  error?: string
+}
+
 /**
  * 自绘选区浮动工具条，完全替代 tippy.js 版 BubbleMenu。
  *
@@ -62,23 +71,30 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
 }) => {
   const host = useOptionalPluginHostContext()
   const [state, setState] = useState<ToolbarState>({ show: false, top: 0, left: 0 })
-  const [rewriteProposal, setRewriteProposal] = useState<{
-    proposal: AiProposal
-    originalText: string
-    proposedText: string
-    status: 'pending' | 'committed' | 'stale' | 'rejected' | 'undone'
-    error?: string
-  } | null>(null)
+  const [rewriteProposal, setRewriteProposal] = useState<RewriteProposalState | null>(null)
+  const rewriteProposalRef = useRef<RewriteProposalState | null>(null)
+  rewriteProposalRef.current = rewriteProposal
   const [rewriteBusy, setRewriteBusy] = useState(false)
   const explicitProposalSyncRemoteRef = useRef(proposalSyncRemote)
   const taskProposalSyncRemoteRef = useRef<ProposalSyncRemote | undefined>(undefined)
-  const proposalWorkspaceIdRef = useRef(workspaceId ?? host?.projectId)
+  const initialWorkspaceId = normalizeScopeId(workspaceId) ?? normalizeScopeId(host?.projectId)
+  const initialProjectId = normalizeScopeId(host?.projectId) ?? initialWorkspaceId
+  const proposalScopeRef = useRef<ProposalEventScope | undefined>(
+    initialWorkspaceId
+      ? {
+          workspaceId: initialWorkspaceId,
+          ...(initialProjectId === undefined ? {} : { projectId: initialProjectId }),
+        }
+      : undefined,
+  )
+  const proposalWorkspaceIdRef = useRef(proposalScopeRef.current?.workspaceId)
   explicitProposalSyncRemoteRef.current = proposalSyncRemote
   const [proposalLedger] = useState(() => {
     const localStore = new IndexedDbProposalStore()
     const scopedWorkspaceId = proposalWorkspaceIdRef.current?.trim()
     if (!scopedWorkspaceId) return new ProposalLedger({ store: localStore })
     return new ProposalLedger({
+      eventScope: proposalScopeRef.current,
       store: new RemoteProposalStore({
         local: localStore,
         workspaceId: scopedWorkspaceId,
@@ -143,6 +159,49 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       editor.off('focus', compute)
     }
   }, [editor, containerRef])
+
+  useEffect(() => {
+    const scope = proposalScopeRef.current
+    if (!scope) return
+
+    let disposed = false
+    const unsubscribe = proposalStateEvents.subscribe(scope, (event) => {
+      const current = rewriteProposalRef.current
+      if (!current || current.proposal.id !== event.proposalId) return
+
+      void proposalLedger.reload().then(() => {
+        if (disposed) return
+        const next = proposalLedger.get(event.proposalId)
+        if (!next) return
+        setRewriteProposal((value) => {
+          if (!value || value.proposal.id !== next.id) return value
+          const nextPatch = next.patches[0]
+          return {
+            ...value,
+            proposal: next,
+            proposedText: nextPatch?.text ?? value.proposedText,
+            status: next.status,
+            error: next.status === 'stale'
+              ? '提案与其他窗口的修改冲突，请重新审阅当前内容'
+              : undefined,
+          }
+        })
+      }).catch((error: unknown) => {
+        if (disposed) return
+        setRewriteProposal((value) => value && value.proposal.id === event.proposalId
+          ? {
+              ...value,
+              error: `跨窗口刷新提案失败：${error instanceof Error ? error.message : String(error)}`,
+            }
+          : value)
+      })
+    })
+
+    return () => {
+      disposed = true
+      unsubscribe()
+    }
+  }, [proposalLedger])
 
   if ((!state.show && !rewriteProposal) || !editor) return null
 
@@ -332,6 +391,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             <div className="rounded bg-emerald-500/10 p-1">{rewriteProposal.proposedText || '（空）'}</div>
           </div>
           {rewriteProposal.error && <div className="mt-1 text-rose-500">{rewriteProposal.error}</div>}
+          {rewriteProposal.status === 'stale' && <div data-testid="rewrite-proposal-conflict" className="mt-1 text-amber-500">其他窗口的修改使此提案产生冲突，请重新审阅。</div>}
           {rewriteProposal.status === 'pending' && <div className="mt-2 flex gap-1">
             <button type="button" onClick={() => void commitRewrite()} className="rounded bg-emerald-600 px-2 py-1 text-white">接受</button>
             <button type="button" onClick={rejectRewrite} className="rounded border border-[var(--ink-border)] px-2 py-1">拒绝</button>
@@ -344,3 +404,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
 }
 
 export default SelectionToolbar
+
+function normalizeScopeId(value?: string): string | undefined {
+  const normalized = value?.trim()
+  return normalized || undefined
+}

@@ -1,5 +1,10 @@
 import type { TaskResult } from '@inkpi/protocol'
 import { db } from '../../db/indexedDB'
+import {
+  proposalStateEvents,
+  type ProposalEventScope,
+  type ProposalStateEventKind,
+} from '../../ports/proposalStateEvents'
 import { requirePatchResult, requireTextResult } from '../results/taskResults'
 import type { DomainProposalEvidence } from './domainProposal'
 
@@ -47,6 +52,7 @@ export interface ProposalStore {
 export interface ProposalLedgerOptions {
   now?: () => number
   store?: ProposalStore
+  eventScope?: ProposalEventScope
 }
 
 export class ProposalConflictError extends Error {
@@ -61,12 +67,15 @@ export class ProposalLedger {
   private readonly committing = new Set<string>()
   private readonly now: () => number
   private readonly store?: ProposalStore
+  private readonly eventScope?: ProposalEventScope
   private persistenceTail: Promise<void> = Promise.resolve()
+  private reloadTail: Promise<void> = Promise.resolve()
   readonly ready: Promise<void>
 
   constructor(options: ProposalLedgerOptions = {}) {
     this.now = options.now ?? Date.now
     this.store = options.store
+    this.eventScope = options.eventScope
     this.ready = this.store
       ? this.store.list().then((proposals) => {
           for (const proposal of proposals) {
@@ -83,12 +92,35 @@ export class ProposalLedger {
     await this.persistenceTail
   }
 
+  /** Reload the authoritative proposal store after a cross-context event. */
+  reload(): Promise<void> {
+    const operation = this.reloadTail
+      .catch(() => undefined)
+      .then(async () => {
+        await this.ready
+        if (!this.store) return
+        await this.persistenceTail.catch(() => undefined)
+
+        const proposals = await this.store.list()
+        const next = new Map<string, AiProposal>()
+        for (const proposal of proposals) {
+          validateProposal(proposal)
+          next.set(proposal.id, cloneProposal(proposal))
+        }
+
+        this.proposals.clear()
+        for (const [proposalId, proposal] of next) this.proposals.set(proposalId, proposal)
+      })
+    this.reloadTail = operation
+    return operation
+  }
+
   create(proposal: AiProposal): AiProposal {
     if (this.proposals.has(proposal.id)) throw new Error(`Proposal already exists: ${proposal.id}`)
     validateProposal(proposal)
     const stored = cloneProposal(proposal)
     this.proposals.set(stored.id, stored)
-    this.persist(stored)
+    this.persist(stored, 'created')
     return cloneProposal(stored)
   }
 
@@ -182,13 +214,13 @@ export class ProposalLedger {
     if (currentRevision !== proposal.baseRevision) {
       proposal.status = 'stale'
       proposal.updatedAt = this.now()
-      await this.persistAndWait(proposal)
+      await this.persistAndWait(proposal, 'conflict')
       throw new ProposalConflictError(proposal.id, proposal.baseRevision, currentRevision)
     }
     if (currentSourceHash !== undefined && proposal.sourceHash !== undefined && currentSourceHash !== proposal.sourceHash) {
       proposal.status = 'stale'
       proposal.updatedAt = this.now()
-      await this.persistAndWait(proposal)
+      await this.persistAndWait(proposal, 'conflict')
       throw new Error(`Proposal ${proposal.id} source hash does not match the current document`)
     }
     const nextRevision = currentRevision + 1
@@ -226,7 +258,7 @@ export class ProposalLedger {
     if (currentRevision !== proposal.committedRevision) {
       proposal.status = 'stale'
       proposal.updatedAt = this.now()
-      await this.persistAndWait(proposal)
+      await this.persistAndWait(proposal, 'conflict')
       throw new ProposalConflictError(proposal.id, proposal.committedRevision ?? currentRevision, currentRevision)
     }
     const nextRevision = currentRevision + 1
@@ -248,15 +280,35 @@ export class ProposalLedger {
     return proposal
   }
 
-  private persist(proposal: AiProposal): void {
-    if (!this.store) return
-    const write = this.persistenceTail.then(() => this.ready).then(() => this.store!.save(cloneProposal(proposal)))
+  private persist(proposal: AiProposal, kind: ProposalStateEventKind = 'updated'): void {
+    const next = cloneProposal(proposal)
+    const notify = () => {
+      if (!this.eventScope) return
+      proposalStateEvents.publish({
+        ...this.eventScope,
+        proposalId: next.id,
+        status: next.status,
+        kind,
+        ...(next.updatedAt === undefined ? {} : { updatedAt: next.updatedAt }),
+      })
+    }
+
+    if (!this.store) {
+      notify()
+      return
+    }
+
+    const write = this.persistenceTail
+      .catch(() => undefined)
+      .then(() => this.ready)
+      .then(() => this.store!.save(cloneProposal(next)))
     this.persistenceTail = write
+    void write.then(notify, notify)
     void write.catch(() => undefined)
   }
 
-  private async persistAndWait(proposal: AiProposal): Promise<void> {
-    this.persist(proposal)
+  private async persistAndWait(proposal: AiProposal, kind: ProposalStateEventKind = 'updated'): Promise<void> {
+    this.persist(proposal, kind)
     await this.persistenceTail
   }
 }

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
 import type { TaskResult } from '@inkpi/protocol'
+import { db } from '../../db/indexedDB'
+import { IndexedDbProposalStore, ProposalLedger } from '../../ai/proposals'
 import { SelectionToolbar } from './SelectionToolbar'
 
 // 用可受控的假编辑器验证：空选区不渲染、有选区才渲染，且全程不抛错（不依赖 tippy/portal）
@@ -131,5 +133,52 @@ describe('SelectionToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }))
     expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('rejected')
     expect(getContent()).toBe('选中文本')
+  })
+
+  it('refreshes a visible proposal when another scoped ledger reports a conflict', async () => {
+    const proposalId = 'proposal-toolbar-cross-context'
+    await db.delete('aiProposals', proposalId)
+    let view: ReturnType<typeof render> | undefined
+    try {
+      const { editor, handlers } = makeEditor({ from: 0, to: 5 })
+      view = render(
+        <SelectionToolbar
+          editor={editor}
+          containerRef={containerRef}
+          onAiTask={async () => ({
+            taskId: 'toolbar-cross-context',
+            kind: 'creative.rewrite' as const,
+            status: 'completed' as const,
+            output: { format: 'patch' as const, patch: { from: 1, to: 3, text: '跨窗' } },
+          })}
+          activeChapterId="chapter-cross-context"
+          activeChapterRevision={1}
+          workspaceId="workspace-cross-context"
+        />,
+      )
+      act(() => { handlers['selectionUpdate']?.() })
+      fireEvent.click(screen.getByText('AI 润色'))
+      await waitFor(() => expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'))
+
+      const store = new IndexedDbProposalStore()
+      await waitFor(async () => {
+        const proposals = await store.list()
+        expect(proposals.some((proposal) => proposal.id === proposalId && proposal.status === 'pending')).toBe(true)
+      })
+
+      const otherLedger = new ProposalLedger({
+        store,
+        eventScope: { workspaceId: 'workspace-cross-context', projectId: 'workspace-cross-context' },
+      })
+      await otherLedger.ready
+      otherLedger.accept(proposalId)
+      await expect(otherLedger.commit(proposalId, 2, () => undefined)).rejects.toThrow(/stale/)
+
+      await waitFor(() => expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('stale'))
+      expect(screen.getByTestId('rewrite-proposal-conflict')).toHaveTextContent('其他窗口')
+    } finally {
+      view?.unmount()
+      await db.delete('aiProposals', proposalId)
+    }
   })
 })
