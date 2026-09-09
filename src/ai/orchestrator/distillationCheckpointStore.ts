@@ -82,12 +82,14 @@ function isPersistedCheckpoint(
 function isCheckpoint(value: unknown): value is DistillationCheckpoint {
   if (!value || typeof value !== 'object') return false
   const checkpoint = value as Partial<DistillationCheckpoint>
+  const nextChunk = checkpoint.nextChunk
   return isIntegerArray(checkpoint.completedChunkIndexes)
     && isIntegerArray(checkpoint.failedChunkIndexes)
     && Array.isArray(checkpoint.failedChunks)
     && checkpoint.failedChunks.every((item) => typeof item === 'string')
-    && Number.isInteger(checkpoint.nextChunk)
-    && checkpoint.nextChunk >= 0
+    && typeof nextChunk === 'number'
+    && Number.isInteger(nextChunk)
+    && nextChunk >= 0
     && isFacts(checkpoint.facts)
 }
 
