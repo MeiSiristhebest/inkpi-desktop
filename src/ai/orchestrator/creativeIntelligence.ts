@@ -9,6 +9,9 @@ import {
   ContextCache,
   createDeterministicTaskCacheKey,
   serializeKey,
+  SharedCacheMetrics,
+  type SharedCacheMetricsPort,
+  type SharedCacheMetricsSnapshot,
   type DeterministicTaskCacheKey,
   type TaskCacheKeyDefaults,
 } from '../cache'
@@ -66,6 +69,9 @@ export interface RunTaskOptions {
 
 export interface CreativeIntelligenceOptions extends TaskCacheKeyDefaults {
   cache?: ContextCache<TaskResult>
+  cacheMetrics?: SharedCacheMetricsPort
+  /** Alias for callers that share the metrics port across cache layers. */
+  sharedCacheMetrics?: SharedCacheMetricsPort
   modelId?: string
   providerId?: string
   capabilityRouter?: CapabilityRouter
@@ -83,6 +89,8 @@ export interface CreativeIntelligenceOptions extends TaskCacheKeyDefaults {
 export class CreativeIntelligence {
   private readonly gateway: CreativeTaskGateway
   private readonly cache: ContextCache<TaskResult>
+  private readonly cacheMetrics: SharedCacheMetricsPort
+  private readonly cachedRevisions = new Map<string, number | undefined>()
   private readonly capabilityRouter: CapabilityRouter
   private readonly cacheKeyDefaults: TaskCacheKeyDefaults
   private readonly artifactRuntime: ArtifactRuntime
@@ -91,6 +99,8 @@ export class CreativeIntelligence {
   constructor(gateway: CreativeTaskGateway, options: CreativeIntelligenceOptions = {}) {
     this.gateway = gateway
     this.cache = options.cache ?? new ContextCache<TaskResult>()
+    this.cacheMetrics =
+      options.cacheMetrics ?? options.sharedCacheMetrics ?? new SharedCacheMetrics()
     this.capabilityRouter =
       options.capabilityRouter ??
       options.router ??
@@ -116,14 +126,13 @@ export class CreativeIntelligence {
   async run(task: AiTask, options: RunTaskOptions = {}): Promise<TaskResult> {
     const decision = this.capabilityRouter.select(task)
     const cacheKey = createDeterministicTaskCacheKey(task, decision.route, this.cacheKeyDefaults)
-    const cached = hasArtifactPersistenceOverrides(task, options)
-      ? undefined
-      : this.cache.get(cacheKey)
+    const cacheReadDisabled = hasArtifactPersistenceOverrides(task, options)
+    const cached = cacheReadDisabled ? undefined : this.readCached(task, cacheKey)
     if (cached !== undefined) {
       const cachedResult = decorateResult(task, cached, decision, cacheKey, true)
       if (requiresArtifact(task) && !cachedResult.artifactIds?.length) {
         const persisted = await this.persistArtifact(task, cachedResult, undefined, options)
-        this.cache.set(cacheKey, persisted)
+        this.writeCached(task, cacheKey, persisted)
         return persisted
       }
       return cachedResult
@@ -144,7 +153,7 @@ export class CreativeIntelligence {
         if (!terminalResult) throw new Error(`Task ${task.id} ended without a result`)
         const result = decorateResult(task, terminalResult, decision, cacheKey, false)
         const persisted = await this.persistArtifact(task, result, snapshot, options)
-        if (persisted.status === 'completed') this.cache.set(cacheKey, persisted)
+        if (persisted.status === 'completed') this.writeCached(task, cacheKey, persisted)
         return persisted
       }
       await delay(pollIntervalMs, options.signal)
@@ -192,6 +201,40 @@ export class CreativeIntelligence {
 
   status(taskId: string): Promise<TaskStatusSnapshot> {
     return this.gateway.getTaskStatus(taskId)
+  }
+
+  cacheStats(): SharedCacheMetricsSnapshot {
+    return this.cacheMetrics.stats()
+  }
+
+  private readCached(task: AiTask, cacheKey: DeterministicTaskCacheKey): TaskResult | undefined {
+    const serializedKey = serializeKey(cacheKey)
+    const documentId = task.input.documentId ?? 'unknown-document'
+    const hasRevisionVariant =
+      hasCachedRevisionVariant(this.cache, serializedKey) ||
+      hasCachedRevisionForDocument(this.cachedRevisions, documentId, cacheKey.projectRevision)
+    const cached = this.cache.get(cacheKey)
+    if (cached === undefined) {
+      this.cacheMetrics.record('miss')
+      if (hasRevisionVariant) this.cacheMetrics.record('invalidation')
+      return undefined
+    }
+    this.cacheMetrics.record('hit')
+    this.cachedRevisions.set(documentId, cacheKey.projectRevision)
+    return cached
+  }
+
+  private writeCached(
+    task: AiTask,
+    cacheKey: DeterministicTaskCacheKey,
+    result: TaskResult,
+  ): void {
+    const documentId = task.input.documentId ?? 'unknown-document'
+    const previousEvictions = this.cache.stats().evictions
+    this.cache.set(cacheKey, result)
+    const evictions = this.cache.stats().evictions - previousEvictions
+    if (evictions > 0) this.cacheMetrics.record('eviction', evictions)
+    this.cachedRevisions.set(documentId, cacheKey.projectRevision)
   }
 
   private async persistArtifact(
@@ -245,6 +288,25 @@ export class CreativeIntelligence {
       },
     }
   }
+}
+
+function hasCachedRevisionVariant(cache: { keys(): string[] }, serializedKey: string): boolean {
+  const identity = withoutProjectRevision(serializedKey)
+  return cache.keys().some(
+    (key) => key !== serializedKey && withoutProjectRevision(key) === identity,
+  )
+}
+
+function hasCachedRevisionForDocument(
+  revisions: Map<string, number | undefined>,
+  documentId: string,
+  projectRevision: number | undefined,
+): boolean {
+  return revisions.has(documentId) && revisions.get(documentId) !== projectRevision
+}
+
+function withoutProjectRevision(serializedKey: string): string {
+  return serializedKey.replace(/&projectRevision=[^&]*/, '&projectRevision=')
 }
 
 const DEFAULT_GATEWAY_CAPABILITIES = [
