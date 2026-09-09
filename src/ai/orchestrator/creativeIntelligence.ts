@@ -335,7 +335,9 @@ function decorateResult(
       ...(routeMetadata ? { routeMetadata } : {}),
       instruction: cacheKey.instruction,
       skill: cacheKey.skill,
-      ...(cacheKey.instructionVersion ? { instructionVersion: cacheKey.instructionVersion } : {}),
+      ...(cacheKey.instructionVersion && result.provenance?.instructionVersion === undefined
+        ? { instructionVersion: cacheKey.instructionVersion }
+        : {}),
       ...(cacheKey.skillVersion ? { skillVersion: cacheKey.skillVersion } : {}),
       ...(cacheKey.projectRevision === undefined
         ? {}

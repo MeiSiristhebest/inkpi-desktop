@@ -1,10 +1,13 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import type { TaskStatusSnapshot } from '@inkpi/protocol'
+import type { InstructionRegistryStatus, TaskStatusSnapshot } from '@inkpi/protocol'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { semanticDocumentFromText } from '../domain/content'
 import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
+import { createPluginAnalysisTask } from '../ai/tasks/pluginTasks'
+import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
+import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 import { createDaemonAiAssistant } from './daemonAiAssistant'
 import { inkpiDaemonGateway } from './inkpiDaemonGateway'
 import type { RpcClient } from '../ports/aiGateway'
@@ -145,6 +148,56 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
             instructionIds: expect.arrayContaining(['creative.continue']),
           },
         },
+      })
+    } finally {
+      await client.close()
+    }
+  })
+
+  it('keeps Desktop instruction metadata aligned with Daemon references and task provenance', async () => {
+    const { client, assistant } = await connectAssistant()
+    try {
+      const task = createPluginAnalysisTask({
+        pluginId: 'reader-hook',
+        input: { chapter: '雨停后，门外只剩一盏冷灯。' },
+      })
+      const result = await assistant.runTask(task, { pollIntervalMs: 10 })
+      const status = await client.request<InstructionRegistryStatus>('instruction.status')
+      const definitions = [
+        ...listCoreInstructionDefinitions(),
+        ...listPluginInstructionDefinitions(),
+      ]
+
+      expect(status).toMatchObject({
+        ready: true,
+        version: expect.stringMatching(/^instructions-\d+$/),
+        count: definitions.length,
+        instructionIds: definitions.map((definition) => definition.id),
+      })
+      expect(status.instructions).toHaveLength(definitions.length)
+      expect(status.instructions).toEqual(expect.arrayContaining(definitions.map((definition) => {
+        const taskKind = definition.taskKind ?? definition.id
+        return expect.objectContaining({
+          id: definition.id,
+          scope: 'task',
+          version: definition.version,
+          source: `task:${taskKind}`,
+          tags: [`task:${taskKind}`],
+        })
+      })))
+
+      const taskReference = status.instructions.find((reference) => reference.id === task.kind)
+      expect(result?.provenance).toMatchObject({
+        instructionVersion: status.version,
+        instructionIds: [task.kind],
+        instructionProvenance: [taskReference],
+      })
+
+      const persisted = await client.request<TaskStatusSnapshot>('task.status', { taskId: task.id })
+      expect(persisted.result?.provenance).toMatchObject({
+        instructionVersion: status.version,
+        instructionIds: [task.kind],
+        instructionProvenance: [taskReference],
       })
     } finally {
       await client.close()

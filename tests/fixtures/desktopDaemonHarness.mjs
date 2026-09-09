@@ -10,7 +10,7 @@ const { InkPiDaemon } = await import(serverEntry)
 const daemon = new InkPiDaemon({ host: '127.0.0.1', port: 0 })
 daemon.getTaskRouter().registry.register({
   id: 'desktop-integration-fixture',
-  kinds: ['creative.assistant', 'creative.continue'],
+  kinds: ['creative.assistant', 'creative.continue', 'plugin.reader-hook.analysis'],
   async execute(context) {
     context.reportProgress(0.5)
     if (context.task.kind === 'creative.continue') {
