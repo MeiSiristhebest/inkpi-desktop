@@ -1,5 +1,6 @@
 import type { AiGateway, AiAssistant } from '../ports/aiGateway'
 import { createDaemonAiAssistant } from '../adapters/daemonAiAssistant'
+import { createDaemonSkillRuntime } from '../adapters/daemonSkillRuntime'
 import { CONNECT_TIMEOUT_MS, WEB_CONNECT_TIMEOUT_MS } from '../config'
 
 export interface ConnectOptions {
@@ -47,13 +48,19 @@ export async function connectToDaemon(
     try {
       const raw = await withTimeout(() => gateway.connect(url), timeoutMs)
       const assistant = createDaemonAiAssistant(raw)
-      const status = await assistant.status()
-      if (!status?.running) throw new Error('daemon not running')
-      if (opts.shouldAbort?.()) {
-        assistant.close().catch(() => {})
-        return { client: null, connected: false }
+      try {
+        await createDaemonSkillRuntime(raw).ensureFirstPartySkillsActivated()
+        const status = await assistant.status()
+        if (!status?.running) throw new Error('daemon not running')
+        if (opts.shouldAbort?.()) {
+          await assistant.close().catch(() => {})
+          return { client: null, connected: false }
+        }
+        return { client: assistant, connected: true }
+      } catch (error) {
+        await raw.close().catch(() => {})
+        throw error
       }
-      return { client: assistant, connected: true }
     } catch {
       if (attempt === maxAttempts - 1) return { client: null, connected: false }
       await delay(opts.retryDelayMs ?? 1000)
