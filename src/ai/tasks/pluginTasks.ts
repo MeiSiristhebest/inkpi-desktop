@@ -1,4 +1,5 @@
 import type { AiTask, TaskResult } from '@inkpi/protocol'
+import { semanticTextFromContent } from '../../domain/content'
 import { getPluginInstruction } from '../instructions/pluginInstructions'
 import { isFirstPartyPluginId } from './pluginCatalog'
 
@@ -14,15 +15,20 @@ export interface PluginAnalysisRequest {
 
 export function createPluginAnalysisTask(request: PluginAnalysisRequest): AiTask {
   taskSequence += 1
+  const analysisInput =
+    typeof request.input === 'string'
+      ? semanticTextFromContent(request.documentId ?? request.pluginId, request.input)
+      : request.input
+
   return {
     id: `plugin-analysis-${request.pluginId}-${Date.now()}-${taskSequence}`,
     kind: `plugin.${request.pluginId}.analysis`,
     input: {
-      text: typeof request.input === 'string' ? request.input : undefined,
+      text: typeof analysisInput === 'string' ? analysisInput : undefined,
       documentId: request.documentId,
       payload: {
         pluginId: request.pluginId,
-        analysisInput: request.input,
+        analysisInput,
         analysisContext: request.context,
         ...request.metadata,
       },
