@@ -3,7 +3,15 @@ import { randomUUID } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import type { Artifact as RuntimeArtifact, TaskOutput, TaskStatusSnapshot } from '@inkpi/protocol'
+import type {
+  Artifact as RuntimeArtifact,
+  SkillActivationResult,
+  SkillLoadResult,
+  SkillManifest,
+  SkillRuntimeRegistrationSnapshot,
+  TaskOutput,
+  TaskStatusSnapshot,
+} from '@inkpi/protocol'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   createContinueTask,
@@ -68,6 +76,50 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
 
   it('verifies all five task contracts and re-reads daemon artifacts/proposals after reconnect', async () => {
     const first = await connectAssistant()
+    const skillRuntime = createSkillRpcProbe(first.client)
+    const discoveredSkills = await skillRuntime.discover()
+    expect(discoveredSkills.map((skill) => skill.id)).toEqual([
+      'character-voice',
+      'hook',
+      'promise',
+      'timeline-consistency',
+    ])
+    const initialSkillStatus = await skillRuntime.status()
+    expect(initialSkillStatus).toMatchObject<Partial<SkillRuntimeRegistrationSnapshot>>({
+      loadedSkills: [],
+      activatedSkills: [],
+      instructions: [],
+    })
+    for (const skillId of ['hook', 'promise', 'character-voice', 'timeline-consistency']) {
+      await expect(skillRuntime.load(skillId)).resolves.toMatchObject({
+        loaded: true,
+        skill: { id: skillId, version: '1.0.0' },
+      })
+      await expect(skillRuntime.activate(skillId)).resolves.toMatchObject({
+        activated: true,
+        loaded: true,
+        skill: { id: skillId, version: '1.0.0' },
+      })
+    }
+    const activatedSkillStatus = await skillRuntime.status()
+    expect(activatedSkillStatus.loadedSkills).toEqual([
+      'character-voice',
+      'hook',
+      'promise',
+      'timeline-consistency',
+    ])
+    expect(activatedSkillStatus.activatedSkills).toEqual([
+      'character-voice',
+      'hook',
+      'promise',
+      'timeline-consistency',
+    ])
+    expect(activatedSkillStatus.instructions?.map((instruction) => instruction.id).sort()).toEqual([
+      'skill.character-voice',
+      'skill.hook',
+      'skill.promise',
+      'skill.timeline-consistency',
+    ])
     const document = semanticDocumentFromText(
       'desktop-five-slice-gate-document',
       '雨停后，门外只剩一盏冷灯。她没有回头。',
@@ -256,6 +308,17 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
 
     const second = await connectClient()
     try {
+      const secondSkillRuntime = createSkillRpcProbe(second)
+      expect((await secondSkillRuntime.discover()).map((skill) => skill.id)).toEqual([
+        'character-voice',
+        'hook',
+        'promise',
+        'timeline-consistency',
+      ])
+      await expect(secondSkillRuntime.status()).resolves.toMatchObject({
+        loadedSkills: [],
+        activatedSkills: [],
+      })
       for (const item of cases) {
         const persistedTask = await second.request<TaskStatusSnapshot>('task.status', {
           taskId: item.task.id,
@@ -316,6 +379,15 @@ async function connectClient(): Promise<RpcClient> {
     return await inkpiDaemonGateway.connect(`ws://127.0.0.1:${daemon.wsPort}`)
   } finally {
     testGlobal.WebSocket = browserWebSocket
+  }
+}
+
+function createSkillRpcProbe(client: RpcClient) {
+  return {
+    discover: () => client.request<SkillManifest[]>('skill.discover'),
+    load: (skillId: string) => client.request<SkillLoadResult>('skill.load', { skillId }),
+    activate: (skillId: string) => client.request<SkillActivationResult>('skill.activate', { skillId }),
+    status: () => client.request<SkillRuntimeRegistrationSnapshot>('skill.status'),
   }
 }
 

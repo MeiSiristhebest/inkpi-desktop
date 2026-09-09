@@ -14,6 +14,7 @@ const persistence = createDaemonPersistence({
 const daemon = new InkPiDaemon({
   host: '127.0.0.1',
   port: 0,
+  skillSearchDirs: [resolve(inkpiRoot, 'skills')],
   context: {
     ...persistence.context,
   },
