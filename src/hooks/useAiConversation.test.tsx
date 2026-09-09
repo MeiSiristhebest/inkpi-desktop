@@ -4,6 +4,7 @@ import type { AiTask, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { AiAssistant } from '../ports/aiGateway'
 import type { Clock } from '../ports/clock'
 import type { TaskRecoveryRecord, TaskRecoveryStore } from '../db/taskRecoveryStore'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { useAiConversation } from './useAiConversation'
 
 const { connectToDaemon } = vi.hoisted(() => ({ connectToDaemon: vi.fn() }))
@@ -139,6 +140,38 @@ describe('useAiConversation task recovery', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     await waitFor(() => expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('cancelled'))
     expect(store.records.get(task.id)?.snapshot.status).toBe('cancelled')
+    hook.unmount()
+  })
+
+  it('synchronizes a local domain append after a short debounce', async () => {
+    const syncDomain = vi.fn(async () => ({
+      workspaceId: 'project-1',
+      pushed: 1,
+      pulled: 0,
+      revision: 1,
+      recovered: false,
+    }))
+    const assistant = {
+      ...makeAssistant(vi.fn(async () => null)),
+      syncDomain,
+    } satisfies AiAssistant
+    connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const hook = renderHook(() => useAiConversation('ws://daemon', null, 'project-1', {
+      taskRecoveryStore: makeStore(),
+      clock: fixedClock,
+    }))
+
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    await waitFor(() => expect(syncDomain).toHaveBeenCalledWith('project-1'))
+    syncDomain.mockClear()
+
+    act(() => {
+      domainChangeEvents.publish('project-1')
+      domainChangeEvents.publish('project-1')
+    })
+
+    await waitFor(() => expect(syncDomain).toHaveBeenCalledOnce(), { timeout: 3000 })
+    expect(syncDomain).toHaveBeenCalledWith('project-1')
     hook.unmount()
   })
 })

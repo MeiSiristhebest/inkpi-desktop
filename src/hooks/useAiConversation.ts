@@ -21,6 +21,7 @@ import {
   type TaskRecoveryRecord,
   type TaskRecoveryStore,
 } from '../db/taskRecoveryStore'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -282,6 +283,30 @@ export function useAiConversation(
     void clientRef.current.syncDomain(workspaceId).catch((error) => {
       console.warn('[InkPi Desktop] Domain projection sync failed:', error)
     })
+  }, [isConnected, workspaceId])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let syncQueue: Promise<unknown> = Promise.resolve()
+    const scheduleSync = () => {
+      if (!isConnected || !clientRef.current?.syncDomain) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        syncQueue = syncQueue
+          .catch(() => undefined)
+          .then(() => clientRef.current?.syncDomain?.(workspaceId))
+          .catch((error: unknown) => {
+            console.warn('[InkPi Desktop] Local domain change sync failed:', error)
+          })
+      }, 100)
+    }
+    const unsubscribe = domainChangeEvents.subscribe(workspaceId, scheduleSync)
+    return () => {
+      unsubscribe()
+      if (timer) clearTimeout(timer)
+    }
   }, [isConnected, workspaceId])
 
   const runTrackedTask = useCallback(
