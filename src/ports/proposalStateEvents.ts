@@ -73,7 +73,7 @@ function getChannel(): ProposalStateChannel | undefined {
       const normalized = normalizeEvent(event.data)
       if (normalized) notify(normalized)
     })
-    next.unref?.()
+    ;(next as BroadcastChannel & { unref?: () => void }).unref?.()
     channel = next
     return channel
   } catch {
