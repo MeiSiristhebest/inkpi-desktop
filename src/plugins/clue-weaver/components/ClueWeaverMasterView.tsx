@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type {
@@ -78,8 +78,13 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
       // 默认尝试拉取第一章内容
       if (allChapters.length > 0 && allChapters[0].content) {
-        setScanText(allChapters[0].content)
-        const found = clueWeaverEngine.scanGodViewLeakage(allChapters[0].content, allClues, allCogs)
+        const semanticText = semanticTextFromContent(
+          allChapters[0].id,
+          allChapters[0].content,
+          allChapters[0].revision,
+        )
+        setScanText(semanticText)
+        const found = clueWeaverEngine.scanGodViewLeakage(semanticText, allClues, allCogs)
         setViolations(found)
       }
     } catch (e) {
@@ -90,14 +95,16 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   const handleSelectChapter = (chapId: string) => {
     setSelectedChapterId(chapId)
     if (chapId === 'all') {
-      const fullText = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      const fullText = chapters
+        .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
+        .join('\n\n')
       setScanText(fullText.slice(0, 15000))
       setViolations(
         clueWeaverEngine.scanGodViewLeakage(fullText.slice(0, 15000), clues, cognitions),
       )
     } else {
       const chap = chapters.find((c) => c.id === chapId)
-      const content = chap?.content || ''
+      const content = chap ? semanticTextFromContent(chap.id, chap.content || '', chap.revision) : ''
       setScanText(content)
       setViolations(clueWeaverEngine.scanGodViewLeakage(content, clues, cognitions))
     }
@@ -106,21 +113,14 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   // AI 深度推演：检查全书信息差悬念与视点越权
   const handleAiDeepLeakAudit = () => {
     if (!scanText.trim()) return
-    const clueList = clues.map((c) => `【${c.title}】(${c.category})`).join('、') || '暂无登记线索'
-    const charList = characters.map((c) => c.name).join('、') || '角色列表'
-    const prompt = `请作为悬疑与长篇剧情审读专家，对以下章节正文进行【上帝视点泄露与信息差博弈】深度排查：
-【全书核心秘密/线索】：${clueList}
-【核心登场人物】：${charList}
-【待核查章节正文】：
-${scanText.slice(0, 2500)}
+    const analysisInput = {
+      clues: clues.map((clue) => ({ title: clue.title, category: clue.category })),
+      characters: characters.map((character) => character.name),
+      text: scanText.slice(0, 2500),
+    }
 
-请重点核查并给出反馈：
-1. 是否存在“上帝视点泄露”：某个角色是否在毫无得知线索途径的情况下，突然未卜先知说出了只有读者才知道的秘密？
-2. 信息差悬念拉扯：当前对话或剧情推进中，角色之间的信息差是否营造出了足够抓人的戏剧讽刺与张力？
-3. 如果存在漏洞或可优化的伏笔交锋点，请指出具体位置并提供修改建议。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('clue-weaver', analysisInput)
     }
   }
 

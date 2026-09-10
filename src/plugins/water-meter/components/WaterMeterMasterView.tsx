@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { WaterAuditReport } from '../types'
@@ -25,7 +25,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             ? list.find((c) => c.id === hostContext.activeChapter?.id) || list[0]
             : list[0]
           setSelectedChapterId(defaultChap.id)
-          const text = htmlToPlain(defaultChap.content || '')
+      const text = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
           setInputText(text)
           setReport(waterMeterEngine.auditText(text))
         }
@@ -39,7 +39,9 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   const handleSelectChapter = (chapId: string) => {
     setSelectedChapterId(chapId)
     if (chapId === 'all') {
-      const full = chapters.map((c) => htmlToPlain(c.content || '')).join('\n\n')
+      const full = chapters
+        .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
+        .join('\n\n')
       setInputText(full.slice(0, 15000))
       setReport(waterMeterEngine.auditText(full.slice(0, 15000)))
     } else {
@@ -54,22 +56,17 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     setReport(waterMeterEngine.auditText(inputText))
   }
 
-  // 真实 AI 深度叙事密度排查（识别真正的情节注水）
+  // AI 深度叙事密度排查
   const handleAiDeepWaterAudit = () => {
     if (!inputText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
-    const prompt = `请作为网文总编对以下章节进行严格的【剧情推进动能与情节注水排查】：
-【章节】：${chap ? `第 ${chap.order} 章《${chap.title}》` : '正文采样'}
-【正文截选】：
-${inputText.slice(0, 2500)}
+    const analysisInput = {
+      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
+      text: inputText.slice(0, 2500),
+    }
 
-请给出专业审校意见：
-1. 动能分析：本段正文是否在有效推进主线/核心矛盾，还是通篇在进行无效的环境心理假动作、无意义配角震惊；
-2. 重复设定：是否存在作者跳出来反复向读者复读前文已交代过的信息（设定车轱辘话）；
-3. 瘦身建议：指出哪几处段落完全可以一笔带过或整段删去而不影响剧情理解，并给出修改后的极简范式。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('water-meter', analysisInput)
     }
   }
 

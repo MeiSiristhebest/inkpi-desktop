@@ -18,19 +18,10 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
 
   const handleAiSubtextCompile = () => {
     if (!spoken.trim()) return
-    const prompt = `请作为世界顶级戏剧与电影台词导演，对以下小说台词进行【海明威冰山理论·潜台词与微表情双轨编译】：
-【说话角色】：${speakerName || '当前角色'}
-【隐藏心理主导情绪】：${emotion}
-【口头表面说出的话】：
-“${spoken}”
+    const analysisInput = { speaker: speakerName, emotion, spoken }
 
-请提供三轨深层文学重塑：
-1. 【冰山潜台词（Subtext）】：角色内心真正没有说出口的渴望、恐惧或痛苦是什么？
-2. 【伴随微动作/反差神态（Physical Micro-action）】：说话时角色有什么下意识的身体反应（如手指微微一颤、避开视线、握紧衣角），用来形成“言行矛盾”的巨大张力；
-3. 【高段位台词重写】：给出 2 句更含蓄、更克制却更具刀子感或回味感的文学重写示范。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('subtext-compiler', analysisInput)
     }
   }
 

@@ -10,6 +10,8 @@ export interface ChapterAutosave {
   cancel: () => void
 }
 
+export type ChapterAutosaveErrorHandler = (error: unknown, chapter: ChapterRecord) => void
+
 /**
  * 章节自动存盘切片（副作用隔离）：
  * 仅管理防抖定时器这一项副作用，触发时回调外部传入的 flush（真正落库）。
@@ -17,6 +19,7 @@ export interface ChapterAutosave {
  */
 export function useChapterAutosave(
   flush: (chapter: ChapterRecord) => void | Promise<void>,
+  onError?: ChapterAutosaveErrorHandler,
 ): ChapterAutosave {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -33,12 +36,14 @@ export function useChapterAutosave(
       timer.current = setTimeout(
         () => {
           timer.current = null
-          void flush(chapter)
+          void Promise.resolve(flush(chapter)).catch((error: unknown) => {
+            onError?.(error, chapter)
+          })
         },
         Math.max(200, delayMs ?? AUTOSAVE_MS),
       )
     },
-    [flush],
+    [flush, onError],
   )
 
   return { schedule, cancel }

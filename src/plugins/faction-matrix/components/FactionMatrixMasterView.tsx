@@ -90,23 +90,13 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   // 触发 AI 分析宗门博弈与剧情暗线
   const handleAiFactionAnalysis = () => {
     if (factions.length === 0) return
-    const facNames = factions.map((f) => f.name).join('、')
-    const paradoxStr =
-      paradoxes.length > 0
-        ? `【当前地缘悖论/冲突】：${paradoxes.map((p) => p.reason).join('；')}`
-        : '【当前地缘格局】：暂无直接逻辑悖论'
+    const analysisInput = {
+      factions: factions.map((faction) => ({ ...faction })),
+      paradoxes: paradoxes.map((paradox) => ({ ...paradox })),
+    }
 
-    const prompt = `请作为长篇网络小说剧情总监，对当前作品的各大宗门势力格局进行推演分析：
-【登场势力/阵营】：${facNames}
-${paradoxStr}
-
-请针对当前作品的地缘关系给出剧情推演建议：
-1. 敌友关系与平衡性：当前势力间的拉扯是否足够产生强烈的剧情推力？
-2. 矛盾升级设计：建议主角通过何种标志性大事件（如宗门大比、遗迹争夺、秘境覆灭）打破当前的均势，引爆冲突高潮？
-3. 给出一条富有张力的三方博弈或“表面结盟、暗中背刺”的剧情暗线建议。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('faction-matrix', analysisInput)
     }
   }
 

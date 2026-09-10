@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { EmotionCurveEngine } from '../engine/EmotionCurveEngine'
@@ -37,7 +37,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         chapterId: c.id,
         chapterTitle: c.title,
         chapterOrder: c.order,
-        content: htmlToPlain(c.content || ''),
+        content: semanticTextFromContent(c.id, c.content || '', c.revision),
       }),
     )
   }, [chapters])
@@ -57,17 +57,10 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       )
       .join('\n')
 
-    const prompt = `请作为小说戏剧节奏专家，对以下章节的【连续情绪心电图与抑扬张力】进行深度文学审校：
-【各章情绪极性与共鸣度趋势】：
-${summaries}
+    const analysisInput = { chapterEmotionSummaries: summaries }
 
-请重点排查：
-1. 是否存在“连续憋屈蓄势过长（连续多章严重负极性），却迟迟不来反击高潮”导致的恶劣弃读感；
-2. 是否存在“连续狂轰滥炸式的大爽（无休止的打脸与高燃）”造成的审美疲劳；
-3. 给出前 20 章情绪曲线的最佳“抑扬交替调节方案”（指出具体哪一章需要插入舒缓日常或喜感情节作为呼吸点）。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('emotion-curve', analysisInput)
     }
   }
 

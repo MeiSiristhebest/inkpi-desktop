@@ -1,4 +1,5 @@
 import type { ChapterRecord, VolumeRecord } from './index'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
 import type { CodexEntity } from '../plugins/living-codex/types'
 import type { ScopedPluginEventBus } from '../core/pluginEventBus'
 
@@ -43,7 +44,12 @@ export interface DesktopPluginHostContextValue {
   scopedBus?: ScopedPluginEventBus
   /** 语义化 AI 助理能力（若已连接 Daemon/LLM，则供插件直接调度深度语义分析） */
   aiAssistant?: {
-    prompt: (instruction: string) => Promise<string | null>
+    runTask: (task: AiTask) => Promise<TaskResult | null>
+    runPluginTask: (
+      pluginId: string,
+      input: unknown,
+      metadata?: Record<string, unknown>,
+    ) => Promise<string | null>
     isAvailable: boolean
   }
 }

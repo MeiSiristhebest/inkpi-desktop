@@ -114,7 +114,7 @@ InkPi Desktop is the native desktop workstation client for **InkPi**. It package
 The backend daemon is compiled by [Bun](https://bun.sh) into a single standalone binary (`inkpi.exe`). The end-user desktop runtime **operates without Node.js, pnpm, or external runtime installations**.
 
 ### 2. Intelligent Flow Editor & Ghost Text
-Built on Tiptap and Novel, featuring real-time AI ghost text suggestions (`session.ghost.suggest`), inline polish, word count metrics, and Chinese typography formatting.
+Built on Tiptap and Novel, featuring real-time AI ghost text suggestions through the unified Task Runtime, inline polish, word count metrics, and Chinese typography formatting.
 
 ### 3. Living Codex Knowledge Graph & AC Automaton
 - $O(N+M)$ Aho-Corasick multi-pattern string matcher scans thousands of entity keywords in milliseconds.

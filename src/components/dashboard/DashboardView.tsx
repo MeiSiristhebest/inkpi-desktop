@@ -23,8 +23,6 @@ interface DashboardViewProps {
   onStats?: (stats: { title?: string; wordCount: number; updatedAt?: number }) => void
   /** 打开 AI 助手 */
   onOpenAssistant?: () => void
-  /** 发送真实指令给 AI 助手（健康诊断 / 审读建议 / 深度分析等） */
-  onAiPrompt?: (text: string, chapterId?: string) => void
   /** 直接进入「沉浸写作」 */
   onStartFocus?: () => void
 }
@@ -60,7 +58,6 @@ export const DashboardView: FC<DashboardViewProps> = ({
   onOpenView,
   onStats,
   onOpenAssistant: _onOpenAssistant,
-  onAiPrompt: _onAiPrompt,
   onStartFocus,
 }) => {
   const { model } = useDashboardModel(projectId)

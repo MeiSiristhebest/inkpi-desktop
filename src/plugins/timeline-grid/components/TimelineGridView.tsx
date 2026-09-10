@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { NarrativeThread, TimelineNode, NarrativeConflict } from '../types'
@@ -118,21 +118,14 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     const chaptersSummary = chaptersList
       .slice(0, 15)
       .map(
-        (c) => `第 ${c.order} 章《${c.title}》：\n${htmlToPlain(c.content || '').slice(0, 300)}...`,
+        (c) => `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 300)}...`,
       )
       .join('\n\n')
 
-    const prompt = `请分析以下小说的已创作章节正文，帮作者逆向提炼并初始化【多线时空大纲因果网格】：
-【已写正文前序】：
-${chaptersSummary}
+    const analysisInput = { chapterSamples: chaptersSummary }
 
-请以结构化方式梳理出：
-1. 核心叙事线划分（建议 3~4 条，如：主线事件、势力/暗涌线、情感/羁绊线）；
-2. 提取出前各章中真实发生的标志性转折节点（事件标题、前置因果依赖、因果产生的结果）；
-3. 标注出各事件在因果链条上可能引发的后续逻辑暗坑。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('timeline-grid', analysisInput)
     }
   }
 

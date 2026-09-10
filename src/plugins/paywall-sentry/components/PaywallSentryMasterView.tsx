@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { PaywallSentryEngine } from '../engine/PaywallSentryEngine'
@@ -46,21 +46,14 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const summaries = chapters
       .slice(0, 30)
       .map(
-        (c) => `第 ${c.order} 章《${c.title}》尾段：\n${htmlToPlain(c.content || '').slice(-250)}`,
+        (c) => `第 ${c.order} 章《${c.title}》尾段：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(-250)}`,
       )
       .join('\n\n')
 
-    const prompt = `请作为网文商业化运作与主编级运营专家，对以下章节的章尾悬念与付费转化能力进行【上架倒 V / 付费黄金卡点点检】：
-【待评估章节末尾清单】：
-${summaries}
+    const analysisInput = { chapterEndings: summaries }
 
-请给出专业推演：
-1. 哪一章的结尾最具“首订引爆力”（高潮悬念留白、大招刚出手、最强宿敌降临）；
-2. 拦截“劝退弱卡点”：指出哪些章节属于大战后的垃圾时间或说明性章节，严禁选作上架前最后一章；
-3. 给出前 3 位最推荐作为付费卡点的章节排名与具体卡点修改指导。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('paywall-sentry', analysisInput)
     }
   }
 
@@ -70,7 +63,7 @@ ${summaries}
         chapterId: ch.id,
         chapterTitle: ch.title,
         chapterOrder: ch.order,
-        content: htmlToPlain(ch.content || ''),
+        content: semanticTextFromContent(ch.id, ch.content || '', ch.revision),
       }),
     )
   }, [chapters])

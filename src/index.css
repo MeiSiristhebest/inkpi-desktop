@@ -389,6 +389,48 @@
   background-color: rgba(200, 230, 210, 0.65);
 }
 
+/* Continuity diagnostics: keep findings visible without changing document text. */
+.ink-editor .ink-continuity-diagnostic {
+  border-radius: 2px;
+  padding: 0 1px;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-underline-offset: 3px;
+}
+
+.ink-editor .ink-continuity-error {
+  text-decoration-color: var(--ink-danger);
+  background: color-mix(in srgb, var(--ink-danger) 10%, transparent);
+}
+
+.ink-editor .ink-continuity-warning {
+  text-decoration-color: var(--ink-warning);
+  background: color-mix(in srgb, var(--ink-warning) 10%, transparent);
+}
+
+.ink-editor .ink-continuity-info {
+  text-decoration-color: var(--ink-accent);
+  background: color-mix(in srgb, var(--ink-accent) 10%, transparent);
+}
+
+.ink-editor .ink-continuity-marker {
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-left: 0.2em;
+  vertical-align: 0.15em;
+  border-radius: 50%;
+  background: var(--ink-accent);
+}
+
+.ink-editor .ink-continuity-marker-error {
+  background: var(--ink-danger);
+}
+
+.ink-editor .ink-continuity-marker-warning {
+  background: var(--ink-warning);
+}
+
 /* ── Ghost Text 内联续写建议 ──────────────────────────────── */
 /* 以浅灰文字跟随光标显示，不进入文档内容、不参与选区与拼写检查 */
 

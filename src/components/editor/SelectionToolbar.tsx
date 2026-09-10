@@ -1,24 +1,53 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Bold, Italic, Wand2, Anchor, CheckCircle2 } from 'lucide-react'
 import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
+import { createRewriteTask } from '../../ai'
+import { semanticDocumentFromProseMirror, semanticDocumentFromText } from '../../domain/content'
+import {
+  hashText,
+  IndexedDbProposalStore,
+  ProposalConflictError,
+  ProposalLedger,
+  proposalFromPatch,
+  type AiProposal,
+} from '../../ai/proposals'
+import { idGenerator } from '../../adapters/idGenerator'
+import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
+import { getProposalSyncRemote, isProposalSyncError, RemoteProposalStore } from '../../ai/proposals'
+import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
 
 interface SelectionToolbarProps {
   /** TipTap 编辑器实例（任意结构，仅在具备 on/off/view 时生效） */
   editor: any
   /** 承载编辑器的可滚动容器（position: relative），用于把选区坐标换算为工具条定位 */
   containerRef: RefObject<HTMLElement | null>
-  /** 划词润色：把选中文本发给 AI 副驾驶 */
-  onAiPrompt?: (text: string, chapterId?: string) => void
+  /** 划词润色：通过统一任务运行时创建 patch proposal */
+  onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 打开 AI 副驾驶面板 */
   onOpenAssistant?: () => void
   /** 当前章节 id，随润色请求一并上报 */
   activeChapterId?: string
+  /** 当前章节版本，用于 Proposal 的 CAS 校验 */
+  activeChapterRevision?: number
+  /** projectId/workspaceId scopes the daemon's derived proposal projection */
+  workspaceId?: string
+  /** Optional direct daemon projection capability; task results provide the production fallback. */
+  proposalSyncRemote?: ProposalSyncRemote
 }
 
 interface ToolbarState {
   show: boolean
   top: number
   left: number
+}
+
+interface RewriteProposalState {
+  proposal: AiProposal
+  originalText: string
+  proposedText: string
+  status: AiProposal['status']
+  error?: string
 }
 
 /**
@@ -33,12 +62,46 @@ interface ToolbarState {
 export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   editor,
   containerRef,
-  onAiPrompt,
+  onAiTask,
   onOpenAssistant,
   activeChapterId,
+  activeChapterRevision = 0,
+  workspaceId,
+  proposalSyncRemote,
 }) => {
   const host = useOptionalPluginHostContext()
   const [state, setState] = useState<ToolbarState>({ show: false, top: 0, left: 0 })
+  const [rewriteProposal, setRewriteProposal] = useState<RewriteProposalState | null>(null)
+  const rewriteProposalRef = useRef<RewriteProposalState | null>(null)
+  rewriteProposalRef.current = rewriteProposal
+  const [rewriteBusy, setRewriteBusy] = useState(false)
+  const explicitProposalSyncRemoteRef = useRef(proposalSyncRemote)
+  const taskProposalSyncRemoteRef = useRef<ProposalSyncRemote | undefined>(undefined)
+  const initialWorkspaceId = normalizeScopeId(workspaceId) ?? normalizeScopeId(host?.projectId)
+  const initialProjectId = normalizeScopeId(host?.projectId) ?? initialWorkspaceId
+  const proposalScopeRef = useRef<ProposalEventScope | undefined>(
+    initialWorkspaceId
+      ? {
+          workspaceId: initialWorkspaceId,
+          ...(initialProjectId === undefined ? {} : { projectId: initialProjectId }),
+        }
+      : undefined,
+  )
+  const proposalWorkspaceIdRef = useRef(proposalScopeRef.current?.workspaceId)
+  explicitProposalSyncRemoteRef.current = proposalSyncRemote
+  const [proposalLedger] = useState(() => {
+    const localStore = new IndexedDbProposalStore()
+    const scopedWorkspaceId = proposalWorkspaceIdRef.current?.trim()
+    if (!scopedWorkspaceId) return new ProposalLedger({ store: localStore })
+    return new ProposalLedger({
+      eventScope: proposalScopeRef.current,
+      store: new RemoteProposalStore({
+        local: localStore,
+        workspaceId: scopedWorkspaceId,
+        remote: () => explicitProposalSyncRemoteRef.current ?? taskProposalSyncRemoteRef.current,
+      }),
+    })
+  })
 
   useEffect(() => {
     if (
@@ -97,24 +160,169 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     }
   }, [editor, containerRef])
 
-  if (!state.show || !editor) return null
+  useEffect(() => {
+    const scope = proposalScopeRef.current
+    if (!scope) return
 
-  const aiPolish = () => {
+    let disposed = false
+    const unsubscribe = proposalStateEvents.subscribe(scope, (event) => {
+      const current = rewriteProposalRef.current
+      if (!current || current.proposal.id !== event.proposalId) return
+
+      void proposalLedger.reload().then(() => {
+        if (disposed) return
+        const next = proposalLedger.get(event.proposalId)
+        if (!next) return
+        setRewriteProposal((value) => {
+          if (!value || value.proposal.id !== next.id) return value
+          const nextPatch = next.patches[0]
+          return {
+            ...value,
+            proposal: next,
+            proposedText: nextPatch?.text ?? value.proposedText,
+            status: next.status,
+            error: next.status === 'stale'
+              ? '提案与其他窗口的修改冲突，请重新审阅当前内容'
+              : undefined,
+          }
+        })
+      }).catch((error: unknown) => {
+        if (disposed) return
+        setRewriteProposal((value) => value && value.proposal.id === event.proposalId
+          ? {
+              ...value,
+              error: `跨窗口刷新提案失败：${error instanceof Error ? error.message : String(error)}`,
+            }
+          : value)
+      })
+    })
+
+    return () => {
+      disposed = true
+      unsubscribe()
+    }
+  }, [proposalLedger])
+
+  if ((!state.show && !rewriteProposal) || !editor) return null
+
+  const currentSemanticDocument = () =>
+    typeof editor.state?.doc?.toJSON === 'function'
+      ? semanticDocumentFromProseMirror(activeChapterId || 'selection', editor.state.doc.toJSON(), activeChapterRevision)
+      : semanticDocumentFromText(activeChapterId || 'selection', editor.getText?.() || '', activeChapterRevision)
+
+  const aiPolish = async () => {
     const { from, to } = editor.state.selection
     const text = editor.state.doc.textBetween(from, to, ' ')
-    if (text) {
-      onAiPrompt?.(`请润色以下小说段落：\n${text}`, activeChapterId)
-      onOpenAssistant?.()
+    if (!text || !onAiTask || rewriteBusy) return
+    const semanticDocument = currentSemanticDocument()
+    const selection = semanticDocument.sourceMap.editorRangeToSemantic({ from, to })
+    const sourceHash = hashText(semanticDocument.text)
+    setRewriteBusy(true)
+    onOpenAssistant?.()
+    try {
+      const result = await onAiTask(
+        createRewriteTask({
+          taskId: idGenerator.generate(`rewrite-${activeChapterId || 'selection'}`),
+          document: semanticDocument,
+          selection,
+          goal: '保持事实和原意，改进选中文本',
+          metadata: { source: 'selection-toolbar', sourceHash },
+        }),
+      )
+      if (!result) return
+      const resultRemote = getProposalSyncRemote(result)
+      if (resultRemote) taskProposalSyncRemoteRef.current = resultRemote
+      const proposal = proposalFromPatch(result, {
+        id: `proposal-${result.taskId}`,
+        documentId: semanticDocument.documentId,
+        baseRevision: activeChapterRevision,
+        sourceHash,
+      })
+      const patch = proposal.patches[0]
+      if (patch.from < selection.from || patch.to > selection.to) {
+        throw new Error('Rewrite proposal must stay within the selected semantic range')
+      }
+      proposalLedger.create(proposal)
+      setRewriteProposal({
+        proposal,
+        originalText: semanticDocument.text.slice(patch.from, patch.to),
+        proposedText: patch.text,
+        status: 'pending',
+      })
+    } catch (error) {
+      setRewriteProposal((current) => current ? { ...current, error: error instanceof Error ? error.message : String(error) } : current)
+    } finally {
+      setRewriteBusy(false)
+    }
+  }
+
+  const commitRewrite = async () => {
+    if (!rewriteProposal || rewriteProposal.status !== 'pending') return
+    const current = currentSemanticDocument()
+    const proposal = rewriteProposal.proposal
+    try {
+      proposalLedger.accept(proposal.id)
+      await proposalLedger.commit(
+        proposal.id,
+        activeChapterRevision,
+        (patches) => {
+          const inversePatches = patches.map((patch) => ({
+            ...patch,
+            to: patch.from + patch.text.length,
+            text: current.text.slice(patch.from, patch.to),
+          }))
+          for (const patch of [...patches].sort((left, right) => right.from - left.from)) {
+            const range = current.sourceMap.semanticRangeToEditor(patch.from, patch.to)
+            editor.commands.insertContentAt({ from: range.from, to: range.to }, patch.text)
+          }
+          return { inversePatches }
+        },
+        hashText(current.text),
+      )
+      setRewriteProposal((value) => value ? { ...value, status: 'committed', error: undefined } : value)
+    } catch (error) {
+      const stale =
+        error instanceof ProposalConflictError ||
+        isProposalSyncError(error) ||
+        /source hash|stale/i.test(String(error))
+      setRewriteProposal((value) => value ? {
+        ...value,
+        status: stale ? 'stale' : value.status,
+        error: error instanceof Error ? error.message : String(error),
+      } : value)
+    }
+  }
+
+  const rejectRewrite = () => {
+    if (!rewriteProposal || rewriteProposal.status !== 'pending') return
+    proposalLedger.reject(rewriteProposal.proposal.id)
+    setRewriteProposal((value) => value ? { ...value, status: 'rejected' } : value)
+  }
+
+  const undoRewrite = async () => {
+    if (!rewriteProposal || rewriteProposal.status !== 'committed') return
+    try {
+      await proposalLedger.undo(rewriteProposal.proposal.id, rewriteProposal.proposal.committedRevision ?? activeChapterRevision, (patches) => {
+        const current = currentSemanticDocument()
+        for (const patch of [...patches].sort((left, right) => right.from - left.from)) {
+          const range = current.sourceMap.semanticRangeToEditor(patch.from, patch.to)
+          editor.commands.insertContentAt({ from: range.from, to: range.to }, patch.text)
+        }
+      })
+      setRewriteProposal((value) => value ? { ...value, status: 'undone', error: undefined } : value)
+    } catch (error) {
+      setRewriteProposal((value) => value ? { ...value, status: 'stale', error: error instanceof Error ? error.message : String(error) } : value)
     }
   }
 
   return (
     <div
       className="absolute z-20 -translate-x-1/2 flex items-center gap-0.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-1 py-1 shadow-[var(--ink-shadow-lg)]"
-      style={{ top: state.top, left: state.left }}
+      style={{ top: state.show ? state.top : 20, left: state.show ? state.left : 20 }}
       // 阻止 mousedown 抢占选区，确保点击工具条时选区不丢失
       onMouseDown={(e) => e.preventDefault()}
     >
+      {state.show && <>
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -134,16 +342,16 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
       <button
         type="button"
-        onClick={aiPolish}
+        onClick={() => void aiPolish()}
         className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors duration-150 cursor-pointer"
         title="调用 InkPi AI 划词润色"
       >
         <Wand2 className="w-3 h-3" />
-        <span>AI 润色</span>
+        <span>{rewriteBusy ? '处理中…' : 'AI 润色'}</span>
       </button>
 
       {/* 划词直接触发断章张力分析抽屉 */}
-      {host && (
+      {host && state.show && (
         <>
           <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
           <button
@@ -161,7 +369,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       )}
 
       {/* 划词直接触发文学质量门禁体检 */}
-      {host && (
+      {host && state.show && (
         <button
           type="button"
           onClick={() => {
@@ -174,8 +382,30 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
           <span>文字体检</span>
         </button>
       )}
+      </>}
+      {rewriteProposal && (
+        <div data-testid="rewrite-proposal-preview" className="mt-2 max-w-sm rounded-md border border-[var(--ink-accent)]/40 bg-[var(--ink-bg-panel)] p-2 text-xs">
+          <div className="mb-1 font-medium">润色提案 · {rewriteProposal.status}</div>
+          <div className="space-y-1">
+            <div className="rounded bg-rose-500/10 p-1 line-through">{rewriteProposal.originalText || '（空）'}</div>
+            <div className="rounded bg-emerald-500/10 p-1">{rewriteProposal.proposedText || '（空）'}</div>
+          </div>
+          {rewriteProposal.error && <div className="mt-1 text-rose-500">{rewriteProposal.error}</div>}
+          {rewriteProposal.status === 'stale' && <div data-testid="rewrite-proposal-conflict" className="mt-1 text-amber-500">其他窗口的修改使此提案产生冲突，请重新审阅。</div>}
+          {rewriteProposal.status === 'pending' && <div className="mt-2 flex gap-1">
+            <button type="button" onClick={() => void commitRewrite()} className="rounded bg-emerald-600 px-2 py-1 text-white">接受</button>
+            <button type="button" onClick={rejectRewrite} className="rounded border border-[var(--ink-border)] px-2 py-1">拒绝</button>
+          </div>}
+          {rewriteProposal.status === 'committed' && <button type="button" onClick={() => void undoRewrite()} className="mt-2 rounded border border-[var(--ink-border)] px-2 py-1">撤销</button>}
+        </div>
+      )}
     </div>
   )
 }
 
 export default SelectionToolbar
+
+function normalizeScopeId(value?: string): string | undefined {
+  const normalized = value?.trim()
+  return normalized || undefined
+}

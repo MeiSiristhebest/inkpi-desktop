@@ -1,4 +1,4 @@
-import { htmlToPlain } from '../../../domain/text'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ChekhovRadarEngine } from '../engine/ChekhovRadarEngine'
@@ -72,21 +72,14 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const chaptersSnippet = chapters
       .slice(0, 15)
       .map(
-        (c) => `第 ${c.order} 章《${c.title}》：\n${htmlToPlain(c.content || '').slice(0, 300)}...`,
+        (c) => `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 300)}...`,
       )
       .join('\n\n')
 
-    const prompt = `请对以下小说的前序章节进行【契诃夫之枪（前文埋设道具/关键伏笔）】深度逆向扫描：
-【已写章节内容】：
-${chaptersSnippet}
+    const analysisInput = { chapterSamples: chaptersSnippet }
 
-请严格排查：
-1. 前文哪些地方提到了特殊的物品、功法、神秘NPC承诺、悬而未决的约定？
-2. 哪些伏线埋下后至今没有回响，存在“严重锈蚀”或“读者遗忘/作者吃书”风险？
-3. 给出 2~3 条具体的收拢方案（在后续哪个剧情高潮中引爆这些伏笔）。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('chekhov-radar', analysisInput)
     }
   }
 

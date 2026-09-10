@@ -18,6 +18,9 @@ import { join, relative } from 'node:path'
  */
 const FORBIDDEN_LAYERS = ['src/components', 'src/domain', 'src/core', 'src/hooks', 'src/plugins']
 
+const AI_AUTHORITATIVE_STORE_ACCESS =
+  /\bdb\.(?:put|get|getAll|delete)\s*\(\s*["'](?:projects|volumes|chapters|domainChangeSets|domainProjectionCursors)["']/i
+
 const FORBIDDEN_PATTERNS: { re: RegExp; msg: string }[] = [
   { re: /from\s+['"][^'"]*\/db\/indexedDB['"]/, msg: '直接 import db/indexedDB（应走适配器端口）' },
   { re: /window\.confirm\s*\(/, msg: '直接使用 window.confirm（应使用 confirmDialog 端口）' },
@@ -90,6 +93,21 @@ describe('架构依赖方向守卫', () => {
         .filter((f) => adapterImportRe.test(readFileSync(f, 'utf-8')))
         .map((f) => relative(root, f))
       expect(violations, `违反领域纯洁性的文件: ${violations.join(', ')}`).toEqual([])
+    })
+  })
+
+  describe('src/ai authoritative state boundary', () => {
+    it('AI implementation may persist derived artifacts but not authoritative domain stores', () => {
+      const aiRoot = join(root, 'src/ai')
+      const files = walk(aiRoot)
+      const violations = files
+        .filter((file) => AI_AUTHORITATIVE_STORE_ACCESS.test(readFileSync(file, 'utf-8')))
+        .map((file) => relative(root, file))
+      AI_AUTHORITATIVE_STORE_ACCESS.lastIndex = 0
+      expect(
+        violations,
+        `AI code references authoritative stores; return proposals through the task/proposal boundary: ${violations.join(', ')}`,
+      ).toEqual([])
     })
   })
 })

@@ -3,11 +3,103 @@ import { Engine } from './core/engine'
 import { Bookshelf } from './components/bookshelf/Bookshelf'
 import { AiAssistantPanel } from './components/ai/AiAssistantPanel'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { useSettings, SettingsProvider } from './core/settings'
+import { useSettings, SettingsProvider, type AppSettings } from './core/settings'
 import { ThemeController } from './core/ThemeController'
 import { useAiConversation } from './hooks/useAiConversation'
-import { useProjectLibrary } from './hooks/useProjectLibrary'
+import { useProjectLibrary, type ProjectLibrary } from './hooks/useProjectLibrary'
 import { PluginProvider } from './core/pluginRegistry'
+import { ProjectDataProvider, useProjectData } from './core/projectDataContext'
+import { StoryStateProvider, useStoryState } from './core/storyStateContext'
+import { DesktopPluginHostProvider } from './core/pluginHostContext'
+import type { ReactNode } from 'react'
+import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
+import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
+
+const ProjectWorkspace: FC<{
+  projectId: string
+  projectName?: string
+  isConnected: boolean
+  onAiTask: (task: import('@inkpi/protocol').AiTask) => Promise<import('@inkpi/protocol').TaskResult | null>
+  children: ReactNode
+}> = ({ projectId, projectName, isConnected, onAiTask, children }) => {
+  const { chapters, volumes, reloadChapters } = useProjectData()
+  return (
+    <DesktopPluginHostProvider
+      projectId={projectId}
+      projectName={projectName}
+      activeChapter={chapters[0] || null}
+      chapters={chapters}
+      volumes={volumes}
+      onRefreshHierarchy={reloadChapters}
+      onAiTask={onAiTask}
+      isAiConnected={isConnected}
+    >
+      {children}
+    </DesktopPluginHostProvider>
+  )
+}
+
+const ProjectEngine: FC<{
+  projectId: string
+  projectName?: string
+  isConnected: boolean
+  isReconnecting: boolean
+  onReconnect: () => void
+  onRequestGhost: (chapterId: string, text: string) => Promise<string | null>
+  onAiTask: (task: import('@inkpi/protocol').AiTask) => Promise<import('@inkpi/protocol').TaskResult | null>
+  onOpenAssistant: () => void
+  aiPanelOpen: boolean
+  setAiPanelOpen: (open: boolean) => void
+  aiMessages: Array<{ role: 'user' | 'assistant'; text: string }>
+  aiInput: string
+  setAiInput: (value: string) => void
+  aiBusy: boolean
+  sendAiPrompt: (prompt: string) => void
+  runContinuityAudit: import('./hooks/useAiConversation').AiConversation['runContinuityAudit']
+  runDeepReasoning: import('./hooks/useAiConversation').AiConversation['runDeepReasoning']
+  runDistillationWorkflow: import('./hooks/useAiConversation').AiConversation['runDistillationWorkflow']
+  steerTask: import('./hooks/useAiConversation').AiConversation['steerTask']
+  onHome: () => void
+}> = (props) => {
+  const { chapters } = useProjectData()
+  return (
+    <Engine
+      projectId={props.projectId}
+      projectName={props.projectName}
+      isConnected={props.isConnected}
+      isReconnecting={props.isReconnecting}
+      onReconnect={props.onReconnect}
+      onRequestGhost={props.onRequestGhost}
+      onAiTask={props.onAiTask}
+      onOpenAssistant={props.onOpenAssistant}
+      onHome={props.onHome}
+      rightPanel={
+        <>
+          <CreativeWorkflowsPanel
+            projectId={props.projectId}
+            chapters={chapters}
+            connected={props.isConnected}
+            onContinuityAudit={props.runContinuityAudit}
+            onDeepReasoning={props.runDeepReasoning}
+            onDistillationWorkflow={props.runDistillationWorkflow}
+            onSteerTask={props.steerTask}
+          />
+          {props.aiPanelOpen && (
+            <AiAssistantPanel
+              messages={props.aiMessages}
+              input={props.aiInput}
+              busy={props.aiBusy}
+              connected={props.isConnected}
+              onInputChange={props.setAiInput}
+              onSend={() => props.sendAiPrompt(props.aiInput)}
+              onClose={() => props.setAiPanelOpen(false)}
+            />
+          )}
+        </>
+      }
+    />
+  )
+}
 
 /**
  * 应用根组件（组合根）：只负责 Provider 装配（SettingsProvider / ThemeController），
@@ -28,9 +120,20 @@ export const App: FC = () => (
  */
 const AppShell: FC = () => {
   const [settings] = useSettings()
-
   const library = useProjectLibrary()
-  const ai = useAiConversation(settings.daemonWsUrl, settings.aiModel)
+
+  return (
+    <StoryStateProvider workspaceId={library.activeProjectId}>
+      <AppShellContent settings={settings} library={library} />
+    </StoryStateProvider>
+  )
+}
+
+const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = ({
+  settings,
+  library,
+}) => {
+  const { storyState } = useStoryState()
 
   const {
     projects,
@@ -44,6 +147,10 @@ const AppShell: FC = () => {
     deleteProject,
   } = library
 
+  const ai = useAiConversation(settings.daemonWsUrl, settings.aiModel, activeProjectId, {
+    storyState,
+  })
+
   const {
     isConnected,
     isReconnecting,
@@ -56,6 +163,17 @@ const AppShell: FC = () => {
     reconnect,
     requestGhost,
     sendAiPrompt,
+    runAiTask,
+    runContinuityAudit,
+    runDeepReasoning,
+    runDistillationWorkflow,
+    steerTask,
+    taskRecovery,
+    taskRecoveryLoading,
+    taskRecoveryError,
+    resumeTask,
+    cancelTask,
+    dismissTask,
   } = ai
 
   const content = !activeProjectId ? (
@@ -73,34 +191,55 @@ const AppShell: FC = () => {
     </ErrorBoundary>
   ) : (
     <ErrorBoundary label="应用主框架">
-      <Engine
-        projectId={activeProjectId}
-        projectName={projects.find((p) => p.id === activeProjectId)?.name}
-        isConnected={isConnected}
-        isReconnecting={isReconnecting}
-        onReconnect={reconnect}
-        onRequestGhost={requestGhost}
-        onAiPrompt={sendAiPrompt}
-        onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
-        onHome={() => setActiveProjectId(null)}
-        rightPanel={
-          aiPanelOpen ? (
-            <AiAssistantPanel
-              messages={aiMessages}
-              input={aiInput}
-              busy={aiBusy}
-              connected={isConnected}
-              onInputChange={setAiInput}
-              onSend={() => sendAiPrompt(aiInput)}
-              onClose={() => setAiPanelOpen(false)}
-            />
-          ) : null
-        }
-      />
+      <ProjectDataProvider projectId={activeProjectId}>
+        <ProjectWorkspace
+          projectId={activeProjectId}
+          projectName={projects.find((p) => p.id === activeProjectId)?.name}
+          isConnected={isConnected}
+          onAiTask={runAiTask}
+        >
+          <ProjectEngine
+            projectId={activeProjectId}
+            projectName={projects.find((p) => p.id === activeProjectId)?.name}
+            isConnected={isConnected}
+            isReconnecting={isReconnecting}
+            onReconnect={reconnect}
+            onRequestGhost={requestGhost}
+            onAiTask={runAiTask}
+            onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
+            onHome={() => setActiveProjectId(null)}
+            aiPanelOpen={aiPanelOpen}
+            setAiPanelOpen={setAiPanelOpen}
+            aiMessages={aiMessages}
+            aiInput={aiInput}
+            setAiInput={setAiInput}
+            aiBusy={aiBusy}
+            sendAiPrompt={sendAiPrompt}
+            runContinuityAudit={runContinuityAudit}
+            runDeepReasoning={runDeepReasoning}
+            runDistillationWorkflow={runDistillationWorkflow}
+            steerTask={steerTask}
+          />
+        </ProjectWorkspace>
+      </ProjectDataProvider>
     </ErrorBoundary>
   )
 
-  return <PluginProvider>{content}</PluginProvider>
+  return (
+    <PluginProvider>
+      {content}
+      {activeProjectId && (
+        <TaskRecoveryPanel
+          records={taskRecovery}
+          loading={taskRecoveryLoading}
+          error={taskRecoveryError}
+          onResume={resumeTask}
+          onCancel={cancelTask}
+          onDismiss={dismissTask}
+        />
+      )}
+    </PluginProvider>
+  )
 }
 
 export default App

@@ -23,7 +23,7 @@ This document establishes the engineering standards, architectural invariants, a
    - They must **never** import `db/indexedDB`, nor call `window.confirm`, `navigator.clipboard`, `URL.createObjectURL`, `Date.now()`, or `Math.random()` directly. `src/adapters/` is the sole infrastructure boundary; non-determinism is injected via the `Clock` / `IdGenerator` / `RandomSource` ports.
    - This rule is enforced at build time by `src/architecture.test.ts` (forbidden-pattern scan).
    - Repositories expose **per-project** queries (`getVolumesByProject` / `getChaptersByProject`); callers must not fetch the global store and filter by `projectId` in memory (multi-project correctness, §5.2 of the review).
-   - The AI layer uses the semantic `AiAssistant` port (`openSession` / `suggestContinuation` / `prompt`); never hand-write `'session.*'` RPC method strings in `components/` / `App.tsx`.
+   - The AI layer uses the semantic `AiAssistant.runTask` port; never hand-write `task.*`, `session.*`, or `agent.*` RPC method strings in `components/` / `App.tsx`.
 
 ---
 

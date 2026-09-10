@@ -1,0 +1,357 @@
+import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react'
+import { Activity, Brain, Database, RefreshCw, Square } from 'lucide-react'
+import type { TaskStatusSnapshot } from '@inkpi/protocol'
+import type { ChapterRecord } from '../../types'
+import { projectContent } from '../../domain/content'
+import { clock } from '../../adapters/clock'
+import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
+import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
+import { projectContinuityFindingsToEditor, type ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
+import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
+import type { SemanticDocument } from '../../domain/content'
+import type {
+  DistillationCheckpoint,
+  DistillationWorkflowResult,
+  ProjectDistillationInput,
+  DistillationWorkflowOptions,
+} from '../../ai/orchestrator/verticalSlices'
+import {
+  createDistillationSourceFingerprint,
+  indexedDbDistillationCheckpointStore,
+  type DistillationCheckpointStore,
+} from '../../ai/orchestrator/distillationCheckpointStore'
+import { idGenerator } from '../../adapters/idGenerator'
+import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
+
+const DISTILLATION_TASK_ID = 'project-distillation'
+
+interface CreativeWorkflowsPanelProps {
+  projectId: string
+  chapters: ChapterRecord[]
+  connected: boolean
+  onContinuityAudit: (
+    input: ContinuityAuditTaskInput,
+    options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void },
+  ) => Promise<ContinuityFinding[] | null>
+  onDeepReasoning: (
+    input: DeepReasoningTaskInput,
+    options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void },
+  ) => Promise<DeepReasoningResult | null>
+  onDistillationWorkflow: (
+    input: ProjectDistillationInput,
+    options?: DistillationWorkflowOptions,
+  ) => Promise<DistillationWorkflowResult | null>
+  onSteerTask: (taskId: string, input: unknown) => Promise<boolean>
+  distillationCheckpointStore?: DistillationCheckpointStore
+}
+
+type WorkflowTab = 'audit' | 'reason' | 'distill'
+
+/** Real UI entry point for the remaining creative vertical slices. */
+export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
+  projectId,
+  chapters,
+  connected,
+  onContinuityAudit,
+  onDeepReasoning,
+  onDistillationWorkflow,
+  onSteerTask,
+  distillationCheckpointStore = indexedDbDistillationCheckpointStore,
+}) => {
+  const [tab, setTab] = useState<WorkflowTab>('audit')
+  const [selectedChapterId, setSelectedChapterId] = useState(chapters[0]?.id ?? '')
+  const [auditFindings, setAuditFindings] = useState<ContinuityFinding[]>([])
+  const [auditDocument, setAuditDocument] = useState<SemanticDocument | null>(null)
+  const [deepResult, setDeepResult] = useState<DeepReasoningResult | null>(null)
+  const [distillation, setDistillation] = useState<DistillationWorkflowResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<TaskStatusSnapshot | null>(null)
+  const [steering, setSteering] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [checkpoint, setCheckpoint] = useState<DistillationCheckpoint | undefined>()
+  const activeController = useRef<AbortController | null>(null)
+  const runToken = useRef(0)
+  const autoAuditTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastAutoAuditRevision = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!chapters.some((chapter) => chapter.id === selectedChapterId)) {
+      setSelectedChapterId(chapters[0]?.id ?? '')
+    }
+  }, [chapters, selectedChapterId])
+
+  useEffect(() => () => activeController.current?.abort(), [])
+
+  const selectedChapter = useMemo(
+    () => chapters.find((chapter) => chapter.id === selectedChapterId) ?? chapters[0],
+    [chapters, selectedChapterId],
+  )
+  const documents = useMemo(
+    () => chapters.map((chapter) => documentForChapter(chapter)),
+    [chapters],
+  )
+  const distillationSourceFingerprint = useMemo(
+    () => createDistillationSourceFingerprint(documents),
+    [documents],
+  )
+  const distillationCheckpointRef = useRef<DistillationCheckpoint | undefined>(undefined)
+  const checkpointLoadRef = useRef<Promise<void>>(Promise.resolve())
+
+  useEffect(() => {
+    let active = true
+    distillationCheckpointRef.current = undefined
+    setCheckpoint(undefined)
+    const load = distillationCheckpointStore
+      .load(projectId, DISTILLATION_TASK_ID, distillationSourceFingerprint)
+      .then((stored) => {
+        if (!active) return
+        distillationCheckpointRef.current = stored
+        setCheckpoint(stored)
+      })
+      .catch(() => {
+        if (active) {
+          distillationCheckpointRef.current = undefined
+          setCheckpoint(undefined)
+        }
+      })
+    checkpointLoadRef.current = load
+    return () => {
+      active = false
+    }
+  }, [distillationCheckpointStore, distillationSourceFingerprint, projectId])
+  const auditMarkers: ContinuityDiagnosticMarker[] = useMemo(
+    () => (auditDocument ? projectContinuityFindingsToEditor(auditDocument, auditFindings) : []),
+    [auditDocument, auditFindings],
+  )
+
+  useEffect(() => {
+    const chapterId = selectedChapter?.id
+    if (!chapterId) return
+    continuityDiagnosticsStore.set(projectId, chapterId, auditMarkers)
+    return () => continuityDiagnosticsStore.clear(projectId, chapterId)
+  }, [auditMarkers, projectId, selectedChapter?.id])
+
+  const runAudit = async (chapterOverride?: ChapterRecord) => {
+    const chapter = chapterOverride ?? selectedChapter
+    if (!chapter || !connected || busy) return
+    activeController.current?.abort()
+    const controller = new AbortController()
+    activeController.current = controller
+    const token = ++runToken.current
+    setBusy(true)
+    setError(null)
+    setProgress(null)
+    setAuditDocument(documentForAudit(chapter))
+    setAuditFindings([])
+    try {
+      const document = documentForAudit(chapter)
+      const result = await onContinuityAudit(
+        {
+          taskId: idGenerator.generate(`continuity-${chapter.id}`),
+          document,
+          scope: 'document',
+        },
+        { signal: controller.signal, onProgress: setProgress },
+      )
+      if (token === runToken.current) {
+        setAuditDocument(document)
+        setAuditFindings(result ?? [])
+      }
+    } catch (cause) {
+      if (!controller.signal.aborted && token === runToken.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (token === runToken.current) {
+        setBusy(false)
+        if (activeController.current === controller) activeController.current = null
+      }
+    }
+  }
+
+  const runAuditRef = useRef<(chapter?: ChapterRecord) => Promise<void>>(async () => {})
+  runAuditRef.current = runAudit
+
+  useEffect(() => {
+    const unsubscribe = chapterSaveEvents.subscribe(({ chapter }) => {
+      if (!connected || chapter.projectId !== projectId || chapter.id !== selectedChapterId) return
+      const revisionKey = `${chapter.id}:${chapter.revision ?? 0}`
+      if (lastAutoAuditRevision.current === revisionKey) return
+      if (autoAuditTimer.current) clearTimeout(autoAuditTimer.current)
+      autoAuditTimer.current = setTimeout(() => {
+        autoAuditTimer.current = null
+        lastAutoAuditRevision.current = revisionKey
+        void runAuditRef.current(chapter)
+      }, 500)
+    })
+    return () => {
+      unsubscribe()
+      if (autoAuditTimer.current) {
+        clearTimeout(autoAuditTimer.current)
+        autoAuditTimer.current = null
+      }
+    }
+  }, [connected, projectId, selectedChapterId])
+
+  const runReasoning = async () => {
+    if (!selectedChapter || !connected || busy) return
+    activeController.current?.abort()
+    const controller = new AbortController()
+    activeController.current = controller
+    const token = ++runToken.current
+    setBusy(true)
+    setError(null)
+    setDeepResult(null)
+    setProgress(null)
+    const taskId = idGenerator.generate(`deep-reason-${selectedChapter.id}`)
+    setSteering('')
+    try {
+      const document = documentForChapter(selectedChapter)
+      const result = await onDeepReasoning(
+        {
+          taskId,
+          document,
+          question: '分析当前章节的关键约束、角色动机和下一步剧情风险。',
+        },
+        { signal: controller.signal, onProgress: setProgress },
+      )
+      if (token === runToken.current) setDeepResult(result)
+    } catch (cause) {
+      if (!controller.signal.aborted && token === runToken.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (token === runToken.current) {
+        setBusy(false)
+        if (activeController.current === controller) activeController.current = null
+      }
+    }
+  }
+
+  const runDistillation = async () => {
+    if (documents.length === 0 || !connected || busy) return
+    activeController.current?.abort()
+    const controller = new AbortController()
+    activeController.current = controller
+    const token = ++runToken.current
+    setBusy(true)
+    setError(null)
+    setProgress(null)
+    try {
+      await checkpointLoadRef.current
+      if (token !== runToken.current) return
+      const saveCheckpoint = async (nextCheckpoint: DistillationCheckpoint) => {
+        distillationCheckpointRef.current = nextCheckpoint
+        setCheckpoint(nextCheckpoint)
+        await distillationCheckpointStore.save(
+          projectId,
+          DISTILLATION_TASK_ID,
+          nextCheckpoint,
+          distillationSourceFingerprint,
+        )
+      }
+      const result = await onDistillationWorkflow(
+        {
+          taskId: DISTILLATION_TASK_ID,
+          documents,
+          target: 'project',
+          fields: ['summary', 'entities', 'events', 'promises'],
+        },
+        {
+          chunkSize: 10,
+          checkpoint: distillationCheckpointRef.current,
+          continueOnError: true,
+          signal: controller.signal,
+          saveCheckpoint,
+          onProgress: ({ completedChunks, totalChunks, failedChunks }) =>
+            setProgress({
+              taskId: DISTILLATION_TASK_ID,
+              kind: 'narrative.project.distill',
+              status: completedChunks === totalChunks ? 'completed' : 'running',
+              progress: totalChunks ? completedChunks / totalChunks : 0,
+              checkpoint: failedChunks.length ? { step: 'retry-failed-chunks', updatedAt: clock.now() } : undefined,
+            }),
+        },
+      )
+      if (token === runToken.current && result) {
+        setDistillation(result)
+        distillationCheckpointRef.current = result.checkpoint
+        setCheckpoint(result.checkpoint)
+        await distillationCheckpointStore.save(
+          projectId,
+          DISTILLATION_TASK_ID,
+          result.checkpoint,
+          distillationSourceFingerprint,
+        )
+      }
+    } catch (cause) {
+      if (!controller.signal.aborted && token === runToken.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (token === runToken.current) {
+        setBusy(false)
+        if (activeController.current === controller) activeController.current = null
+      }
+    }
+  }
+
+  const steer = async () => {
+    const taskId = progress?.taskId
+    if (!taskId || !steering.trim()) return
+    const accepted = await onSteerTask(taskId, { direction: steering.trim() })
+    if (!accepted) setError('Runtime 未接受 steering 输入')
+    else setSteering('')
+  }
+
+  return (
+    <section data-testid="creative-workflows-panel" className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[13px] font-medium">
+          <Activity className="h-3.5 w-3.5 text-[var(--ink-accent)]" /> 创作工作流
+        </div>
+        <span className="text-[10px] text-[var(--ink-text-faint)]">{connected ? 'Runtime 已连接' : '离线'}</span>
+      </div>
+      <div className="mb-2 grid grid-cols-3 gap-1">
+        <TabButton active={tab === 'audit'} onClick={() => setTab('audit')}><Activity className="h-3 w-3" />连续性</TabButton>
+        <TabButton active={tab === 'reason'} onClick={() => setTab('reason')}><Brain className="h-3 w-3" />深度推理</TabButton>
+        <TabButton active={tab === 'distill'} onClick={() => setTab('distill')}><Database className="h-3 w-3" />项目提炼</TabButton>
+      </div>
+      {tab !== 'distill' && (
+        <select aria-label="选择章节" value={selectedChapterId} onChange={(event) => setSelectedChapterId(event.target.value)} className="mb-2 w-full rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs">
+          {chapters.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
+        </select>
+      )}
+      <button type="button" disabled={!connected || busy || (tab !== 'distill' && !selectedChapter)} onClick={() => void (tab === 'audit' ? runAudit() : tab === 'reason' ? runReasoning() : runDistillation())} className="flex w-full items-center justify-center gap-1 rounded bg-[var(--ink-accent)] px-2 py-1.5 text-xs text-white disabled:opacity-40">
+        {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
+        {busy ? '运行中…' : tab === 'audit' ? '审计当前章节' : tab === 'reason' ? '开始深度推理' : checkpoint ? '继续项目提炼' : '开始项目提炼'}
+      </button>
+      {tab === 'reason' && progress?.status !== 'completed' && progress?.taskId && (
+        <div className="mt-2 flex gap-1">
+          <input aria-label="推理 steering" value={steering} onChange={(event) => setSteering(event.target.value)} placeholder="运行中补充方向…" className="min-w-0 flex-1 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs" />
+          <button type="button" onClick={() => void steer()} disabled={!steering.trim()} className="rounded border border-[var(--ink-border)] px-2 py-1 text-xs disabled:opacity-40">引导</button>
+        </div>
+      )}
+      {busy && <button type="button" onClick={() => activeController.current?.abort()} className="mt-2 flex items-center gap-1 text-xs text-rose-500"><Square className="h-3 w-3" />取消{tab === 'audit' ? '审计' : tab === 'reason' ? '深度推理' : '项目提炼'}</button>}
+      {progress?.status === 'waiting-user' && <div data-testid="workflow-waiting-user" className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 p-1.5 text-xs text-amber-600">Runtime 等待人工输入，可继续提供 steering。</div>}
+      {progress && <div data-testid="workflow-progress" className="mt-2 text-[11px] text-[var(--ink-text-faint)]">{Math.round((progress.progress ?? 0) * 100)}% · {progress.status}</div>}
+      {error && <div role="alert" className="mt-2 text-xs text-rose-500">{error}</div>}
+      {tab === 'audit' && auditMarkers.length > 0 && <div data-testid="continuity-findings" className="mt-2 space-y-1">{auditMarkers.map((marker) => <div key={marker.findingId} data-testid="continuity-diagnostic" data-finding-id={marker.findingId} data-location-kind={marker.locationStatus} className="rounded border border-[var(--ink-border)] p-1.5 text-xs"><div><span className="mr-1 font-medium">{marker.severity}</span>{marker.description}</div>{marker.locations.length > 0 ? <div className="mt-1 flex flex-wrap gap-1" aria-label="编辑器诊断位置">{marker.locations.map((location) => <span key={`${marker.findingId}-${location.blockId}`} data-testid="continuity-diagnostic-location" data-block-id={location.blockId} data-semantic-from={location.semanticFrom} data-semantic-to={location.semanticTo} data-editor-from={location.editorFrom} data-editor-to={location.editorTo} className="rounded bg-[var(--ink-bg-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--ink-text-faint)]">编辑器位置 {location.editorFrom}–{location.editorTo}</span>)}</div> : <span data-testid="continuity-diagnostic-unlocated" className="mt-1 inline-block text-[10px] text-[var(--ink-text-faint)]">未定位到编辑器位置</span>}</div>)}</div>}
+      {tab === 'audit' && !busy && auditMarkers.length === 0 && <p className="mt-2 text-xs text-[var(--ink-text-faint)]">暂无诊断结果。</p>}
+      {tab === 'reason' && deepResult && <div data-testid="deep-reasoning-result" className="mt-2 space-y-1 text-xs"><p>{deepResult.answer}</p>{deepResult.risks.length > 0 && <p className="text-rose-500">风险：{deepResult.risks.join('；')}</p>}</div>}
+      {tab === 'distill' && distillation && <div data-testid="distillation-result" className="mt-2 space-y-1 text-xs"><p>{distillation.facts.summary}</p><p className="text-[var(--ink-text-faint)]">{distillation.completedChunks}/{distillation.totalChunks} chunks · 实体 {distillation.facts.entities.length} · 事件 {distillation.facts.events.length} · 伏笔 {distillation.facts.promises.length}</p>{distillation.failedChunks.length > 0 && <p className="text-amber-500">待重试：{distillation.failedChunks.length}</p>}</div>}
+    </section>
+  )
+}
+
+function documentForAudit(chapter: ChapterRecord): SemanticDocument {
+  return documentForChapter(chapter)
+}
+
+function documentForChapter(chapter: ChapterRecord): SemanticDocument {
+  return projectContent(chapter.id, chapter.content || '', chapter.revision ?? 0)
+}
+
+const TabButton: FC<{ active: boolean; onClick: () => void; children: ReactNode }> = ({ active, onClick, children }) => (
+  <button type="button" onClick={onClick} className={`flex items-center justify-center gap-1 rounded px-1 py-1 text-[11px] ${active ? 'bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]' : 'text-[var(--ink-text-muted)]'}`}>{children}</button>
+)

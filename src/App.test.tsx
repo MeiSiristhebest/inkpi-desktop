@@ -80,7 +80,17 @@ describe('App daemon connection', () => {
     connectWebSocketSpy.mockImplementationOnce(() =>
       Promise.resolve({
         close: vi.fn().mockResolvedValue(undefined),
-        request: vi.fn().mockResolvedValue({ running: true }),
+        request: vi.fn().mockImplementation(async (method: string) => {
+          if (method === 'skill.status') return { activatedSkills: [] }
+          if (method === 'skill.activate') {
+            return {
+              snapshot: {
+                activatedSkills: ['hook', 'promise', 'character-voice', 'timeline-consistency'],
+              },
+            }
+          }
+          return { running: true }
+        }),
       }),
     )
 

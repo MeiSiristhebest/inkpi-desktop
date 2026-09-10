@@ -63,21 +63,17 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     loadData()
   }, [projectId])
 
-  // 真实 AI 战斗拆招与越级绝杀推演
+  // AI 战斗拆招与越级绝杀推演
   const handleAiCombatRecommend = () => {
-    const prompt = `请作为仙侠玄幻动作戏与战斗场面动作指导，对以下【两强决死搏杀战役】进行四段式硬核拆招设计：
-【交战双方】：【${protagonistName}】(战力标量 ${protagonistRank}) VS 【${enemyName}】(战力标量 ${enemyRank})
-【战役筹码】：${stakes}
-【越级底牌】：${assets.join('、') || '暂无底牌'}
+    const analysisInput = {
+      protagonist: { name: protagonistName, rank: protagonistRank },
+      enemy: { name: enemyName, rank: enemyRank },
+      stakes,
+      compensatingAssets: [...assets],
+    }
 
-请设计四段式层层递进的经典高燃打斗节拍：
-1. 第一段（试探交锋）：双方如何通过远程道法或试探性杀招互探虚实；
-2. 第二段（敌手碾压）：反派展现大境界压制，主角如何陷入绝境并负伤见血；
-3. 第三段（底牌博弈）：主角如何利用预留的克制法宝/地形代价引诱敌人露出致命破绽；
-4. 第四段（终极绝杀）：一击定乾坤的招式动作细节与尘埃落定后的代价反馈。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('combat-sandbox', analysisInput)
     }
   }
 

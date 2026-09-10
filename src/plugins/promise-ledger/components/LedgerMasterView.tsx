@@ -103,18 +103,10 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       )
       .join('\n')
 
-    const prompt = `请作为小说结构编辑，对以下【未回收伏笔账本与剧情悬念债】进行专业审查：
-【当前全书推进进度】：第 ${currentChapter} 章
-【伏笔账本记录】：
-${entrySummaries}
+    const analysisInput = { currentChapter, promises: entrySummaries }
 
-请重点排查：
-1. 哪些伏笔已经严重超出读者记忆遗忘半衰期（遗忘衰减指数过大，读者基本忘光，若突然出现读者会觉得突兀莫名）；
-2. 哪些伏笔存在“死锁”风险（前面挖坑设定过大，后续战力或世界观无法合理自洽回收）；
-3. 给出前 3 条最该在接下来 5~10 章内分步给甜头或彻底闭环的伏笔规划。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('promise-ledger', analysisInput)
     }
   }
 

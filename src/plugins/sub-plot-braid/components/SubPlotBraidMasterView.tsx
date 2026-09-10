@@ -54,18 +54,10 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       )
       .join('\n')
 
-    const prompt = `请作为小说结构大纲指导，对以下【多线叙事与支线收拢交汇计划】进行专业审查：
-【当前全书最大章节序号】：第 ${maxChapterOrder} 章
-【当前登记的各支线状态】：
-${strandSummaries}
+    const analysisInput = { currentMaxChapter: maxChapterOrder, strands: strandSummaries }
 
-请排查：
-1. 是否有严重“掉线休眠”的支线（隔了几十万字没动静，读者几乎遗忘）；
-2. 支线与主线的高潮交汇设计：如何设计一桩大事件，让上述两到三条支线同时发生化学反应并收拢为主线推力；
-3. 给出一条最紧迫需要推进或闭环的支线建议。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('sub-plot-braid', analysisInput)
     }
   }
 

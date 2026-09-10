@@ -1,5 +1,7 @@
 import { lazy, type ComponentType } from 'react'
 import type { DesktopPlugin, DesktopPluginCategory } from '../types/plugin'
+import { provideLivingCodexContext } from '../plugins/living-codex/contextProvider'
+import { provideConsistencyContext } from '../plugins/consistency-sentinel/contextProvider'
 import {
   Layers,
   BookOpen,
@@ -40,6 +42,8 @@ import {
   Split,
   Mic,
   Film,
+  Dna,
+  GitMerge,
 } from 'lucide-react'
 
 export interface PluginStaticDefinition {
@@ -54,7 +58,7 @@ export interface PluginStaticDefinition {
   enabledByDefault?: boolean
   loadMainView: () => Promise<{ default: ComponentType<any> }>
   loadDrawerSnippetView?: () => Promise<{ default: ComponentType<any> }>
-  aiCapabilities?: DesktopPlugin['aiCapabilities']
+  contextProvider?: DesktopPlugin['contextProvider']
 }
 
 export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
@@ -68,6 +72,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['世界书', '实体图谱', 'AC扫描', '智能提示'],
     enabledByDefault: true,
     icon: Layers,
+    contextProvider: provideLivingCodexContext,
     loadMainView: () =>
       import('../plugins/living-codex').then((m) => ({ default: m.CodexMasterView })),
     loadDrawerSnippetView: () =>
@@ -176,6 +181,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     tags: ['境界体系', '一致性', '偏序闭包', '战力崩坏'],
     enabledByDefault: true,
     icon: Gauge,
+    contextProvider: provideConsistencyContext,
     loadMainView: () =>
       import('../plugins/consistency-sentinel').then((m) => ({ default: m.ConsistencyMasterView })),
     loadDrawerSnippetView: () =>
@@ -608,6 +614,76 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     loadDrawerSnippetView: () =>
       import('../plugins/storyboard-gen').then((m) => ({ default: m.StoryboardDrawer })),
   },
+  {
+    id: 'archetype-cards',
+    name: '人格原型素材库与叙事母题卡牌',
+    description: '经典戏剧人格原型与英雄之旅叙事母题素材库',
+    version: '1.0.0',
+    category: 'craft',
+    tags: ['人格原型', '戏剧张力', '对手戏'],
+    enabledByDefault: true,
+    icon: Dna,
+    loadMainView: () =>
+      import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeDrawer })),
+  },
+  {
+    id: 'author-ops',
+    name: '连载运营台账与作者商业名片',
+    description: '追读数据、作者品牌与版权管理工具',
+    version: '1.0.0',
+    category: 'flow',
+    tags: ['运营台账', '作者品牌', '版权'],
+    enabledByDefault: true,
+    icon: TrendingUp,
+    loadMainView: () =>
+      import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsDrawer })),
+  },
+  {
+    id: 'gold-chapters-eval',
+    name: '黄金三章与签约过稿诊断器',
+    description: '从动机、筹码、冲突和期待感评估开篇',
+    version: '1.0.0',
+    category: 'review',
+    tags: ['黄金三章', '签约诊断', '开篇'],
+    enabledByDefault: true,
+    icon: Award,
+    loadMainView: () =>
+      import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersDrawer })),
+  },
+  {
+    id: 'memory-palace',
+    name: '记忆宫殿与实体召回仪',
+    description: '长篇跨卷实体检索与历史登场轨迹召回',
+    version: '1.0.0',
+    category: 'tools',
+    tags: ['记忆宫殿', '实体召回', '历史轨迹'],
+    enabledByDefault: true,
+    icon: Sparkles,
+    loadMainView: () =>
+      import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceDrawer })),
+  },
+  {
+    id: 'sub-plot-braid',
+    name: '多线叙事编织器',
+    description: '副线状态、交汇节点和长篇多线合流管理',
+    version: '1.0.0',
+    category: 'plot',
+    tags: ['多线', '支线', '合流'],
+    enabledByDefault: true,
+    icon: GitMerge,
+    loadMainView: () =>
+      import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidMasterView })),
+    loadDrawerSnippetView: () =>
+      import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidDrawer })),
+  },
 ]
 
 /**
@@ -629,8 +705,12 @@ export function materializeLazyPlugin(def: PluginStaticDefinition): DesktopPlugi
     enabledByDefault: def.enabledByDefault,
     mainView: LazyMainView,
     drawerSnippetView: LazyDrawer,
-    aiCapabilities: def.aiCapabilities,
+    contextProvider: def.contextProvider,
   }
+}
+
+export function resolvePluginContextProvider(pluginId: string): DesktopPlugin['contextProvider'] {
+  return ALL_PLUGIN_DEFINITIONS.find((definition) => definition.id === pluginId)?.contextProvider
 }
 
 /**

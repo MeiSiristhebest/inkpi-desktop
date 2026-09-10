@@ -52,18 +52,16 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const handleAiVolumeArcRecommend = () => {
     const curVol = volumes.find((v) => v.id === selectedVolId)
     const volChapters = chapters.filter((c) => c.volumeId === selectedVolId)
-    const prompt = `请作为百万字长篇网络小说大纲总监，对【第 ${curVol?.order ?? 1} 卷《${curVol?.title ?? '当前卷'}》】进行三幕式分卷弧线与卷末高潮设计：
-【分卷信息】：已创作 ${volChapters.length} 章节，目标字数 ${editTargetWords} 字
-【核心矛盾现状】：${editConflict || '暂未详细规划'}
-【卷末高潮预设】：${editClimax || '暂未详细规划'}
+    const analysisInput = {
+      volume: { id: curVol?.id, order: curVol?.order, title: curVol?.title },
+      chapterCount: volChapters.length,
+      targetWords: editTargetWords,
+      conflict: editConflict,
+      climax: editClimax,
+    }
 
-请给出长篇工业级分卷设计建议：
-1. 卷核心矛盾（推动主角必须跨卷成长、离开新手村或打破旧秩序的核心动机）；
-2. 卷末终局大高潮（Climax）节点设计（怎样的高潮决战最具视觉感与情绪爆点）；
-3. 卷末跨卷大悬念（Cross-volume Cliffhanger）：打完大Boss后，如何用一封绝密玉简、突发天地异象或神秘势力降临，让读者产生翻开下一卷的狂热驱动力？`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('volume-master', analysisInput)
     }
   }
 

@@ -9,7 +9,7 @@
 // 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 21
+export const DB_VERSION = 24
 
 export const STORES = [
   'projects',
@@ -64,6 +64,9 @@ export const STORES = [
   'multiverseBranches',
   'voiceScriptCasts',
   'storyboardScenes',
+  'domainChangeSets',
+  'aiArtifacts',
+  'aiProposals',
 ] as const
 export type StoreName = (typeof STORES)[number]
 
@@ -83,7 +86,12 @@ class InkStudioDB {
             const keyPath =
               name === 'dailyStats' || name === 'settingsKV'
                 ? 'key'
-                : name === 'powerTierSystems' || name === 'pressExportConfigs' || name === 'rhythmCadences' || name === 'linterRulesConfigs' || name === 'soundscapeConfigs' || name === 'authorOpsProfiles'
+                : name === 'powerTierSystems' ||
+                    name === 'pressExportConfigs' ||
+                    name === 'rhythmCadences' ||
+                    name === 'linterRulesConfigs' ||
+                    name === 'soundscapeConfigs' ||
+                    name === 'authorOpsProfiles'
                   ? 'projectId'
                   : 'id'
             const store = db.createObjectStore(name, { keyPath })
@@ -91,7 +99,10 @@ class InkStudioDB {
               store.createIndex('projectId', 'projectId', { unique: false })
               store.createIndex('category', 'category', { unique: false })
             }
-            if ((name === 'tableRows' || name === 'cardRecords') && typeof store.createIndex === 'function') {
+            if (
+              (name === 'tableRows' || name === 'cardRecords') &&
+              typeof store.createIndex === 'function'
+            ) {
               store.createIndex('projectId', 'projectId', { unique: false })
               store.createIndex('tabId', 'tabId', { unique: false })
             }
@@ -268,7 +279,7 @@ class InkStudioDB {
   public async getByIndex<T>(
     store: StoreName,
     indexName: string,
-    queryValue: IDBValidKey | IDBKeyRange
+    queryValue: IDBValidKey | IDBKeyRange,
   ): Promise<T[]> {
     const db = await this.openDB()
     return new Promise((resolve, reject) => {
@@ -311,6 +322,57 @@ class InkStudioDB {
     })
   }
 
+  /** Runs synchronous request scheduling inside one IndexedDB read/write transaction. */
+  public async runTransaction(
+    stores: StoreName[],
+    operation: (transaction: IDBTransaction, fail: (error: unknown) => void) => void,
+  ): Promise<void> {
+    const database = await this.openDB()
+    const uniqueStores = [...new Set(stores)]
+    return new Promise((resolve, reject) => {
+      let transaction: IDBTransaction
+      try {
+        transaction = database.transaction(uniqueStores, 'readwrite')
+      } catch (error) {
+        reject(error)
+        return
+      }
+
+      let failure: Error | undefined
+      let settled = false
+      const rejectOnce = (error: unknown) => {
+        if (settled) return
+        settled = true
+        reject(toError(error))
+      }
+      const fail = (error: unknown) => {
+        failure = toError(error)
+        try {
+          transaction.abort()
+        } catch {
+          rejectOnce(failure)
+        }
+      }
+
+      transaction.oncomplete = () => {
+        if (settled) return
+        settled = true
+        if (failure) reject(failure)
+        else resolve()
+      }
+      transaction.onerror = () =>
+        rejectOnce(failure ?? transaction.error ?? new Error('IndexedDB transaction failed'))
+      transaction.onabort = () =>
+        rejectOnce(failure ?? transaction.error ?? new Error('IndexedDB transaction aborted'))
+
+      try {
+        operation(transaction, fail)
+      } catch (error) {
+        fail(error)
+      }
+    })
+  }
+
   public async delete(store: StoreName, key: string): Promise<void> {
     const db = await this.openDB()
     return new Promise((resolve, reject) => {
@@ -323,6 +385,10 @@ class InkStudioDB {
 }
 
 export const db = new InkStudioDB()
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error ?? 'Unknown IndexedDB error'))
+}
 
 // 轻量唯一 ID：前缀 + 时间基 + 随机串，避免依赖外部库
 export const uid = (prefix = 'id'): string =>

@@ -1,0 +1,115 @@
+name: Architecture Gates
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: architecture-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  architecture-gates:
+    name: Runtime and Desktop architecture evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Desktop
+        uses: actions/checkout@v4
+        with:
+          path: inkpi-desktop
+
+      - name: Checkout upstream InkPi Runtime
+        uses: actions/checkout@v4
+        with:
+          repository: MeiSiristhebest/inkpi
+          path: inkpi
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.0
+
+      - name: Install Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: |
+            inkpi/pnpm-lock.yaml
+            inkpi-desktop/pnpm-lock.yaml
+
+      - name: Install Runtime dependencies
+        run: pnpm --dir inkpi install --frozen-lockfile --ignore-scripts
+
+      - name: Build Runtime packages
+        run: pnpm --dir inkpi run build
+
+      - name: Install Desktop dependencies
+        run: pnpm --dir inkpi-desktop install --frozen-lockfile --ignore-scripts
+
+      - name: Architecture AI boundary
+        run: pnpm --dir inkpi-desktop exec vitest run src/architecture-ai.test.ts
+
+      - name: Desktop to Daemon vertical slices
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/adapters/desktopDaemonIntegration.test.ts
+          src/adapters/desktopDaemonVerticalSlices.test.ts
+          src/adapters/desktopFiveSliceGate.test.ts
+
+      - name: Desktop to Daemon skill runtime
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/adapters/daemonSkillRuntime.test.ts
+          src/adapters/daemonSkillRuntime.integration.test.ts
+
+      - name: Editor AI chain
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/adapters/editor-ai-chain.integration.test.ts
+
+      - name: Canonical content SourceMap boundaries
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/domain/content/sourceMap.boundaries.test.ts
+
+      - name: StoryState projection and reducer
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/domain/story/storyState.test.ts
+          src/domain/story/storyStateReducer.test.ts
+
+      - name: StoryState plugin projection
+        if: ${{ hashFiles('inkpi-desktop/src/domain/story/pluginProjection.test.ts') != '' }}
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/domain/story/pluginProjection.test.ts
+
+      - name: Domain sync
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/domain/sync/domainSync.test.ts
+          src/domain/sync/domainSyncService.test.ts
+          src/adapters/daemonDomainSyncRemote.test.ts
+          src/hooks/useAiConversation.offline.test.tsx
+
+      - name: Restart reliability
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/adapters/desktopAppRestartEvidence.test.ts
+          src/adapters/desktopTaskRecoveryBootstrap.test.ts
+          src/phase21-22-reliability.test.ts
+
+      - name: TypeScript project check
+        run: pnpm --dir inkpi-desktop exec tsc -b
+
+      - name: Lint Desktop
+        run: pnpm --dir inkpi-desktop run lint

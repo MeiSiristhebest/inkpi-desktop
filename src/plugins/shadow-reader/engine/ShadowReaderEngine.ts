@@ -21,28 +21,25 @@ import type { ShadowSimulationResult } from '../types'
  * 5. 设定考据党 (lore_scholar): 抓世界观常识与等级称谓
  *
  * 演进设计：
- * 支持 Prompt 导向的 Agentic 认知推理，与基于段落语义上下文切片的自适应动态弹幕生成。
+ * 支持统一任务运行时的认知推理输入，与基于段落语义上下文切片的自适应动态弹幕生成。
  */
 export class ShadowReaderEngine {
   /**
-   * 生成大模型读者推演结构化 Prompt（用于通过 AiAssistant 端口实现真正的大模型读者群像推演）
+   * 生成统一任务运行时使用的结构化读者模拟输入。
    */
-  public static buildAiPrompt(chapterTitle: string, chapterText: string): string {
-    return [
-      `【指令：全真读者群像心智模拟】`,
-      `你是一位拥有十年网文阅读经验的读者群推演专家，请代入 5 大典型网文读者肖像对以下章节段落进行真实、具有网感、切合上下文的段评推演：`,
-      `1. 暴躁爽感老哥 (power_fantasy)：对主角憋屈、圣母、放虎归山极度敏感`,
-      `2. 纯爱战神CP粉 (romance_shipper)：对虐女、送女、移情别恋警觉`,
-      `3. 杠精大毒舌 (critical_toxic)：抓战力崩溃、时空逻辑硬伤`,
-      `4. 大侦探考据党 (plot_detective)：分析剧情细节、伏笔与暗线推演`,
-      `5. 催更吃瓜群众 (pleasure_seeker)：高潮喝彩、期待后续`,
-      ``,
-      `章节：《${chapterTitle || '未命名章节'}》`,
-      `正文片段：`,
-      chapterText.slice(0, 2000),
-      ``,
-      `请按 JSON 数组格式输出 5-8 条段评：[{ "paragraphIndex": number, "persona": string, "authorName": string, "commentText": string, "sentiment": "rage"|"applause"|"suspicious"|"excited", "isToxic": boolean }]`,
-    ].join('\n')
+  public static buildAnalysisInput(chapterTitle: string, chapterText: string): Record<string, unknown> {
+    return {
+      chapterTitle: chapterTitle || '未命名章节',
+      chapterText: chapterText.slice(0, 2000),
+      personas: [
+        'power_fantasy',
+        'romance_shipper',
+        'critical_toxic',
+        'plot_detective',
+        'pleasure_seeker',
+      ],
+      outputFields: ['paragraphIndex', 'persona', 'authorName', 'commentText', 'sentiment', 'isToxic'],
+    }
   }
 
   public static simulate(

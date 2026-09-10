@@ -19,6 +19,9 @@ import type {
   ChapterMutationResult,
   DesktopPluginHostContextValue,
 } from '../types/pluginHost'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
+import { createPluginAnalysisTask, taskResultText } from '../ai'
+import { resolvePluginContextProvider } from './pluginDefinitions'
 
 export const DesktopPluginHostContext = createContext<DesktopPluginHostContextValue | null>(null)
 
@@ -30,7 +33,7 @@ export interface DesktopPluginHostProviderProps {
   chapters?: ChapterRecord[]
   onChapterUpdate?: (updated: ChapterRecord) => void
   onRefreshHierarchy?: () => Promise<void>
-  onAiPrompt?: (text: string, chapterId?: string) => void
+  onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   isAiConnected?: boolean
   children: ReactNode
 }
@@ -43,7 +46,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
   chapters = [],
   onChapterUpdate,
   onRefreshHierarchy,
-  onAiPrompt,
+  onAiTask,
   isAiConnected = false,
   children,
 }) => {
@@ -79,19 +82,44 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
   }, [onRefreshHierarchy])
 
   const aiAssistant = useMemo(() => {
-    if (!onAiPrompt) return undefined
+    if (!onAiTask) return undefined
+    const runTask = async (task: AiTask): Promise<TaskResult | null> => {
+      return onAiTask(task)
+    }
     return {
       isAvailable: !!isAiConnected,
-      prompt: async (instruction: string): Promise<string | null> => {
+      runTask,
+      runPluginTask: async (
+        pluginId: string,
+        input: unknown,
+        metadata?: Record<string, unknown>,
+      ): Promise<string | null> => {
         try {
-          onAiPrompt(instruction, activeChapter?.id)
-          return 'AI 请求已发送至副驾驶'
+          const contextProvider = resolvePluginContextProvider(pluginId)
+          const context = contextProvider
+            ? await contextProvider({
+                projectId,
+                currentText: typeof input === 'string' ? input : JSON.stringify(input) ?? '',
+                activeChapterId: activeChapter?.id,
+              })
+            : undefined
+          return taskResultText(
+            await runTask(
+              createPluginAnalysisTask({
+                pluginId,
+                input,
+                documentId: activeChapter?.id,
+                context,
+                metadata,
+              }),
+            ),
+          )
         } catch {
           return null
         }
       },
     }
-  }, [onAiPrompt, isAiConnected, activeChapter?.id])
+  }, [onAiTask, isAiConnected, projectId, activeChapter?.id])
 
   const mutateActiveChapter = useCallback(
     async (patch: ChapterMutationPatch): Promise<ChapterMutationResult> => {

@@ -1,4 +1,5 @@
 import type { ChapterEmotionalScore, GoldenThreeDiagnostic, ExpectationContract } from '../types'
+import { semanticTextFromContent } from '../../../domain/content'
 
 const SUPPRESSION_CUES = [
   '打压',
@@ -78,28 +79,20 @@ const HOOK_CUES = [
 
 export class ExpectationEngine {
   /**
-   * 生成针对黄金三章与商业期待感的大语言模型深度诊断 Prompt
+   * 生成统一任务运行时使用的结构化黄金三章诊断输入。
    */
-  public static buildAiGoldenThreePrompt(params: {
+  public static buildAnalysisInput(params: {
     chapters: Array<{ order: number; title: string; content: string }>
-  }): string {
-    return [
-      `【指令：商业网络小说黄金三章高维心智体检】`,
-      `你是一位资深网文总编与爽点期待感把控专家，请对前三章内容进行深度文学与商业化评审：`,
-      params.chapters
-        .map(
-          (c) => `第${c.order}章《${c.title}》：\n${c.content.slice(0, 1500)}\n-------------------`,
-        )
-        .join('\n'),
-      ``,
-      `请从 4 个核心维度给出专业诊断：`,
-      `1. 核心金手指/金手指兑现速度 (Golden Finger Clarity)`,
-      `2. 压抑-释放比率与打压阻力设计 (Suppression vs Payoff Balance)`,
-      `3. 核心驱动力与长期期待伏笔 (Long-term Hooks & Curiosity)`,
-      `4. 读者弃书风险点与改稿建议 (Drop-off Risk & Polish Advice)`,
-      ``,
-      `请按 JSON 格式输出：{ "score": number, "claritySummary": string, "hookLevel": "excellent"|"fair"|"weak", "sprAnalysis": string, "actionableAdvice": string[] }`,
-    ].join('\n')
+  }): Record<string, unknown> {
+    return {
+      chapters: params.chapters.map((chapter) => ({
+        order: chapter.order,
+        title: chapter.title,
+        content: semanticTextFromContent(`expectation-chapter-${chapter.order}`, chapter.content).slice(0, 1500),
+      })),
+      rubric: ['golden-finger-clarity', 'suppression-payoff-balance', 'long-term-hooks', 'drop-off-risk'],
+      outputFields: ['score', 'claritySummary', 'hookLevel', 'sprAnalysis', 'actionableAdvice'],
+    }
   }
 
   /**

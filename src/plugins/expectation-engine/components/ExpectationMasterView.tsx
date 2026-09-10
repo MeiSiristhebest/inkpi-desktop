@@ -52,27 +52,13 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     }
   }
 
-  // 真实 AI 爽点节奏与多巴胺契约长线排查
+  // AI 爽点节奏与契约长线排查
   const handleAiExpectationAudit = () => {
     if (contracts.length === 0) return
-    const contractSummaries = contracts
-      .map(
-        (c) =>
-          `爽点期待【${c.title}】(强度 ${c.intensity}星)：立项于第 ${c.plantedChapter} 章，承诺兑现第 ${c.promisedResolveChapter} 章，状态：${c.status}`,
-      )
-      .join('\n')
+    const analysisInput = { contracts: contracts.map((contract) => ({ ...contract })) }
 
-    const prompt = `请作为网络小说爽点与期待感专家，对当前作品的【多巴胺爽点契约与压抑释放比（SPR）】进行长线节奏排查：
-【当前签约的爽点契约清单】：
-${contractSummaries}
-
-请诊断：
-1. 压抑蓄势是否过长：是否有高强度的爽点契约拖延超过 20 章没有兑现，导致读者积怨甚至判定为“无脑虐主”；
-2. 密集高潮是否导致审美疲劳：是否有短时间内连续兑现大爽点后突然进入漫长剧情真空期；
-3. 给出后续剧情的最佳爽点释放时刻表（哪一章该给小甜头，哪一章引爆终极装逼打脸高潮）。`
-
-    if (hostContext?.aiAssistant?.prompt) {
-      hostContext.aiAssistant.prompt(prompt)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('expectation-engine', analysisInput)
     }
   }
 
