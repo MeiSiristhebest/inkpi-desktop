@@ -1,4 +1,10 @@
-import type { AiTask, TaskExecutionSnapshot, TaskResult } from '@inkpi/protocol'
+import type {
+  AiTask,
+  CacheInvalidateResult,
+  CacheStatus,
+  TaskExecutionSnapshot,
+  TaskResult,
+} from '@inkpi/protocol'
 import { describe, expect, it, vi } from 'vitest'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import type { RpcClient } from '../ports/aiGateway'
@@ -257,5 +263,40 @@ describe('createDaemonAiAssistant instruction registration', () => {
 
     await expect(assistant.getTaskExecution?.('execution-view')).resolves.toEqual(execution)
     expect(calls).toEqual([{ method: 'task.execution', params: { taskId: 'execution-view' } }])
+  })
+
+  it('exposes Runtime cache status and scoped invalidation through the assistant port', async () => {
+    const status: CacheStatus = {
+      version: 1,
+      stats: {
+        provider: { hits: 3, misses: 1, evictions: 0, invalidations: 0 },
+        context: { hits: 2, misses: 2, evictions: 1, invalidations: 0 },
+        retrieval: { hits: 1, misses: 4, evictions: 0, invalidations: 0 },
+      },
+    }
+    const invalidated: CacheInvalidateResult = { accepted: true, status }
+    const calls: Array<{ method: string; params: unknown }> = []
+    const client: RpcClient = {
+      request: async <T>(method: string, params?: unknown): Promise<T> => {
+        calls.push({ method, params })
+        if (method === 'cache.status') return status as T
+        if (method === 'cache.invalidate') return invalidated as T
+        throw new Error(`Unexpected RPC method: ${method}`)
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const assistant = createDaemonAiAssistant(client)
+
+    await expect(assistant.getCacheStatus?.()).resolves.toEqual(status)
+    await expect(
+      assistant.invalidateCache?.({ reason: 'revision', projectRevision: 7, layers: ['context'] }),
+    ).resolves.toEqual(invalidated)
+    expect(calls).toEqual([
+      { method: 'cache.status', params: undefined },
+      {
+        method: 'cache.invalidate',
+        params: { reason: 'revision', projectRevision: 7, layers: ['context'] },
+      },
+    ])
   })
 })

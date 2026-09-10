@@ -1,5 +1,8 @@
 import type {
   AiTask,
+  CacheInvalidateParams,
+  CacheInvalidateResult,
+  CacheStatus,
   TaskCancelResult,
   TaskExecutionSnapshot,
   TaskResult,
@@ -81,6 +84,9 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
 
     getTaskExecution: (taskId: string) =>
       client.request<TaskExecutionSnapshot>('task.execution', { taskId }),
+    getCacheStatus: () => client.request<CacheStatus>('cache.status'),
+    invalidateCache: (params: CacheInvalidateParams) =>
+      client.request<CacheInvalidateResult>('cache.invalidate', params),
 
     runContinuityAudit: async (input, options = {}) => {
       await ensurePluginInstructionsRegistered()

@@ -1,4 +1,12 @@
-import type { AiTask, TaskExecutionSnapshot, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
+import type {
+  AiTask,
+  CacheInvalidateParams,
+  CacheInvalidateResult,
+  CacheStatus,
+  TaskExecutionSnapshot,
+  TaskResult,
+  TaskStatusSnapshot,
+} from '@inkpi/protocol'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tasks/taskFactories'
 import type {
   ProjectDistillationInput,
@@ -39,6 +47,9 @@ export interface AiAssistant {
   ): Promise<TaskResult | null>
   /** Public durable execution view, including steps, attempts and resume token. */
   getTaskExecution?(taskId: string): Promise<TaskExecutionSnapshot>
+  /** Cross-process Runtime cache counters and invalidation boundary. */
+  getCacheStatus?(): Promise<CacheStatus>
+  invalidateCache?(params: CacheInvalidateParams): Promise<CacheInvalidateResult>
   /** Optional daemon projection capability for proposal review state. */
   proposalSyncRemote?: ProposalSyncRemote
   runContinuityAudit?(
