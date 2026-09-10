@@ -21,7 +21,9 @@ class MemoryDomainChangeStore implements AuthoritativeDomainChangeStore {
 
   async list(workspace: string, afterRevision = 0): Promise<DomainChangeSet[]> {
     return this.records
-      .filter((changeSet) => changeSet.workspaceId === workspace && changeSet.revision > afterRevision)
+      .filter(
+        (changeSet) => changeSet.workspaceId === workspace && changeSet.revision > afterRevision,
+      )
       .sort((left, right) => left.revision - right.revision)
       .map(cloneChangeSet)
   }
@@ -85,11 +87,13 @@ function snapshot(changeSets: DomainChangeSet[]): DomainProjectionSnapshot {
   }
 }
 
-function remoteWith(options: {
-  snapshots?: DomainProjectionSnapshot[]
-  pulls?: DomainChangeSet[][]
-  pushes?: DomainProjectionApplyResult[]
-} = {}): DomainSyncRemote {
+function remoteWith(
+  options: {
+    snapshots?: DomainProjectionSnapshot[]
+    pulls?: DomainChangeSet[][]
+    pushes?: DomainProjectionApplyResult[]
+  } = {},
+): DomainSyncRemote {
   const snapshots = options.snapshots ?? [snapshot([])]
   const pulls = options.pulls ?? [[]]
   const pushes = options.pushes ?? []
@@ -136,7 +140,13 @@ describe('DomainSyncService recovery', () => {
       snapshots: [snapshot([]), remoteSnapshot],
       pulls: [[], []],
       pushes: [
-        { accepted: false, duplicate: false, workspaceId, revision: 0, reason: 'revision-conflict' },
+        {
+          accepted: false,
+          duplicate: false,
+          workspaceId,
+          revision: 0,
+          reason: 'revision-conflict',
+        },
       ],
     })
 

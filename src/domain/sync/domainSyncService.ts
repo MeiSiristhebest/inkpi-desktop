@@ -1,4 +1,8 @@
-import type { DomainProjectionSnapshot, DomainChangeSet, DomainProjectionApplyResult } from '@inkpi/protocol'
+import type {
+  DomainProjectionSnapshot,
+  DomainChangeSet,
+  DomainProjectionApplyResult,
+} from '@inkpi/protocol'
 import type { AuthoritativeDomainChangeStore } from './domainChangeStore'
 
 export interface DomainSyncRemote {
@@ -42,7 +46,9 @@ export class DomainSyncService {
     recoveredBeforeAttempt: boolean,
   ): Promise<DomainSyncResult> {
     if (recoveryAttempt > this.maxRecoveryAttempts) {
-      throw new Error(`Domain sync did not converge after ${this.maxRecoveryAttempts} recovery attempts`)
+      throw new Error(
+        `Domain sync did not converge after ${this.maxRecoveryAttempts} recovery attempts`,
+      )
     }
     let remoteSnapshot = await this.remote.snapshotDomain(workspaceId)
     let localRevision = await this.store.latestRevision(workspaceId)
@@ -67,7 +73,10 @@ export class DomainSyncService {
       if (applied.accepted && !applied.duplicate) pushed += 1
     }
 
-    const incoming = await this.remote.pullDomainChangeSets(workspaceId, await this.store.latestRevision(workspaceId))
+    const incoming = await this.remote.pullDomainChangeSets(
+      workspaceId,
+      await this.store.latestRevision(workspaceId),
+    )
     for (const changeSet of incoming) {
       const current = await this.store.latestRevision(workspaceId)
       if (changeSet.baseRevision !== current || changeSet.revision !== current + 1) {
