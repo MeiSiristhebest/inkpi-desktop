@@ -182,6 +182,23 @@ describe('DomainSyncService recovery', () => {
       'remote-3',
     ])
   })
+
+  it('ignores an idempotent duplicate pull without snapshot recovery', async () => {
+    const store = new MemoryDomainChangeStore()
+    const first = changeSet('remote-1', 0)
+    await store.append(first)
+    const remote = remoteWith({ snapshots: [snapshot([first])], pulls: [[first]] })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).resolves.toMatchObject({
+      workspaceId,
+      pushed: 0,
+      pulled: 0,
+      revision: 1,
+      recovered: false,
+    })
+    expect(store.restoreCalls).toHaveLength(0)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual(['remote-1'])
+  })
 })
 
 function cloneChangeSet(changeSet: DomainChangeSet): DomainChangeSet {

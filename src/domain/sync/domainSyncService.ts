@@ -53,6 +53,7 @@ export class DomainSyncService {
     let remoteSnapshot = await this.remote.snapshotDomain(workspaceId)
     let localRevision = await this.store.latestRevision(workspaceId)
     let pushed = 0
+    let pulled = 0
     let recovered = recoveredBeforeAttempt
 
     if (remoteSnapshot.revision > localRevision) {
@@ -79,6 +80,25 @@ export class DomainSyncService {
     )
     for (const changeSet of incoming) {
       const current = await this.store.latestRevision(workspaceId)
+      if (changeSet.revision <= current) {
+        const localAtRevision = (await this.store.list(workspaceId, changeSet.revision - 1)).find(
+          (candidate) => candidate.revision === changeSet.revision,
+        )
+        if (
+          localAtRevision &&
+          localAtRevision.id === changeSet.id &&
+          localAtRevision.checksum === changeSet.checksum
+        ) {
+          // A remote retry may replay a change set already present locally.
+          // The authoritative log is idempotent, so acknowledge it without
+          // mutating the local projection or forcing snapshot recovery.
+          continue
+        }
+        const snapshot = await this.remote.snapshotDomain(workspaceId)
+        await this.store.restoreSnapshot(snapshot)
+        recovered = true
+        return this.syncAttempt(workspaceId, recoveryAttempt + 1, true)
+      }
       if (changeSet.baseRevision !== current || changeSet.revision !== current + 1) {
         const snapshot = await this.remote.snapshotDomain(workspaceId)
         await this.store.restoreSnapshot(snapshot)
@@ -86,11 +106,12 @@ export class DomainSyncService {
         return this.syncAttempt(workspaceId, recoveryAttempt + 1, true)
       }
       await this.store.append(changeSet)
+      pulled += 1
     }
     return {
       workspaceId,
       pushed,
-      pulled: incoming.length,
+      pulled,
       revision: await this.store.latestRevision(workspaceId),
       recovered,
     }
