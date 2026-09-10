@@ -28,6 +28,7 @@ export interface AiProposal {
   createdAt: number
   updatedAt?: number
   sourceHash?: string
+  evidence?: DomainProposalEvidence[]
   inversePatches?: TextPatch[]
   committedRevision?: number
 }
@@ -795,6 +796,7 @@ function proposalsEqual(value: unknown, expected: AiProposal): boolean {
     candidate.createdAt === expected.createdAt &&
     candidate.updatedAt === expected.updatedAt &&
     candidate.sourceHash === expected.sourceHash &&
+    evidenceEqual(candidate.evidence, expected.evidence) &&
     candidate.committedRevision === expected.committedRevision &&
     candidate.explanation === expected.explanation &&
     patchesEqual(candidate.patches, expected.patches) &&
@@ -820,6 +822,12 @@ function patchesEqual(left: TextPatch[] | undefined, right: TextPatch[] | undefi
       patch.text === other.text
     )
   })
+}
+
+function evidenceEqual(left: Evidence[] | undefined, right: Evidence[] | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right
+  if (left.length !== right.length) return false
+  return left.every((evidence, index) => JSON.stringify(evidence) === JSON.stringify(right[index]))
 }
 
 function toError(error: unknown): Error {
@@ -923,6 +931,7 @@ function cloneProposal(proposal: AiProposal): AiProposal {
   return {
     ...proposal,
     patches: proposal.patches.map((patch) => ({ ...patch })),
+    evidence: proposal.evidence?.map((evidence) => ({ ...evidence })),
     inversePatches: proposal.inversePatches?.map((patch) => ({ ...patch })),
   }
 }

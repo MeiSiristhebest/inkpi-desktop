@@ -221,6 +221,7 @@ function cloneProposal(proposal: AiProposal): AiProposal {
   return {
     ...proposal,
     patches: proposal.patches.map((patch) => ({ ...patch })),
+    evidence: proposal.evidence?.map((evidence) => ({ ...evidence })),
     inversePatches: proposal.inversePatches?.map((patch) => ({ ...patch })),
   }
 }

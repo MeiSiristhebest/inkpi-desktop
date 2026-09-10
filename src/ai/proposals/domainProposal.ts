@@ -51,6 +51,7 @@ export function aiProposalToDomainProposal(
   evidence?: DomainProposalEvidence[],
 ): DomainProposal {
   const patches = requireTextPatches(proposal.patches, proposal.documentId)
+  const proposalEvidence = evidence ?? proposal.evidence
 
   const domainProposal: DomainProposal = {
     id: proposal.id,
@@ -61,7 +62,7 @@ export function aiProposalToDomainProposal(
     patch: patches,
     ...(proposal.sourceHash === undefined ? {} : { sourceHash: proposal.sourceHash }),
     ...(proposal.explanation === undefined ? {} : { reason: proposal.explanation }),
-    ...(evidence === undefined ? {} : { evidence: evidence.map(cloneEvidence) }),
+    ...(proposalEvidence === undefined ? {} : { evidence: proposalEvidence.map(cloneEvidence) }),
   }
   validateDomainProposal(domainProposal)
   return cloneDomainProposal(domainProposal)
@@ -98,6 +99,9 @@ export function domainProposalToAiProposal(
     createdAt: options.createdAt,
     ...(options.updatedAt === undefined ? {} : { updatedAt: options.updatedAt }),
     ...(proposal.sourceHash === undefined ? {} : { sourceHash: proposal.sourceHash }),
+    ...(proposal.evidence === undefined
+      ? {}
+      : { evidence: proposal.evidence.map(cloneEvidence) }),
     ...(inversePatches === undefined ? {} : { inversePatches }),
     ...(options.committedRevision === undefined
       ? {}

@@ -60,7 +60,10 @@ describe('Desktop DomainProposal protocol boundary', () => {
         status: textProposal.status,
         createdAt: textProposal.createdAt,
       }),
-    ).toEqual(textProposal)
+    ).toEqual({
+      ...textProposal,
+      evidence: [{ documentId: 'chapter-1', semanticFrom: 0, semanticTo: 1, excerpt: '原文' }],
+    })
   })
 
   it('rejects malformed evidence before a DomainProposal can be serialized or restored', () => {
@@ -81,5 +84,19 @@ describe('Desktop DomainProposal protocol boundary', () => {
         patches: [{ documentId: 'chapter-1', from: 2, to: 1, text: '坏' }],
       }),
     ).toThrow('Text proposal patch at index 0 is invalid')
+  })
+
+  it('preserves evidence when a proposal crosses the Desktop text bridge', () => {
+    const evidence = [{ documentId: 'chapter-1', blockId: 'block-1', excerpt: '原文' }]
+    const withEvidence = { ...textProposal, evidence }
+    const domainProposal = aiProposalToDomainProposal(withEvidence)
+
+    expect(domainProposal.evidence).toEqual(evidence)
+    expect(
+      domainProposalToAiProposal(domainProposal, {
+        status: withEvidence.status,
+        createdAt: withEvidence.createdAt,
+      }).evidence,
+    ).toEqual(evidence)
   })
 })
