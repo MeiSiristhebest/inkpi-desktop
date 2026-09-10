@@ -286,7 +286,7 @@ function pluginEvidence(pluginId: FirstPartyPluginId) {
   const files = existsSync(directory) ? implementationFiles(directory) : []
   const source = stripComments(files.map((file) => readFileSync(file, 'utf8')).join('\n'))
   const taskInvocations = [
-    ...source.matchAll(/\brunAnalysis\s*\(\s*['"`]([^'"`]+)['"`]/g),
+    ...source.matchAll(/\brunPluginTask\s*\(\s*['"`]([^'"`]+)['"`]/g),
   ].map((match) => match[1])
 
   return {
@@ -358,14 +358,14 @@ function collectLegacyViolations(): string[] {
       violations.push(`${relativeToDesktop(file)} -> legacy session/agent RPC`)
     }
     if (
-      /setTimeout\s*\(\s*(?:async\s*)?\(\)\s*=>[\s\S]{0,320}\b(?:runAnalysis|runTask|generateText|generateObject|streamAi)\s*\(/.test(
+      /setTimeout\s*\(\s*(?:async\s*)?\(\)\s*=>[\s\S]{0,320}\b(?:runPluginTask|runTask|generateText|generateObject|streamAi)\s*\(/.test(
         source,
       )
     ) {
       violations.push(`${relativeToDesktop(file)} -> setTimeout AI mock path`)
     }
     if (
-      /(?:innerHTML|dangerouslySetInnerHTML|DOMParser)[^\n]*(?:runAnalysis|runTask|aiAssistant)|(?:runAnalysis|runTask|aiAssistant)[^\n]*(?:innerHTML|dangerouslySetInnerHTML|DOMParser)/.test(
+      /(?:innerHTML|dangerouslySetInnerHTML|DOMParser)[^\n]*(?:runPluginTask|runTask|aiAssistant)|(?:runPluginTask|runTask|aiAssistant)[^\n]*(?:innerHTML|dangerouslySetInnerHTML|DOMParser)/.test(
         source,
       )
     ) {
