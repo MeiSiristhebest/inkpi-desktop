@@ -156,8 +156,9 @@ describe('useAiConversation task recovery', () => {
       syncDomain,
     } satisfies AiAssistant
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const store = makeStore()
     const hook = renderHook(() => useAiConversation('ws://daemon', null, 'project-1', {
-      taskRecoveryStore: makeStore(),
+      taskRecoveryStore: store,
       clock: fixedClock,
     }))
 

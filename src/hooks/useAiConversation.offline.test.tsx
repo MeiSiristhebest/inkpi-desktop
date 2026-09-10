@@ -41,8 +41,9 @@ describe('useAiConversation offline recovery', () => {
       .mockResolvedValueOnce({ client: null, connected: false })
       .mockResolvedValueOnce({ client: assistant, connected: true })
 
+    const store = makeStore()
     const hook = renderHook(() => useAiConversation('ws://daemon', null, 'project-1', {
-      taskRecoveryStore: makeStore(),
+      taskRecoveryStore: store,
     }))
 
     await waitFor(() => expect(connectToDaemon).toHaveBeenCalledTimes(1))
