@@ -279,7 +279,7 @@ TaskRouter observer 和 task.event 可记录 taskId、kind、状态、时间、p
 
 ## 11. 插件与 Legacy 状态
 
-src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id；src/ai/tasks/pluginRuntimeCatalog.ts 为 44 个条目逐一标注 pure-local、ai-task、context-provider、tool、workflow、ui-only 或 hybrid 边界。当前有 22 个插件组件通过 PluginHostContext.aiAssistant.runAnalysis 生成 plugin.<id>.analysis 任务，其余条目也已显式分类和指向 Desktop、本地引擎、Story Context、Extension Tool 或 Runtime Workflow。`src/ai/tasks/pluginRuntimeMigration.test.ts` 对 44 个目录、定义、运行时分类、任务/Context Provider 证据和 legacy 入口扫描做一致性校验；其中 4 个 Extension Tool 和 2 个 Runtime Workflow 仍是明确的 classification-only 目标。
+src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id；src/ai/tasks/pluginRuntimeCatalog.ts 为 44 个条目逐一标注 pure-local、ai-task、context-provider、tool、workflow、ui-only 或 hybrid 边界。当前 22 个 AI 插件组件通过 PluginHostContext.aiAssistant.runPluginTask 生成 plugin.<id>.analysis 任务，再由宿主映射到通用 runTask；其余条目也已显式分类和指向 Desktop、本地引擎、Story Context、Extension Tool 或 Runtime Workflow。`src/ai/tasks/pluginRuntimeMigration.test.ts` 对 44 个目录、定义、运行时分类、任务/Context Provider 证据和 legacy 入口扫描做一致性校验；其中 4 个 Extension Tool 和 2 个 Runtime Workflow 仍是明确的 classification-only 目标。
 
 src/architecture-ai.test.ts 已覆盖：
 
