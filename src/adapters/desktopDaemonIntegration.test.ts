@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import type { InstructionRegistryStatus, TaskStatusSnapshot } from '@inkpi/protocol'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { semanticDocumentFromText } from '../domain/content'
+import { createStoryState } from '../domain/story'
 import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
 import { createPluginAnalysisTask } from '../ai/tasks/pluginTasks'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
@@ -151,6 +152,34 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
             fixture: 'desktop-daemon-harness',
             instructionIds: expect.arrayContaining(['creative.continue']),
           },
+        },
+      })
+    } finally {
+      await client.close()
+    }
+  })
+
+  it('carries the authoritative StoryState through the real context providers', async () => {
+    const { client, assistant } = await connectAssistant()
+    try {
+      const task = createContinueTask({
+        taskId: 'desktop-daemon-story-context',
+        document: semanticDocumentFromText('desktop-story-context-doc', '她把笔停在最后一个字上。'),
+        storyState: createStoryState(12),
+        targetCharacters: 40,
+        instruction: '保留故事状态后等待作者确认。',
+      })
+
+      const result = await assistant.runTask(task, { pollIntervalMs: 10 })
+
+      expect(result).toMatchObject({
+        taskId: task.id,
+        kind: task.kind,
+        status: 'waiting-user',
+        provenance: {
+          fixture: 'desktop-daemon-harness',
+          contextSources: expect.arrayContaining(['creative.document', 'creative.story']),
+          contextFingerprint: expect.any(String),
         },
       })
     } finally {

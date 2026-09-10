@@ -17,20 +17,12 @@ daemon.getTaskRouter().registry.register({
       return {
         status: 'waiting-user',
         output: { format: 'text', text: 'desktop-daemon-fixture:waiting-user' },
-        provenance: {
-          fixture: 'desktop-daemon-harness',
-          trace: { reasoning: 'private reasoning must not cross the daemon boundary' },
-          calls: [{ rawThinking: 'private trace must not be persisted' }],
-        },
+        provenance: fixtureProvenance(context),
       }
     }
     return {
       output: { format: 'text', text: 'desktop-daemon-fixture:completed' },
-      provenance: {
-        fixture: 'desktop-daemon-harness',
-        trace: { reasoning: 'private reasoning must not cross the daemon boundary' },
-        calls: [{ rawThinking: 'private trace must not be persisted' }],
-      },
+      provenance: fixtureProvenance(context),
     }
   },
 })
@@ -79,4 +71,14 @@ function findFreePort() {
       })
     })
   })
+}
+
+function fixtureProvenance(context) {
+  return {
+    fixture: 'desktop-daemon-harness',
+    contextSources: context.context.fragments.map((fragment) => fragment.source),
+    contextFingerprint: context.context.fingerprint,
+    trace: { reasoning: 'private reasoning must not cross the daemon boundary' },
+    calls: [{ rawThinking: 'private trace must not be persisted' }],
+  }
 }
