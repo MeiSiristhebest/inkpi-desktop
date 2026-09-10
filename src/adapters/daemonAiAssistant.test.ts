@@ -1,4 +1,4 @@
-import type { AiTask, TaskResult } from '@inkpi/protocol'
+import type { AiTask, TaskExecutionSnapshot, TaskResult } from '@inkpi/protocol'
 import { describe, expect, it, vi } from 'vitest'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import type { RpcClient } from '../ports/aiGateway'
@@ -212,5 +212,45 @@ describe('createDaemonAiAssistant instruction registration', () => {
     await expect(assistant.steerTask?.('task-1', { direction: '收束' })).resolves.toBe(true)
     await expect(assistant.resumeTask?.('task-1')).resolves.toBeUndefined()
     expect(calls).toEqual(['task.steer', 'task.resume'])
+  })
+
+  it('exposes the durable task execution view through the semantic assistant port', async () => {
+    const execution: TaskExecutionSnapshot = {
+      task: task('execution-view'),
+      snapshot: {
+        taskId: 'execution-view',
+        kind: 'plugin.demo.analysis',
+        status: 'checkpointed',
+        checkpoint: { step: 'draft', updatedAt: 42 },
+      },
+      attempts: 2,
+      updatedAt: 42,
+      steps: [
+        {
+          id: 'step-1',
+          runId: 'run-1',
+          step: 'draft',
+          status: 'checkpointed',
+        },
+      ],
+      resumeToken: {
+        taskId: 'execution-view',
+        checkpointStep: 'draft',
+        issuedAt: 42,
+      },
+    }
+    const calls: Array<{ method: string; params: unknown }> = []
+    const client: RpcClient = {
+      request: async <T>(method: string, params?: unknown): Promise<T> => {
+        calls.push({ method, params })
+        if (method === 'task.execution') return execution as T
+        throw new Error(`Unexpected RPC method: ${method}`)
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const assistant = createDaemonAiAssistant(client)
+
+    await expect(assistant.getTaskExecution?.('execution-view')).resolves.toEqual(execution)
+    expect(calls).toEqual([{ method: 'task.execution', params: { taskId: 'execution-view' } }])
   })
 })

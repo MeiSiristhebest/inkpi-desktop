@@ -1,6 +1,7 @@
 import type {
   AiTask,
   TaskCancelResult,
+  TaskExecutionSnapshot,
   TaskResult,
   TaskStatusSnapshot,
   TaskSubmitResult,
@@ -49,6 +50,7 @@ import {
 export interface CreativeTaskGateway {
   submitTask(task: AiTask): Promise<TaskSubmitResult>
   getTaskStatus(taskId: string): Promise<TaskStatusSnapshot>
+  getTaskExecution?(taskId: string): Promise<TaskExecutionSnapshot>
   cancelTask(taskId: string): Promise<TaskCancelResult>
   steerTask?(taskId: string, input: unknown): Promise<{ accepted: boolean }>
   resumeTask?(taskId: string): Promise<TaskSubmitResult>

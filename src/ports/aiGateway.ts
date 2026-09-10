@@ -1,8 +1,5 @@
-import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
-import type {
-  ContinuityAuditTaskInput,
-  DeepReasoningTaskInput,
-} from '../ai/tasks/taskFactories'
+import type { AiTask, TaskExecutionSnapshot, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
+import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tasks/taskFactories'
 import type {
   ProjectDistillationInput,
   DistillationWorkflowOptions,
@@ -32,12 +29,38 @@ export interface AiGateway {
  * 语义化 AI 助手端口。所有创作请求都通过通用 task.submit 进入 Runtime。
  */
 export interface AiAssistant {
-  runTask(task: AiTask, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<TaskResult | null>
+  runTask(
+    task: AiTask,
+    options?: {
+      signal?: AbortSignal
+      pollIntervalMs?: number
+      onProgress?: (snapshot: TaskStatusSnapshot) => void
+    },
+  ): Promise<TaskResult | null>
+  /** Public durable execution view, including steps, attempts and resume token. */
+  getTaskExecution?(taskId: string): Promise<TaskExecutionSnapshot>
   /** Optional daemon projection capability for proposal review state. */
   proposalSyncRemote?: ProposalSyncRemote
-  runContinuityAudit?(input: ContinuityAuditTaskInput, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<ContinuityFinding[]>
-  runDeepReasoning?(input: DeepReasoningTaskInput, options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void }): Promise<DeepReasoningResult>
-  runDistillationWorkflow?(input: ProjectDistillationInput, options?: DistillationWorkflowOptions): Promise<DistillationWorkflowResult>
+  runContinuityAudit?(
+    input: ContinuityAuditTaskInput,
+    options?: {
+      signal?: AbortSignal
+      pollIntervalMs?: number
+      onProgress?: (snapshot: TaskStatusSnapshot) => void
+    },
+  ): Promise<ContinuityFinding[]>
+  runDeepReasoning?(
+    input: DeepReasoningTaskInput,
+    options?: {
+      signal?: AbortSignal
+      pollIntervalMs?: number
+      onProgress?: (snapshot: TaskStatusSnapshot) => void
+    },
+  ): Promise<DeepReasoningResult>
+  runDistillationWorkflow?(
+    input: ProjectDistillationInput,
+    options?: DistillationWorkflowOptions,
+  ): Promise<DistillationWorkflowResult>
   steerTask?(taskId: string, input: unknown): Promise<boolean>
   resumeTask?(taskId: string): Promise<void>
   syncDomain?(workspaceId: string): Promise<DomainSyncResult>

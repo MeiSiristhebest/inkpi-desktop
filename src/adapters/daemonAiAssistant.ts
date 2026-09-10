@@ -1,10 +1,26 @@
-import type { AiTask, TaskCancelResult, TaskResult, TaskStatusSnapshot, TaskSubmitResult } from '@inkpi/protocol'
+import type {
+  AiTask,
+  TaskCancelResult,
+  TaskExecutionSnapshot,
+  TaskResult,
+  TaskStatusSnapshot,
+  TaskSubmitResult,
+} from '@inkpi/protocol'
 import type { AiAssistant, RpcClient } from '../ports/aiGateway'
-import { CreativeIntelligence, type CreativeTaskGateway } from '../ai/orchestrator/creativeIntelligence'
+import {
+  CreativeIntelligence,
+  type CreativeTaskGateway,
+} from '../ai/orchestrator/creativeIntelligence'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
-import { ContinuityAuditScheduler, ProjectDistillationWorkflow } from '../ai/orchestrator/verticalSlices'
-import { createDaemonDomainSyncRemote, createDaemonProposalSyncRemote } from './daemonDomainSyncRemote'
+import {
+  ContinuityAuditScheduler,
+  ProjectDistillationWorkflow,
+} from '../ai/orchestrator/verticalSlices'
+import {
+  createDaemonDomainSyncRemote,
+  createDaemonProposalSyncRemote,
+} from './daemonDomainSyncRemote'
 import { DomainSyncService } from '../domain/sync/domainSyncService'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { attachProposalSyncRemote } from '../ai/proposals/remoteProposalStore'
@@ -20,8 +36,11 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   const taskGateway: CreativeTaskGateway = {
     submitTask: (task) => client.request<TaskSubmitResult>('task.submit', { task }),
     getTaskStatus: (taskId) => client.request<TaskStatusSnapshot>('task.status', { taskId }),
+    getTaskExecution: (taskId) =>
+      client.request<TaskExecutionSnapshot>('task.execution', { taskId }),
     cancelTask: (taskId) => client.request<TaskCancelResult>('task.cancel', { taskId }),
-    steerTask: (taskId, input) => client.request<{ accepted: boolean }>('task.steer', { taskId, input }),
+    steerTask: (taskId, input) =>
+      client.request<{ accepted: boolean }>('task.steer', { taskId, input }),
     resumeTask: (taskId) => client.request<TaskSubmitResult>('task.resume', { taskId }),
   }
   const creativeIntelligence = new CreativeIntelligence(taskGateway, {
@@ -52,10 +71,16 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   return {
     runTask: async (task: AiTask, options = {}): Promise<TaskResult | null> => {
       await ensurePluginInstructionsRegistered()
-      return attachProposalSyncRemote(await creativeIntelligence.run(task, options), proposalSyncRemote)
+      return attachProposalSyncRemote(
+        await creativeIntelligence.run(task, options),
+        proposalSyncRemote,
+      )
     },
 
     proposalSyncRemote,
+
+    getTaskExecution: (taskId: string) =>
+      client.request<TaskExecutionSnapshot>('task.execution', { taskId }),
 
     runContinuityAudit: async (input, options = {}) => {
       await ensurePluginInstructionsRegistered()
