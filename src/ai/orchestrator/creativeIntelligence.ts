@@ -9,10 +9,12 @@ import type {
 import {
   ContextCache,
   createDeterministicTaskCacheKey,
+  LayeredContextCache,
   serializeKey,
   SharedCacheMetrics,
   type SharedCacheMetricsPort,
   type SharedCacheMetricsSnapshot,
+  type ContextCacheKey,
   type DeterministicTaskCacheKey,
   type TaskCacheKeyDefaults,
 } from '../cache'
@@ -71,6 +73,8 @@ export interface RunTaskOptions {
 
 export interface CreativeIntelligenceOptions extends TaskCacheKeyDefaults {
   cache?: ContextCache<TaskResult>
+  /** Shared three-layer cache. The provider layer is used for task results. */
+  layeredCache?: LayeredContextCache<unknown>
   cacheMetrics?: SharedCacheMetricsPort
   /** Alias for callers that share the metrics port across cache layers. */
   sharedCacheMetrics?: SharedCacheMetricsPort
@@ -91,6 +95,7 @@ export interface CreativeIntelligenceOptions extends TaskCacheKeyDefaults {
 export class CreativeIntelligence {
   private readonly gateway: CreativeTaskGateway
   private readonly cache: ContextCache<TaskResult>
+  private readonly layeredCache?: LayeredContextCache<unknown>
   private readonly cacheMetrics: SharedCacheMetricsPort
   private readonly cachedRevisions = new Map<string, number | undefined>()
   private readonly capabilityRouter: CapabilityRouter
@@ -100,7 +105,11 @@ export class CreativeIntelligence {
 
   constructor(gateway: CreativeTaskGateway, options: CreativeIntelligenceOptions = {}) {
     this.gateway = gateway
-    this.cache = options.cache ?? new ContextCache<TaskResult>()
+    this.layeredCache =
+      options.layeredCache ?? (options.cache ? undefined : new LayeredContextCache<unknown>())
+    this.cache = this.layeredCache
+      ? (this.layeredCache.provider as unknown as ContextCache<TaskResult>)
+      : (options.cache ?? new ContextCache<TaskResult>())
     this.cacheMetrics =
       options.cacheMetrics ?? options.sharedCacheMetrics ?? new SharedCacheMetrics()
     this.capabilityRouter =
@@ -128,19 +137,26 @@ export class CreativeIntelligence {
   async run(task: AiTask, options: RunTaskOptions = {}): Promise<TaskResult> {
     const decision = this.capabilityRouter.select(task)
     const cacheKey = createDeterministicTaskCacheKey(task, decision.route, this.cacheKeyDefaults)
+    this.invalidateLayeredRevisions(cacheKey.projectRevision)
+    const effectiveTask = this.touchLayeredCaches(task, cacheKey)
     const cacheReadDisabled = hasArtifactPersistenceOverrides(task, options)
-    const cached = cacheReadDisabled ? undefined : this.readCached(task, cacheKey)
+    const cached = cacheReadDisabled ? undefined : this.readCached(effectiveTask, cacheKey)
     if (cached !== undefined) {
-      const cachedResult = decorateResult(task, cached, decision, cacheKey, true)
+      const cachedResult = decorateResult(effectiveTask, cached, decision, cacheKey, true)
       if (requiresArtifact(task) && !cachedResult.artifactIds?.length) {
-        const persisted = await this.persistArtifact(task, cachedResult, undefined, options)
-        this.writeCached(task, cacheKey, persisted)
+        const persisted = await this.persistArtifact(
+          effectiveTask,
+          cachedResult,
+          undefined,
+          options,
+        )
+        this.writeCached(effectiveTask, cacheKey, persisted)
         return persisted
       }
       return cachedResult
     }
 
-    const routedTask = attachRouteMetadata(task, decision, cacheKey)
+    const routedTask = attachRouteMetadata(effectiveTask, decision, cacheKey)
     await this.gateway.submitTask(routedTask)
     const pollIntervalMs = options.pollIntervalMs ?? 100
     while (true) {
@@ -151,11 +167,11 @@ export class CreativeIntelligence {
       const snapshot = await this.gateway.getTaskStatus(task.id)
       options.onProgress?.(snapshot)
       if (isTerminal(snapshot.status)) {
-        const terminalResult = snapshot.result ?? fallbackTerminalResult(task, snapshot)
+        const terminalResult = snapshot.result ?? fallbackTerminalResult(effectiveTask, snapshot)
         if (!terminalResult) throw new Error(`Task ${task.id} ended without a result`)
-        const result = decorateResult(task, terminalResult, decision, cacheKey, false)
-        const persisted = await this.persistArtifact(task, result, snapshot, options)
-        if (persisted.status === 'completed') this.writeCached(task, cacheKey, persisted)
+        const result = decorateResult(effectiveTask, terminalResult, decision, cacheKey, false)
+        const persisted = await this.persistArtifact(effectiveTask, result, snapshot, options)
+        if (persisted.status === 'completed') this.writeCached(effectiveTask, cacheKey, persisted)
         return persisted
       }
       await delay(pollIntervalMs, options.signal)
@@ -206,7 +222,55 @@ export class CreativeIntelligence {
   }
 
   cacheStats(): SharedCacheMetricsSnapshot {
-    return this.cacheMetrics.stats()
+    return this.layeredCache?.aggregateStats() ?? this.cacheMetrics.stats()
+  }
+
+  private invalidateLayeredRevisions(projectRevision: number | undefined): void {
+    if (!this.layeredCache || projectRevision === undefined) return
+    this.layeredCache.invalidate({ reason: 'revision', projectRevision })
+  }
+
+  private touchLayeredCaches(task: AiTask, cacheKey: DeterministicTaskCacheKey): AiTask {
+    if (!this.layeredCache) return task
+
+    const contextKey = createLayerCacheKey(cacheKey, 'context')
+    let contextEntry = this.layeredCache.get('context', contextKey)
+    if (contextEntry === undefined) {
+      const payload = asRecord(task.input.payload)
+      contextEntry = {
+        fingerprint: cacheKey.contextFingerprint,
+        revision: cacheKey.projectRevision,
+        value: payload?.context ?? null,
+      }
+      this.layeredCache.set('context', contextKey, contextEntry)
+    }
+
+    const semanticKey = createLayerCacheKey(cacheKey, 'semantic')
+    let semanticEntry = this.layeredCache.get('semantic', semanticKey)
+    if (semanticEntry === undefined) {
+      semanticEntry = {
+        documentId: task.input.documentId,
+        revision: task.input.selection?.revision ?? cacheKey.projectRevision,
+        text: task.input.text,
+        selection: task.input.selection ? { ...task.input.selection } : undefined,
+      }
+      this.layeredCache.set('semantic', semanticKey, semanticEntry)
+    }
+
+    const cachedContext = asRecord(contextEntry)?.value
+    const cachedSemantic = asRecord(semanticEntry)
+    const payload = asRecord(task.input.payload)
+    return {
+      ...task,
+      input: {
+        ...task.input,
+        text: typeof cachedSemantic?.text === 'string' ? cachedSemantic.text : task.input.text,
+        payload: {
+          ...payload,
+          ...(cachedContext === undefined ? {} : { context: cachedContext }),
+        },
+      },
+    }
   }
 
   private readCached(task: AiTask, cacheKey: DeterministicTaskCacheKey): TaskResult | undefined {
@@ -309,6 +373,17 @@ function hasCachedRevisionForDocument(
 
 function withoutProjectRevision(serializedKey: string): string {
   return serializedKey.replace(/&projectRevision=[^&]*/, '&projectRevision=')
+}
+
+function createLayerCacheKey(
+  cacheKey: DeterministicTaskCacheKey,
+  layer: 'context' | 'semantic',
+): Omit<ContextCacheKey, 'layer'> {
+  return {
+    taskKind: `creative.${layer}`,
+    contextFingerprint: cacheKey.contextFingerprint,
+    projectRevision: cacheKey.projectRevision,
+  }
 }
 
 const DEFAULT_GATEWAY_CAPABILITIES = [

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ContextCache, createDeterministicTaskCacheKey, serializeKey } from './index'
+import {
+  CACHE_LAYERS,
+  ContextCache,
+  LayeredContextCache,
+  SharedCacheMetrics,
+  createDeterministicTaskCacheKey,
+  serializeKey,
+} from './index'
 
 describe('context fingerprint cache', () => {
   it('keys entries by task, context, model, and instruction version with LRU eviction', () => {
@@ -16,6 +23,28 @@ describe('context fingerprint cache', () => {
     expect(cache.get(first)).toBe('one')
     now = 121
     expect(cache.get(first)).toBeUndefined()
+  })
+
+  it('counts explicit, revision, and clear invalidations', () => {
+    const cache = new ContextCache<string>()
+    const oldKey = { taskKind: 'creative.continue', contextFingerprint: 'old', projectRevision: 1 }
+    const currentKey = {
+      taskKind: 'creative.continue',
+      contextFingerprint: 'current',
+      projectRevision: 2,
+    }
+
+    cache.set(oldKey, 'old')
+    cache.set(currentKey, 'current')
+
+    expect(cache.invalidateRevision(2)).toBe(1)
+    expect(cache.size()).toBe(1)
+    expect(cache.get(currentKey)).toBe('current')
+    expect(cache.invalidate(currentKey)).toBe(true)
+    cache.set(currentKey, 'current-again')
+
+    expect(cache.clear()).toBe(1)
+    expect(cache.stats()).toMatchObject({ hits: 1, invalidations: 3 })
   })
 
   it('tracks deterministic cache hits and misses across every cache identity dimension', () => {
@@ -115,5 +144,36 @@ describe('context fingerprint cache', () => {
 
     expect(cache.get(key)).toBe('new')
     expect(cache.size()).toBe(1)
+  })
+
+  it('reports per-layer and aggregate stats for a shared cross-layer cache', () => {
+    const metrics = new SharedCacheMetrics()
+    const cache = new LayeredContextCache<string>({ maxEntries: 1, metrics })
+    const key = {
+      taskKind: 'creative.continue',
+      contextFingerprint: 'context-a',
+      projectRevision: 1,
+    }
+
+    for (const layer of CACHE_LAYERS) {
+      expect(cache.get(layer, key)).toBeUndefined()
+      cache.set(layer, key, layer)
+      expect(cache.get(layer, key)).toBe(layer)
+    }
+    cache.set('context', { ...key, contextFingerprint: 'context-b' }, 'replacement')
+
+    expect(cache.invalidate({ reason: 'revision', projectRevision: 2 })).toBe(3)
+    expect(cache.stats()).toEqual({
+      context: { hits: 1, misses: 1, evictions: 1, invalidations: 1 },
+      semantic: { hits: 1, misses: 1, evictions: 0, invalidations: 1 },
+      provider: { hits: 1, misses: 1, evictions: 0, invalidations: 1 },
+    })
+    expect(cache.aggregateStats()).toEqual({
+      hits: 3,
+      misses: 3,
+      evictions: 1,
+      invalidations: 3,
+    })
+    expect(metrics.stats()).toEqual(cache.aggregateStats())
   })
 })
