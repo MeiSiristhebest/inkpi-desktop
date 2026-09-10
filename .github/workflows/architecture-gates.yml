@@ -76,6 +76,23 @@ jobs:
           pnpm --dir inkpi-desktop exec vitest run
           src/adapters/editor-ai-chain.integration.test.ts
 
+      - name: Canonical content SourceMap boundaries
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/domain/content/sourceMap.boundaries.test.ts
+
+      - name: StoryState projection and reducer
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/domain/story/storyState.test.ts
+          src/domain/story/storyStateReducer.test.ts
+
+      - name: StoryState plugin projection
+        if: ${{ hashFiles('inkpi-desktop/src/domain/story/pluginProjection.test.ts') != '' }}
+        run: >-
+          pnpm --dir inkpi-desktop exec vitest run
+          src/domain/story/pluginProjection.test.ts
+
       - name: Domain sync
         run: >-
           pnpm --dir inkpi-desktop exec vitest run
