@@ -118,8 +118,8 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
       text: extractText.slice(0, 2000),
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('dialogue-distiller', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('dialogue-distiller', analysisInput)
     }
   }
 

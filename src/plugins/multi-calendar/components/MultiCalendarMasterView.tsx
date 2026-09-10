@@ -96,8 +96,8 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
     const analysisInput = { chapterSamples: chaptersText }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('multi-calendar', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('multi-calendar', analysisInput)
     }
   }
 

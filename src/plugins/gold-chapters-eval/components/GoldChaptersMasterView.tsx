@@ -55,8 +55,8 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
     if (!chaptersText.trim()) return
     const analysisInput = { openingText: chaptersText.slice(0, 4000) }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('gold-chapters-eval', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('gold-chapters-eval', analysisInput)
     }
   }
 

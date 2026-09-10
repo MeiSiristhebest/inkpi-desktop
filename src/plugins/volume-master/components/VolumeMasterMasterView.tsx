@@ -60,8 +60,8 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       climax: editClimax,
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('volume-master', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('volume-master', analysisInput)
     }
   }
 

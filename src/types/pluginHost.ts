@@ -45,7 +45,7 @@ export interface DesktopPluginHostContextValue {
   /** 语义化 AI 助理能力（若已连接 Daemon/LLM，则供插件直接调度深度语义分析） */
   aiAssistant?: {
     runTask: (task: AiTask) => Promise<TaskResult | null>
-    runAnalysis: (
+    runPluginTask: (
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,

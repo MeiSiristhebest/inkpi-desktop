@@ -95,8 +95,8 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       paradoxes: paradoxes.map((paradox) => ({ ...paradox })),
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('faction-matrix', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('faction-matrix', analysisInput)
     }
   }
 

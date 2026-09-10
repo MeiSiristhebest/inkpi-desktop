@@ -72,8 +72,8 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       compensatingAssets: [...assets],
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('combat-sandbox', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('combat-sandbox', analysisInput)
     }
   }
 

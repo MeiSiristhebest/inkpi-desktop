@@ -74,8 +74,8 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       readerProfiles: ['dropout-prone veteran', 'logic-focused reader', 'relationship-focused reader', 'pacing-focused reader'],
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('reader-simulator', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('reader-simulator', analysisInput)
     }
   }
 

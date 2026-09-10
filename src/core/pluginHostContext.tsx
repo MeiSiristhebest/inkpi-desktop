@@ -89,7 +89,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
     return {
       isAvailable: !!isAiConnected,
       runTask,
-      runAnalysis: async (
+      runPluginTask: async (
         pluginId: string,
         input: unknown,
         metadata?: Record<string, unknown>,

@@ -103,8 +103,8 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       genre,
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('safe-gate', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('safe-gate', analysisInput)
     }
   }
 

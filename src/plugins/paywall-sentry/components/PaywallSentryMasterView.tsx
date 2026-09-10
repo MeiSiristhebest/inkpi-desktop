@@ -52,8 +52,8 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
     const analysisInput = { chapterEndings: summaries }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('paywall-sentry', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('paywall-sentry', analysisInput)
     }
   }
 

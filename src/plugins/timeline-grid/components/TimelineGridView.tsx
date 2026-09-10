@@ -124,8 +124,8 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
     const analysisInput = { chapterSamples: chaptersSummary }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('timeline-grid', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('timeline-grid', analysisInput)
     }
   }
 

@@ -105,8 +105,8 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
     const analysisInput = { currentChapter, promises: entrySummaries }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('promise-ledger', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('promise-ledger', analysisInput)
     }
   }
 

@@ -96,8 +96,8 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       text: auditText.slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('consistency-sentinel', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('consistency-sentinel', analysisInput)
     }
   }
 

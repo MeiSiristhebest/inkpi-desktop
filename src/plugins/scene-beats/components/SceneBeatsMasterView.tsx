@@ -68,8 +68,8 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         : '',
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('scene-beats', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('scene-beats', analysisInput)
     }
   }
 

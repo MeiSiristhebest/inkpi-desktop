@@ -119,8 +119,8 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       text: scanText.slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('clue-weaver', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('clue-weaver', analysisInput)
     }
   }
 

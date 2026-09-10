@@ -56,8 +56,8 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
     const analysisInput = { currentMaxChapter: maxChapterOrder, strands: strandSummaries }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('sub-plot-braid', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('sub-plot-braid', analysisInput)
     }
   }
 

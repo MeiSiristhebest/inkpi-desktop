@@ -57,8 +57,8 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     if (contracts.length === 0) return
     const analysisInput = { contracts: contracts.map((contract) => ({ ...contract })) }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('expectation-engine', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('expectation-engine', analysisInput)
     }
   }
 

@@ -95,8 +95,8 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       endingText: testText,
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('reader-hook', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('reader-hook', analysisInput)
     }
   }
 

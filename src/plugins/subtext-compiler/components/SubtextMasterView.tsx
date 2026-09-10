@@ -20,8 +20,8 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
     if (!spoken.trim()) return
     const analysisInput = { speaker: speakerName, emotion, spoken }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('subtext-compiler', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('subtext-compiler', analysisInput)
     }
   }
 

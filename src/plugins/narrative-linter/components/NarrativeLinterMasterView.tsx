@@ -89,8 +89,8 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
       text: text.slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('narrative-linter', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('narrative-linter', analysisInput)
     }
   }
 

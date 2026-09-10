@@ -65,8 +65,8 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       text: inputText.slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('water-meter', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('water-meter', analysisInput)
     }
   }
 

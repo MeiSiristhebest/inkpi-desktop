@@ -78,8 +78,8 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
     const analysisInput = { chapterSamples: chaptersSnippet }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('chekhov-radar', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('chekhov-radar', analysisInput)
     }
   }
 

@@ -59,8 +59,8 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
     const analysisInput = { chapterEmotionSummaries: summaries }
 
-    if (hostContext?.aiAssistant?.runAnalysis) {
-      void hostContext.aiAssistant.runAnalysis('emotion-curve', analysisInput)
+    if (hostContext?.aiAssistant?.runPluginTask) {
+      void hostContext.aiAssistant.runPluginTask('emotion-curve', analysisInput)
     }
   }
 
