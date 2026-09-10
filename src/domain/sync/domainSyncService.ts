@@ -33,17 +33,21 @@ export class DomainSyncService {
   }
 
   async sync(workspaceId: string): Promise<DomainSyncResult> {
-    return this.syncAttempt(workspaceId, 0)
+    return this.syncAttempt(workspaceId, 0, false)
   }
 
-  private async syncAttempt(workspaceId: string, recoveryAttempt: number): Promise<DomainSyncResult> {
+  private async syncAttempt(
+    workspaceId: string,
+    recoveryAttempt: number,
+    recoveredBeforeAttempt: boolean,
+  ): Promise<DomainSyncResult> {
     if (recoveryAttempt > this.maxRecoveryAttempts) {
       throw new Error(`Domain sync did not converge after ${this.maxRecoveryAttempts} recovery attempts`)
     }
     let remoteSnapshot = await this.remote.snapshotDomain(workspaceId)
     let localRevision = await this.store.latestRevision(workspaceId)
     let pushed = 0
-    let recovered = false
+    let recovered = recoveredBeforeAttempt
 
     if (remoteSnapshot.revision > localRevision) {
       await this.store.restoreSnapshot(remoteSnapshot)
@@ -58,7 +62,7 @@ export class DomainSyncService {
         remoteSnapshot = await this.remote.snapshotDomain(workspaceId)
         await this.store.restoreSnapshot(remoteSnapshot)
         recovered = true
-        return this.syncAttempt(workspaceId, recoveryAttempt + 1)
+        return this.syncAttempt(workspaceId, recoveryAttempt + 1, true)
       }
       if (applied.accepted && !applied.duplicate) pushed += 1
     }
@@ -70,7 +74,7 @@ export class DomainSyncService {
         const snapshot = await this.remote.snapshotDomain(workspaceId)
         await this.store.restoreSnapshot(snapshot)
         recovered = true
-        return this.syncAttempt(workspaceId, recoveryAttempt + 1)
+        return this.syncAttempt(workspaceId, recoveryAttempt + 1, true)
       }
       await this.store.append(changeSet)
     }
