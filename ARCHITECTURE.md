@@ -207,6 +207,8 @@ Daemon DomainProjectionStore.apply/list/createSnapshot/restoreSnapshot 使用同
 
 Desktop 的本地权威追加成功后，IndexedDB 适配器发布 `domainChangeEvents`；已连接的 `useAiConversation` 对同一 workspace 的事件做短暂 debounce 后调用 `syncDomain`。`domainChangeEvents` 还通过 `BroadcastChannel('inkpi-authoritative-domain-changes')` 做 best-effort 跨窗口通知；`StoryStateProvider` 监听匹配 workspace 的事件并从 IndexedDB debounce reload。`src/ports/domainChangeEvents.test.ts` 覆盖 workspace 过滤和外部 BroadcastChannel 事件，`src/core/storyStateContext.test.tsx` 覆盖事件后加载新 revision。这证明了 Desktop 的通知和 StoryState reload 边界，不等同于真实多窗口/Tauri 离线重连演练。
 
+`DomainSyncService` 的恢复测试还覆盖了远端新快照、push revision conflict 重试和 out-of-order pull；重试后仍保留 `recovered` 状态。该证据覆盖本地同步状态机，不等同于多设备网络演练。
+
 ## 8. Proposal / CAS 边界
 
 AI 不直接写 Authoritative Domain State。当前有两个相关但尚未统一的 Desktop 类型：
@@ -237,7 +239,7 @@ Proposal Ledger 以 IndexedDB 为 Desktop authoritative store；`RemoteProposalS
 
 `src/adapters/desktopDaemonIntegration.test.ts` 覆盖 Continue 的 completed/waiting-user；`src/adapters/desktopDaemonVerticalSlices.test.ts` 通过真实 child process 覆盖 Rewrite、Continuity Audit、Deep Reasoning 和 Distillation；`src/adapters/editor-ai-chain.integration.test.ts` 进一步通过真实 Daemon/WebSocket、useAiConversation、TipTap GhostText 和 ProposalLedger 覆盖正文写回及 CAS 冲突；`src/adapters/desktopFiveSliceGate.test.ts` 逐一核对五个 task factory 的 output/status contract，并在磁盘 SQLite Daemon 进程重启后读取五个任务状态、Artifact 与 Proposal。五个 task factory 的 RPC、output contract、instruction provenance 和 Daemon 持久化已有 child-process 集成证据；`src/components/ai/CreativeWorkflowsPanel.test.tsx`、`src/ports/chapterSaveEvents.test.ts` 和 `src/extensions/continuity-diagnostics.test.ts` 覆盖保存触发到诊断 marker 的 Desktop 边界，`src/adapters/daemonAiAssistant.test.ts` 和面板测试覆盖 AbortSignal 取消、进度和 `waiting-user`。这些证据关闭了“本地 gutter marker/长任务 UI 未实现”的陈旧描述，但不替代真实 provider、App 重启和完整生产验收。
 
-任务工厂引用的 provider id 是 creative.document、creative.story、retrieval.jit。Daemon 目前在注入 JIT retriever 时注册 JitContextProvider；Desktop Story provider 和 document provider 的跨进程注册需继续核对。
+任务工厂引用的 provider id 是 creative.document、creative.story、retrieval.jit。Daemon 目前在注入 JIT retriever 时注册 JitContextProvider；`src/adapters/desktopDaemonIntegration.test.ts` 已通过真实 child process 验证 authoritative StoryState 随任务进入 serialized creative context，并由 creative.document、creative.story provider 产生上下文。该测试证明跨进程数据边界，不等同于 Tauri 生产注册验收。
 
 ## 10. 扩展能力边界
 
@@ -257,7 +259,7 @@ src/ai/artifacts/artifactStore.ts 定义 Artifact、AiArtifact、ArtifactStore�
 
 ContextCache 和 LayeredContextCache 提供 context、semantic、provider 三层缓存。键可包含 taskKind、contextFingerprint、projectRevision、model、instructionVersion、skillVersion、providerId；实现有 TTL、LRU 淘汰和 hit/miss/eviction 统计。
 
-daemonAiAssistant.runTask 现在经由 CreativeIntelligence，再由其接入 provider-response cache 和计数型 SharedCacheMetrics；Runtime ContextPipeline 已有按 task/provider/revision 缓存编译结果并接入 JIT/SQLite retrieval 的集成用例。Desktop provider-response cache 与 Runtime 编译缓存尚未合并为三层默认调用链，semantic/retrieval 统计和跨重启策略仍需测量。
+daemonAiAssistant.runTask 现在经由 CreativeIntelligence，再由其接入 provider-response cache 和计数型 SharedCacheMetrics；Runtime ContextPipeline 已有按 task/provider/revision 缓存编译结果并接入 JIT/SQLite retrieval 的集成用例。Runtime 还通过 `daemon-cache-persistence.test.ts` 验证三层缓存的 Daemon 启动恢复、停止保存和损坏快照启动门禁；Desktop provider-response cache 与 Runtime 编译缓存尚未合并为三层默认调用链，semantic/retrieval 统计和跨重启策略仍需测量。
 
 ### Capability
 
