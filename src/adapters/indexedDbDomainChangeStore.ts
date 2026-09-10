@@ -72,6 +72,10 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
               if (existingChange.checksum !== changeSet.checksum) {
                 throw new Error(`Domain change set id collision: ${changeSet.id}`)
               }
+              // The domain log and aggregate were committed atomically. A
+              // replay of the same change set is therefore already complete;
+              // do not apply its aggregate mutation a second time.
+              return
             }
 
             const workspaceChanges = allChanges!

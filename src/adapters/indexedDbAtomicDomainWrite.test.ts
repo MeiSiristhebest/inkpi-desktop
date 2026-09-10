@@ -95,4 +95,52 @@ describe('atomic IndexedDB domain writes', () => {
     expect(await store.latestRevision(workspaceId)).toBe(0)
     expect(await db.get('chapters', 'atomic-domain-rollback-chapter')).toBeUndefined()
   })
+
+  it('does not reapply an already committed aggregate on duplicate replay', async () => {
+    const workspaceId = 'atomic-domain-idempotence-workspace'
+    const chapterId = 'atomic-domain-idempotence-chapter'
+    const changeSet = createDomainChangeSet({
+      id: 'atomic-domain-idempotence-change',
+      workspaceId,
+      sourceDeviceId: 'desktop-test',
+      baseRevision: 0,
+      changes: [
+        {
+          id: 'atomic-domain-idempotence-entry',
+          aggregateType: 'chapter',
+          aggregateId: chapterId,
+          operation: 'upsert',
+          revision: 0,
+          payload: { title: '第一次写入' },
+          occurredAt: 1,
+        },
+      ],
+      createdAt: 1,
+    })
+    const store = new IndexedDbDomainChangeStore()
+    await db.delete('chapters', chapterId)
+    for (const existing of await store.list(workspaceId)) {
+      await db.delete('domainChangeSets', existing.id)
+    }
+
+    const first = { id: chapterId, title: '第一次写入' }
+    await store.appendWithAggregate(changeSet, {
+      store: 'chapters',
+      key: chapterId,
+      operation: 'upsert',
+      value: first,
+      expected: undefined,
+    })
+
+    await store.appendWithAggregate(changeSet, {
+      store: 'chapters',
+      key: chapterId,
+      operation: 'upsert',
+      value: { id: chapterId, title: '重复回放不应覆盖' },
+      expected: first,
+    })
+
+    expect(await db.get('chapters', chapterId)).toEqual(first)
+    expect(await store.latestRevision(workspaceId)).toBe(1)
+  })
 })
