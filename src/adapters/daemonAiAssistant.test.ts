@@ -77,28 +77,33 @@ describe('createDaemonAiAssistant instruction registration', () => {
       'task.submit',
       'task.status',
     ])
-    const payload = harness.calls[0].params as { instructions: Array<Record<string, unknown>> }
+    const payload = harness.calls.find((call) => call.method === 'instruction.register')
+      ?.params as { instructions: Array<Record<string, unknown>> }
     expect(payload.instructions).toEqual([
       ...listCoreInstructionDefinitions(),
       ...listPluginInstructionDefinitions(),
     ])
-    expect(payload.instructions.every((instruction) =>
-      typeof instruction.id === 'string'
-      && typeof instruction.version === 'string'
-      && typeof instruction.systemInstruction === 'string',
-    )).toBe(true)
+    expect(
+      payload.instructions.every(
+        (instruction) =>
+          typeof instruction.id === 'string' &&
+          typeof instruction.version === 'string' &&
+          typeof instruction.systemInstruction === 'string',
+      ),
+    ).toBe(true)
   })
 
   it('shares one in-flight registration when first tasks start concurrently', async () => {
     let releaseRegistration!: () => void
-    const registrationGate = new Promise<void>((resolve) => { releaseRegistration = resolve })
+    const registrationGate = new Promise<void>((resolve) => {
+      releaseRegistration = resolve
+    })
     const harness = makeClient(() => registrationGate)
     const assistant = createDaemonAiAssistant(harness.client)
 
     const first = assistant.runTask(task('parallel-1'), { pollIntervalMs: 0 })
     const second = assistant.runTask(task('parallel-2'), { pollIntervalMs: 0 })
-    await Promise.resolve()
-    expect(harness.registerCalls).toBe(1)
+    await vi.waitFor(() => expect(harness.registerCalls).toBe(1))
     expect(harness.calls.filter((call) => call.method === 'task.submit')).toHaveLength(0)
 
     releaseRegistration()
