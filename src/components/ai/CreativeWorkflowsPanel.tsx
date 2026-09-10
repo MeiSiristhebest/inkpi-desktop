@@ -243,21 +243,34 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     setError(null)
     setProgress(null)
     try {
+      await checkpointLoadRef.current
+      if (token !== runToken.current) return
+      const saveCheckpoint = async (nextCheckpoint: DistillationCheckpoint) => {
+        distillationCheckpointRef.current = nextCheckpoint
+        setCheckpoint(nextCheckpoint)
+        await distillationCheckpointStore.save(
+          projectId,
+          DISTILLATION_TASK_ID,
+          nextCheckpoint,
+          distillationSourceFingerprint,
+        )
+      }
       const result = await onDistillationWorkflow(
         {
-          taskId: 'project-distillation',
+          taskId: DISTILLATION_TASK_ID,
           documents,
           target: 'project',
           fields: ['summary', 'entities', 'events', 'promises'],
         },
         {
           chunkSize: 10,
-          checkpoint,
+          checkpoint: distillationCheckpointRef.current,
           continueOnError: true,
           signal: controller.signal,
+          saveCheckpoint,
           onProgress: ({ completedChunks, totalChunks, failedChunks }) =>
             setProgress({
-              taskId: 'project-distillation',
+              taskId: DISTILLATION_TASK_ID,
               kind: 'narrative.project.distill',
               status: completedChunks === totalChunks ? 'completed' : 'running',
               progress: totalChunks ? completedChunks / totalChunks : 0,
@@ -267,7 +280,14 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       )
       if (token === runToken.current && result) {
         setDistillation(result)
+        distillationCheckpointRef.current = result.checkpoint
         setCheckpoint(result.checkpoint)
+        await distillationCheckpointStore.save(
+          projectId,
+          DISTILLATION_TASK_ID,
+          result.checkpoint,
+          distillationSourceFingerprint,
+        )
       }
     } catch (cause) {
       if (!controller.signal.aborted && token === runToken.current) {

@@ -138,4 +138,64 @@ describe('CreativeWorkflowsPanel', () => {
     await waitFor(() => expect(screen.getByTestId('distillation-result')).toHaveTextContent('项目提炼完成'))
     expect(distill).toHaveBeenCalledWith(expect.objectContaining({ documents: [expect.objectContaining({ text: '雨停后，她没有回头。' })] }), expect.objectContaining({ checkpoint: undefined }))
   })
+
+  it('rehydrates a matching checkpoint before running and persists workflow checkpoints', async () => {
+    const stored = {
+      nextChunk: 1,
+      completedChunkIndexes: [0],
+      failedChunkIndexes: [],
+      failedChunks: [],
+      facts: { summary: '已完成第一块', entities: [], events: [], promises: [] },
+    }
+    const checkpointStore = {
+      load: vi.fn(async () => structuredClone(stored)),
+      save: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined),
+    }
+    const next = {
+      nextChunk: 2,
+      completedChunkIndexes: [0, 1],
+      failedChunkIndexes: [],
+      failedChunks: [],
+      facts: { summary: '项目提炼完成', entities: [], events: [], promises: [] },
+    }
+    const distill = vi.fn(async (_input: unknown, options: { checkpoint?: unknown; saveCheckpoint?: (checkpoint: typeof next) => Promise<void> }) => {
+      expect(options.checkpoint).toEqual(stored)
+      await options.saveCheckpoint?.(next)
+      return {
+        facts: next.facts,
+        complete: true,
+        failedChunks: [],
+        completedChunks: 2,
+        totalChunks: 2,
+        checkpoint: next,
+        chunkTaskIds: ['project-distillation:chunk:1'],
+      }
+    })
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={distill}
+        onSteerTask={vi.fn()}
+        distillationCheckpointStore={checkpointStore}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '项目提炼' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '继续项目提炼' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '继续项目提炼' }))
+
+    await waitFor(() => expect(screen.getByTestId('distillation-result')).toHaveTextContent('项目提炼完成'))
+    expect(checkpointStore.load).toHaveBeenCalledWith('project-1', 'project-distillation', expect.any(String))
+    expect(checkpointStore.save).toHaveBeenCalledWith(
+      'project-1',
+      'project-distillation',
+      next,
+      expect.any(String),
+    )
+  })
 })
