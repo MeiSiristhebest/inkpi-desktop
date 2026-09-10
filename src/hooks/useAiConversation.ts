@@ -228,9 +228,13 @@ export function useAiConversation(
       result.client?.close().catch(() => {})
       return
     }
-      clientRef.current = result.client
+    const previousClient = clientRef.current
+    clientRef.current = result.client
+    if (previousClient && previousClient !== result.client) {
+      void previousClient.close().catch(() => {})
+    }
     setIsConnected(result.connected)
-      setIsReconnecting(false)
+    setIsReconnecting(false)
     if (!result.connected) {
       console.warn('[InkPi Desktop] Daemon 连接失败，进入离线沙盒模式')
     }

@@ -139,24 +139,56 @@ describe('useAiConversation task recovery', () => {
     hook.unmount()
   })
 
+  it('closes the previous daemon assistant when reconnect replaces it', async () => {
+    const first = makeAssistant(vi.fn(async () => null))
+    const second = makeAssistant(vi.fn(async () => null))
+    const store = makeStore()
+    connectToDaemon
+      .mockResolvedValueOnce({ client: first, connected: true })
+      .mockResolvedValueOnce({ client: second, connected: true })
+
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
+
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    await act(async () => {
+      hook.result.current.reconnect()
+      await waitFor(() => expect(connectToDaemon).toHaveBeenCalledTimes(2))
+    })
+    await waitFor(() => expect(first.close).toHaveBeenCalledOnce())
+
+    hook.unmount()
+    expect(second.close).toHaveBeenCalledOnce()
+  })
+
   it('persists a failed snapshot when the daemon task fails', async () => {
     const task = makeTask('failed-task')
     const store = makeStore()
-    const runTask = vi.fn(async (_task: AiTask, options?: Parameters<AiAssistant['runTask']>[1]) => {
-      options?.onProgress?.({ ...makeSnapshot(task, 'running'), progress: 0.25 })
-      throw new Error('provider failed')
-    })
+    const runTask = vi.fn(
+      async (_task: AiTask, options?: Parameters<AiAssistant['runTask']>[1]) => {
+        options?.onProgress?.({ ...makeSnapshot(task, 'running'), progress: 0.25 })
+        throw new Error('provider failed')
+      },
+    )
     const assistant = makeAssistant(runTask)
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
-    const hook = renderHook(() => useAiConversation('ws://daemon', null, 'project-1', {
-      taskRecoveryStore: store,
-      clock: fixedClock,
-    }))
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
     await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
 
     await expect(hook.result.current.runAiTask(task)).rejects.toThrow('provider failed')
     await waitFor(() => expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('failed'))
-    expect(hook.result.current.taskRecovery[0].snapshot.error).toMatchObject({ message: 'provider failed' })
+    expect(hook.result.current.taskRecovery[0].snapshot.error).toMatchObject({
+      message: 'provider failed',
+    })
     expect(store.records.get(task.id)?.snapshot.status).toBe('failed')
     hook.unmount()
   })
