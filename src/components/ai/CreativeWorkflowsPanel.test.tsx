@@ -18,10 +18,12 @@ const chapter: ChapterRecord = {
 }
 
 describe('CreativeWorkflowsPanel', () => {
-  it('runs continuity audit from the UI with canonical plain-text input', async () => {
+  it('runs continuity audit from the UI with canonical HTML input and source mapping', async () => {
     let auditedBlockId = ''
-    const audit = vi.fn(async (input: { document: { text: string; blocks: Array<{ id: string }> } }) => {
+    const audit = vi.fn(async (input: { document: { text: string; representation: string; blocks: Array<{ id: string }>; sourceMap: { semanticRangeToEditor: (from: number, to: number) => { from: number; to: number } } } }) => {
       expect(input.document.text).toBe('雨停后，她没有回头。')
+      expect(input.document.representation).toBe('html')
+      expect(input.document.sourceMap.semanticRangeToEditor(0, 1)).toMatchObject({ from: 3, to: 4 })
       auditedBlockId = input.document.blocks[0].id
       return [{ id: 'finding-1', severity: 'warning' as const, description: '存在未回收伏笔', blockIds: [input.document.blocks[0].id] }]
     })

@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'r
 import { Activity, Brain, Database, RefreshCw, Square } from 'lucide-react'
 import type { TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ChapterRecord } from '../../types'
-import { htmlToPlain } from '../../domain/text'
-import { semanticDocumentFromText } from '../../domain/content'
+import { projectContent } from '../../domain/content'
 import { clock } from '../../adapters/clock'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
@@ -88,7 +87,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     [chapters, selectedChapterId],
   )
   const documents = useMemo(
-    () => chapters.map((chapter) => semanticDocumentFromText(chapter.id, htmlToPlain(chapter.content || ''), chapter.revision ?? 0)),
+    () => chapters.map((chapter) => documentForChapter(chapter)),
     [chapters],
   )
   const distillationSourceFingerprint = useMemo(
@@ -207,11 +206,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     const taskId = idGenerator.generate(`deep-reason-${selectedChapter.id}`)
     setSteering('')
     try {
-      const document = semanticDocumentFromText(
-        selectedChapter.id,
-        htmlToPlain(selectedChapter.content || ''),
-        selectedChapter.revision ?? 0,
-      )
+      const document = documentForChapter(selectedChapter)
       const result = await onDeepReasoning(
         {
           taskId,
@@ -350,11 +345,11 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
 }
 
 function documentForAudit(chapter: ChapterRecord): SemanticDocument {
-  return semanticDocumentFromText(
-    chapter.id,
-    htmlToPlain(chapter.content || ''),
-    chapter.revision ?? 0,
-  )
+  return documentForChapter(chapter)
+}
+
+function documentForChapter(chapter: ChapterRecord): SemanticDocument {
+  return projectContent(chapter.id, chapter.content || '', chapter.revision ?? 0)
 }
 
 const TabButton: FC<{ active: boolean; onClick: () => void; children: ReactNode }> = ({ active, onClick, children }) => (
