@@ -8,12 +8,16 @@ import type { ModelConfig } from '../core/settings'
 import { DEFAULT_DAEMON_URL } from '../config'
 import type { AiTask, TaskResult, TaskStatus, TaskStatusSnapshot } from '@inkpi/protocol'
 import { semanticDocumentFromText } from '../domain/content'
+import type { StoryState } from '../domain/story'
 import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
 import { taskResultText } from '../ai/tasks/pluginTasks'
 import { idGenerator } from '../adapters/idGenerator'
 import type { DomainSyncResult } from '../domain/sync/domainSyncService'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tasks/taskFactories'
-import type { ProjectDistillationInput, DistillationWorkflowOptions } from '../ai/orchestrator/verticalSlices'
+import type {
+  ProjectDistillationInput,
+  DistillationWorkflowOptions,
+} from '../ai/orchestrator/verticalSlices'
 import type { ContinuityFinding, DeepReasoningResult } from '../ai/results/taskResults'
 import type { DistillationWorkflowResult } from '../ai/orchestrator/verticalSlices'
 import {
@@ -138,6 +142,8 @@ export interface UseAiConversationOptions {
   taskRecoveryStore?: TaskRecoveryStore
   /** 时间源可注入，避免恢复快照测试依赖系统时钟。 */
   clock?: Clock
+  /** Current authoritative StoryState used when building creative task context. */
+  storyState?: StoryState
 }
 
 export function useAiConversation(
@@ -146,7 +152,7 @@ export function useAiConversation(
   workspaceId?: string | null,
   options: UseAiConversationOptions = {},
 ): AiConversation {
-  const { initialPanelOpen = false } = options
+  const { initialPanelOpen = false, storyState } = options
   const taskStore = options.taskRecoveryStore ?? indexedDbTaskRecoveryStore
   const clockPort = options.clock ?? clock
   const [isConnected, setIsConnected] = useState(false)
@@ -378,6 +384,7 @@ export function useAiConversation(
           taskId: idGenerator.generate(`ghost-${chapterId}`),
           document,
           selection: { from: document.text.length, to: document.text.length },
+          storyState,
           metadata: { modelId: aiModel?.id },
         })
         return taskResultText(await runTrackedTask(task))
@@ -385,7 +392,7 @@ export function useAiConversation(
         return null
       }
     },
-    [aiModel?.id, isConnected, runTrackedTask],
+    [aiModel?.id, isConnected, runTrackedTask, storyState],
   )
 
   const sendAiPrompt = useCallback(
@@ -416,6 +423,7 @@ export function useAiConversation(
           taskId: idGenerator.generate('assistant'),
           document,
           question: trimmed,
+          storyState,
           metadata: { modelId: aiModel?.id },
         })
         const result = await runTrackedTask(task)
@@ -433,7 +441,7 @@ export function useAiConversation(
         setAiBusy(false)
       }
     },
-    [aiBusy, aiModel?.id, isConnected, runTrackedTask],
+    [aiBusy, aiModel?.id, isConnected, runTrackedTask, storyState],
   )
 
   const reconnect = useCallback(() => {
@@ -492,20 +500,38 @@ export function useAiConversation(
     return clientRef.current.steerTask(taskId, input)
   }, [isConnected])
 
-  const runContinuityAudit = useCallback(async (input: ContinuityAuditTaskInput, options = {}) => {
-    if (!clientRef.current?.runContinuityAudit || !isConnected) return null
-    return clientRef.current.runContinuityAudit(input, options)
-  }, [isConnected])
+  const runContinuityAudit = useCallback(
+    async (input: ContinuityAuditTaskInput, options = {}) => {
+      if (!clientRef.current?.runContinuityAudit || !isConnected) return null
+      return clientRef.current.runContinuityAudit(
+        { ...input, storyState: input.storyState ?? storyState },
+        options,
+      )
+    },
+    [isConnected, storyState],
+  )
 
-  const runDeepReasoning = useCallback(async (input: DeepReasoningTaskInput, options = {}) => {
-    if (!clientRef.current?.runDeepReasoning || !isConnected) return null
-    return clientRef.current.runDeepReasoning(input, options)
-  }, [isConnected])
+  const runDeepReasoning = useCallback(
+    async (input: DeepReasoningTaskInput, options = {}) => {
+      if (!clientRef.current?.runDeepReasoning || !isConnected) return null
+      return clientRef.current.runDeepReasoning(
+        { ...input, storyState: input.storyState ?? storyState },
+        options,
+      )
+    },
+    [isConnected, storyState],
+  )
 
-  const runDistillationWorkflow = useCallback(async (input: ProjectDistillationInput, options: DistillationWorkflowOptions = {}) => {
-    if (!clientRef.current?.runDistillationWorkflow || !isConnected) return null
-    return clientRef.current.runDistillationWorkflow(input, options)
-  }, [isConnected])
+  const runDistillationWorkflow = useCallback(
+    async (input: ProjectDistillationInput, options: DistillationWorkflowOptions = {}) => {
+      if (!clientRef.current?.runDistillationWorkflow || !isConnected) return null
+      return clientRef.current.runDistillationWorkflow(
+        { ...input, storyState: input.storyState ?? storyState },
+        options,
+      )
+    },
+    [isConnected, storyState],
+  )
 
   const syncDomain = useCallback(async (id: string) => {
     if (!clientRef.current?.syncDomain || !isConnected) return null

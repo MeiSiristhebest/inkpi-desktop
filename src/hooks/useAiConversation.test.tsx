@@ -4,6 +4,7 @@ import type { AiTask, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { AiAssistant } from '../ports/aiGateway'
 import type { Clock } from '../ports/clock'
 import type { TaskRecoveryRecord, TaskRecoveryStore } from '../db/taskRecoveryStore'
+import { createStoryState } from '../domain/story'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { useAiConversation } from './useAiConversation'
 
@@ -54,24 +55,75 @@ beforeEach(() => {
 })
 
 describe('useAiConversation task recovery', () => {
+  it('includes the authoritative StoryState in default creative task context', async () => {
+    const store = makeStore()
+    const storyState = createStoryState(7)
+    let submitted: AiTask | undefined
+    const runTask = vi.fn(async (task: AiTask) => {
+      submitted = task
+      return {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'completed' as const,
+        output: { format: 'text' as const, text: '续写结果' },
+      }
+    })
+    const assistant = makeAssistant(runTask)
+    connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+        storyState,
+      }),
+    )
+
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    await act(async () => {
+      await expect(hook.result.current.requestGhost('chapter-1', '已有内容')).resolves.toBe(
+        '续写结果',
+      )
+    })
+
+    expect(submitted).toMatchObject({
+      kind: 'creative.continue',
+      contextPolicy: {
+        includeProjectState: true,
+        providerIds: expect.arrayContaining(['creative.story']),
+      },
+      input: {
+        payload: {
+          context: {
+            storyContext: expect.objectContaining({ revision: 7 }),
+          },
+        },
+      },
+    })
+    hook.unmount()
+  })
+
   it('rehydrates a task after restart and sends the existing task.resume RPC', async () => {
     const task = makeTask('restart-task')
-    const store = makeStore([{
-      projectId: 'project-1',
-      task,
-      snapshot: {
-        ...makeSnapshot(task, 'running'),
-        checkpoint: { step: 'chapter-2', updatedAt: 50 },
+    const store = makeStore([
+      {
+        projectId: 'project-1',
+        task,
+        snapshot: {
+          ...makeSnapshot(task, 'running'),
+          checkpoint: { step: 'chapter-2', updatedAt: 50 },
+        },
+        updatedAt: 50,
       },
-      updatedAt: 50,
-    }])
+    ])
     const assistant = makeAssistant(vi.fn(async () => null))
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
 
-    const hook = renderHook(() => useAiConversation('ws://daemon', null, 'project-1', {
-      taskRecoveryStore: store,
-      clock: fixedClock,
-    }))
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
 
     await waitFor(() => expect(hook.result.current.taskRecovery).toHaveLength(1))
     expect(hook.result.current.taskRecovery[0].snapshot.status).toBe('interrupted')

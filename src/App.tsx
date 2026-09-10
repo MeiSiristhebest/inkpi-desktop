@@ -3,13 +3,13 @@ import { Engine } from './core/engine'
 import { Bookshelf } from './components/bookshelf/Bookshelf'
 import { AiAssistantPanel } from './components/ai/AiAssistantPanel'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { useSettings, SettingsProvider } from './core/settings'
+import { useSettings, SettingsProvider, type AppSettings } from './core/settings'
 import { ThemeController } from './core/ThemeController'
 import { useAiConversation } from './hooks/useAiConversation'
-import { useProjectLibrary } from './hooks/useProjectLibrary'
+import { useProjectLibrary, type ProjectLibrary } from './hooks/useProjectLibrary'
 import { PluginProvider } from './core/pluginRegistry'
 import { ProjectDataProvider, useProjectData } from './core/projectDataContext'
-import { StoryStateProvider } from './core/storyStateContext'
+import { StoryStateProvider, useStoryState } from './core/storyStateContext'
 import { DesktopPluginHostProvider } from './core/pluginHostContext'
 import type { ReactNode } from 'react'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
@@ -120,8 +120,20 @@ export const App: FC = () => (
  */
 const AppShell: FC = () => {
   const [settings] = useSettings()
-
   const library = useProjectLibrary()
+
+  return (
+    <StoryStateProvider workspaceId={library.activeProjectId}>
+      <AppShellContent settings={settings} library={library} />
+    </StoryStateProvider>
+  )
+}
+
+const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = ({
+  settings,
+  library,
+}) => {
+  const { storyState } = useStoryState()
 
   const {
     projects,
@@ -135,7 +147,9 @@ const AppShell: FC = () => {
     deleteProject,
   } = library
 
-  const ai = useAiConversation(settings.daemonWsUrl, settings.aiModel, activeProjectId)
+  const ai = useAiConversation(settings.daemonWsUrl, settings.aiModel, activeProjectId, {
+    storyState,
+  })
 
   const {
     isConnected,
@@ -178,37 +192,35 @@ const AppShell: FC = () => {
   ) : (
     <ErrorBoundary label="应用主框架">
       <ProjectDataProvider projectId={activeProjectId}>
-        <StoryStateProvider workspaceId={activeProjectId}>
-          <ProjectWorkspace
+        <ProjectWorkspace
+          projectId={activeProjectId}
+          projectName={projects.find((p) => p.id === activeProjectId)?.name}
+          isConnected={isConnected}
+          onAiTask={runAiTask}
+        >
+          <ProjectEngine
             projectId={activeProjectId}
             projectName={projects.find((p) => p.id === activeProjectId)?.name}
             isConnected={isConnected}
+            isReconnecting={isReconnecting}
+            onReconnect={reconnect}
+            onRequestGhost={requestGhost}
             onAiTask={runAiTask}
-          >
-            <ProjectEngine
-              projectId={activeProjectId}
-              projectName={projects.find((p) => p.id === activeProjectId)?.name}
-              isConnected={isConnected}
-              isReconnecting={isReconnecting}
-              onReconnect={reconnect}
-              onRequestGhost={requestGhost}
-              onAiTask={runAiTask}
-              onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
-              onHome={() => setActiveProjectId(null)}
-              aiPanelOpen={aiPanelOpen}
-              setAiPanelOpen={setAiPanelOpen}
-              aiMessages={aiMessages}
-              aiInput={aiInput}
-              setAiInput={setAiInput}
-              aiBusy={aiBusy}
-              sendAiPrompt={sendAiPrompt}
-              runContinuityAudit={runContinuityAudit}
-              runDeepReasoning={runDeepReasoning}
-              runDistillationWorkflow={runDistillationWorkflow}
-              steerTask={steerTask}
-            />
-          </ProjectWorkspace>
-        </StoryStateProvider>
+            onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
+            onHome={() => setActiveProjectId(null)}
+            aiPanelOpen={aiPanelOpen}
+            setAiPanelOpen={setAiPanelOpen}
+            aiMessages={aiMessages}
+            aiInput={aiInput}
+            setAiInput={setAiInput}
+            aiBusy={aiBusy}
+            sendAiPrompt={sendAiPrompt}
+            runContinuityAudit={runContinuityAudit}
+            runDeepReasoning={runDeepReasoning}
+            runDistillationWorkflow={runDistillationWorkflow}
+            steerTask={steerTask}
+          />
+        </ProjectWorkspace>
       </ProjectDataProvider>
     </ErrorBoundary>
   )
