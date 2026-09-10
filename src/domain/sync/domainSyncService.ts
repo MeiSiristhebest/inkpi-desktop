@@ -19,6 +19,22 @@ export interface DomainSyncResult {
   pulled: number
   revision: number
   recovered: boolean
+  conflict?: DomainSyncConflict
+}
+
+export type DomainSyncConflictReason = 'remote-ahead-with-pending' | 'aggregate-conflict'
+
+export interface DomainSyncConflict {
+  workspaceId: string
+  localRevision: number
+  remoteRevision: number
+  reason: DomainSyncConflictReason
+  /** The original, checksummed local entries that can be replayed after review. */
+  pendingChangeSets: DomainChangeSet[]
+  conflictingAggregates: Array<{
+    aggregateType: string
+    aggregateId: string
+  }>
 }
 
 /** Coordinates the authoritative IndexedDB log with the daemon's derived projection. */
@@ -52,12 +68,31 @@ export class DomainSyncService {
       )
     }
     let remoteSnapshot = await this.readRemoteSnapshot(workspaceId)
-    let localRevision = await this.store.latestRevision(workspaceId)
+    const localChangeSets = await this.store.list(workspaceId)
+    assertContiguousChangeSets(localChangeSets, workspaceId, 0, 'local authoritative log')
+    let localRevision = localChangeSets.at(-1)?.revision ?? 0
     let pushed = 0
     let pulled = 0
     let recovered = recoveredBeforeAttempt
 
     if (remoteSnapshot.revision > localRevision) {
+      const pending = findPendingChangeSets(localChangeSets, remoteSnapshot.changeSets)
+      if (pending.length > 0) {
+        return {
+          workspaceId,
+          pushed: 0,
+          pulled: 0,
+          revision: localRevision,
+          recovered,
+          conflict: createPendingConflict(
+            workspaceId,
+            localRevision,
+            remoteSnapshot,
+            localChangeSets,
+            pending,
+          ),
+        }
+      }
       await this.store.restoreSnapshot(remoteSnapshot)
       localRevision = remoteSnapshot.revision
       recovered = true
@@ -137,6 +172,80 @@ export class DomainSyncService {
     const snapshot = await this.readRemoteSnapshot(workspaceId)
     await this.store.restoreSnapshot(snapshot)
     return this.syncAttempt(workspaceId, recoveryAttempt + 1, true)
+  }
+}
+
+function findPendingChangeSets(
+  localChangeSets: DomainChangeSet[],
+  remoteChangeSets: DomainChangeSet[],
+): DomainChangeSet[] {
+  const remoteKeys = new Set(remoteChangeSets.map(changeSetKey))
+  return localChangeSets
+    .filter((changeSet) => !remoteKeys.has(changeSetKey(changeSet)))
+    .map(cloneChangeSet)
+}
+
+function createPendingConflict(
+  workspaceId: string,
+  localRevision: number,
+  remoteSnapshot: DomainProjectionSnapshot,
+  localChangeSets: DomainChangeSet[],
+  pendingChangeSets: DomainChangeSet[],
+): DomainSyncConflict {
+  const localKeys = new Set(localChangeSets.map(changeSetKey))
+  const remoteAggregateKeys = new Map<string, { aggregateType: string; aggregateId: string }>()
+  for (const changeSet of remoteSnapshot.changeSets) {
+    // A change set shared by both logs is already part of the local base and
+    // cannot conflict with the pending suffix.
+    if (localKeys.has(changeSetKey(changeSet))) continue
+    for (const change of changeSet.changes) {
+      const key = aggregateKey(change.aggregateType, change.aggregateId)
+      remoteAggregateKeys.set(key, {
+        aggregateType: change.aggregateType,
+        aggregateId: change.aggregateId,
+      })
+    }
+  }
+
+  const conflictingAggregates = new Map<string, { aggregateType: string; aggregateId: string }>()
+  for (const changeSet of pendingChangeSets) {
+    for (const change of changeSet.changes) {
+      const key = aggregateKey(change.aggregateType, change.aggregateId)
+      if (remoteAggregateKeys.has(key)) {
+        conflictingAggregates.set(key, {
+          aggregateType: change.aggregateType,
+          aggregateId: change.aggregateId,
+        })
+      }
+    }
+  }
+
+  return {
+    workspaceId,
+    localRevision,
+    remoteRevision: remoteSnapshot.revision,
+    reason: conflictingAggregates.size > 0 ? 'aggregate-conflict' : 'remote-ahead-with-pending',
+    pendingChangeSets,
+    conflictingAggregates: [...conflictingAggregates.values()].sort((left, right) =>
+      aggregateKey(left.aggregateType, left.aggregateId).localeCompare(
+        aggregateKey(right.aggregateType, right.aggregateId),
+      ),
+    ),
+  }
+}
+
+function changeSetKey(changeSet: DomainChangeSet): string {
+  return `${changeSet.id}\u0000${changeSet.checksum}`
+}
+
+function aggregateKey(aggregateType: string, aggregateId: string): string {
+  return `${aggregateType}\u0000${aggregateId}`
+}
+
+function cloneChangeSet(changeSet: DomainChangeSet): DomainChangeSet {
+  return {
+    ...changeSet,
+    changes: changeSet.changes.map((change) => ({ ...change })),
   }
 }
 
@@ -269,7 +378,8 @@ function assertApplyResult(
   workspaceId: string,
   changeSet: DomainChangeSet,
 ): asserts value is DomainProjectionApplyResult {
-  if (!isRecord(value)) throw new Error(`Remote push returned an invalid result for ${changeSet.id}`)
+  if (!isRecord(value))
+    throw new Error(`Remote push returned an invalid result for ${changeSet.id}`)
   if (
     typeof value.accepted !== 'boolean' ||
     typeof value.duplicate !== 'boolean' ||

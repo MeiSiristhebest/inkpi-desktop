@@ -61,11 +61,21 @@ function changeSet(id: string, baseRevision: number, createdAt = 1): DomainChang
   return changeSetForWorkspace(id, workspaceId, baseRevision, createdAt)
 }
 
+function changeSetWithAggregate(
+  id: string,
+  baseRevision: number,
+  aggregateId: string,
+  createdAt = 1,
+): DomainChangeSet {
+  return changeSetForWorkspace(id, workspaceId, baseRevision, createdAt, aggregateId)
+}
+
 function changeSetForWorkspace(
   id: string,
   targetWorkspaceId: string,
   baseRevision: number,
   createdAt = 1,
+  aggregateId = 'chapter-1',
 ): DomainChangeSet {
   return createDomainChangeSet({
     id,
@@ -76,7 +86,7 @@ function changeSetForWorkspace(
       {
         id: `${id}-change`,
         aggregateType: 'document',
-        aggregateId: 'chapter-1',
+        aggregateId,
         operation: 'upsert',
         revision: baseRevision + 1,
         payload: { title: id },
@@ -179,6 +189,78 @@ describe('DomainSyncService recovery', () => {
       'remote-1',
       'remote-2',
     ])
+  })
+
+  it('preserves local pending changes when the remote snapshot is ahead', async () => {
+    const store = new MemoryDomainChangeStore()
+    const localPending = changeSetWithAggregate('local-pending', 0, 'chapter-2')
+    await store.append(localPending)
+    const remoteSnapshot = snapshot([changeSet('remote-1', 0), changeSet('remote-2', 1)])
+    const remote = remoteWith({ snapshots: [remoteSnapshot] })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).resolves.toMatchObject({
+      workspaceId,
+      pushed: 0,
+      pulled: 0,
+      revision: 1,
+      recovered: false,
+      conflict: {
+        reason: 'remote-ahead-with-pending',
+        localRevision: 1,
+        remoteRevision: 2,
+        pendingChangeSets: [localPending],
+        conflictingAggregates: [],
+      },
+    })
+    expect(store.restoreCalls).toHaveLength(0)
+    expect(remote.pushDomainChangeSet).not.toHaveBeenCalled()
+    expect(remote.pullDomainChangeSets).not.toHaveBeenCalled()
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual(['local-pending'])
+  })
+
+  it('reports an aggregate conflict without replacing the local pending log', async () => {
+    const store = new MemoryDomainChangeStore()
+    const localPending = changeSet('local-aggregate-conflict', 0)
+    await store.append(localPending)
+    const remoteChange = changeSet('remote-aggregate-conflict', 0)
+    const remoteSnapshot = snapshot([remoteChange, changeSet('remote-aggregate-tail', 1)])
+    const remote = remoteWith({ snapshots: [remoteSnapshot] })
+
+    const result = await new DomainSyncService(store, remote).sync(workspaceId)
+
+    expect(result.conflict).toMatchObject({
+      reason: 'aggregate-conflict',
+      pendingChangeSets: [localPending],
+      conflictingAggregates: [{ aggregateType: 'document', aggregateId: 'chapter-1' }],
+    })
+    expect(result.revision).toBe(1)
+    expect(store.restoreCalls).toHaveLength(0)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual([
+      'local-aggregate-conflict',
+    ])
+  })
+
+  it('makes a retry of the pending conflict idempotent', async () => {
+    const store = new MemoryDomainChangeStore()
+    const localPending = changeSet('local-retry-pending', 0)
+    await store.append(localPending)
+    const remoteSnapshot = snapshot([
+      changeSet('remote-retry-1', 0),
+      changeSet('remote-retry-2', 1),
+    ])
+    const remote = remoteWith({ snapshots: [remoteSnapshot, remoteSnapshot] })
+    const service = new DomainSyncService(store, remote)
+
+    const first = await service.sync(workspaceId)
+    const second = await service.sync(workspaceId)
+
+    expect(second).toEqual(first)
+    expect(store.restoreCalls).toHaveLength(0)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual([
+      'local-retry-pending',
+    ])
+    expect(remote.pushDomainChangeSet).not.toHaveBeenCalled()
+    expect(remote.pullDomainChangeSets).not.toHaveBeenCalled()
   })
 
   it('preserves the recovered flag after retrying a push revision conflict', async () => {
