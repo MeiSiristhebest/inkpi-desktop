@@ -58,9 +58,18 @@ class MemoryDomainChangeStore implements AuthoritativeDomainChangeStore {
 }
 
 function changeSet(id: string, baseRevision: number, createdAt = 1): DomainChangeSet {
+  return changeSetForWorkspace(id, workspaceId, baseRevision, createdAt)
+}
+
+function changeSetForWorkspace(
+  id: string,
+  targetWorkspaceId: string,
+  baseRevision: number,
+  createdAt = 1,
+): DomainChangeSet {
   return createDomainChangeSet({
     id,
-    workspaceId,
+    workspaceId: targetWorkspaceId,
     sourceDeviceId: 'desktop-a',
     baseRevision,
     changes: [
@@ -79,8 +88,15 @@ function changeSet(id: string, baseRevision: number, createdAt = 1): DomainChang
 }
 
 function snapshot(changeSets: DomainChangeSet[]): DomainProjectionSnapshot {
+  return snapshotForWorkspace(workspaceId, changeSets)
+}
+
+function snapshotForWorkspace(
+  targetWorkspaceId: string,
+  changeSets: DomainChangeSet[],
+): DomainProjectionSnapshot {
   return {
-    workspaceId,
+    workspaceId: targetWorkspaceId,
     revision: changeSets.at(-1)?.revision ?? 0,
     changeSets,
     createdAt: 1,
@@ -112,6 +128,40 @@ function remoteWith(
 }
 
 describe('DomainSyncService recovery', () => {
+  it('rejects a remote snapshot from another workspace before restoring it', async () => {
+    const store = new MemoryDomainChangeStore()
+    const remote = remoteWith({ snapshots: [snapshotForWorkspace('foreign-workspace', [])] })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).rejects.toThrow(
+      /workspace mismatch/i,
+    )
+    expect(store.restoreCalls).toHaveLength(0)
+    expect(remote.pullDomainChangeSets).not.toHaveBeenCalled()
+  })
+
+  it('rejects a corrupt remote snapshot without restoring unverified data', async () => {
+    const store = new MemoryDomainChangeStore()
+    const corrupt = { ...changeSet('corrupt-snapshot', 0), checksum: 'corrupt' }
+    const remote = remoteWith({ snapshots: [snapshot([corrupt])] })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).rejects.toThrow(
+      /checksum mismatch/i,
+    )
+    expect(store.restoreCalls).toHaveLength(0)
+    expect(remote.pullDomainChangeSets).not.toHaveBeenCalled()
+  })
+
+  it('rejects a remote snapshot with a non-contiguous revision cursor', async () => {
+    const store = new MemoryDomainChangeStore()
+    const second = changeSet('snapshot-gap', 1)
+    const remote = remoteWith({ snapshots: [snapshot([second])] })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).rejects.toThrow(
+      /not contiguous/i,
+    )
+    expect(store.restoreCalls).toHaveLength(0)
+  })
+
   it('restores a newer remote snapshot before pulling incremental changes', async () => {
     const store = new MemoryDomainChangeStore()
     const remoteSnapshot = snapshot([changeSet('remote-1', 0), changeSet('remote-2', 1)])
@@ -181,6 +231,102 @@ describe('DomainSyncService recovery', () => {
       'remote-2',
       'remote-3',
     ])
+  })
+
+  it('recovers from an out-of-order batch instead of appending a gap', async () => {
+    const store = new MemoryDomainChangeStore()
+    const first = changeSet('batch-remote-1', 0)
+    const second = changeSet('batch-remote-2', 1)
+    const remote = remoteWith({
+      snapshots: [snapshot([]), snapshot([first, second])],
+      pulls: [[second, first], []],
+    })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).resolves.toMatchObject({
+      pulled: 0,
+      revision: 2,
+      recovered: true,
+    })
+    expect(store.restoreCalls).toHaveLength(1)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual([
+      'batch-remote-1',
+      'batch-remote-2',
+    ])
+  })
+
+  it('recovers from a remote change set for another workspace', async () => {
+    const store = new MemoryDomainChangeStore()
+    const foreign = changeSetForWorkspace('foreign-change', 'foreign-workspace', 0)
+    const canonical = changeSet('canonical-change', 0)
+    const remote = remoteWith({
+      snapshots: [snapshot([]), snapshot([canonical])],
+      pulls: [[foreign], []],
+    })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).resolves.toMatchObject({
+      revision: 1,
+      recovered: true,
+    })
+    expect(store.restoreCalls).toHaveLength(1)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual(['canonical-change'])
+  })
+
+  it('recovers from a corrupt remote change set before appending it', async () => {
+    const store = new MemoryDomainChangeStore()
+    const canonical = changeSet('canonical-after-corruption', 0)
+    const corrupt = { ...canonical, id: 'corrupt-pull', checksum: 'corrupt' }
+    const remote = remoteWith({
+      snapshots: [snapshot([]), snapshot([canonical])],
+      pulls: [[corrupt], []],
+    })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).resolves.toMatchObject({
+      revision: 1,
+      recovered: true,
+    })
+    expect(store.restoreCalls).toHaveLength(1)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual([
+      'canonical-after-corruption',
+    ])
+  })
+
+  it('recovers when a duplicate revision has a different identity or checksum', async () => {
+    const store = new MemoryDomainChangeStore()
+    const local = changeSet('local-canonical', 0)
+    const conflictingDuplicate = changeSet('different-at-revision-one', 0)
+    await store.append(local)
+    const remote = remoteWith({
+      snapshots: [snapshot([]), snapshot([local])],
+      pulls: [[conflictingDuplicate], []],
+    })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).resolves.toMatchObject({
+      revision: 1,
+      recovered: true,
+    })
+    expect(store.restoreCalls).toHaveLength(1)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual(['local-canonical'])
+  })
+
+  it('rejects a push result that reports another workspace', async () => {
+    const store = new MemoryDomainChangeStore()
+    const local = changeSet('local-workspace-check', 0)
+    await store.append(local)
+    const remote = remoteWith({
+      pushes: [
+        {
+          accepted: true,
+          duplicate: false,
+          workspaceId: 'foreign-workspace',
+          revision: 1,
+        },
+      ],
+    })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).rejects.toThrow(
+      /invalid result/i,
+    )
+    expect(store.restoreCalls).toHaveLength(0)
   })
 
   it('ignores an idempotent duplicate pull without snapshot recovery', async () => {
