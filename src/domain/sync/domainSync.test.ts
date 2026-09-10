@@ -76,4 +76,40 @@ describe('authoritative IndexedDB domain change log', () => {
       }),
     ).rejects.toThrow(/cursor|contiguous/i)
   })
+
+  it('serializes snapshot restore before replaying a pending local write', async () => {
+    const store = new IndexedDbDomainChangeStore()
+    const workspaceId = 'sync-restore-order-workspace'
+    for (const record of await db.getAll<{ id: string; workspaceId?: string }>('domainChangeSets')) {
+      if (record.workspaceId === workspaceId) await db.delete('domainChangeSets', record.id)
+    }
+
+    const first = createDomainChangeSet({
+      id: 'restore-order-set-1',
+      workspaceId,
+      sourceDeviceId: 'desktop-a',
+      baseRevision: 0,
+      changes: [change],
+      createdAt: 4,
+    })
+    await store.append(first)
+    const snapshot = await store.createSnapshot(workspaceId)
+    const second = createDomainChangeSet({
+      id: 'restore-order-set-2',
+      workspaceId,
+      sourceDeviceId: 'desktop-a',
+      baseRevision: 1,
+      changes: [{ ...change, id: 'change-2', revision: 2, payload: { title: '第二章' } }],
+      createdAt: 5,
+    })
+    await store.append(second)
+
+    await Promise.all([store.restore(snapshot), store.append(second)])
+
+    expect(await store.latestRevision(workspaceId)).toBe(2)
+    expect((await store.list(workspaceId)).map((record) => record.id)).toEqual([
+      'restore-order-set-1',
+      'restore-order-set-2',
+    ])
+  })
 })

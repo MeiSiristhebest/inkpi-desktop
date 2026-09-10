@@ -160,12 +160,29 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
     validateOrderedChangeSets(snapshot.changeSets, snapshot.workspaceId)
     if ((snapshot.changeSets.at(-1)?.revision ?? 0) !== snapshot.revision)
       throw new Error('Domain projection snapshot cursor mismatch')
-    const existing = await db.getAll<DomainChangeSet>('domainChangeSets')
-    for (const record of existing.filter((record) => record.workspaceId === snapshot.workspaceId)) {
-      await db.delete('domainChangeSets', record.id)
-    }
-    for (const changeSet of snapshot.changeSets)
-      await db.put('domainChangeSets', cloneChangeSet(changeSet))
+    const operation = this.appendQueue.then(() =>
+      db.runTransaction(['domainChangeSets'], (transaction, fail) => {
+        const store = transaction.objectStore('domainChangeSets')
+        const request = store.getAll()
+        request.onerror = () => fail(request.error)
+        request.onsuccess = () => {
+          try {
+            for (const record of (request.result as DomainChangeSet[]).filter(
+              (record) => record.workspaceId === snapshot.workspaceId,
+            )) {
+              store.delete(record.id)
+            }
+            for (const changeSet of snapshot.changeSets) {
+              store.put(cloneChangeSet(changeSet))
+            }
+          } catch (error) {
+            fail(error)
+          }
+        }
+      }),
+    )
+    this.appendQueue = operation.catch(() => undefined)
+    await operation
   }
 
   createSnapshot(workspaceId: string): Promise<DomainProjectionSnapshot> {
