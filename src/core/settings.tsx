@@ -36,7 +36,7 @@ export type ThemeSkin = 'default' | 'youth' | 'ink' | 'forest'
 
 /**
  * 完全对齐 @inkpi/ai / @inkpi/protocol 的 ProviderType。
- * 这是 daemon 端 streamAi 实际支持的 provider 全集——UI 不做删减。
+ * 这是 Daemon Runtime 路由实际支持的 provider 全集——UI 不做删减。
  */
 export type ProviderType =
   | 'openai'
@@ -60,7 +60,7 @@ export type ProviderType =
   | 'faux'
 
 /**
- * 完全对齐 @inkpi/ai 的 ModelConfig —— daemon 端 streamAi(model, ...) 接收的全部字段。
+ * 完全对齐 @inkpi/ai 的 ModelConfig —— Daemon Runtime 接收的全部模型配置字段。
  * 自定义 AI 界面把这些字段全盘暴露给用户配置。
  */
 export interface ModelConfig {

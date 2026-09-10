@@ -1770,7 +1770,7 @@ const AboutTab: FC = () => (
           </div>
           <div className="rounded-xl bg-[var(--ink-bg-elevated)] px-3.5 py-2.5 border border-[var(--ink-border)]">
             <div className="text-[var(--ink-text-faint)]">AI 引擎</div>
-            <div className="text-[var(--ink-text)] font-medium mt-0.5">InkPi Daemon (streamAi)</div>
+              <div className="text-[var(--ink-text)] font-medium mt-0.5">InkPi Daemon Task Runtime</div>
           </div>
         </div>
         <p className="text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
