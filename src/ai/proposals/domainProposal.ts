@@ -50,9 +50,7 @@ export function aiProposalToDomainProposal(
   proposal: AiProposal,
   evidence?: DomainProposalEvidence[],
 ): DomainProposal {
-  if (!Array.isArray(proposal.patches) || proposal.patches.length === 0) {
-    throw new Error('Text proposal requires at least one patch')
-  }
+  const patches = requireTextPatches(proposal.patches, proposal.documentId)
 
   const domainProposal: DomainProposal = {
     id: proposal.id,
@@ -60,7 +58,7 @@ export function aiProposalToDomainProposal(
     baseRevision: proposal.baseRevision,
     target: { type: 'document', id: proposal.documentId },
     operation: 'update',
-    patch: proposal.patches.map(cloneTextPatch),
+    patch: patches,
     ...(proposal.sourceHash === undefined ? {} : { sourceHash: proposal.sourceHash }),
     ...(proposal.explanation === undefined ? {} : { reason: proposal.explanation }),
     ...(evidence === undefined ? {} : { evidence: evidence.map(cloneEvidence) }),
@@ -214,10 +212,6 @@ function validateAiProposalMetadata(options: DomainProposalToAiProposalOptions):
       throw new Error(`Text proposal ${name} must be a non-negative integer`)
     }
   }
-}
-
-function cloneTextPatch(patch: TextPatch): TextPatch {
-  return { ...patch }
 }
 
 function cloneEvidence(evidence: DomainProposalEvidence): DomainProposalEvidence {

@@ -75,5 +75,11 @@ describe('Desktop DomainProposal protocol boundary', () => {
     expect(() =>
       deserializeDomainProposal(JSON.stringify({ ...domainProposal, evidence: [null] })),
     ).toThrow('Domain proposal evidence at index 0 must be an object')
+    expect(() =>
+      aiProposalToDomainProposal({
+        ...textProposal,
+        patches: [{ documentId: 'chapter-1', from: 2, to: 1, text: '坏' }],
+      }),
+    ).toThrow('Text proposal patch at index 0 is invalid')
   })
 })
