@@ -85,4 +85,23 @@ describe('daemon proposal sync adapter', () => {
       currentHash: 'current-snapshot-hash',
     })
   })
+
+  it('rejects malformed evidence while restoring a shared projection snapshot', async () => {
+    const state = proposalToProjectionState(proposal)
+    const request = vi.fn(async <T>(method: string): Promise<T> => {
+      if (method !== 'proposal.sync.snapshot') throw new Error(`Unexpected RPC method: ${method}`)
+      return {
+        workspaceId: 'workspace-1',
+        revision: 1,
+        proposals: [{ ...state, evidence: [{ semanticFrom: 2, semanticTo: 1 }] }],
+        hash: 'snapshot-hash',
+        updatedAt: 20,
+      } as T
+    })
+    const remote = createDaemonProposalSyncRemote({ request, close: vi.fn() } as unknown as RpcClient)
+
+    await expect(remote.snapshotProposals('workspace-1')).rejects.toThrow(
+      'Domain proposal evidence range at index 0 is inverted',
+    )
+  })
 })

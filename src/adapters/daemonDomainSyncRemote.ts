@@ -6,8 +6,15 @@ import type {
   ProposalProjectionState,
   ProposalSyncPushResult,
 } from '@inkpi/protocol'
-import { calculateProposalProjectionStateHash } from '@inkpi/protocol'
-import type { AiProposal, TextPatch } from '../ai/proposals/proposalLedger'
+import {
+  calculateProposalProjectionStateHash,
+  validateProposalProjectionState,
+} from '@inkpi/protocol'
+import {
+  aiProposalToDomainProposal,
+  domainProposalToAiProposal,
+} from '../ai/proposals/domainProposal'
+import type { AiProposal } from '../ai/proposals/proposalLedger'
 import type { DomainSyncRemote } from '../domain/sync/domainSyncService'
 import type { RpcClient } from '../ports/aiGateway'
 
@@ -41,23 +48,19 @@ export interface ProposalSyncRemote {
 
 /** Maps the Desktop review ledger to the domain-neutral Runtime projection. */
 export function proposalToProjectionState(proposal: AiProposal): ProposalProjectionState {
-  return {
-    id: proposal.id,
-    taskId: proposal.taskId,
-    baseRevision: proposal.baseRevision,
-    target: { type: 'document', id: proposal.documentId },
-    operation: 'update',
-    patch: proposal.patches.map(cloneTextPatch),
+  const domainProposal = aiProposalToDomainProposal(proposal)
+  const state: ProposalProjectionState = {
+    ...domainProposal,
     status: proposal.status,
     createdAt: proposal.createdAt,
     updatedAt: proposal.updatedAt ?? proposal.createdAt,
-    ...(proposal.sourceHash === undefined ? {} : { sourceHash: proposal.sourceHash }),
-    ...(proposal.explanation === undefined ? {} : { reason: proposal.explanation }),
     ...(proposal.inversePatches === undefined
       ? {}
-      : { inversePatch: proposal.inversePatches.map(cloneTextPatch) }),
+      : { inversePatch: proposal.inversePatches.map((patch) => ({ ...patch })) }),
     ...(proposal.committedRevision === undefined ? {} : { committedRevision: proposal.committedRevision }),
   }
+  validateProposalProjectionState(state)
+  return state
 }
 
 /** Creates the JSON-RPC adapter without changing the local ProposalLedger. */
@@ -83,48 +86,12 @@ export function createDaemonProposalSyncRemote(client: RpcClient): ProposalSyncR
 }
 
 function projectionStateToProposal(state: ProposalProjectionState): AiProposal {
-  if (state.target.type !== 'document') throw new Error('Unsupported proposal projection target')
-  return {
-    id: state.id,
-    taskId: state.taskId,
-    documentId: state.target.id,
-    baseRevision: state.baseRevision,
-    patches: requireTextPatches(state.patch, state.target.id),
+  validateProposalProjectionState(state)
+  return domainProposalToAiProposal(state, {
     status: state.status,
     createdAt: state.createdAt,
     ...(state.updatedAt === state.createdAt ? {} : { updatedAt: state.updatedAt }),
-    ...(state.sourceHash === undefined ? {} : { sourceHash: state.sourceHash }),
-    ...(state.reason === undefined ? {} : { explanation: state.reason }),
-    ...(state.inversePatch === undefined
-      ? {}
-      : { inversePatches: requireTextPatches(state.inversePatch, state.target.id) }),
+    ...(state.inversePatch === undefined ? {} : { inversePatch: state.inversePatch }),
     ...(state.committedRevision === undefined ? {} : { committedRevision: state.committedRevision }),
-  }
-}
-
-function requireTextPatches(value: unknown, documentId: string): TextPatch[] {
-  if (!Array.isArray(value) || value.length === 0) throw new Error('Proposal projection is missing text patches')
-  return value.map((candidate) => {
-    if (!candidate || typeof candidate !== 'object') throw new Error('Proposal projection contains an invalid patch')
-    const patch = candidate as Record<string, unknown>
-    if (
-      !Number.isInteger(patch.from) ||
-      !Number.isInteger(patch.to) ||
-      (patch.from as number) < 0 ||
-      (patch.to as number) < (patch.from as number) ||
-      typeof patch.text !== 'string'
-    ) {
-      throw new Error('Proposal projection contains an invalid text patch')
-    }
-    return {
-      documentId,
-      from: patch.from as number,
-      to: patch.to as number,
-      text: patch.text,
-    }
   })
-}
-
-function cloneTextPatch(patch: TextPatch): TextPatch {
-  return { ...patch }
 }
