@@ -56,7 +56,9 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
       setCleanScore(res.cleanScore)
     } else {
       const chap = chapters.find((c) => c.id === chapId)
-      const chapText = chap?.content || ''
+      const chapText = chap
+        ? semanticTextFromContent(chap.id, chap.content || '', chap.revision)
+        : ''
       setText(chapText)
       const res = engine.lint(chapText, rules)
       setIssues(res.issues)
