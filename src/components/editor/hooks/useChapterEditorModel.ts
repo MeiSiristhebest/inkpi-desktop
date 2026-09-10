@@ -361,7 +361,28 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     [onStats, patch],
   )
 
-  const autosave = useChapterAutosave(flushSave)
+  const reportSaveError = useCallback(
+    (error: unknown) => {
+      console.warn('[InkPi Desktop] Chapter save failed:', error)
+      patch({ isSaved: false })
+    },
+    [patch],
+  )
+
+  const runPersistence = useCallback(
+    async (operation: () => Promise<void>): Promise<boolean> => {
+      try {
+        await operation()
+        return true
+      } catch (error) {
+        reportSaveError(error)
+        return false
+      }
+    },
+    [reportSaveError],
+  )
+
+  const autosave = useChapterAutosave(flushSave, reportSaveError)
 
   const loadData = useCallback(async () => {
     const [allVols, allChs] = await Promise.all([
@@ -385,8 +406,12 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         createdAt: now,
         updatedAt: now,
       }))
-      for (const v of seedVols) await indexedDbProjectRepository.saveVolume(v)
-      for (const c of seedChs) await indexedDbProjectRepository.saveChapter(c)
+      for (const v of seedVols) {
+        if (!(await runPersistence(() => indexedDbProjectRepository.saveVolume(v)))) return
+      }
+      for (const c of seedChs) {
+        if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(c)))) return
+      }
       const init: Record<string, boolean> = {}
       seedVols.forEach((v) => (init[v.id] = true))
       patch({
@@ -408,10 +433,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       activeChapterId: projChs[0]?.id ?? '',
       activeChapter: projChs[0] ?? null,
     })
-  }, [projectId, patch])
+  }, [projectId, patch, runPersistence])
 
   useEffect(() => {
-    void loadData()
+    void loadData().catch(reportSaveError)
     return () => {
       autosave.cancel()
       if (ghostTimer.current) clearTimeout(ghostTimer.current)
@@ -446,12 +471,12 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       createdAt: clock.now(),
       updatedAt: clock.now(),
     }
-    await indexedDbProjectRepository.saveVolume(vol)
+    if (!(await runPersistence(() => indexedDbProjectRepository.saveVolume(vol)))) return
     patch({
       volumes: [...volumes, vol],
       expanded: { ...stateRef.current.expanded, [vol.id]: true },
     })
-  }, [projectId, patch])
+  }, [projectId, patch, runPersistence])
 
   const handleNewChapter = useCallback(
     async (targetVolumeId?: string) => {
@@ -469,7 +494,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
           createdAt: clock.now(),
           updatedAt: clock.now(),
         }
-        await indexedDbProjectRepository.saveVolume(vol)
+        if (!(await runPersistence(() => indexedDbProjectRepository.saveVolume(vol)))) return
         patch({
           volumes: [...volumes, vol],
           expanded: { ...stateRef.current.expanded, [vol.id]: true },
@@ -488,7 +513,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         createdAt: clock.now(),
         updatedAt: clock.now(),
       }
-      await indexedDbProjectRepository.saveChapter(ch)
+      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(ch)))) return
       patch({
         chapters: [...stateRef.current.chapters, ch],
         activeChapterId: ch.id,
@@ -497,7 +522,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         isSaved: true,
       })
     },
-    [projectId, patch],
+    [projectId, patch, runPersistence],
   )
 
   const renameChapter = useCallback(
@@ -508,7 +533,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         return
       }
       const updated = { ...chapter, title: trimmed, updatedAt: clock.now() }
-      await indexedDbProjectRepository.saveChapter(updated)
+      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) return
       const chapters = stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c))
       const next: Partial<EditorModelState> = { chapters, renamingChapter: null }
       if (stateRef.current.activeChapterId === updated.id) {
@@ -521,12 +546,13 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }
       patch(next)
     },
-    [onStats, patch],
+    [onStats, patch, runPersistence],
   )
 
   const deleteChapter = useCallback(
     async (chapter: ChapterRecord) => {
-      await indexedDbProjectRepository.deleteChapter(chapter.id)
+      if (!(await runPersistence(() => indexedDbProjectRepository.deleteChapter(chapter.id))))
+        return
       const nextList = stateRef.current.chapters.filter((c) => c.id !== chapter.id)
       const next: Partial<EditorModelState> = { chapters: nextList, deletingChapter: null }
       if (stateRef.current.activeChapterId === chapter.id) {
@@ -540,7 +566,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }
       patch(next)
     },
-    [patch],
+    [patch, runPersistence],
   )
 
   const renameVolume = useCallback(
@@ -551,40 +577,45 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         return
       }
       const updated = { ...volume, title: trimmed, updatedAt: clock.now() }
-      await indexedDbProjectRepository.saveVolume(updated)
+      if (!(await runPersistence(() => indexedDbProjectRepository.saveVolume(updated)))) return
       const volumes = stateRef.current.volumes.map((v) => (v.id === updated.id ? updated : v))
       patch({ volumes, renamingVolume: null })
     },
-    [patch],
+    [patch, runPersistence],
   )
 
   const deleteVolume = useCallback(
     async (volume: VolumeRecord) => {
-      await indexedDbProjectRepository.deleteVolume(volume.id)
+      if (!(await runPersistence(() => indexedDbProjectRepository.deleteVolume(volume.id)))) return
       const volumes = stateRef.current.volumes.filter((v) => v.id !== volume.id)
       const fallbackVolId = volumes[0]?.id
       let chapters = stateRef.current.chapters
+      let persistenceFailed = false
       if (fallbackVolId) {
         chapters = await Promise.all(
           chapters.map(async (ch) => {
             if (ch.volumeId === volume.id) {
               const updated = { ...ch, volumeId: fallbackVolId, updatedAt: clock.now() }
-              await indexedDbProjectRepository.saveChapter(updated)
+              if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) {
+                persistenceFailed = true
+                return ch
+              }
               return updated
             }
             return ch
           }),
         )
+        if (persistenceFailed) return
       } else {
         // 无其余分卷时，删除该卷下所有章节
         for (const ch of chapters.filter((c) => c.volumeId === volume.id)) {
-          await indexedDbProjectRepository.deleteChapter(ch.id)
+          if (!(await runPersistence(() => indexedDbProjectRepository.deleteChapter(ch.id)))) return
         }
         chapters = chapters.filter((c) => c.volumeId !== volume.id)
       }
       patch({ volumes, chapters, deletingVolume: null })
     },
-    [patch],
+    [patch, runPersistence],
   )
 
   const moveChapterToVolume = useCallback(
@@ -592,7 +623,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       if (chapter.volumeId === targetVolumeId) return
       const order = stateRef.current.chapters.filter((c) => c.volumeId === targetVolumeId).length
       const updated = { ...chapter, volumeId: targetVolumeId, order, updatedAt: clock.now() }
-      await indexedDbProjectRepository.saveChapter(updated)
+      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) return
       const chapters = stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c))
       const next: Partial<EditorModelState> = {
         chapters,
@@ -603,7 +634,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }
       patch(next)
     },
-    [patch],
+    [patch, runPersistence],
   )
 
   const duplicateChapter = useCallback(
@@ -621,14 +652,14 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         createdAt: clock.now(),
         updatedAt: clock.now(),
       }
-      await indexedDbProjectRepository.saveChapter(copyCh)
+      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(copyCh)))) return
       patch({
         chapters: [...stateRef.current.chapters, copyCh],
         activeChapterId: copyCh.id,
         activeChapter: copyCh,
       })
     },
-    [patch],
+    [patch, runPersistence],
   )
 
   const copyChapterText = useCallback(
@@ -660,7 +691,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       const cur = stateRef.current.activeChapter
       if (!cur) return
       const updated = { ...cur, status, updatedAt: clock.now() }
-      await indexedDbProjectRepository.saveChapter(updated)
+      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) return
       const chapters = stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c))
       patch({ chapters, activeChapter: updated })
       onStats?.({
@@ -669,7 +700,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         updatedAt: updated.updatedAt,
       })
     },
-    [onStats, patch],
+    [onStats, patch, runPersistence],
   )
 
   const setCanvasWidth = useCallback(
@@ -872,8 +903,8 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   }, [editorRef, patch, setGhostText, autosave])
 
   const save = useCallback(() => {
-    void flushSave()
-  }, [flushSave])
+    void flushSave().catch(reportSaveError)
+  }, [flushSave, reportSaveError])
 
   // ── 切换章节时把内容灌入编辑器（不覆盖正在进行的输入）──
   useEffect(() => {
