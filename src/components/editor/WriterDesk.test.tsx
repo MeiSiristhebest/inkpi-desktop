@@ -5,21 +5,109 @@ import { db } from '../../db/indexedDB'
 import type { ChapterRecord, VolumeRecord } from '../../types'
 
 // 用内存 mock 替换真实 IndexedDB 调用，便于断言持久化行为
-vi.mock('../../db/indexedDB', () => ({
-  db: {
-    getAll: vi.fn(),
-    get: vi.fn().mockResolvedValue(undefined),
-    put: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined),
-  },
-  uid: (p = 'id') => `${p}-mock-${Math.random().toString(36).slice(2, 8)}`,
-}))
+vi.mock('../../db/indexedDB', () => {
+  const getAll = vi.fn()
+  const get = vi.fn().mockResolvedValue(undefined)
+  const put = vi.fn().mockResolvedValue(undefined)
+  const remove = vi.fn().mockResolvedValue(undefined)
+
+  const runTransaction = vi.fn(
+    (
+      _stores: string[],
+      operation: (
+        transaction: {
+          objectStore: (store: string) => {
+            get: (key: string) => {
+              result: unknown
+              error: unknown
+              onsuccess?: () => void
+              onerror?: () => void
+            }
+            getAll: () => {
+              result: unknown
+              error: unknown
+              onsuccess?: () => void
+              onerror?: () => void
+            }
+            put: (value: unknown) => unknown
+            delete: (key: string) => unknown
+          }
+        },
+        fail: (error: unknown) => void,
+      ) => void,
+    ) =>
+      new Promise<void>((resolve, reject) => {
+        let failed = false
+
+        const fail = (error: unknown) => {
+          failed = true
+          reject(error instanceof Error ? error : new Error(String(error)))
+        }
+
+        const requestFor = (load: () => Promise<unknown>) => {
+          const request: {
+            result: unknown
+            error: unknown
+            onsuccess?: () => void
+            onerror?: () => void
+          } = {
+            result: undefined,
+            error: null,
+          }
+
+          load().then(
+            (result) => {
+              request.result = result
+              request.onsuccess?.()
+            },
+            (error: unknown) => {
+              request.error = error
+              request.onerror?.()
+            },
+          )
+
+          return request
+        }
+
+        const transaction = {
+          objectStore: (store: string) => ({
+            get: (key: string) => requestFor(() => Promise.resolve(get(store, key))),
+            getAll: () => requestFor(() => Promise.resolve(getAll(store))),
+            put: (value: unknown) => {
+              void put(store, value)
+              return {}
+            },
+            delete: (key: string) => {
+              void remove(store, key)
+              return {}
+            },
+          }),
+        }
+
+        try {
+          operation(transaction, fail)
+        } catch (error) {
+          fail(error)
+        }
+
+        setTimeout(() => {
+          if (!failed) resolve()
+        }, 0)
+      }),
+  )
+
+  return {
+    db: { getAll, get, put, delete: remove, runTransaction },
+    uid: (p = 'id') => `${p}-mock-${Math.random().toString(36).slice(2, 8)}`,
+  }
+})
 
 const mocked = db as unknown as {
   getAll: ReturnType<typeof vi.fn>
   get: ReturnType<typeof vi.fn>
   put: ReturnType<typeof vi.fn>
   delete: ReturnType<typeof vi.fn>
+  runTransaction: ReturnType<typeof vi.fn>
 }
 
 const vol = (over: Partial<VolumeRecord> = {}): VolumeRecord => ({
@@ -123,7 +211,9 @@ describe('WriterDesk — 卷章树导航', () => {
     fireEvent.click(screen.getByTitle('新建章节'))
     await waitFor(() => expect(screen.getByText('第一卷')).toBeInTheDocument())
     expect(screen.getAllByText('第001章 未命名').length).toBeGreaterThan(0)
-    const entityWrites = mocked.put.mock.calls.filter(([store]) => store === 'volumes' || store === 'chapters')
+    const entityWrites = mocked.put.mock.calls.filter(
+      ([store]) => store === 'volumes' || store === 'chapters',
+    )
     expect(entityWrites).toHaveLength(2)
   })
 
