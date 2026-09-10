@@ -21,8 +21,9 @@ const makeTask = (id: string): AiTask => ({
   input: { documentId: 'project-document', text: '长任务正文' },
 })
 
-const makeAssistant = (): AiAssistant => ({
+const makeAssistant = (getTaskExecution?: AiAssistant['getTaskExecution']): AiAssistant => ({
   runTask: vi.fn(async () => null),
+  ...(getTaskExecution ? { getTaskExecution } : {}),
   resumeTask: vi.fn(async () => undefined),
   status: vi.fn(async () => ({ running: true })),
   close: vi.fn(async () => undefined),
@@ -91,5 +92,114 @@ describe('Desktop App restart recovery evidence', () => {
 
     hook.unmount()
     await afterRestart.remove(projectId, task.id)
+  })
+
+  it('reconciles a daemon-completed task and removes the stale App record after reconnect', async () => {
+    const task = makeTask('desktop-restart-completed-task')
+    const beforeRestart = new IndexedDbTaskRecoveryStore()
+    await beforeRestart.save({
+      projectId,
+      task,
+      snapshot: {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'running',
+        checkpoint: { step: 'chunk-12', updatedAt: 150 },
+      },
+      updatedAt: 150,
+    })
+
+    const getTaskExecution = vi.fn(async () => ({
+      task,
+      snapshot: {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'completed' as const,
+        finishedAt: 250,
+      },
+      attempts: 1,
+      updatedAt: 250,
+    }))
+    const assistant = makeAssistant(getTaskExecution)
+    connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const afterRestart = new IndexedDbTaskRecoveryStore()
+    const hook = renderHook(() => useAiConversation('ws://daemon', null, projectId, {
+      taskRecoveryStore: afterRestart,
+      clock: fixedClock,
+    }))
+
+    await waitFor(() => expect(getTaskExecution).toHaveBeenCalledWith(task.id))
+    await waitFor(async () => {
+      await expect(afterRestart.list(projectId)).resolves.toEqual([])
+    })
+    expect(hook.result.current.taskRecovery).toEqual([])
+
+    hook.unmount()
+  })
+
+  it('reattaches the persisted task again when an already running App reconnects', async () => {
+    const task = makeTask('desktop-reconnect-task')
+    const store = new IndexedDbTaskRecoveryStore()
+    await store.save({
+      projectId,
+      task,
+      snapshot: {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'running',
+      },
+      updatedAt: 150,
+    })
+
+    const firstExecution = vi.fn(async () => ({
+      task,
+      snapshot: {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'running' as const,
+        progress: 0.25,
+      },
+      attempts: 1,
+      updatedAt: 200,
+    }))
+    const secondExecution = vi.fn(async () => ({
+      task,
+      snapshot: {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'checkpointed' as const,
+        progress: 0.5,
+        checkpoint: { step: 'chunk-12', updatedAt: 250 },
+      },
+      attempts: 1,
+      updatedAt: 250,
+    }))
+    const first = makeAssistant(firstExecution)
+    const second = makeAssistant(secondExecution)
+    connectToDaemon
+      .mockResolvedValueOnce({ client: first, connected: true })
+      .mockResolvedValueOnce({ client: second, connected: true })
+
+    const hook = renderHook(() => useAiConversation('ws://daemon', null, projectId, {
+      taskRecoveryStore: store,
+      clock: fixedClock,
+    }))
+
+    await waitFor(() => expect(firstExecution).toHaveBeenCalledWith(task.id))
+    await waitFor(() => expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('running'))
+
+    await act(async () => {
+      hook.result.current.reconnect()
+      await waitFor(() => expect(connectToDaemon).toHaveBeenCalledTimes(2))
+    })
+    await waitFor(() => expect(secondExecution).toHaveBeenCalledWith(task.id))
+    await waitFor(() =>
+      expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('checkpointed'),
+    )
+    expect(second.close).not.toHaveBeenCalled()
+    expect(first.close).toHaveBeenCalledOnce()
+
+    hook.unmount()
+    expect(second.close).toHaveBeenCalledOnce()
   })
 })
