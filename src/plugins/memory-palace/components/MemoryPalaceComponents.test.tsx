@@ -44,7 +44,9 @@ describe('MemoryPalace Components', () => {
 
   it('renders MemoryPalaceMasterView and searches entities', async () => {
     vi.mocked(indexedDbCodexEntityRepository.getAll).mockResolvedValue(fakeEntities as any)
-    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(fakeChapters as any)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
 
     render(<MemoryPalaceMasterView projectId="proj-1" />)
     expect(screen.getByText(/记忆宫殿与历史实体快速召回仪/)).toBeInTheDocument()
@@ -55,12 +57,7 @@ describe('MemoryPalace Components', () => {
 
   it('renders MemoryPalaceDrawer with detected entities', async () => {
     vi.mocked(indexedDbCodexEntityRepository.getAll).mockResolvedValue(fakeEntities as any)
-    render(
-      <MemoryPalaceDrawer
-        projectId="proj-1"
-        currentText="古刹之中，镇魔钟鸣响不绝。"
-      />
-    )
+    render(<MemoryPalaceDrawer projectId="proj-1" currentText="古刹之中，镇魔钟鸣响不绝。" />)
     await waitFor(() => {
       expect(screen.getByText(/本章登场实体速查/)).toBeInTheDocument()
       expect(screen.getByText(/镇魔钟/)).toBeInTheDocument()

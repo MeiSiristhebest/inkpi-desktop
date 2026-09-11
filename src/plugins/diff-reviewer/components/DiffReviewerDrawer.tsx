@@ -1,8 +1,8 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { DiffReviewerEngine } from "../engine/DiffReviewerEngine"
-import type { DiffComputeResult } from "../types"
-import { GitCompare } from "lucide-react"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { DiffReviewerEngine } from '../engine/DiffReviewerEngine'
+import type { DiffComputeResult } from '../types'
+import { GitCompare } from 'lucide-react'
 
 export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const [diffResult, setDiffResult] = useState<DiffComputeResult | null>(null)
@@ -13,9 +13,7 @@ export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
       return
     }
     // 模拟基于原稿与改写草案的快照 Diff
-    const proposedDraft = currentText
-      .replace(/握/g, "紧握")
-      .replace(/说/g, "冷哼道")
+    const proposedDraft = currentText.replace(/握/g, '紧握').replace(/说/g, '冷哼道')
     const res = DiffReviewerEngine.computeDiff(currentText, proposedDraft)
     setDiffResult(res)
   }, [currentText])
@@ -27,9 +25,7 @@ export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
           <GitCompare className="w-4 h-4" /> 双栏审校随动
         </span>
         {diffResult && (
-          <span className="text-[10px] text-slate-400">
-            {diffResult.hunks.length} 处修订分块
-          </span>
+          <span className="text-[10px] text-slate-400">{diffResult.hunks.length} 处修订分块</span>
         )}
       </div>
 
@@ -42,7 +38,9 @@ export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
           <div className="grid grid-cols-2 gap-2 text-center">
             <div className="p-2 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
               <div className="text-slate-400 text-[10px]">新增字行</div>
-              <div className="text-sm font-bold text-emerald-600">+{diffResult.stats.additions}</div>
+              <div className="text-sm font-bold text-emerald-600">
+                +{diffResult.stats.additions}
+              </div>
             </div>
             <div className="p-2 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800">
               <div className="text-slate-400 text-[10px]">删除/替换字行</div>

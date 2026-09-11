@@ -16,7 +16,7 @@ export interface AuthorOpsProfileRecord {
     title: string
     genre: string
     totalWords: number
-    status: "serialized" | "finished" | "planning"
+    status: 'serialized' | 'finished' | 'planning'
   }>
   supportChannels: {
     wechatPayQr?: string

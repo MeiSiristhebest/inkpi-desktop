@@ -30,8 +30,8 @@ describe('Desktop DomainProposal protocol boundary', () => {
         target: { type: 'entity', id: 'entity-1' },
         operation: 'update',
         patch: { name: '主角' },
-        evidence: {}
-      } as never)
+        evidence: {},
+      } as never),
     ).toThrow('Domain proposal evidence must be an array')
 
     expect(() =>
@@ -42,8 +42,8 @@ describe('Desktop DomainProposal protocol boundary', () => {
         target: { type: 'entity', id: 'entity-1' },
         operation: 'update',
         patch: { name: '主角' },
-        evidence: [{ documentId: 'chapter-1', semanticFrom: 0, semanticTo: 2 }]
-      })
+        evidence: [{ documentId: 'chapter-1', semanticFrom: 0, semanticTo: 2 }],
+      }),
     ).not.toThrow()
   })
 

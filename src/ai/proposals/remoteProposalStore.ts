@@ -14,9 +14,7 @@ export interface RemoteProposalStoreOptions {
 
 export type ProposalSyncFailureReason = NonNullable<ProposalSyncPushResult['reason']>
 export type ProposalSyncErrorCode =
-  | 'PROPOSAL_SYNC_REVISION_CONFLICT'
-  | 'PROPOSAL_SYNC_HASH_MISMATCH'
-  | 'PROPOSAL_SYNC_REJECTED'
+  'PROPOSAL_SYNC_REVISION_CONFLICT' | 'PROPOSAL_SYNC_HASH_MISMATCH' | 'PROPOSAL_SYNC_REJECTED'
 
 /** A daemon projection rejected a local proposal state update. */
 export class ProposalSyncError extends Error {
@@ -85,7 +83,9 @@ export function attachProposalSyncRemote(
   return result
 }
 
-export function getProposalSyncRemote(result: TaskResult | null | undefined): ProposalSyncRemote | undefined {
+export function getProposalSyncRemote(
+  result: TaskResult | null | undefined,
+): ProposalSyncRemote | undefined {
   return result && typeof result === 'object' ? taskResultRemotes.get(result) : undefined
 }
 
@@ -133,8 +133,7 @@ export class RemoteProposalStore implements ProposalStore {
 
     this.local = local
     this.workspaceId = workspaceId
-    this.remoteProvider =
-      typeof remote === 'function' ? remote : () => remote
+    this.remoteProvider = typeof remote === 'function' ? remote : () => remote
   }
 
   async list(): Promise<AiProposal[]> {
@@ -202,9 +201,9 @@ function isOptions(value: unknown): value is RemoteProposalStoreOptions {
 function isProposalStore(value: unknown): value is ProposalStore {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      typeof (value as ProposalStore).list === 'function' &&
-      typeof (value as ProposalStore).save === 'function',
+    typeof value === 'object' &&
+    typeof (value as ProposalStore).list === 'function' &&
+    typeof (value as ProposalStore).save === 'function',
   )
 }
 

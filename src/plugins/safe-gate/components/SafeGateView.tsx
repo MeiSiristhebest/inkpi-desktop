@@ -60,7 +60,11 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             ? list.find((c) => c.id === hostContext.activeChapter?.id) || list[0]
             : list[0]
           setSelectedChapterId(defaultChap.id)
-      const chapContent = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
+          const chapContent = semanticTextFromContent(
+            defaultChap.id,
+            defaultChap.content || '',
+            defaultChap.revision,
+          )
           if (chapContent.trim()) {
             setText(chapContent)
             setScanResult(engine.scan(chapContent, genre))

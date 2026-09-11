@@ -10,12 +10,9 @@ describe("ShadowReader UI Components", () => {
     expect(screen.getByText(/读者弹幕与毒点预判模拟器/)).toBeDefined()
   })
 
-  it("ShadowReaderDrawer renders correctly", () => {
+  it('ShadowReaderDrawer renders correctly', () => {
     render(
-      <ShadowReaderDrawer
-        projectId="p1"
-        currentText="林凡一剑封喉！全场寂静，倒吸一口凉气！"
-      />
+      <ShadowReaderDrawer projectId="p1" currentText="林凡一剑封喉！全场寂静，倒吸一口凉气！" />,
     )
     expect(screen.getByText(/读者弹幕哨兵/)).toBeDefined()
   })
@@ -52,4 +49,3 @@ describe("ShadowReader UI Components", () => {
     await waitFor(() => expect(screen.getAllByRole('textbox')[1]).toHaveValue('新章节。'))
   })
 })
-

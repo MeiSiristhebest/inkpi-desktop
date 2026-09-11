@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  ChekhovGunRecord,
-  ChekhovGunRepository,
-} from '../ports/chekhovGunRepository'
+import type { ChekhovGunRecord, ChekhovGunRepository } from '../ports/chekhovGunRepository'
 
 export const indexedDbChekhovGunRepository: ChekhovGunRepository = {
   async getAll(projectId: string): Promise<ChekhovGunRecord[]> {

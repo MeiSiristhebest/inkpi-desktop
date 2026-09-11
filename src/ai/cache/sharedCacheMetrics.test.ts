@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiTask } from '@inkpi/protocol'
-import {
-  ContextCache,
-  SharedCacheMetrics,
-  createSharedCacheMetrics,
-} from './index'
+import { ContextCache, SharedCacheMetrics, createSharedCacheMetrics } from './index'
 import { CreativeIntelligence } from '../orchestrator/creativeIntelligence'
 
 function makeTask(id: string, revision: number): AiTask {

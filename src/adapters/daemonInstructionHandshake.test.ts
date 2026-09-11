@@ -78,7 +78,9 @@ describe('Desktop instruction registration handshake', () => {
     const client = clientWithReceipt(registrationResult(definitions))
     const assistant = createDaemonAiAssistant(client)
 
-    await expect(assistant.runTask(makeTask('handshake-ok'), { pollIntervalMs: 0 })).resolves.toMatchObject({
+    await expect(
+      assistant.runTask(makeTask('handshake-ok'), { pollIntervalMs: 0 }),
+    ).resolves.toMatchObject({
       output: { text: 'ok' },
     })
     expect(client.calls).toEqual(['instruction.register', 'task.submit', 'task.status'])
@@ -91,9 +93,9 @@ describe('Desktop instruction registration handshake', () => {
     const client = clientWithReceipt(receipt)
     const assistant = createDaemonAiAssistant(client)
 
-    await expect(assistant.runTask(makeTask('handshake-bad'), { pollIntervalMs: 0 })).rejects.toThrow(
-      'registration IDs do not match',
-    )
+    await expect(
+      assistant.runTask(makeTask('handshake-bad'), { pollIntervalMs: 0 }),
+    ).rejects.toThrow('registration IDs do not match')
     expect(client.calls).toEqual(['instruction.register'])
   })
 })

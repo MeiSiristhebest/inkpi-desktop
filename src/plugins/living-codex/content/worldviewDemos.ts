@@ -24,7 +24,8 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
     subtitle: '完整修真宗门·神兵法宝·境界战力·爱恨因果图谱',
     genre: 'xianxia',
     badge: '玄幻修仙',
-    description: '包含主角陈渊、宗门大弟子萧景行、青岚剑宗、九幽魔门、青铜古塔、云州断界渊等 8 大实体与双向关系网。',
+    description:
+      '包含主角陈渊、宗门大弟子萧景行、青岚剑宗、九幽魔门、青铜古塔、云州断界渊等 8 大实体与双向关系网。',
     entitiesCount: 8,
     entities: (projectId: string): CodexEntity[] => [
       {
@@ -33,11 +34,30 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: '陈渊',
         aliases: ['渊哥', '废脉少主', '吞天神体'],
         category: 'character',
-        attributes: { 身份定位: '青岚宗杂役弟子(实为神体传承者)', 实力境界: '淬体九重巅峰', 保密等级: '绝密' },
+        attributes: {
+          身份定位: '青岚宗杂役弟子(实为神体传承者)',
+          实力境界: '淬体九重巅峰',
+          保密等级: '绝密',
+        },
         relations: [
-          { targetId: '萧景行', targetName: '萧景行', relationType: '宿敌', description: '多次暗中打压' },
-          { targetId: '青岚宗', targetName: '青岚宗', relationType: '所属宗门', description: '杂役院' },
-          { targetId: '青铜小塔', targetName: '青铜小塔', relationType: '持有至宝', description: '识海温养' },
+          {
+            targetId: '萧景行',
+            targetName: '萧景行',
+            relationType: '宿敌',
+            description: '多次暗中打压',
+          },
+          {
+            targetId: '青岚宗',
+            targetName: '青岚宗',
+            relationType: '所属宗门',
+            description: '杂役院',
+          },
+          {
+            targetId: '青铜小塔',
+            targetName: '青铜小塔',
+            relationType: '持有至宝',
+            description: '识海温养',
+          },
         ],
         summary: '废脉觉醒吞天神体的男主，行事果决沉稳，不信天命，深藏不露。',
         detailMarkdown: `### 人物背景\n本为陈家少主，因灵脉破碎沦为青岚宗杂役，机缘巧合在断界渊唤醒青铜古塔。\n\n### 功法与神通\n《吞天造化诀》：可炼化诸天异火与煞气。`,
@@ -52,7 +72,12 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         category: 'character',
         attributes: { 身份定位: '青岚宗内门首席真传', 实力境界: '筑基初期', 保密等级: '公开' },
         relations: [
-          { targetId: '陈渊', targetName: '陈渊', relationType: '打压目标', description: '夺其家传玉佩' },
+          {
+            targetId: '陈渊',
+            targetName: '陈渊',
+            relationType: '打压目标',
+            description: '夺其家传玉佩',
+          },
           { targetId: '青岚宗', targetName: '青岚宗', relationType: '核心真传' },
         ],
         summary: '青岚宗天之骄子，表面温润如玉风度翩翩，实则心胸狭隘，容不得他人超越。',
@@ -66,9 +91,18 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: '洛青璇',
         aliases: ['青璇仙子', '太上关门弟子'],
         category: 'character',
-        attributes: { 身份定位: '太上长老关门弟子/太阴神体', 实力境界: '筑基中期', 保密等级: '核心机密' },
+        attributes: {
+          身份定位: '太上长老关门弟子/太阴神体',
+          实力境界: '筑基中期',
+          保密等级: '核心机密',
+        },
         relations: [
-          { targetId: '陈渊', targetName: '陈渊', relationType: '暗中盟友', description: '受其救命之恩' },
+          {
+            targetId: '陈渊',
+            targetName: '陈渊',
+            relationType: '暗中盟友',
+            description: '受其救命之恩',
+          },
           { targetId: '青岚宗', targetName: '青岚宗', relationType: '圣女候补' },
         ],
         summary: '清冷出尘的剑道天才，性格淡漠不染尘埃，唯独对陈渊持有特殊的探究与信任。',
@@ -82,7 +116,11 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: '青岚宗',
         aliases: ['青岚剑派', '云州三大正道'],
         category: 'faction',
-        attributes: { 宗门品阶: '二流巅峰', 镇派功法: '《青岚太虚剑诀》', 宗门属地: '云州苍霞山脉' },
+        attributes: {
+          宗门品阶: '二流巅峰',
+          镇派功法: '《青岚太虚剑诀》',
+          宗门属地: '云州苍霞山脉',
+        },
         relations: [
           { targetId: '断界渊', targetName: '断界渊', relationType: '封锁禁地' },
           { targetId: '九幽魔宫', targetName: '九幽魔宫', relationType: '世代死仇' },
@@ -99,9 +137,7 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         aliases: ['九幽煞宗', '魔道魁首'],
         category: 'faction',
         attributes: { 宗门品阶: '一流魔门', 镇教至宝: '九幽招魂幡', 危险等级: '极度凶险' },
-        relations: [
-          { targetId: '青岚宗', targetName: '青岚宗', relationType: '图谋覆灭' },
-        ],
+        relations: [{ targetId: '青岚宗', targetName: '青岚宗', relationType: '图谋覆灭' }],
         summary: '南疆凶名赫赫的魔道第一宗，行事狠辣不择手段，常年觊觎断界渊下的太古遗迹。',
         detailMarkdown: `### 核心秘法\n以九幽地煞祭炼魔兵，门徒遍布各州散修盟会。`,
         createdAt: DEMO_TS,
@@ -113,10 +149,12 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: '青铜小塔',
         aliases: ['混沌镇天塔', '太古铜塔'],
         category: 'item',
-        attributes: { 法宝品阶: '天阶极品(封印中)', 当前层数: '九层已开第一层', 核心效能: '时间加速·混沌熔炉' },
-        relations: [
-          { targetId: '陈渊', targetName: '陈渊', relationType: '认主绑定' },
-        ],
+        attributes: {
+          法宝品阶: '天阶极品(封印中)',
+          当前层数: '九层已开第一层',
+          核心效能: '时间加速·混沌熔炉',
+        },
+        relations: [{ targetId: '陈渊', targetName: '陈渊', relationType: '认主绑定' }],
         summary: '太古遗留的至高神器，内蕴一方独立混沌小天地，可十倍加速参悟功法。',
         detailMarkdown: `### 神通能力\n第一层【混沌熔炉】：可自动提纯任何劣质丹药与斑驳灵气。`,
         createdAt: DEMO_TS,
@@ -128,10 +166,12 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: '断界渊',
         aliases: ['万丈魔渊', '太古坠魔地'],
         category: 'location',
-        attributes: { 危险等级: '禁地特级', 地理位置: '青岚宗后山十万里外', 核心产出: '太阴玄煞/天外陨铁' },
-        relations: [
-          { targetId: '青岚宗', targetName: '青岚宗', relationType: '宗门后山禁地' },
-        ],
+        attributes: {
+          危险等级: '禁地特级',
+          地理位置: '青岚宗后山十万里外',
+          核心产出: '太阴玄煞/天外陨铁',
+        },
+        relations: [{ targetId: '青岚宗', targetName: '青岚宗', relationType: '宗门后山禁地' }],
         summary: '云州与魔域交界处的天堑深渊，终年黑雾笼罩，藏有太古仙魔大战的诸多秘境遗迹。',
         detailMarkdown: `### 区域环境\n深渊下罡风如刀，寻常金丹修士难逾千丈。`,
         createdAt: DEMO_TS,
@@ -160,7 +200,8 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
     subtitle: '巨型财阀·义体改造·暗网协议·边缘行者',
     genre: 'cyberpunk',
     badge: '赛博朋克',
-    description: '包含传奇雇佣兵 V、荒坂巨型财阀、军用科技、黑客深网、斯安威斯坦神经义体等实体与博弈网络。',
+    description:
+      '包含传奇雇佣兵 V、荒坂巨型财阀、军用科技、黑客深网、斯安威斯坦神经义体等实体与博弈网络。',
     entitiesCount: 6,
     entities: (projectId: string): CodexEntity[] => [
       {
@@ -169,7 +210,11 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: 'V',
         aliases: ['边缘行者V', '夜之城传奇'],
         category: 'character',
-        attributes: { 身份定位: '顶级雇佣兵/独狼', 义体化率: '65%', 神经系统: '军用级斯安威斯坦5代' },
+        attributes: {
+          身份定位: '顶级雇佣兵/独狼',
+          义体化率: '65%',
+          神经系统: '军用级斯安威斯坦5代',
+        },
         relations: [
           { targetId: '荒坂集团', targetName: '荒坂集团', relationType: '生死对抗' },
           { targetId: '强尼·银手', targetName: '强尼·银手', relationType: '意识共生' },
@@ -185,10 +230,12 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: '荒坂集团',
         aliases: ['荒坂公司', 'Arasaka Corp'],
         category: 'faction',
-        attributes: { 企业评级: '超级巨头(Megacorp)', 垄断领域: '安保/武器/意识上传Relic', 控制权: '荒坂家族' },
-        relations: [
-          { targetId: '新夜城', targetName: '新夜城', relationType: '幕后统治者' },
-        ],
+        attributes: {
+          企业评级: '超级巨头(Megacorp)',
+          垄断领域: '安保/武器/意识上传Relic',
+          控制权: '荒坂家族',
+        },
+        relations: [{ targetId: '新夜城', targetName: '新夜城', relationType: '幕后统治者' }],
         summary: '掌控全球军火与意识上传技术的巨型企业，夜之城的绝对幕后主宰。',
         detailMarkdown: `### 权力结构\n由荒坂三郎一手缔造，拥有令主权国家俯首的私有浮空舰队与精锐机械军团。`,
         createdAt: DEMO_TS,
@@ -200,10 +247,12 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
         name: '斯安威斯坦',
         aliases: ['军用级沙盘', '时空加速神经阀'],
         category: 'item',
-        attributes: { 义体类别: '中枢操作系统', 反应加成: '思维感知加速500%', 负荷指数: '极易导致赛博精神病' },
-        relations: [
-          { targetId: 'V', targetName: 'V', relationType: '脊柱植入' },
-        ],
+        attributes: {
+          义体类别: '中枢操作系统',
+          反应加成: '思维感知加速500%',
+          负荷指数: '极易导致赛博精神病',
+        },
+        relations: [{ targetId: 'V', targetName: 'V', relationType: '脊柱植入' }],
         summary: '军方绝密研发的高负荷神经操作系统，启动后可将使用者体感时间压缩至子弹时间。',
         detailMarkdown: `### 性能指标\n需搭配高纯度免疫抑制剂使用，连续过载会导致中枢神经崩溃。`,
         createdAt: DEMO_TS,
@@ -261,7 +310,8 @@ export const WORLDVIEW_DEMO_PACKS: WorldviewDemoPack[] = [
     subtitle: '圣堂骑士·龙语魔法·秘境遗迹·古神契约',
     genre: 'fantasy',
     badge: '西方奇幻',
-    description: '包含亚瑟骑士王、梅林大魔导师、圣光教廷、圆桌骑士团、誓约胜利之剑、阿瓦隆圣地等史诗级全套世界观。',
+    description:
+      '包含亚瑟骑士王、梅林大魔导师、圣光教廷、圆桌骑士团、誓约胜利之剑、阿瓦隆圣地等史诗级全套世界观。',
     entitiesCount: 6,
     entities: (projectId: string): CodexEntity[] => [
       {

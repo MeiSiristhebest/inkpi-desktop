@@ -38,6 +38,8 @@ describe('healthCheck 领域规则', () => {
   })
 
   it('findMissingDisplayNames 在无 displayCol 时返回空', () => {
-    expect(findMissingDisplayNames([{ id: 'r1', data: {} }], { id: 't', name: 'T' })).toHaveLength(0)
+    expect(findMissingDisplayNames([{ id: 'r1', data: {} }], { id: 't', name: 'T' })).toHaveLength(
+      0,
+    )
   })
 })

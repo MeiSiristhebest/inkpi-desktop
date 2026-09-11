@@ -72,7 +72,9 @@ export class ChekhovRadarEngine {
     const suggestions: PlantGunSuggestion[] = []
 
     // 1. 器物与重宝伏笔特征 (残卷/玉佩/铜镜/古剑/断刃/指环/手镯/黑鼎/锦囊/印记)
-    const itemMatch = text.match(/([\u4e00-\u9fa5]{2,8}(?:残卷|玉佩|铜镜|古剑|断刃|指环|手镯|黑鼎|锦囊|小鼎|骨片|道符|令牌))/g)
+    const itemMatch = text.match(
+      /([\u4e00-\u9fa5]{2,8}(?:残卷|玉佩|铜镜|古剑|断刃|指环|手镯|黑鼎|锦囊|小鼎|骨片|道符|令牌))/g,
+    )
     if (itemMatch) {
       for (const item of itemMatch.slice(0, 3)) {
         suggestions.push({
@@ -110,7 +112,11 @@ export class ChekhovRadarEngine {
   /**
    * 检查是否在当前文本中提及了某个伏笔（呼应回收判定），若触发回收通过事件总线通知
    */
-  static checkMentionedGuns(guns: ChekhovGunRecord[], text: string, projectId?: string): ChekhovGunRecord[] {
+  static checkMentionedGuns(
+    guns: ChekhovGunRecord[],
+    text: string,
+    projectId?: string,
+  ): ChekhovGunRecord[] {
     const mentioned = guns.filter((gun) => {
       if (gun.status === 'fired' || gun.status === 'abandoned') return false
       return text.includes(gun.gunName)

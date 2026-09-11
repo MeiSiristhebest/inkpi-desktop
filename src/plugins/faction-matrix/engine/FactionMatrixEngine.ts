@@ -64,7 +64,7 @@ export class FactionMatrixEngine {
     factions: FactionNode[],
     diplomacies: FactionDiplomacyRecord[],
     targetFactionId: string,
-    directDelta: number
+    directDelta: number,
   ): EventRippleResult {
     const target = factions.find((f) => f.id === targetFactionId)
     const directName = target ? target.name : '目标势力'
@@ -79,7 +79,7 @@ export class FactionMatrixEngine {
       const dip = diplomacies.find(
         (d) =>
           (d.factionAId === targetFactionId && d.factionBId === fac.id) ||
-          (d.factionBId === targetFactionId && d.factionAId === fac.id)
+          (d.factionBId === targetFactionId && d.factionAId === fac.id),
       )
 
       if (!dip) continue
@@ -87,7 +87,8 @@ export class FactionMatrixEngine {
       let change = 0
       let reason = ''
 
-      const isAlliedOrFriendly = dip.stance === 'allied' || dip.stance === 'friendly' || dip.stance === 'vassal'
+      const isAlliedOrFriendly =
+        dip.stance === 'allied' || dip.stance === 'friendly' || dip.stance === 'vassal'
       const isHostileOrEnemy = dip.stance === 'hostile' || dip.stance === 'mortal_enemy'
 
       if (directDelta < 0) {
@@ -134,14 +135,14 @@ export class FactionMatrixEngine {
    */
   detectStructuralParadoxes(
     factions: FactionNode[],
-    diplomacies: FactionDiplomacyRecord[]
+    diplomacies: FactionDiplomacyRecord[],
   ): BalanceParadox[] {
     const paradoxes: BalanceParadox[] = []
     const getStance = (idA: string, idB: string): FactionStance => {
       const rec = diplomacies.find(
         (d) =>
           (d.factionAId === idA && d.factionBId === idB) ||
-          (d.factionBId === idA && d.factionAId === idB)
+          (d.factionBId === idA && d.factionAId === idB),
       )
       return rec ? rec.stance : 'neutral'
     }

@@ -1,15 +1,15 @@
-import React from 'react';
-import type { CardRecord } from '../../types';
-import type { CardRecordRepository } from '../../ports/cardRecordRepository';
-import { useCardViewModel } from '../../hooks/useCardViewModel';
-import { Plus, User, Edit2, Trash2, X, Check } from 'lucide-react';
-import { confirmDialog } from '../../adapters/confirmDialog';
+import React from 'react'
+import type { CardRecord } from '../../types'
+import type { CardRecordRepository } from '../../ports/cardRecordRepository'
+import { useCardViewModel } from '../../hooks/useCardViewModel'
+import { Plus, User, Edit2, Trash2, X, Check } from 'lucide-react'
+import { confirmDialog } from '../../adapters/confirmDialog'
 
 export interface CardViewProps {
-  projectId: string;
-  tabId: string;
-  tabMeta: any;
-  repository?: CardRecordRepository;
+  projectId: string
+  tabId: string
+  tabMeta: any
+  repository?: CardRecordRepository
 }
 
 export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, repository }) => {
@@ -26,14 +26,14 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
     projectId,
     tabId,
     repository,
-  });
+  })
 
-  const modules = tabMeta?.modules || [];
+  const modules = tabMeta?.modules || []
 
   const handleDelete = async (id: string) => {
-    if (!(await confirmDialog.confirm('确定删除该档案卡片？'))) return;
-    await deleteCard(id);
-  };
+    if (!(await confirmDialog.confirm('确定删除该档案卡片？'))) return
+    await deleteCard(id)
+  }
 
   return (
     <div className="flex-1 h-screen flex flex-col justify-between bg-[var(--ink-bg)] text-[var(--ink-text)] p-6 select-none overflow-hidden">
@@ -41,7 +41,9 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
         <div className="flex items-center justify-between pb-4 border-b border-[var(--ink-border)]">
           <div>
             <h2 className="text-lg font-bold">{tabMeta?.name || '设定卡片'}</h2>
-            <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">{tabMeta?.description || '结构化卡片与档案管理'}</p>
+            <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
+              {tabMeta?.description || '结构化卡片与档案管理'}
+            </p>
           </div>
           <button
             onClick={createCard}
@@ -72,9 +74,14 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
                         <div className="w-7 h-7 rounded-lg bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] flex items-center justify-center font-bold text-xs">
                           {card.name ? card.name.slice(0, 1) : '?'}
                         </div>
-                        <h4 className="font-bold text-sm text-[var(--ink-text)]">{card.name || '未命名'}</h4>
+                        <h4 className="font-bold text-sm text-[var(--ink-text)]">
+                          {card.name || '未命名'}
+                        </h4>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
                           onClick={() => setEditingCard({ ...card })}
                           className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
@@ -97,16 +104,24 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
                         .slice(0, 4)
                         .map(([k, v]) => (
                           <div key={k} className="flex items-baseline gap-2 truncate">
-                            <span className="font-medium text-[var(--ink-text-faint)] shrink-0">{k}:</span>
-                            <span className="truncate text-[var(--ink-text)]">{String(v || '-')}</span>
+                            <span className="font-medium text-[var(--ink-text-faint)] shrink-0">
+                              {k}:
+                            </span>
+                            <span className="truncate text-[var(--ink-text)]">
+                              {String(v || '-')}
+                            </span>
                           </div>
                         ))}
                     </div>
                   </div>
 
                   <div className="mt-4 pt-2 border-t border-[var(--ink-border)]/30 text-[10px] text-[var(--ink-text-faint)] flex justify-between">
-                    <span>更新于 {new Date(card.updatedAt || card.createdAt || 0).toLocaleDateString()}</span>
-                    <span className="group-hover:text-[var(--ink-accent)] transition-colors">点击查看完整档案 →</span>
+                    <span>
+                      更新于 {new Date(card.updatedAt || card.createdAt || 0).toLocaleDateString()}
+                    </span>
+                    <span className="group-hover:text-[var(--ink-accent)] transition-colors">
+                      点击查看完整档案 →
+                    </span>
                   </div>
                 </div>
               ))}
@@ -143,7 +158,9 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
 
             <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
               <div>
-                <label className="text-xs font-semibold text-[var(--ink-text)]">名称 / 标题 *</label>
+                <label className="text-xs font-semibold text-[var(--ink-text)]">
+                  名称 / 标题 *
+                </label>
                 <input
                   type="text"
                   placeholder="如：陈渊、苍岚大陆等"
@@ -158,12 +175,16 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
                   <h4 className="text-xs font-bold text-[var(--ink-accent)]">{mod.name}</h4>
                   <div className="space-y-2.5 pl-1">
                     {(mod.fields || []).map((field: any, fIdx: number) => {
-                      const val = editingCard.data?.[field.name] || '';
+                      const val = editingCard.data?.[field.name] || ''
                       return (
                         <div key={fIdx} className="space-y-1">
                           <label className="text-xs font-medium text-[var(--ink-text)] flex items-center justify-between">
                             <span>{field.name}</span>
-                            {field.desc && <span className="text-[10px] text-[var(--ink-text-faint)]">{field.desc}</span>}
+                            {field.desc && (
+                              <span className="text-[10px] text-[var(--ink-text-faint)]">
+                                {field.desc}
+                              </span>
+                            )}
                           </label>
                           <input
                             type="text"
@@ -178,7 +199,7 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
                             className="w-full p-2 text-xs rounded-lg bg-[var(--ink-bg)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"
                           />
                         </div>
-                      );
+                      )
                     })}
                   </div>
                 </div>
@@ -204,5 +225,5 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
         </div>
       )}
     </div>
-  );
-};
+  )
+}

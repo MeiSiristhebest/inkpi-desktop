@@ -1,4 +1,4 @@
-import type { ScrapbookFragmentRecord } from "../../ports/scrapbookRepository"
+import type { ScrapbookFragmentRecord } from '../../ports/scrapbookRepository'
 
 export type { ScrapbookFragmentRecord }
 

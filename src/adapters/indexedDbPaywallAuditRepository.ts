@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  PaywallAuditRecord,
-  PaywallAuditRepository,
-} from '../ports/paywallAuditRepository'
+import type { PaywallAuditRecord, PaywallAuditRepository } from '../ports/paywallAuditRepository'
 
 export const indexedDbPaywallAuditRepository: PaywallAuditRepository = {
   async getAll(projectId: string): Promise<PaywallAuditRecord[]> {

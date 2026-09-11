@@ -47,7 +47,10 @@ export function compileStoryContext(
   const items = collections.flatMap(([collection, values]) =>
     Object.values(values).map((value) => toContextItem(collection, value)),
   )
-  const maxItems = options.maxItems === undefined ? Number.MAX_SAFE_INTEGER : Math.max(0, Math.floor(options.maxItems))
+  const maxItems =
+    options.maxItems === undefined
+      ? Number.MAX_SAFE_INTEGER
+      : Math.max(0, Math.floor(options.maxItems))
   const canonicalFacts = items.filter((item) => item.canonical).slice(0, maxItems)
   const hypotheses = items.filter((item) => !item.canonical).slice(0, maxItems)
   const grouped = (collection: string) => items.filter((item) => item.collection === collection)
@@ -77,16 +80,18 @@ export function createStoryContextProvider(getState: () => StoryState | undefine
         includeHypotheses: task.contextPolicy?.metadata?.includeHypotheses !== false,
       })
       if (!story) return []
-      return [{
-        id: `story:${story.revision}:${story.fingerprint}`,
-        source: 'creative.story',
-        kind: 'story-state',
-        text: stableSerialize(story),
-        data: story,
-        priority: 800,
-        relevance: 1,
-        dependency: 1,
-      }]
+      return [
+        {
+          id: `story:${story.revision}:${story.fingerprint}`,
+          source: 'creative.story',
+          kind: 'story-state',
+          text: stableSerialize(story),
+          data: story,
+          priority: 800,
+          relevance: 1,
+          dependency: 1,
+        },
+      ]
     },
   }
 }
@@ -97,7 +102,9 @@ function toContextItem(collection: string, value: unknown): StoryContextItem {
   const factLevel = String(provenance.factLevel || 'ai-inference')
   const confidence = typeof provenance.confidence === 'number' ? provenance.confidence : 0
   const label = String(record.name || record.title || record.label || record.id || collection)
-  const summary = String(record.summary || record.description || record.statement || record.content || label)
+  const summary = String(
+    record.summary || record.description || record.statement || record.content || label,
+  )
   return {
     id: String(record.id),
     collection,
@@ -113,7 +120,10 @@ function stableSerialize(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? ''
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`
   const record = value as Record<string, unknown>
-  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`)
+    .join(',')}}`
 }
 
 function hash(value: string): string {

@@ -1,4 +1,8 @@
-import type { LinterSeverity, LinterRuleConfig, LinterProjectConfigRecord } from "../../ports/narrativeLinterRepository"
+import type {
+  LinterSeverity,
+  LinterRuleConfig,
+  LinterProjectConfigRecord,
+} from '../../ports/narrativeLinterRepository'
 
 export type { LinterSeverity, LinterRuleConfig, LinterProjectConfigRecord }
 

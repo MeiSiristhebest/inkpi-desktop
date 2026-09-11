@@ -174,7 +174,7 @@ describe('CodexGraphStore Topology & Context Slicing', () => {
     // optimal-b: 命中 keyword 长度 5 -> weight = max(1.0, 5*0.4) = 2.0
     // 输入文本同时包含三者：
     const text = '贪心陷阱实体 优选实体甲 优选实体乙'
-    
+
     // 我们找到一个 tokenBudget 恰好容纳 optimal-a + optimal-b，但容纳不下 greedy-trap + 任意一个
     // 查询各自 cost：
     // baseTagTokens = 20

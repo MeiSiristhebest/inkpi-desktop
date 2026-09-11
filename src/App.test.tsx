@@ -28,10 +28,15 @@ vi.mock('./components/ai/AiAssistantPanel', () => ({
 }))
 
 vi.mock('./core/projectService', () => ({
-  loadProjects: vi.fn(() => Promise.resolve([{ id: 'test-proj', name: '测试项目', updatedAt: Date.now() }])),
+  loadProjects: vi.fn(() =>
+    Promise.resolve([{ id: 'test-proj', name: '测试项目', updatedAt: Date.now() }]),
+  ),
   createProject: vi.fn(),
   importProject: vi.fn(() =>
-    Promise.resolve({ ok: true, project: { id: 'imported', name: '导入项目', updatedAt: Date.now() } }),
+    Promise.resolve({
+      ok: true,
+      project: { id: 'imported', name: '导入项目', updatedAt: Date.now() },
+    }),
   ),
 }))
 

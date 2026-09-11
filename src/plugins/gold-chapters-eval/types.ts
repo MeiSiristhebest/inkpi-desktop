@@ -1,4 +1,4 @@
-import type { GoldChapterEvalRecord } from "../../ports/goldChaptersRepository"
+import type { GoldChapterEvalRecord } from '../../ports/goldChaptersRepository'
 
 export type { GoldChapterEvalRecord }
 

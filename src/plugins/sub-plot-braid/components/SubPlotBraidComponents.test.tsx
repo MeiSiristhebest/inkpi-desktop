@@ -51,12 +51,7 @@ describe('SubPlotBraid Components', () => {
   it('renders SubPlotBraidDrawer with active detected strands', async () => {
     vi.mocked(indexedDbSubPlotRepository.getAll).mockResolvedValue(fakeStrands as any)
 
-    render(
-      <SubPlotBraidDrawer
-        projectId="proj-1"
-        currentText="白长老面色凝重，握紧了手中密信。"
-      />
-    )
+    render(<SubPlotBraidDrawer projectId="proj-1" currentText="白长老面色凝重，握紧了手中密信。" />)
 
     await waitFor(() => {
       expect(screen.getByText(/多线叙事随动感知/)).toBeInTheDocument()

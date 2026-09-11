@@ -92,7 +92,8 @@ export function parseDistilledFacts(result: TaskResult): DistilledStoryFacts {
 
 export function parseDeepReasoning(result: TaskResult): DeepReasoningResult {
   const value = requireStructuredResult<unknown>(result)
-  if (!value || typeof value !== 'object') throw new Error('Deep reasoning output must be an object')
+  if (!value || typeof value !== 'object')
+    throw new Error('Deep reasoning output must be an object')
   const data = value as Record<string, unknown>
   if (typeof data.answer !== 'string') throw new Error('Deep reasoning output is missing answer')
   return {

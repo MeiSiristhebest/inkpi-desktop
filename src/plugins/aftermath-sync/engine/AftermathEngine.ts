@@ -1,4 +1,4 @@
-import type { EntityCandidate, AftermathAnalysisResult } from "../types"
+import type { EntityCandidate, AftermathAnalysisResult } from '../types'
 
 /**
  * AftermathEngine (章后桥段设定回写器引擎)
@@ -16,17 +16,20 @@ export class AftermathEngine {
     chapterText: string,
     chapterId: string,
     chapterOrder: number,
-    knownEntities: EntityCandidate[]
+    knownEntities: EntityCandidate[],
   ): AftermathAnalysisResult {
-    const lines = chapterText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0)
-    const patches: AftermathAnalysisResult["patches"] = []
+    const lines = chapterText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+    const patches: AftermathAnalysisResult['patches'] = []
 
     let attributeUpdates = 0
     let relations = 0
     let ownershipTransfers = 0
 
-    const characters = knownEntities.filter((e) => e.category === "character")
-    const items = knownEntities.filter((e) => e.category === "item")
+    const characters = knownEntities.filter((e) => e.category === 'character')
+    const items = knownEntities.filter((e) => e.category === 'item')
 
     lines.forEach((line) => {
       // 1. 境界突破与战力跃迁模式匹配
@@ -34,7 +37,9 @@ export class AftermathEngine {
         if (!line.includes(char.name)) continue
 
         // 匹配突破模式："突破至/突破到/晋升为/迈入 [境界]"
-        const breakPattern = new RegExp(`${char.name}[^。！？]*?(?:突破到|突破至|成功晋升为|一举迈入|踏入)([\u4e00-\u9fa5]{2,6}期|[\u4e00-\u9fa5]{2,6}境|[\u4e00-\u9fa5]{2,6}阶)`)
+        const breakPattern = new RegExp(
+          `${char.name}[^。！？]*?(?:突破到|突破至|成功晋升为|一举迈入|踏入)([\u4e00-\u9fa5]{2,6}期|[\u4e00-\u9fa5]{2,6}境|[\u4e00-\u9fa5]{2,6}阶)`,
+        )
         const match = line.match(breakPattern)
         if (match && match[1]) {
           const newTier = match[1]
@@ -45,9 +50,9 @@ export class AftermathEngine {
               chapterOrder,
               entityId: char.id,
               entityName: char.name,
-              changeType: "attribute_update",
-              propertyName: "战力境界",
-              beforeValue: char.currentTier || "未知",
+              changeType: 'attribute_update',
+              propertyName: '战力境界',
+              beforeValue: char.currentTier || '未知',
               afterValue: newTier,
               evidenceSnippet: match[0],
             })
@@ -63,7 +68,9 @@ export class AftermathEngine {
           if (!line.includes(char.name)) continue
 
           // 匹配获取模式："林凡将青阳剑收入囊中" / "收服了灵狐" / "夺得紫阳令"
-          const lootPattern = new RegExp(`${char.name}[^。！？]*?(?:收入囊中|据为己有|夺得|收服|炼化了|握住|接过)${item.name}`)
+          const lootPattern = new RegExp(
+            `${char.name}[^。！？]*?(?:收入囊中|据为己有|夺得|收服|炼化了|握住|接过)${item.name}`,
+          )
           if (lootPattern.test(line)) {
             if (char.name !== item.currentOwner) {
               ownershipTransfers++
@@ -72,9 +79,9 @@ export class AftermathEngine {
                 chapterOrder,
                 entityId: item.id,
                 entityName: item.name,
-                changeType: "ownership_transfer",
-                propertyName: "所有权归属",
-                beforeValue: item.currentOwner || "无主/未知",
+                changeType: 'ownership_transfer',
+                propertyName: '所有权归属',
+                beforeValue: item.currentOwner || '无主/未知',
                 afterValue: char.name,
                 evidenceSnippet: line.slice(0, 45),
               })
@@ -90,16 +97,20 @@ export class AftermathEngine {
             const c1 = characters[i]
             const c2 = characters[j]
             if (line.includes(c1.name) && line.includes(c2.name)) {
-              if (line.includes("结为异姓兄弟") || line.includes("拜其为师") || line.includes("义结金兰")) {
+              if (
+                line.includes('结为异姓兄弟') ||
+                line.includes('拜其为师') ||
+                line.includes('义结金兰')
+              ) {
                 relations++
                 patches.push({
                   chapterId,
                   chapterOrder,
                   entityId: c1.id,
                   entityName: c1.name,
-                  changeType: "new_relation",
-                  propertyName: "人际羁绊",
-                  beforeValue: "相识",
+                  changeType: 'new_relation',
+                  propertyName: '人际羁绊',
+                  beforeValue: '相识',
                   afterValue: `与 ${c2.name} 结为盟友/至交`,
                   evidenceSnippet: line.slice(0, 45),
                 })

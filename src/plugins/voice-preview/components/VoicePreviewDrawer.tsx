@@ -1,10 +1,10 @@
-import type { FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { VoicePreviewEngine } from "../engine/VoicePreviewEngine"
-import { Volume2 } from "lucide-react"
+import type { FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { VoicePreviewEngine } from '../engine/VoicePreviewEngine'
+import { Volume2 } from 'lucide-react'
 
 export const VoicePreviewDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
-  const script = VoicePreviewEngine.extractScript(currentText || "")
+  const script = VoicePreviewEngine.extractScript(currentText || '')
 
   return (
     <div className="p-3 space-y-3 text-xs">
@@ -21,7 +21,7 @@ export const VoicePreviewDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
         <div className="flex justify-between">
           <span className="text-slate-500">登场角色说话人:</span>
           <span className="font-bold text-slate-700 dark:text-slate-300">
-            {script.characterSpeakers.length > 0 ? script.characterSpeakers.join("、") : "无对白"}
+            {script.characterSpeakers.length > 0 ? script.characterSpeakers.join('、') : '无对白'}
           </span>
         </div>
         <div className="text-[10px] text-slate-500">
@@ -31,4 +31,3 @@ export const VoicePreviewDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
     </div>
   )
 }
-

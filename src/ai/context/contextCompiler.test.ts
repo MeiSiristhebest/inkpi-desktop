@@ -8,12 +8,15 @@ describe('creative context compiler', () => {
   it('compiles the real document selection and canonical story context', () => {
     const document = semanticDocumentFromText('chapter-1', '甲乙丙丁', 3)
     let story = createStoryState(8)
-    story = upsertEntity(story, createStoryEntity({
-      id: 'hero',
-      kind: 'character',
-      name: '甲',
-      provenance: { sourceType: 'author', factLevel: 'canonical-fact', confidence: 1 },
-    }))
+    story = upsertEntity(
+      story,
+      createStoryEntity({
+        id: 'hero',
+        kind: 'character',
+        name: '甲',
+        provenance: { sourceType: 'author', factLevel: 'canonical-fact', confidence: 1 },
+      }),
+    )
 
     const context = compileCreativeContext({
       document,

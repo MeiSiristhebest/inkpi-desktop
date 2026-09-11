@@ -1,8 +1,4 @@
-import type {
-  CalendarDefinition,
-  ChapterChronologyEvent,
-  ChronologyAuditResult,
-} from '../types'
+import type { CalendarDefinition, ChapterChronologyEvent, ChronologyAuditResult } from '../types'
 
 export class MultiCalendarEngine {
   /**
@@ -30,7 +26,7 @@ export class MultiCalendarEngine {
    */
   static toAbsoluteDay(
     calendar: CalendarDefinition,
-    date: { year: number; month: number; day: number }
+    date: { year: number; month: number; day: number },
   ): number {
     const daysInYear = calendar.daysPerMonth.reduce((a, b) => a + b, 0)
     let total = calendar.epochOffsetDays + (date.year - 1) * daysInYear
@@ -50,7 +46,7 @@ export class MultiCalendarEngine {
    */
   static fromAbsoluteDay(
     calendar: CalendarDefinition,
-    absoluteDay: number
+    absoluteDay: number,
   ): { year: number; month: number; day: number } {
     let dayRemainder = absoluteDay - calendar.epochOffsetDays
     const daysInYear = calendar.daysPerMonth.reduce((a, b) => a + b, 0)

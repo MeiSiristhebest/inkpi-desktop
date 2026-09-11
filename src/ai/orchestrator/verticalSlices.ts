@@ -1,9 +1,6 @@
 import type { SemanticDocument } from '../../domain/content'
 import type { StoryState } from '../../domain/story'
-import {
-  CreativeIntelligence,
-  type RunTaskOptions,
-} from './creativeIntelligence'
+import { CreativeIntelligence, type RunTaskOptions } from './creativeIntelligence'
 import type { ContinuityAuditTaskInput, DistillationTaskInput } from '../tasks/taskFactories'
 import type { ContinuityFinding, DistilledStoryFacts } from '../results/taskResults'
 
@@ -37,12 +34,16 @@ export class ContinuityAuditScheduler {
     this.debounceMs = Math.max(0, options.debounceMs ?? 300)
   }
 
-  schedule(input: ContinuityAuditTaskInput, options: RunTaskOptions = {}): Promise<ContinuityFinding[]> {
+  schedule(
+    input: ContinuityAuditTaskInput,
+    options: RunTaskOptions = {},
+  ): Promise<ContinuityFinding[]> {
     const key = `${input.document.documentId}:${input.document.revision}:${input.scope ?? 'document'}`
     const existing = this.pending.get(key)
-    if (existing) return new Promise((resolve, reject) => {
-      existing.promiseResolvers.push({ resolve, reject })
-    })
+    if (existing)
+      return new Promise((resolve, reject) => {
+        existing.promiseResolvers.push({ resolve, reject })
+      })
 
     for (const entry of this.pending.values()) {
       if (entry.documentId !== input.document.documentId) continue
@@ -75,7 +76,10 @@ export class ContinuityAuditScheduler {
     this.pending.set(key, entry)
     if (options.signal) {
       if (options.signal.aborted) this.cancelEntry(entry, new AbortError())
-      else options.signal.addEventListener('abort', () => this.cancelEntry(entry, new AbortError()), { once: true })
+      else
+        options.signal.addEventListener('abort', () => this.cancelEntry(entry, new AbortError()), {
+          once: true,
+        })
     }
     return promise
   }
@@ -179,7 +183,10 @@ export class ProjectDistillationWorkflow {
     this.intelligence = intelligence
   }
 
-  async run(input: ProjectDistillationInput, options: DistillationWorkflowOptions = {}): Promise<DistillationWorkflowResult> {
+  async run(
+    input: ProjectDistillationInput,
+    options: DistillationWorkflowOptions = {},
+  ): Promise<DistillationWorkflowResult> {
     if (!input.taskId.trim()) throw new Error('Distillation task id must not be empty')
     if (input.documents.length === 0) throw new Error('Distillation requires at least one document')
     const requestedChunkSize = options.chunkSize ?? 20
@@ -198,30 +205,37 @@ export class ProjectDistillationWorkflow {
     const start = Math.max(0, Math.min(totalChunks, previous?.nextChunk ?? 0))
 
     for (let index = 0; index < totalChunks; index += 1) {
-      if ((index < start && !failedIndexes.has(index)) || (completed.has(index) && !failedIndexes.has(index))) continue
+      if (
+        (index < start && !failedIndexes.has(index)) ||
+        (completed.has(index) && !failedIndexes.has(index))
+      )
+        continue
       if (options.signal?.aborted) throw new AbortError()
       const documents = chunks[index]
       const taskId = `${input.taskId}:chunk:${index}`
       chunkTaskIds.push(taskId)
       const chunkId = `${documents[0].documentId}:${documents.at(-1)?.documentId ?? documents[0].documentId}`
       try {
-        const result = await this.intelligence.runDistillation({
-          taskId,
-          document: documents[0],
-          neighboringDocuments: documents.slice(1),
-          target: input.target ?? 'project',
-          fields: input.fields,
-          storyState: input.storyState,
-          instruction: input.instruction,
-          metadata: {
-            ...input.metadata,
-            distillationChunk: index,
-            distillationChunks: totalChunks,
+        const result = await this.intelligence.runDistillation(
+          {
+            taskId,
+            document: documents[0],
+            neighboringDocuments: documents.slice(1),
+            target: input.target ?? 'project',
+            fields: input.fields,
+            storyState: input.storyState,
+            instruction: input.instruction,
+            metadata: {
+              ...input.metadata,
+              distillationChunk: index,
+              distillationChunks: totalChunks,
+            },
           },
-        }, {
-          signal: options.signal,
-          pollIntervalMs: options.pollIntervalMs,
-        })
+          {
+            signal: options.signal,
+            pollIntervalMs: options.pollIntervalMs,
+          },
+        )
         mergeFacts(facts, result)
         completed.add(index)
         failedIndexes.delete(index)
@@ -229,7 +243,13 @@ export class ProjectDistillationWorkflow {
       } catch (error) {
         failedIndexes.add(index)
         failedIds.add(chunkId)
-        const checkpoint = makeCheckpoint(index + (options.continueOnError ? 1 : 0), completed, failedIndexes, failedIds, facts)
+        const checkpoint = makeCheckpoint(
+          index + (options.continueOnError ? 1 : 0),
+          completed,
+          failedIndexes,
+          failedIds,
+          facts,
+        )
         await options.saveCheckpoint?.(checkpoint)
         reportProgress(options.onProgress, completed.size, totalChunks, [...failedIds])
         if (options.signal?.aborted) throw error
@@ -281,7 +301,8 @@ function reportProgress(
 
 function chunk<T>(items: T[], size: number): T[][] {
   const result: T[][] = []
-  for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))
+  for (let index = 0; index < items.length; index += size)
+    result.push(items.slice(index, index + size))
   return result
 }
 
@@ -292,10 +313,18 @@ function emptyFacts(): DistilledStoryFacts {
 function mergeFacts(target: DistilledStoryFacts, source: DistilledStoryFacts): void {
   target.summary = [target.summary, source.summary].filter(Boolean).join('\n\n')
   appendUnique(target.entities, source.entities, (item) => `${item.kind}:${item.id ?? item.name}`)
-  appendUnique(target.events, source.events, (item) => `${item.type}:${item.id ?? item.description ?? ''}`)
+  appendUnique(
+    target.events,
+    source.events,
+    (item) => `${item.type}:${item.id ?? item.description ?? ''}`,
+  )
   appendUnique(target.promises, source.promises, (item) => `${item.id ?? item.statement}`)
-  const confidences = [target.confidence, source.confidence].filter((value): value is number => typeof value === 'number')
-  target.confidence = confidences.length ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length : undefined
+  const confidences = [target.confidence, source.confidence].filter(
+    (value): value is number => typeof value === 'number',
+  )
+  target.confidence = confidences.length
+    ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
+    : undefined
 }
 
 function appendUnique<T>(target: T[], source: T[], key: (item: T) => string): void {
@@ -312,7 +341,10 @@ function cloneFacts(facts: DistilledStoryFacts): DistilledStoryFacts {
   return structuredClone(facts)
 }
 
-function linkedSignal(primary: AbortSignal, secondary?: AbortSignal): { signal: AbortSignal; cleanup: () => void } {
+function linkedSignal(
+  primary: AbortSignal,
+  secondary?: AbortSignal,
+): { signal: AbortSignal; cleanup: () => void } {
   if (!secondary) return { signal: primary, cleanup: () => undefined }
   const controller = new AbortController()
   const abort = () => controller.abort()

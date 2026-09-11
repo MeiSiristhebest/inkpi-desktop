@@ -54,7 +54,7 @@ describe('GeographyMap Components', () => {
       <GeographyMapDrawer
         projectId="p1"
         currentText="主角一行人翻山越岭，终于来到了传说中的青云门！"
-      />
+      />,
     )
 
     expect(screen.getByText(/地理拓扑随动感知/)).toBeInTheDocument()

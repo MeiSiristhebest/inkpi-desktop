@@ -43,13 +43,7 @@ export const ProjectCard = ({
   onCancelEdit,
 }: ProjectCardProps) => {
   if (isEditing) {
-    return (
-      <ProjectEditForm
-        project={project}
-        onCancel={onCancelEdit}
-        onSave={onSaveEdit}
-      />
-    )
+    return <ProjectEditForm project={project} onCancel={onCancelEdit} onSave={onSaveEdit} />
   }
 
   const vols = stats?.volumes ?? 0
@@ -134,7 +128,9 @@ export const ProjectCard = ({
               {project.intro}
             </p>
           ) : (
-            <p className="mt-2.5 text-[12px] text-[var(--ink-text-faint)] italic">暂未添加作品简介</p>
+            <p className="mt-2.5 text-[12px] text-[var(--ink-text-faint)] italic">
+              暂未添加作品简介
+            </p>
           )}
         </div>
       </div>

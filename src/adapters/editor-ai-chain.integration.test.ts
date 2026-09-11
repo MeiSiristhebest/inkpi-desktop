@@ -6,7 +6,12 @@ import StarterKit from '@tiptap/starter-kit'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createContinueTask, taskResultText } from '../ai'
-import { ProposalConflictError, ProposalLedger, hashText, proposalFromContinuation } from '../ai/proposals'
+import {
+  ProposalConflictError,
+  ProposalLedger,
+  hashText,
+  proposalFromContinuation,
+} from '../ai/proposals'
 import { semanticDocumentFromProseMirror, semanticDocumentFromText } from '../domain/content'
 import { useAiConversation } from '../hooks/useAiConversation'
 import { GhostText, ghostTextPluginKey, setGhostText } from '../extensions/ghost-text'
@@ -54,7 +59,11 @@ describe('Desktop editor AI chain integration', () => {
       await waitFor(() => expect(hook.result.current.isConnected).toBe(true), { timeout: 10_000 })
       testGlobal.WebSocket = browserWebSocket
 
-      const document = semanticDocumentFromText('editor-ai-chain-doc', '雨停后，门外只剩一盏冷灯。', 7)
+      const document = semanticDocumentFromText(
+        'editor-ai-chain-doc',
+        '雨停后，门外只剩一盏冷灯。',
+        7,
+      )
       const task = createContinueTask({
         taskId: 'editor-ai-chain-continuation',
         document,
@@ -70,9 +79,9 @@ describe('Desktop editor AI chain integration', () => {
         provenance: { fixture: 'editor-ai-chain-harness' },
       })
       expect(taskResultText(result)).toBe('editor-ai-chain-fixture:continuation')
-      await expect(hook.result.current.requestGhost(document.documentId, document.text)).resolves.toBe(
-        'editor-ai-chain-fixture:continuation',
-      )
+      await expect(
+        hook.result.current.requestGhost(document.documentId, document.text),
+      ).resolves.toBe('editor-ai-chain-fixture:continuation')
 
       editor.commands.setTextSelection(editor.state.doc.content.size - 1)
       setGhostText(editor, taskResultText(result) ?? '')
@@ -139,9 +148,9 @@ describe('Desktop editor AI chain integration', () => {
       })
       ledger.create(stale)
       ledger.accept(stale.id)
-      await expect(ledger.commit(stale.id, receipt.revision, () => undefined)).rejects.toBeInstanceOf(
-        ProposalConflictError,
-      )
+      await expect(
+        ledger.commit(stale.id, receipt.revision, () => undefined),
+      ).rejects.toBeInstanceOf(ProposalConflictError)
       expect(ledger.get(stale.id)?.status).toBe('stale')
     } finally {
       testGlobal.WebSocket = browserWebSocket
@@ -166,7 +175,9 @@ function waitForDaemonReady(child: ChildProcess): Promise<DaemonReadyMessage> {
     let stderr = ''
     let settled = false
     const timeout = setTimeout(() => {
-      finishReject(new Error(`Timed out waiting for editor AI fixture. stdout=${stdout} stderr=${stderr}`))
+      finishReject(
+        new Error(`Timed out waiting for editor AI fixture. stdout=${stdout} stderr=${stderr}`),
+      )
     }, 20_000)
 
     const finishResolve = (message: DaemonReadyMessage) => {

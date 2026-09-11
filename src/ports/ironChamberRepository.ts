@@ -1,5 +1,5 @@
-export type ChamberLockMode = "words" | "minutes" | "dual"
-export type ChamberStatus = "idle" | "locked" | "completed" | "emergency_abort"
+export type ChamberLockMode = 'words' | 'minutes' | 'dual'
+export type ChamberStatus = 'idle' | 'locked' | 'completed' | 'emergency_abort'
 
 export interface IronChamberRecord {
   id: string

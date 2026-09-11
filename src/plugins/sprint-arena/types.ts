@@ -5,11 +5,11 @@ import type { SynthesizerSoundType } from '../../ports/audioSynthesizer'
 export type { SprintRecord, SynthesizerSoundType }
 
 export type FlowStateLevel =
-  | 'idle'       // 静止待命
-  | 'warm_up'    // 微热蓄势 (Combo < 10)
-  | 'focused'    // 渐入佳境 (Combo >= 10, WPM >= 30)
+  | 'idle' // 静止待命
+  | 'warm_up' // 微热蓄势 (Combo < 10)
+  | 'focused' // 渐入佳境 (Combo >= 10, WPM >= 30)
   | 'flow_surge' // 心流狂飙 (Combo >= 30, WPM >= 60)
-  | 'zen_mode'   // 人键合一·心流化境 (Combo >= 60, WPM >= 80)
+  | 'zen_mode' // 人键合一·心流化境 (Combo >= 60, WPM >= 80)
 
 export interface SprintConfig {
   mode: 'time' | 'word_count'

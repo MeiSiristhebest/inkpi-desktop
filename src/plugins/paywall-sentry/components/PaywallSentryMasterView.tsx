@@ -46,7 +46,8 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const summaries = chapters
       .slice(0, 30)
       .map(
-        (c) => `第 ${c.order} 章《${c.title}》尾段：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(-250)}`,
+        (c) =>
+          `第 ${c.order} 章《${c.title}》尾段：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(-250)}`,
       )
       .join('\n\n')
 

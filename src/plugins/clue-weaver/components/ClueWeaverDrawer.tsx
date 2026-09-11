@@ -40,9 +40,7 @@ export const ClueWeaverDrawer: FC<DesktopPluginDrawerProps> = () => {
           <Network className="w-4 h-4 text-blue-500" />
           <span>信息差与全知哨兵</span>
         </div>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">
-          登记线索: {clues.length}
-        </span>
+        <span className="text-[10px] text-[var(--ink-text-muted)]">登记线索: {clues.length}</span>
       </div>
 
       <div className="space-y-2">

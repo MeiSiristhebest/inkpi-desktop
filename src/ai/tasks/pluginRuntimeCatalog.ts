@@ -2,13 +2,7 @@ import { FIRST_PARTY_PLUGIN_IDS, type FirstPartyPluginId } from './pluginCatalog
 
 /** Phase 20 runtime boundary classes. */
 export type PluginRuntimeClass =
-  | 'pure-local'
-  | 'ai-task'
-  | 'context-provider'
-  | 'tool'
-  | 'workflow'
-  | 'ui-only'
-  | 'hybrid'
+  'pure-local' | 'ai-task' | 'context-provider' | 'tool' | 'workflow' | 'ui-only' | 'hybrid'
 
 export type PluginRuntimeTarget =
   | 'desktop-local-engine'
@@ -33,10 +27,26 @@ export interface PluginRuntimeCatalogEntry {
  * a Runtime boundary before it can be added to the product registry.
  */
 export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCatalogEntry> = {
-  'aftermath-sync': { pluginId: 'aftermath-sync', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
-  'archetype-cards': { pluginId: 'archetype-cards', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
-  'author-ops': { pluginId: 'author-ops', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
-  'brainstorm-spark': { pluginId: 'brainstorm-spark', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
+  'aftermath-sync': {
+    pluginId: 'aftermath-sync',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
+  'archetype-cards': {
+    pluginId: 'archetype-cards',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
+  'author-ops': {
+    pluginId: 'author-ops',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
+  'brainstorm-spark': {
+    pluginId: 'brainstorm-spark',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
   'chekhov-radar': taskEntry('chekhov-radar'),
   'clue-weaver': taskEntry('clue-weaver'),
   'combat-sandbox': taskEntry('combat-sandbox'),
@@ -47,7 +57,11 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     taskKind: 'plugin.consistency-sentinel.analysis',
     contextProviderId: 'story.context.consistency-sentinel',
   },
-  'describe-palette': { pluginId: 'describe-palette', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
+  'describe-palette': {
+    pluginId: 'describe-palette',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
   'dialogue-distiller': taskEntry('dialogue-distiller'),
   'diff-reviewer': {
     pluginId: 'diff-reviewer',
@@ -58,9 +72,17 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
   'emotion-curve': taskEntry('emotion-curve'),
   'expectation-engine': taskEntry('expectation-engine'),
   'faction-matrix': taskEntry('faction-matrix'),
-  'geography-map': { pluginId: 'geography-map', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
+  'geography-map': {
+    pluginId: 'geography-map',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
   'gold-chapters-eval': taskEntry('gold-chapters-eval'),
-  'iron-chamber': { pluginId: 'iron-chamber', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
+  'iron-chamber': {
+    pluginId: 'iron-chamber',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
   'living-codex': {
     pluginId: 'living-codex',
     runtimeClass: 'context-provider',
@@ -101,8 +123,16 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
   'promise-ledger': taskEntry('promise-ledger'),
   'reader-hook': taskEntry('reader-hook'),
   'reader-simulator': taskEntry('reader-simulator'),
-  'rhythm-metronome': { pluginId: 'rhythm-metronome', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
-  'rhythm-radar': { pluginId: 'rhythm-radar', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
+  'rhythm-metronome': {
+    pluginId: 'rhythm-metronome',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
+  'rhythm-radar': {
+    pluginId: 'rhythm-radar',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
   'safe-gate': taskEntry('safe-gate'),
   'scene-beats': taskEntry('scene-beats'),
   'scrapbook-recycler': {
@@ -131,7 +161,11 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
   'sub-plot-braid': taskEntry('sub-plot-braid'),
   'subtext-compiler': taskEntry('subtext-compiler'),
   'timeline-grid': taskEntry('timeline-grid'),
-  'voice-preview': { pluginId: 'voice-preview', runtimeClass: 'ui-only', runtimeTarget: 'desktop-ui' },
+  'voice-preview': {
+    pluginId: 'voice-preview',
+    runtimeClass: 'ui-only',
+    runtimeTarget: 'desktop-ui',
+  },
   'volume-master': taskEntry('volume-master'),
   'water-meter': taskEntry('water-meter'),
 }

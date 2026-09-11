@@ -1,6 +1,7 @@
-export type VoiceGender = "male" | "female" | "neutral"
-export type VoiceAgeGroup = "youth" | "adult" | "elder" | "child"
-export type VoiceTimbreFilter = "standard" | "heroic_highpass" | "villain_lowpass" | "whisper_bandpass"
+export type VoiceGender = 'male' | 'female' | 'neutral'
+export type VoiceAgeGroup = 'youth' | 'adult' | 'elder' | 'child'
+export type VoiceTimbreFilter =
+  'standard' | 'heroic_highpass' | 'villain_lowpass' | 'whisper_bandpass'
 
 export interface VoiceCastProfileRecord {
   id: string
@@ -21,4 +22,3 @@ export interface VoicePreviewRepository {
   save(record: VoiceCastProfileRecord): Promise<void>
   delete(id: string): Promise<void>
 }
-

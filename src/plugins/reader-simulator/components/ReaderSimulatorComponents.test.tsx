@@ -55,7 +55,7 @@ describe('ReaderSimulator Components', () => {
       <ReaderSimulatorDrawer
         projectId="proj-1"
         currentText="反派逼迫主角跪下磕头，受尽屈辱，主角竟然原谅了他！"
-      />
+      />,
     )
 
     expect(screen.getByText(/读者心智段评随动/)).toBeInTheDocument()

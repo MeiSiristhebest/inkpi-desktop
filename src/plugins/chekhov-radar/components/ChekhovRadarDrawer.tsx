@@ -23,7 +23,11 @@ export const ChekhovRadarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
   const mentionedGuns = ChekhovRadarEngine.checkMentionedGuns(guns, currentText || '')
   const detectedSuggestions = ChekhovRadarEngine.detectPotentialGuns(currentText || '')
 
-  const handleQuickPlant = async (name: string, category: ChekhovGunRecord['category'], snippet: string) => {
+  const handleQuickPlant = async (
+    name: string,
+    category: ChekhovGunRecord['category'],
+    snippet: string,
+  ) => {
     const newRecord: ChekhovGunRecord = {
       id: idGenerator.generate('gun'),
       projectId,
@@ -59,9 +63,7 @@ export const ChekhovRadarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
         <span className="font-semibold text-sm flex items-center gap-1.5 text-rose-500">
           <Crosshair className="w-4 h-4" /> 契诃夫伏笔随动感知
         </span>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">
-          {guns.length} 柄伏笔枪在册
-        </span>
+        <span className="text-[10px] text-[var(--ink-text-muted)]">{guns.length} 柄伏笔枪在册</span>
       </div>
 
       {justPlanted && (
@@ -125,9 +127,7 @@ export const ChekhovRadarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
                     <Plus className="w-3 h-3" /> 建立伏笔
                   </button>
                 </div>
-                <p className="text-[10px] text-[var(--ink-text-muted)]">
-                  {sug.reason}
-                </p>
+                <p className="text-[10px] text-[var(--ink-text-muted)]">{sug.reason}</p>
               </div>
             ))}
           </div>

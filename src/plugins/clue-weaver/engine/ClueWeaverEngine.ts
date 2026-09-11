@@ -12,7 +12,7 @@ export class ClueWeaverEngine {
    */
   private extractUtterances(
     text: string,
-    knownCharNames: string[]
+    knownCharNames: string[],
   ): Array<{ speaker: string; speech: string; fullSnippet: string }> {
     const utterances: Array<{ speaker: string; speech: string; fullSnippet: string }> = []
     if (!text) return utterances
@@ -23,7 +23,7 @@ export class ClueWeaverEngine {
     // 模式 1：正向引领: 角色 + 动作动词 + 冒号 + “台词”
     const leadingRegex = new RegExp(
       `([\\u4e00-\\u9fa5A-Za-z0-9_]{2,15}?)${speechVerbPattern}[：:]\\s*[“「]([^”」]+)[”」]`,
-      'g'
+      'g',
     )
     let m: RegExpExecArray | null
     while ((m = leadingRegex.exec(text)) !== null) {
@@ -36,12 +36,13 @@ export class ClueWeaverEngine {
     // 模式 2：倒装后置: “台词”，角色 + 动作动词
     const trailingRegex = new RegExp(
       `[“「]([^”」]+)[”」][，,。]?\\s*([\\u4e00-\\u9fa5A-Za-z0-9_]{2,15}?)${speechVerbPattern}`,
-      'g'
+      'g',
     )
     while ((m = trailingRegex.exec(text)) !== null) {
       const speech = m[1]
       const postfix = m[2]
-      const matched = knownCharNames.find((n) => postfix.startsWith(n) || postfix.includes(n)) || postfix
+      const matched =
+        knownCharNames.find((n) => postfix.startsWith(n) || postfix.includes(n)) || postfix
       utterances.push({ speaker: matched.trim(), speech: speech.trim(), fullSnippet: m[0] })
     }
 
@@ -54,7 +55,7 @@ export class ClueWeaverEngine {
   scanGodViewLeakage(
     text: string,
     clues: ClueItem[],
-    cognitions: ClueCognitionRecord[]
+    cognitions: ClueCognitionRecord[],
   ): GodViewViolation[] {
     const violations: GodViewViolation[] = []
     if (!text || clues.length === 0) return violations
@@ -70,7 +71,7 @@ export class ClueWeaverEngine {
     }
 
     const knownCharNames = Array.from(
-      new Set(cognitions.map((c) => c.characterName).filter(Boolean))
+      new Set(cognitions.map((c) => c.characterName).filter(Boolean)),
     )
 
     const utterances = this.extractUtterances(text, knownCharNames)
@@ -81,7 +82,7 @@ export class ClueWeaverEngine {
           const cog = cognitions.find(
             (c) =>
               c.clueId === clue.id &&
-              (c.characterName === u.speaker || c.characterId === u.speaker)
+              (c.characterName === u.speaker || c.characterId === u.speaker),
           )
 
           const state: EpistemicState = cog ? cog.epistemicState : 'blind'
@@ -93,7 +94,8 @@ export class ClueWeaverEngine {
               clueId: clue.id,
               clueTitle: clue.title,
               matchedKeyword: keyword,
-              snippet: u.fullSnippet.length > 60 ? u.fullSnippet.slice(0, 60) + '...' : u.fullSnippet,
+              snippet:
+                u.fullSnippet.length > 60 ? u.fullSnippet.slice(0, 60) + '...' : u.fullSnippet,
               reason: `角色【${u.speaker}】在认知模态图谱中对线索【${clue.title}】处于未知盲区(Blind)，却在对白中泄露了关键真值命题“${keyword}”！`,
             })
           }
@@ -113,7 +115,7 @@ export class ClueWeaverEngine {
     charBId: string,
     charBName: string,
     clues: ClueItem[],
-    cognitions: ClueCognitionRecord[]
+    cognitions: ClueCognitionRecord[],
   ): InformationAdvantage {
     const activeClues = clues.filter((c) => c.status !== 'abandoned')
     const activeClueIds = new Set(activeClues.map((c) => c.id))
@@ -169,7 +171,7 @@ export class ClueWeaverEngine {
   getCognitionMatrix(
     characters: Array<{ id: string; name: string }>,
     clues: ClueItem[],
-    cognitions: ClueCognitionRecord[]
+    cognitions: ClueCognitionRecord[],
   ): Array<{
     character: { id: string; name: string }
     clueStates: Array<{ clueId: string; state: EpistemicState }>
@@ -180,7 +182,7 @@ export class ClueWeaverEngine {
         const found = cognitions.find(
           (cog) =>
             cog.clueId === clue.id &&
-            (cog.characterId === char.id || cog.characterName === char.name)
+            (cog.characterId === char.id || cog.characterName === char.name),
         )
         return {
           clueId: clue.id,

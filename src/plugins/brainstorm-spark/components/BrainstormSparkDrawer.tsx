@@ -35,9 +35,7 @@ export const BrainstormSparkDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-[11px] text-[var(--ink-text-muted)] block">
-          当前困境极性切换：
-        </label>
+        <label className="text-[11px] text-[var(--ink-text-muted)] block">当前困境极性切换：</label>
         <div className="grid grid-cols-2 gap-1.5">
           {[
             { id: 'dead_end', label: '必死绝境' },
@@ -75,7 +73,11 @@ export const BrainstormSparkDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
                 onClick={() => handleCopy(sol)}
                 className="text-amber-500 hover:text-amber-600 flex items-center gap-1 text-[10px]"
               >
-                {copiedId === sol.operatorId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                {copiedId === sol.operatorId ? (
+                  <Check className="w-3 h-3" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
                 {copiedId === sol.operatorId ? '已复制' : '复制脑洞'}
               </button>
             </div>
@@ -84,9 +86,7 @@ export const BrainstormSparkDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
               {sol.concretePlot}
             </p>
 
-            <div className="text-[10px] text-emerald-500">
-              优势：{sol.pros}
-            </div>
+            <div className="text-[10px] text-emerald-500">优势：{sol.pros}</div>
           </div>
         ))}
       </div>

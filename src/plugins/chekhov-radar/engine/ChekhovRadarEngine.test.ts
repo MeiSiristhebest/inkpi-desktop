@@ -91,7 +91,7 @@ describe('ChekhovRadarEngine', () => {
 
     const activeMentioned = ChekhovRadarEngine.checkMentionedGuns(
       guns,
-      '主角突然拔出了随身携带的太虚神剑，剑气如虹！'
+      '主角突然拔出了随身携带的太虚神剑，剑气如虹！',
     )
     expect(activeMentioned.length).toBe(1)
     expect(activeMentioned[0].gunName).toBe('太虚神剑')

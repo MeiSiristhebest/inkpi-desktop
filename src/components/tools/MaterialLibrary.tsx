@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { BookOpen, Sparkles, Search } from 'lucide-react';
+import React, { useState } from 'react'
+import { BookOpen, Sparkles, Search } from 'lucide-react'
 
 interface PersonalityType {
-  id: string;
-  name: string;
-  gender: '女' | '男';
-  tagline: string;
-  fit: string[];
-  dims: { label: string; value: string }[];
+  id: string
+  name: string
+  gender: '女' | '男'
+  tagline: string
+  fit: string[]
+  dims: { label: string; value: string }[]
 }
 
 const PERSONALITY_DATA: PersonalityType[] = [
@@ -89,25 +89,25 @@ const PERSONALITY_DATA: PersonalityType[] = [
       { label: '代表原型', value: '花满楼 / 楚留香' },
     ],
   },
-];
+]
 
 export const MaterialLibrary: React.FC = () => {
-  const [filterGender, setFilterGender] = useState<'all' | '女' | '男'>('all');
-  const [search, setSearch] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filterGender, setFilterGender] = useState<'all' | '女' | '男'>('all')
+  const [search, setSearch] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const filtered = PERSONALITY_DATA.filter((p) => {
-    if (filterGender !== 'all' && p.gender !== filterGender) return false;
+    if (filterGender !== 'all' && p.gender !== filterGender) return false
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q = search.toLowerCase()
       return (
         p.name.toLowerCase().includes(q) ||
         p.tagline.toLowerCase().includes(q) ||
         p.fit.some((f) => f.toLowerCase().includes(q))
-      );
+      )
     }
-    return true;
-  });
+    return true
+  })
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-[var(--ink-bg)] text-[var(--ink-text)] p-6 select-none">
@@ -154,7 +154,7 @@ export const MaterialLibrary: React.FC = () => {
       {/* Grid of Character Archetypes */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-w-5xl">
         {filtered.map((item) => {
-          const isExpanded = expandedId === item.id;
+          const isExpanded = expandedId === item.id
           return (
             <div
               key={item.id}
@@ -170,7 +170,9 @@ export const MaterialLibrary: React.FC = () => {
                   </div>
                   <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
                 </div>
-                <p className="text-xs text-[var(--ink-text-muted)] mt-2 leading-relaxed">{item.tagline}</p>
+                <p className="text-xs text-[var(--ink-text-muted)] mt-2 leading-relaxed">
+                  {item.tagline}
+                </p>
 
                 {/* Tags */}
                 <div className="flex flex-wrap gap-1.5 mt-3">
@@ -189,7 +191,9 @@ export const MaterialLibrary: React.FC = () => {
                   <div className="mt-4 pt-3 border-t border-[var(--ink-border)]/50 space-y-2 text-xs">
                     {item.dims.map((dim, dIdx) => (
                       <div key={dIdx} className="space-y-0.5">
-                        <span className="text-[10px] font-bold text-[var(--ink-text-muted)]">{dim.label}：</span>
+                        <span className="text-[10px] font-bold text-[var(--ink-text-muted)]">
+                          {dim.label}：
+                        </span>
                         <p className="text-xs text-[var(--ink-text)]">{dim.value}</p>
                       </div>
                     ))}
@@ -206,9 +210,9 @@ export const MaterialLibrary: React.FC = () => {
                 </button>
               </div>
             </div>
-          );
+          )
         })}
       </div>
     </div>
-  );
-};
+  )
+}

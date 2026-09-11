@@ -36,7 +36,10 @@ export const TimelineNodeCard: FC<TimelineNodeCardProps> = ({
       }}
     >
       <div className="flex items-center justify-between gap-1 mb-1">
-        <span className="font-semibold text-xs text-[var(--ink-text)] truncate" title={node.eventTitle}>
+        <span
+          className="font-semibold text-xs text-[var(--ink-text)] truncate"
+          title={node.eventTitle}
+        >
           {node.eventTitle}
         </span>
         {hasConflict && <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
@@ -49,13 +52,19 @@ export const TimelineNodeCard: FC<TimelineNodeCardProps> = ({
       <div className="flex items-center justify-between text-[10px] text-[var(--ink-text-faint)] pt-1 border-t border-[var(--ink-border)]/50">
         <span className="flex items-center gap-1">
           {node.prerequisites && node.prerequisites.length > 0 && (
-            <span className="flex items-center gap-0.5 text-blue-400" title={`前置依赖: ${node.prerequisites.length} 个`}>
+            <span
+              className="flex items-center gap-0.5 text-blue-400"
+              title={`前置依赖: ${node.prerequisites.length} 个`}
+            >
               <Link2 className="w-2.5 h-2.5" />
               {node.prerequisites.length}
             </span>
           )}
         </span>
-        <span className={`font-medium ${polarityColor}`} title={`情感张力: ${node.emotionalPolarity}`}>
+        <span
+          className={`font-medium ${polarityColor}`}
+          title={`情感张力: ${node.emotionalPolarity}`}
+        >
           {node.emotionalPolarity > 0 ? `+${node.emotionalPolarity}` : node.emotionalPolarity}
         </span>
       </div>

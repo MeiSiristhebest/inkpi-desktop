@@ -1,9 +1,5 @@
 export type PlatformPresetId =
-  | 'qidian-standard'
-  | 'jinjiang-clean'
-  | 'fanqie-compact'
-  | 'zongheng-classic'
-  | 'print-typeset'
+  'qidian-standard' | 'jinjiang-clean' | 'fanqie-compact' | 'zongheng-classic' | 'print-typeset'
 
 export interface PlatformPresetConfig {
   id: PlatformPresetId

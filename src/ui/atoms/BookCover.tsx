@@ -11,13 +11,7 @@ export const BookCover = ({
   className?: string
 }) => {
   if (cover) {
-    return (
-      <img
-        src={cover}
-        alt={title}
-        className={`w-full h-full object-cover ${className}`}
-      />
-    )
+    return <img src={cover} alt={title} className={`w-full h-full object-cover ${className}`} />
   }
   // 按书名确定性选取封面渐变（见 bookCoverPalettes.ts）
   const [from, to] = pickCoverPalette(title)
@@ -26,7 +20,9 @@ export const BookCover = ({
       className={`w-full h-full flex items-end p-3 ${className}`}
       style={{ background: `linear-gradient(160deg, ${from}, ${to})` }}
     >
-      <span className="text-white/90 text-[13px] font-semibold leading-snug line-clamp-3">{title}</span>
+      <span className="text-white/90 text-[13px] font-semibold leading-snug line-clamp-3">
+        {title}
+      </span>
     </div>
   )
 }

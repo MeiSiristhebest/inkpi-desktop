@@ -22,7 +22,9 @@ describe('EmotionCurve Components', () => {
   ]
 
   it('renders EmotionCurveMasterView with chapter evaluation cards', async () => {
-    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(fakeChapters as any)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
     render(<EmotionCurveMasterView projectId="proj-1" />)
 
     expect(screen.getByText(/读者情绪心电图与心智共鸣计/)).toBeInTheDocument()
@@ -32,12 +34,7 @@ describe('EmotionCurve Components', () => {
   })
 
   it('renders EmotionCurveDrawer with polarity', async () => {
-    render(
-      <EmotionCurveDrawer
-        projectId="proj-1"
-        currentText="危机降临，杀意弥漫！"
-      />
-    )
+    render(<EmotionCurveDrawer projectId="proj-1" currentText="危机降临，杀意弥漫！" />)
 
     expect(screen.getByText(/读者情绪心电图/)).toBeInTheDocument()
     expect(screen.getByText(/六维情绪光谱分解/)).toBeInTheDocument()

@@ -3,14 +3,9 @@ import type {
   PacingStatus,
   CliffhangerSuggestion,
   RhythmRadarReportRecord,
-} from "../../ports/rhythmRadarRepository"
+} from '../../ports/rhythmRadarRepository'
 
-export type {
-  CliffhangerType,
-  PacingStatus,
-  CliffhangerSuggestion,
-  RhythmRadarReportRecord,
-}
+export type { CliffhangerType, PacingStatus, CliffhangerSuggestion, RhythmRadarReportRecord }
 
 export interface ChapterTensionPoint {
   chapterOrder: number

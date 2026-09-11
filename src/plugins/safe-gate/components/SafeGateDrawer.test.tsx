@@ -10,12 +10,7 @@ describe('SafeGateDrawer — 写作台敏感词审查随动感知抽屉', () => 
   })
 
   it('detects violations and renders literary replacement pills', async () => {
-    render(
-      <SafeGateDrawer
-        projectId="p1"
-        currentText="魔修一掌拍出，顿时血肉横飞！"
-      />,
-    )
+    render(<SafeGateDrawer projectId="p1" currentText="魔修一掌拍出，顿时血肉横飞！" />)
 
     await waitFor(
       () => {

@@ -23,12 +23,7 @@ describe('BrainstormSpark Components', () => {
   })
 
   it('renders BrainstormSparkDrawer with recommendations', () => {
-    render(
-      <BrainstormSparkDrawer
-        projectId="proj-1"
-        currentText="四面大军压境，主角命悬一线！"
-      />
-    )
+    render(<BrainstormSparkDrawer projectId="proj-1" currentText="四面大军压境，主角命悬一线！" />)
 
     expect(screen.getByText(/写作卡文破局炉/)).toBeInTheDocument()
     expect(screen.getByText(/应急破局脑洞方案/)).toBeInTheDocument()

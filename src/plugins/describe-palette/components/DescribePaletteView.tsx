@@ -114,7 +114,11 @@ export const DescribePaletteView: FC<DesktopPluginViewProps> = () => {
             >
               <Activity className="w-3.5 h-3.5" />
               <span>感官雷达诊断</span>
-              {showDiagnostic ? <ChevronUp className="w-3 h-3 ml-0.5" /> : <ChevronDown className="w-3 h-3 ml-0.5" />}
+              {showDiagnostic ? (
+                <ChevronUp className="w-3 h-3 ml-0.5" />
+              ) : (
+                <ChevronDown className="w-3 h-3 ml-0.5" />
+              )}
             </button>
             <button
               onClick={handleRandomInspire}
@@ -208,7 +212,10 @@ export const DescribePaletteView: FC<DesktopPluginViewProps> = () => {
                     <Activity className="w-3.5 h-3.5 text-blue-400" /> 感官雷达透视
                   </span>
                   <span className="text-[10px] text-[var(--ink-text-muted)]">
-                    主感官: {diagnosisReport.dominantSense ? diagnosisReport.dominantSense.toUpperCase() : '无'}
+                    主感官:{' '}
+                    {diagnosisReport.dominantSense
+                      ? diagnosisReport.dominantSense.toUpperCase()
+                      : '无'}
                   </span>
                 </div>
 

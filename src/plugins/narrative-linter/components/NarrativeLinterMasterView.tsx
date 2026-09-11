@@ -31,7 +31,11 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
             ? all.find((c) => c.id === hostContext.activeChapter?.id) || all[0]
             : all[0]
           setSelectedChapterId(defaultChap.id)
-      const chapText = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
+          const chapText = semanticTextFromContent(
+            defaultChap.id,
+            defaultChap.content || '',
+            defaultChap.revision,
+          )
           setText(chapText)
           if (chapText) {
             const res = engine.lint(chapText, rules)

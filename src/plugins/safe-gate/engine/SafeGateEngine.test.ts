@@ -21,9 +21,7 @@ describe('SafeGateEngine — 三级敏感词匹配与逆序文学平替算法', 
       word: '反党',
       level: 'red',
       category: '政治',
-      literaryAlternatives: [
-        { replacement: '离经叛道', genre: ['neutral'], confidence: 0.9 },
-      ],
+      literaryAlternatives: [{ replacement: '离经叛道', genre: ['neutral'], confidence: 0.9 }],
     },
     {
       id: 'w3',
@@ -44,9 +42,7 @@ describe('SafeGateEngine — 三级敏感词匹配与逆序文学平替算法', 
       flags: 'gi',
       level: 'yellow',
       category: '谐音',
-      literaryAlternatives: [
-        { replacement: '抹平痕迹', genre: ['neutral'], confidence: 0.9 },
-      ],
+      literaryAlternatives: [{ replacement: '抹平痕迹', genre: ['neutral'], confidence: 0.9 }],
     },
   ]
 

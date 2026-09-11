@@ -13,7 +13,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={vi.fn()}
         onSend={vi.fn()}
         onClose={vi.fn()}
-      />
+      />,
     )
     expect(screen.getByText('AI 副驾驶')).toBeInTheDocument()
     expect(screen.getByText('与 InkPi Agent 对话')).toBeInTheDocument()
@@ -36,7 +36,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={onInputChange}
         onSend={onSend}
         onClose={onClose}
-      />
+      />,
     )
 
     expect(screen.getByText('续写下一段')).toBeInTheDocument()
@@ -64,7 +64,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={vi.fn()}
         onSend={vi.fn()}
         onClose={vi.fn()}
-      />
+      />,
     )
     expect(screen.getByText('InkPi 正在思考…')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('离线模式：无法调用 AI')).toBeInTheDocument()
@@ -81,7 +81,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={vi.fn()}
         onSend={onSend}
         onClose={vi.fn()}
-      />
+      />,
     )
     const input = screen.getByPlaceholderText('向 InkPi 下达写作指令…')
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
@@ -99,7 +99,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={vi.fn()}
         onSend={onSend}
         onClose={vi.fn()}
-      />
+      />,
     )
     fireEvent.click(screen.getByText('发送'))
     expect(onSend).toHaveBeenCalledTimes(1)
@@ -115,7 +115,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={vi.fn()}
         onSend={vi.fn()}
         onClose={vi.fn()}
-      />
+      />,
     )
     const input = screen.getByPlaceholderText('离线模式：无法调用 AI') as HTMLInputElement
     expect(input.disabled).toBe(true)
@@ -132,7 +132,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={vi.fn()}
         onSend={vi.fn()}
         onClose={vi.fn()}
-      />
+      />,
     )
     const input = screen.getByPlaceholderText('向 InkPi 下达写作指令…') as HTMLInputElement
     expect(input.disabled).toBe(true)
@@ -149,7 +149,7 @@ describe('AiAssistantPanel Component', () => {
         onInputChange={vi.fn()}
         onSend={vi.fn()}
         onClose={vi.fn()}
-      />
+      />,
     )
     expect((screen.getByText('发送') as HTMLButtonElement).disabled).toBe(true)
   })

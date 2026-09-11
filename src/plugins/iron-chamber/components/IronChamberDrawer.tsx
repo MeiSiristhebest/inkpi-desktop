@@ -1,18 +1,21 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { indexedDbIronChamberRepository } from "../../../adapters/indexedDbIronChamberRepository"
-import { IronChamberEngine } from "../engine/IronChamberEngine"
-import type { IronChamberRecord } from "../types"
-import { Lock } from "lucide-react"
-import { clock } from "../../../adapters/clock"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { indexedDbIronChamberRepository } from '../../../adapters/indexedDbIronChamberRepository'
+import { IronChamberEngine } from '../engine/IronChamberEngine'
+import type { IronChamberRecord } from '../types'
+import { Lock } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
 
 export const IronChamberDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [activeRecord, setActiveRecord] = useState<IronChamberRecord | null>(null)
 
   useEffect(() => {
-    indexedDbIronChamberRepository.getActive(projectId).then((rec) => {
-      setActiveRecord(rec || null)
-    }).catch(console.error)
+    indexedDbIronChamberRepository
+      .getActive(projectId)
+      .then((rec) => {
+        setActiveRecord(rec || null)
+      })
+      .catch(console.error)
   }, [projectId])
 
   const progress = activeRecord
@@ -47,7 +50,10 @@ export const IronChamberDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
                 </span>
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-indigo-500 h-full" style={{ width: `${progress.wordsPercentage}%` }} />
+                <div
+                  className="bg-indigo-500 h-full"
+                  style={{ width: `${progress.wordsPercentage}%` }}
+                />
               </div>
 
               <div className="flex justify-between text-[11px] pt-1">
@@ -57,7 +63,10 @@ export const IronChamberDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
                 </span>
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-amber-500 h-full" style={{ width: `${progress.timePercentage}%` }} />
+                <div
+                  className="bg-amber-500 h-full"
+                  style={{ width: `${progress.timePercentage}%` }}
+                />
               </div>
             </div>
           )}

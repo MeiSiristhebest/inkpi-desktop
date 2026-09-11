@@ -33,10 +33,14 @@ export const cardRecordToCodexEntity = (
   const category: CodexCategory = 'character'
 
   const attributes: Record<string, string | number | boolean> = {}
-  if (data['一、基础信息::身份定位'] || data['身份定位']) attributes['identity'] = data['一、基础信息::身份定位'] || data['身份定位']
-  if (data['三、能力与成长::实力境界'] || data['实力境界']) attributes['realm'] = data['三、能力与成长::实力境界'] || data['实力境界']
-  if (data['一、基础信息::保密等级'] || data['保密等级']) attributes['securityLevel'] = data['一、基础信息::保密等级'] || data['保密等级']
-  if (data['一、基础信息::人物状态'] || data['人物状态']) attributes['status'] = data['一、基础信息::人物状态'] || data['人物状态']
+  if (data['一、基础信息::身份定位'] || data['身份定位'])
+    attributes['identity'] = data['一、基础信息::身份定位'] || data['身份定位']
+  if (data['三、能力与成长::实力境界'] || data['实力境界'])
+    attributes['realm'] = data['三、能力与成长::实力境界'] || data['实力境界']
+  if (data['一、基础信息::保密等级'] || data['保密等级'])
+    attributes['securityLevel'] = data['一、基础信息::保密等级'] || data['保密等级']
+  if (data['一、基础信息::人物状态'] || data['人物状态'])
+    attributes['status'] = data['一、基础信息::人物状态'] || data['人物状态']
 
   const summary = buildCharacterSummary(card.name, data)
 
@@ -94,13 +98,25 @@ export const tableRowToCodexEntity = (
 
   const relations: EntityRelation[] = []
   if (data['势力归属']) {
-    relations.push({ targetId: data['势力归属'], targetName: data['势力归属'], relationType: '势力归属' })
+    relations.push({
+      targetId: data['势力归属'],
+      targetName: data['势力归属'],
+      relationType: '势力归属',
+    })
   }
   if (data['当前持有者']) {
-    relations.push({ targetId: data['当前持有者'], targetName: data['当前持有者'], relationType: '持有者' })
+    relations.push({
+      targetId: data['当前持有者'],
+      targetName: data['当前持有者'],
+      relationType: '持有者',
+    })
   }
   if (data['地理位置']) {
-    relations.push({ targetId: data['地理位置'], targetName: data['地理位置'], relationType: '位于' })
+    relations.push({
+      targetId: data['地理位置'],
+      targetName: data['地理位置'],
+      relationType: '位于',
+    })
   }
 
   const summary = buildTableSummary(category, data)
@@ -115,7 +131,9 @@ export const tableRowToCodexEntity = (
     attributes,
     relations,
     summary,
-    detailMarkdown: Object.entries(data).map(([k, v]) => `**${k}**: ${v}`).join('\n\n'),
+    detailMarkdown: Object.entries(data)
+      .map(([k, v]) => `**${k}**: ${v}`)
+      .join('\n\n'),
     createdAt: now,
     updatedAt: now,
   }
@@ -143,14 +161,14 @@ const extractAliases = (raw: string): string[] => {
 
 // 关系图边的引用键：以规范化后的名称作为稳定键（去除空白、统一小写），
 // 避免直接以「原始人名展示文本」充当实体 ID（评审 §4.3）。
-const normalizeEntityKey = (name: string): string =>
-  name.trim().toLowerCase().replace(/\s+/g, '-')
+const normalizeEntityKey = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, '-')
 
 const buildCharacterSummary = (name: string, data: Record<string, any>): string => {
   const parts: string[] = []
   const identity = data['一、基础信息::身份定位'] || data['身份定位'] || data['身份']
   const realm = data['三、能力与成长::实力境界'] || data['实力境界']
-  const personality = data['二、性格与内心::核心性格'] || data['二、性格与动机::核心性格'] || data['一句话性格']
+  const personality =
+    data['二、性格与内心::核心性格'] || data['二、性格与动机::核心性格'] || data['一句话性格']
   const role = data['五、剧情功能::角色弧光'] || data['剧情功能'] || data['功能定位']
 
   if (identity) parts.push(identity)
@@ -163,11 +181,16 @@ const buildCharacterSummary = (name: string, data: Record<string, any>): string 
 
 // §3.2：摘要策略注册表（组合优于分支，新增类别只注册一个 Summarizer）
 const SUMMARIZERS: Record<CodexCategory, (data: Record<string, any>) => string> = {
-  faction: (data) => `${data['类别'] || '势力'} · ${data['实力等级'] || ''} · 核心:${data['镇派功法/核心武力'] || '无'}`,
-  location: (data) => `${data['类别'] || '地点'} · 危险:${data['危险等级'] || '普通'} · 行程:${data['距离与行程时间'] || '未知'}`,
-  item: (data) => `${data['类别'] || '物品'} · 品级:${data['品级'] || '普通'} · 效果:${data['能力/效果'] || '无'}`,
-  race: (data) => `${data['类别'] || '种族'} · 威胁:${data['威胁等级'] || '普通'} · 特性:${data['能力特性'] || '无'}`,
-  history: (data) => `时间:${data['故事内时间'] || '上古'} · 真相:${data['事件经过（真相）'] || '未知'}`,
+  faction: (data) =>
+    `${data['类别'] || '势力'} · ${data['实力等级'] || ''} · 核心:${data['镇派功法/核心武力'] || '无'}`,
+  location: (data) =>
+    `${data['类别'] || '地点'} · 危险:${data['危险等级'] || '普通'} · 行程:${data['距离与行程时间'] || '未知'}`,
+  item: (data) =>
+    `${data['类别'] || '物品'} · 品级:${data['品级'] || '普通'} · 效果:${data['能力/效果'] || '无'}`,
+  race: (data) =>
+    `${data['类别'] || '种族'} · 威胁:${data['威胁等级'] || '普通'} · 特性:${data['能力特性'] || '无'}`,
+  history: (data) =>
+    `时间:${data['故事内时间'] || '上古'} · 真相:${data['事件经过（真相）'] || '未知'}`,
   term: (data) => `${data['类别'] || '术语'} · 定义:${data['定义（一句话）'] || '无'}`,
   character: (data) => `${data['类别'] || '角色'} · ${data['身份定位'] || ''}`,
 }

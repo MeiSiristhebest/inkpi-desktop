@@ -18,7 +18,14 @@ const seed = async (pid: string, wordsByChapter: number[], recent: boolean = tru
     updatedAt: 1,
   })
   const vid = `v-${pid}`
-  await db.put<VolumeRecord>('volumes', { id: vid, projectId: pid, title: 'V', order: 0, createdAt: 1, updatedAt: 1 })
+  await db.put<VolumeRecord>('volumes', {
+    id: vid,
+    projectId: pid,
+    title: 'V',
+    order: 0,
+    createdAt: 1,
+    updatedAt: 1,
+  })
   let i = 0
   for (const w of wordsByChapter) {
     await db.put<ChapterRecord>('chapters', {

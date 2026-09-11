@@ -51,11 +51,12 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
       chapterOrder: currentChapter.order,
-      content: semanticTextFromContent(
-        currentChapter.id,
-        currentChapter.content || '',
-        currentChapter.revision,
-      ) || '',
+      content:
+        semanticTextFromContent(
+          currentChapter.id,
+          currentChapter.content || '',
+          currentChapter.revision,
+        ) || '',
     })
   }, [currentChapter])
 
@@ -71,7 +72,12 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
     const analysisInput = {
       chapter: { id: currentChapter.id, order: currentChapter.order, title: currentChapter.title },
       text: chapterText.slice(0, 3000),
-      readerProfiles: ['dropout-prone veteran', 'logic-focused reader', 'relationship-focused reader', 'pacing-focused reader'],
+      readerProfiles: [
+        'dropout-prone veteran',
+        'logic-focused reader',
+        'relationship-focused reader',
+        'pacing-focused reader',
+      ],
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

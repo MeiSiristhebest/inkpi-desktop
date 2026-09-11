@@ -1,6 +1,6 @@
-import type { FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { TrendingUp } from "lucide-react"
+import type { FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { TrendingUp } from 'lucide-react'
 
 export const AuthorOpsDrawer: FC<DesktopPluginDrawerProps> = () => {
   return (
@@ -24,4 +24,3 @@ export const AuthorOpsDrawer: FC<DesktopPluginDrawerProps> = () => {
     </div>
   )
 }
-

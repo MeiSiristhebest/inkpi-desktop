@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render as baseRender, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
+import {
+  render as baseRender,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+  act,
+} from '@testing-library/react'
 import { RichEditor } from './RichEditor'
 import { db } from '../../db/indexedDB'
 import { SettingsProvider } from '../../core/settings'
@@ -456,7 +463,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       resolveTask(null)
       await pendingTask
     })
-    await waitFor(() => expect(screen.queryByTestId('editor-long-task-status')).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.queryByTestId('editor-long-task-status')).not.toBeInTheDocument(),
+    )
   })
 
   it('only publishes current-chapter diagnostics with the matching revision', async () => {

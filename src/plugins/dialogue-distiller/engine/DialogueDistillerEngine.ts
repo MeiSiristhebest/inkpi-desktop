@@ -5,8 +5,39 @@ import type {
   DialoguePreset,
 } from '../types'
 
-const ARCHAIC_WORDS = ['尔等', '本座', '老夫', '罢了', '岂敢', '此乃', '安能', '吾', '汝', '甚好', '徒儿', '道友', '本尊', '朕', '寡人']
-const COLLOQUIAL_WORDS = ['俺', '老子', '切', '哼', '呀', '哇', '哈哈', '哎呀', '没门', '真特么', '滚犊子', '得了吧', '扯淡', '去你的']
+const ARCHAIC_WORDS = [
+  '尔等',
+  '本座',
+  '老夫',
+  '罢了',
+  '岂敢',
+  '此乃',
+  '安能',
+  '吾',
+  '汝',
+  '甚好',
+  '徒儿',
+  '道友',
+  '本尊',
+  '朕',
+  '寡人',
+]
+const COLLOQUIAL_WORDS = [
+  '俺',
+  '老子',
+  '切',
+  '哼',
+  '呀',
+  '哇',
+  '哈哈',
+  '哎呀',
+  '没门',
+  '真特么',
+  '滚犊子',
+  '得了吧',
+  '扯淡',
+  '去你的',
+]
 
 const PRESETS: DialoguePreset[] = [
   {
@@ -55,12 +86,13 @@ export class DialogueDistillerEngine {
 
     if (!text || characterNames.length === 0) return result
 
-    const speechVerbPattern = '(?:道|说|冷笑|冷哼|暗道|心想|沉吟|怒斥|低语|喝道|叹道|问|答|暴喝|低呼)'
+    const speechVerbPattern =
+      '(?:道|说|冷笑|冷哼|暗道|心想|沉吟|怒斥|低语|喝道|叹道|问|答|暴喝|低呼)'
 
     // 正向引语
     const leadingRegex = new RegExp(
       `([\\u4e00-\\u9fa5A-Za-z0-9_]{2,15}?)${speechVerbPattern}[：:]\\s*[“「]([^”」]+)[”」]`,
-      'g'
+      'g',
     )
     let match: RegExpExecArray | null
     while ((match = leadingRegex.exec(text)) !== null) {
@@ -68,7 +100,7 @@ export class DialogueDistillerEngine {
       const speech = match[2]
 
       const matched = characterNames.find(
-        (name) => rawPrefix.endsWith(name) || rawPrefix.includes(name)
+        (name) => rawPrefix.endsWith(name) || rawPrefix.includes(name),
       )
       if (matched && result[matched]) {
         result[matched].push(speech.trim())
@@ -78,14 +110,14 @@ export class DialogueDistillerEngine {
     // 倒装引语
     const trailingRegex = new RegExp(
       `[“「]([^”」]+)[”」][，,。]?\\s*([\\u4e00-\\u9fa5A-Za-z0-9_]{2,15}?)${speechVerbPattern}`,
-      'g'
+      'g',
     )
     while ((match = trailingRegex.exec(text)) !== null) {
       const speech = match[1]
       const rawPostfix = match[2]
 
       const matched = characterNames.find(
-        (name) => rawPostfix.startsWith(name) || rawPostfix.includes(name)
+        (name) => rawPostfix.startsWith(name) || rawPostfix.includes(name),
       )
       if (matched && result[matched]) {
         result[matched].push(speech.trim())
@@ -101,7 +133,7 @@ export class DialogueDistillerEngine {
   computeVoiceprint(
     characterName: string,
     quotes: string[],
-    projectId: string = ''
+    projectId: string = '',
   ): CharacterVoiceprint & { vector: VoiceprintVector } {
     const compositeId = projectId
       ? `${projectId}::vp::${encodeURIComponent(characterName)}`
@@ -132,7 +164,10 @@ export class DialogueDistillerEngine {
 
     const sentences: string[] = []
     for (const q of quotes) {
-      const parts = q.split(/[。！？!?\n]+/).map((s) => s.trim()).filter(Boolean)
+      const parts = q
+        .split(/[。！？!?\n]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
       if (parts.length > 0) sentences.push(...parts)
       else sentences.push(q)
     }
@@ -146,10 +181,24 @@ export class DialogueDistillerEngine {
     let colloquialCount = 0
 
     for (const s of sentences) {
-      if (s.includes('?') || s.includes('？') || s.includes('难道') || s.includes('岂') || s.includes('怎') || s.includes('莫非')) {
+      if (
+        s.includes('?') ||
+        s.includes('？') ||
+        s.includes('难道') ||
+        s.includes('岂') ||
+        s.includes('怎') ||
+        s.includes('莫非')
+      ) {
         questionCount++
       }
-      if (s.includes('!') || s.includes('！') || s.includes('受死') || s.includes('休得') || s.includes('绝不') || s.includes('放肆')) {
+      if (
+        s.includes('!') ||
+        s.includes('！') ||
+        s.includes('受死') ||
+        s.includes('休得') ||
+        s.includes('绝不') ||
+        s.includes('放肆')
+      ) {
         exclamationCount++
       }
       for (const w of ARCHAIC_WORDS) {
@@ -204,8 +253,20 @@ export class DialogueDistillerEngine {
    * 计算两位角色的声纹余弦相似度
    */
   computeCosineSimilarity(vA: VoiceprintVector, vB: VoiceprintVector): number {
-    const a = [vA.asl / 25, vA.questionRatio, vA.exclamationRatio, vA.archaicRatio, vA.colloquialRatio]
-    const b = [vB.asl / 25, vB.questionRatio, vB.exclamationRatio, vB.archaicRatio, vB.colloquialRatio]
+    const a = [
+      vA.asl / 25,
+      vA.questionRatio,
+      vA.exclamationRatio,
+      vA.archaicRatio,
+      vA.colloquialRatio,
+    ]
+    const b = [
+      vB.asl / 25,
+      vB.questionRatio,
+      vB.exclamationRatio,
+      vB.archaicRatio,
+      vB.colloquialRatio,
+    ]
 
     let dot = 0
     let normA = 0
@@ -228,7 +289,7 @@ export class DialogueDistillerEngine {
     charA: string,
     vA: VoiceprintVector,
     charB: string,
-    vB: VoiceprintVector
+    vB: VoiceprintVector,
   ): SimilarityPair {
     const similarity = this.computeCosineSimilarity(vA, vB)
     const isHomogeneous = similarity >= 0.85

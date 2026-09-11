@@ -1,7 +1,4 @@
-import type {
-  ArchetypeCategory,
-  NarrativeArchetypeRecord,
-} from "../../ports/archetypeRepository"
+import type { ArchetypeCategory, NarrativeArchetypeRecord } from '../../ports/archetypeRepository'
 
 export type { ArchetypeCategory, NarrativeArchetypeRecord }
 

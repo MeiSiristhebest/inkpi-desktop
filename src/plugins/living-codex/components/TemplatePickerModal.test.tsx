@@ -5,7 +5,7 @@ import { TemplatePickerModal } from './TemplatePickerModal'
 describe('TemplatePickerModal Component', () => {
   it('does not render when isOpen is false', () => {
     const { container } = render(
-      <TemplatePickerModal isOpen={false} onClose={vi.fn()} onSelect={vi.fn()} />
+      <TemplatePickerModal isOpen={false} onClose={vi.fn()} onSelect={vi.fn()} />,
     )
     expect(container).toBeEmptyDOMElement()
   })
@@ -35,7 +35,7 @@ describe('TemplatePickerModal Component', () => {
       expect.objectContaining({
         category: 'character',
         summary: expect.stringContaining('世家贵胄'),
-      })
+      }),
     )
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -54,7 +54,7 @@ describe('TemplatePickerModal Component', () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
         category: 'faction',
-      })
+      }),
     )
   })
 })

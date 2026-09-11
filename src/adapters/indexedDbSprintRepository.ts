@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  SprintRecord,
-  SprintRepository,
-} from '../ports/sprintRepository'
+import type { SprintRecord, SprintRepository } from '../ports/sprintRepository'
 
 export const indexedDbSprintRepository: SprintRepository = {
   async getAll(projectId?: string): Promise<SprintRecord[]> {

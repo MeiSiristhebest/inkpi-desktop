@@ -208,16 +208,20 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
         instructionIds: definitions.map((definition) => definition.id),
       })
       expect(status.instructions).toHaveLength(definitions.length)
-      expect(status.instructions).toEqual(expect.arrayContaining(definitions.map((definition) => {
-        const taskKind = definition.taskKind ?? definition.id
-        return expect.objectContaining({
-          id: definition.id,
-          scope: 'task',
-          version: definition.version,
-          source: `task:${taskKind}`,
-          tags: [`task:${taskKind}`],
-        })
-      })))
+      expect(status.instructions).toEqual(
+        expect.arrayContaining(
+          definitions.map((definition) => {
+            const taskKind = definition.taskKind ?? definition.id
+            return expect.objectContaining({
+              id: definition.id,
+              scope: 'task',
+              version: definition.version,
+              source: `task:${taskKind}`,
+              tags: [`task:${taskKind}`],
+            })
+          }),
+        ),
+      )
 
       const taskReference = status.instructions.find((reference) => reference.id === task.kind)
       expect(result?.provenance).toMatchObject({

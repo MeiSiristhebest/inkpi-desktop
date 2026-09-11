@@ -1,5 +1,5 @@
-import * as Diff from "diff"
-import type { ScrapbookFragmentRecord, ScrapRecommendation } from "../types"
+import * as Diff from 'diff'
+import type { ScrapbookFragmentRecord, ScrapRecommendation } from '../types'
 
 /**
  * ScrapbookEngine (废稿灵感碎纸机回收站引擎)
@@ -16,12 +16,12 @@ export class ScrapbookEngine {
     oldText: string,
     newText: string,
     sourceChapterId?: string,
-    sourceChapterTitle?: string
-  ): Array<Omit<ScrapbookFragmentRecord, "id" | "projectId" | "deletedAt">> {
+    sourceChapterTitle?: string,
+  ): Array<Omit<ScrapbookFragmentRecord, 'id' | 'projectId' | 'deletedAt'>> {
     if (!oldText || oldText === newText) return []
 
     const diffs = Diff.diffChars(oldText, newText)
-    const fragments: Array<Omit<ScrapbookFragmentRecord, "id" | "projectId" | "deletedAt">> = []
+    const fragments: Array<Omit<ScrapbookFragmentRecord, 'id' | 'projectId' | 'deletedAt'>> = []
 
     for (const part of diffs) {
       if (part.removed) {
@@ -50,8 +50,8 @@ export class ScrapbookEngine {
    * 纯前端分词切分 (简易中文 2-Gram 与标点停用词过滤)
    */
   public static tokenize(text: string): string[] {
-    const cleaned = text.replace(/[，。！？；、“”’（）《》\s\r\n]/g, " ")
-    const rawTokens = cleaned.split(" ").filter((t) => t.length >= 2)
+    const cleaned = text.replace(/[，。！？；、“”’（）《》\s\r\n]/g, ' ')
+    const rawTokens = cleaned.split(' ').filter((t) => t.length >= 2)
     const grams: string[] = []
 
     // 提取连续双字与原始词
@@ -73,7 +73,7 @@ export class ScrapbookEngine {
   public static recommendFragments(
     contextText: string,
     fragments: ScrapbookFragmentRecord[],
-    topK = 5
+    topK = 5,
   ): ScrapRecommendation[] {
     if (!contextText || fragments.length === 0) return []
 

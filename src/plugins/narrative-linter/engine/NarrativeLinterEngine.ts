@@ -1,14 +1,10 @@
-import type {
-  LinterRuleConfig,
-  LintIssue,
-  LintSummary,
-} from "../types"
+import type { LinterRuleConfig, LintIssue, LintSummary } from '../types'
 
 export interface ILinterRule {
   readonly id: string
   readonly name: string
   readonly description: string
-  readonly defaultSeverity: "error" | "warning" | "info"
+  readonly defaultSeverity: 'error' | 'warning' | 'info'
   check(text: string, options?: Record<string, unknown>): LintIssue[]
 }
 
@@ -17,10 +13,10 @@ export interface ILinterRule {
  * 检查大量连续的"-地"修饰，倡导以动作和细节展现而非修饰词堆叠
  */
 export class AdverbStackRule implements ILinterRule {
-  readonly id = "LINT_ADVERB_STACK"
-  readonly name = "弱化副词过度修饰"
-  readonly description = "检测连续或过度密集的副词（如xx地），建议用生动的动词或细节替代"
-  readonly defaultSeverity = "warning"
+  readonly id = 'LINT_ADVERB_STACK'
+  readonly name = '弱化副词过度修饰'
+  readonly description = '检测连续或过度密集的副词（如xx地），建议用生动的动词或细节替代'
+  readonly defaultSeverity = 'warning'
 
   check(text: string): LintIssue[] {
     const issues: LintIssue[] = []
@@ -45,7 +41,7 @@ export class AdverbStackRule implements ILinterRule {
             message: `单句中副词修饰（${m[0]}）过于密集（本行累计 ${matches.length} 处），削弱了叙述张力。`,
             quickFix: {
               title: `精简并删除「${m[0]}」`,
-              replacementText: "",
+              replacementText: '',
               range: [start, start + m[0].length],
             },
           })
@@ -63,10 +59,10 @@ export class AdverbStackRule implements ILinterRule {
  * 单个无逗号/句号切割的连续文本超过 65 字
  */
 export class RunOnSentenceRule implements ILinterRule {
-  readonly id = "LINT_RUN_ON_SENTENCE"
-  readonly name = "超长从句/无间歇长句"
-  readonly description = "单句无标点连续字数超过阈值，造成阅读窒息感"
-  readonly defaultSeverity = "warning"
+  readonly id = 'LINT_RUN_ON_SENTENCE'
+  readonly name = '超长从句/无间歇长句'
+  readonly description = '单句无标点连续字数超过阈值，造成阅读窒息感'
+  readonly defaultSeverity = 'warning'
 
   check(text: string, options?: { maxClauseLength?: number }): LintIssue[] {
     const maxLen = options?.maxClauseLength ?? 55
@@ -89,7 +85,7 @@ export class RunOnSentenceRule implements ILinterRule {
             lineNumber: lineIdx + 1,
             startOffset: start,
             endOffset: start + trimmed.length,
-            matchedSnippet: trimmed.slice(0, 30) + "...",
+            matchedSnippet: trimmed.slice(0, 30) + '...',
             message: `该分句连续长度达 ${trimmed.length} 字（阈值 ${maxLen} 字）未见停顿标点，严重破坏网文快节奏吸入感。`,
           })
         }
@@ -107,10 +103,10 @@ export class RunOnSentenceRule implements ILinterRule {
  * 对话引号内包含过长的设定说明词汇或连续单次台词超过 120 字
  */
 export class DialogueInfodumpRule implements ILinterRule {
-  readonly id = "LINT_DIALOGUE_INFODUMP"
-  readonly name = "对话违和倾倒世界观设定"
-  readonly description = "角色台词长篇大论背书，将读者当做受众灌输百科设定"
-  readonly defaultSeverity = "error"
+  readonly id = 'LINT_DIALOGUE_INFODUMP'
+  readonly name = '对话违和倾倒世界观设定'
+  readonly description = '角色台词长篇大论背书，将读者当做受众灌输百科设定'
+  readonly defaultSeverity = 'error'
 
   check(text: string): LintIssue[] {
     const issues: LintIssue[] = []
@@ -123,10 +119,10 @@ export class DialogueInfodumpRule implements ILinterRule {
       const isInfodump =
         dialogueContent.length > 100 ||
         (dialogueContent.length > 50 &&
-          (dialogueContent.includes("正如你所知") ||
-            dialogueContent.includes("顾名思义") ||
-            dialogueContent.includes("根据帝国第") ||
-            dialogueContent.includes("换言之，这个世界的法则")))
+          (dialogueContent.includes('正如你所知') ||
+            dialogueContent.includes('顾名思义') ||
+            dialogueContent.includes('根据帝国第') ||
+            dialogueContent.includes('换言之，这个世界的法则')))
 
       if (isInfodump) {
         issues.push({
@@ -137,9 +133,9 @@ export class DialogueInfodumpRule implements ILinterRule {
           lineNumber: text.slice(0, start).split(/\r?\n/).length,
           startOffset: start,
           endOffset: start + match[0].length,
-          matchedSnippet: match[0].slice(0, 40) + "...",
+          matchedSnippet: match[0].slice(0, 40) + '...',
           message: `对话长达 ${dialogueContent.length} 字且带有生硬的说教/背景设定倒灌痕迹，角色声音失真。`,
-          suggestedFix: "将说明性文字转移至环境烘托、动作交互或剧情冲突中自然流露",
+          suggestedFix: '将说明性文字转移至环境烘托、动作交互或剧情冲突中自然流露',
         } as LintIssue)
       }
     }
@@ -153,20 +149,20 @@ export class DialogueInfodumpRule implements ILinterRule {
  * 古风玄幻中突兀出现现代词汇（例如："降维打击"、"性价比"、"大数据"）
  */
 export class AnachronismRule implements ILinterRule {
-  readonly id = "LINT_ANACHRONISM"
-  readonly name = "现代工业/网络热梗出戏词"
-  readonly description = "在严肃古典/修真语境中误用现代专有名词导致读者出戏"
-  readonly defaultSeverity = "error"
+  readonly id = 'LINT_ANACHRONISM'
+  readonly name = '现代工业/网络热梗出戏词'
+  readonly description = '在严肃古典/修真语境中误用现代专有名词导致读者出戏'
+  readonly defaultSeverity = 'error'
 
   private static readonly ANACHRONISTIC_WORDS = [
-    "性价比",
-    "大数据",
-    "云计算",
-    "打工人",
-    "内卷",
-    "降维打击",
-    "KPI",
-    "割韭菜",
+    '性价比',
+    '大数据',
+    '云计算',
+    '打工人',
+    '内卷',
+    '降维打击',
+    'KPI',
+    '割韭菜',
   ]
 
   check(text: string): LintIssue[] {
@@ -214,32 +210,32 @@ export class NarrativeLinterEngine {
   public static getDefaultRules(): LinterRuleConfig[] {
     return [
       {
-        ruleId: "LINT_ADVERB_STACK",
-        name: "弱化副词过度修饰",
+        ruleId: 'LINT_ADVERB_STACK',
+        name: '弱化副词过度修饰',
         enabled: true,
-        severity: "warning",
-        description: "检测连续或过度密集的副词，倡导动词白描",
+        severity: 'warning',
+        description: '检测连续或过度密集的副词，倡导动词白描',
       },
       {
-        ruleId: "LINT_RUN_ON_SENTENCE",
-        name: "超长从句/无间歇长句",
+        ruleId: 'LINT_RUN_ON_SENTENCE',
+        name: '超长从句/无间歇长句',
         enabled: true,
-        severity: "warning",
-        description: "单句无标点连续字数超过阈值造成阅读窒息",
+        severity: 'warning',
+        description: '单句无标点连续字数超过阈值造成阅读窒息',
       },
       {
-        ruleId: "LINT_DIALOGUE_INFODUMP",
-        name: "对话违和倾倒世界观设定",
+        ruleId: 'LINT_DIALOGUE_INFODUMP',
+        name: '对话违和倾倒世界观设定',
         enabled: true,
-        severity: "error",
-        description: "角色台词长篇大论背书",
+        severity: 'error',
+        description: '角色台词长篇大论背书',
       },
       {
-        ruleId: "LINT_ANACHRONISM",
-        name: "现代工业/网络热梗出戏词",
+        ruleId: 'LINT_ANACHRONISM',
+        name: '现代工业/网络热梗出戏词',
         enabled: true,
-        severity: "error",
-        description: "在古典玄幻中误用现代专有名词",
+        severity: 'error',
+        description: '在古典玄幻中误用现代专有名词',
       },
     ]
   }
@@ -273,8 +269,8 @@ export class NarrativeLinterEngine {
     let infoCount = 0
 
     allIssues.forEach((issue) => {
-      if (issue.severity === "error") errorCount++
-      else if (issue.severity === "warning") warningCount++
+      if (issue.severity === 'error') errorCount++
+      else if (issue.severity === 'warning') warningCount++
       else infoCount++
     })
 

@@ -5,7 +5,12 @@ describe('capability-aware routing', () => {
   it('selects the highest-priority route satisfying every requirement', () => {
     const router = new CapabilityRouter([
       { id: 'offline', capabilities: ['creative-writing'], online: false, priority: 10 },
-      { id: 'cloud', capabilities: ['creative-writing', 'continuity-audit'], online: true, priority: 5 },
+      {
+        id: 'cloud',
+        capabilities: ['creative-writing', 'continuity-audit'],
+        online: true,
+        priority: 5,
+      },
     ])
     const selected = router.select({
       id: 'task',

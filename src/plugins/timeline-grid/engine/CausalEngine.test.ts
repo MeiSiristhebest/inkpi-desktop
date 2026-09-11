@@ -58,7 +58,12 @@ describe('CausalEngine — 因果拓扑分析、环路死锁与时间悖论检�
   it('detects temporal paradoxes when pre-requisite happens in future chapters', () => {
     // n2 发生在第 2 章，但依赖第 5 章才发生的 n1
     const n1 = makeNode({ id: 'n1', chapterOrder: 5, eventTitle: '击败魔皇' })
-    const n2 = makeNode({ id: 'n2', chapterOrder: 2, eventTitle: '主角顿悟神力', prerequisites: ['n1'] })
+    const n2 = makeNode({
+      id: 'n2',
+      chapterOrder: 2,
+      eventTitle: '主角顿悟神力',
+      prerequisites: ['n1'],
+    })
 
     const paradoxes = engine.detectTemporalParadoxes([n1, n2])
     expect(paradoxes).toHaveLength(1)

@@ -36,7 +36,10 @@ export function createPluginAnalysisTask(request: PluginAnalysisRequest): AiTask
     contextPolicy: {
       includeSelection: false,
       includeProjectState: false,
-      metadata: { pluginId: request.pluginId, instructionId: getPluginInstruction(request.pluginId).id },
+      metadata: {
+        pluginId: request.pluginId,
+        instructionId: getPluginInstruction(request.pluginId).id,
+      },
     },
     executionPolicy: {
       strategy: 'completion',

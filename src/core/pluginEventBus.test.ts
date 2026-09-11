@@ -20,7 +20,7 @@ describe('PluginEventBus', () => {
       expect.objectContaining({
         protagonistName: '韩立',
         riskLevel: 'CRITICAL_COLLAPSE',
-      })
+      }),
     )
 
     unsubscribe()

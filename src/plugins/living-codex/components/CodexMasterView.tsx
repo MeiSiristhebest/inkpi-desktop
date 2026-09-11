@@ -34,15 +34,62 @@ const CATEGORY_TABS: {
   icon: any
   badgeClass: string
 }[] = [
-  { id: 'all', label: '全部实体', icon: Layers, badgeClass: 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)]' },
+  {
+    id: 'all',
+    label: '全部实体',
+    icon: Layers,
+    badgeClass: 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)]',
+  },
   // 类别区分依靠图标 + 文案；配色统一使用全局唯一强调色令牌（不引入第二彩色，评审 §1.5）。
-  { id: 'character', label: '角色人物', icon: User, badgeClass: 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20' },
-  { id: 'faction', label: '国家宗门', icon: Shield, badgeClass: 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20' },
-  { id: 'location', label: '地理风物', icon: MapPin, badgeClass: 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20' },
-  { id: 'item', label: '物品法宝', icon: Sparkles, badgeClass: 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20' },
-  { id: 'race', label: '种族生物', icon: BookOpen, badgeClass: 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20' },
-  { id: 'history', label: '历史事件', icon: Calendar, badgeClass: 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20' },
-  { id: 'term', label: '名词术语', icon: Database, badgeClass: 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20' },
+  {
+    id: 'character',
+    label: '角色人物',
+    icon: User,
+    badgeClass:
+      'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20',
+  },
+  {
+    id: 'faction',
+    label: '国家宗门',
+    icon: Shield,
+    badgeClass:
+      'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20',
+  },
+  {
+    id: 'location',
+    label: '地理风物',
+    icon: MapPin,
+    badgeClass:
+      'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20',
+  },
+  {
+    id: 'item',
+    label: '物品法宝',
+    icon: Sparkles,
+    badgeClass:
+      'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20',
+  },
+  {
+    id: 'race',
+    label: '种族生物',
+    icon: BookOpen,
+    badgeClass:
+      'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20',
+  },
+  {
+    id: 'history',
+    label: '历史事件',
+    icon: Calendar,
+    badgeClass:
+      'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20',
+  },
+  {
+    id: 'term',
+    label: '名词术语',
+    icon: Database,
+    badgeClass:
+      'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20',
+  },
 ]
 
 export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
@@ -109,7 +156,8 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
 
   // 清空当前工程的世界观实体
   const handleClearAll = async () => {
-    if (!(await confirmDialog.confirm('确定要清空当前工程的所有世界观实体吗？此操作不可逆。'))) return
+    if (!(await confirmDialog.confirm('确定要清空当前工程的所有世界观实体吗？此操作不可逆。')))
+      return
     for (const ent of entities) {
       await indexedDbCodexEntityRepository.delete(ent.id)
     }
@@ -265,7 +313,9 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
               /* 数据加载失败：可读错误 + 重试，而非白屏 */
               <div className="h-full flex flex-col items-center justify-center gap-3 text-[var(--ink-text-muted)]">
                 <Database className="w-8 h-8 opacity-40 text-red-400" />
-                <span className="text-[13px] font-medium text-[var(--ink-text)]">世界观数据加载失败</span>
+                <span className="text-[13px] font-medium text-[var(--ink-text)]">
+                  世界观数据加载失败
+                </span>
                 <span className="text-[11px] text-[var(--ink-text-faint)] max-w-md text-center px-4 leading-relaxed">
                   {loadError}
                 </span>
@@ -287,7 +337,8 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
                     开启你的活体世界观图谱
                   </h3>
                   <p className="text-[12px] text-[var(--ink-text-muted)] max-w-lg mx-auto leading-relaxed">
-                    你可以一键预装经典题材世界观 Demo 体验 Aho-Corasick 毫秒级行文感知，也可以从 36+ 种核心人设模版自由创造。
+                    你可以一键预装经典题材世界观 Demo 体验 Aho-Corasick 毫秒级行文感知，也可以从 36+
+                    种核心人设模版自由创造。
                   </p>
                 </div>
 

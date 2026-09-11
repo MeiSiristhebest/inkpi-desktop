@@ -48,7 +48,10 @@ export const findDuplicateCodes = (rows: TableRowInput[], tab: HealthTabContext)
 }
 
 /** 主标识必填空扫描：displayCol 字段留空的条目 */
-export const findMissingDisplayNames = (rows: TableRowInput[], tab: HealthTabContext): HealthIssue[] => {
+export const findMissingDisplayNames = (
+  rows: TableRowInput[],
+  tab: HealthTabContext,
+): HealthIssue[] => {
   const issues: HealthIssue[] = []
   if (!tab.displayCol) return issues
   for (const r of rows) {

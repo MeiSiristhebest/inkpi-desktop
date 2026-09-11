@@ -8,7 +8,7 @@ export interface CharacterKnowledge {
 export interface SecretItem {
   id: string
   title: string
-  confidentialityLevel: "low" | "secret" | "top_secret"
+  confidentialityLevel: 'low' | 'secret' | 'top_secret'
   originChapterOrder: number
   holders: string[]
 }
@@ -20,7 +20,7 @@ export interface PovSnapshotRecord {
   chapterOrder: number
   povCharacterId: string
   povCharacterName: string
-  povMode: "first_person" | "third_limited" | "third_objective" | "omniscient"
+  povMode: 'first_person' | 'third_limited' | 'third_objective' | 'omniscient'
   allowedCharacters: CharacterKnowledge[]
   secrets: SecretItem[]
   headHoppingViolationsCount: number

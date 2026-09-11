@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { PluginSettingsView } from './PluginSettingsView'
-import { PluginProvider, usePluginRegistry, STORAGE_KEY_ENABLED_PLUGINS } from '../../core/pluginRegistry'
+import {
+  PluginProvider,
+  usePluginRegistry,
+  STORAGE_KEY_ENABLED_PLUGINS,
+} from '../../core/pluginRegistry'
 
-const renderWithProviders = (ui: React.ReactNode) =>
-  render(<PluginProvider>{ui}</PluginProvider>)
+const renderWithProviders = (ui: React.ReactNode) => render(<PluginProvider>{ui}</PluginProvider>)
 
 describe('PluginSettingsView UI Component', () => {
   beforeEach(() => {
@@ -32,7 +35,9 @@ describe('PluginSettingsView UI Component', () => {
   it('toggles plugin off/on and persists to localStorage', () => {
     const Consumer = () => {
       const { isPluginEnabled } = usePluginRegistry()
-      return <div data-testid="consumer">{isPluginEnabled('living-codex') ? 'enabled' : 'disabled'}</div>
+      return (
+        <div data-testid="consumer">{isPluginEnabled('living-codex') ? 'enabled' : 'disabled'}</div>
+      )
     }
 
     renderWithProviders(

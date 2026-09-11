@@ -51,7 +51,9 @@ describe('authoritative IndexedDB domain change log', () => {
   it('rejects corrupted records and restores a validated snapshot', async () => {
     const store = new IndexedDbDomainChangeStore()
     const workspaceId = 'sync-recovery-workspace'
-    for (const record of await db.getAll<{ id: string; workspaceId?: string }>('domainChangeSets')) {
+    for (const record of await db.getAll<{ id: string; workspaceId?: string }>(
+      'domainChangeSets',
+    )) {
       if (record.workspaceId === workspaceId) await db.delete('domainChangeSets', record.id)
     }
     const first = createDomainChangeSet({
@@ -80,7 +82,9 @@ describe('authoritative IndexedDB domain change log', () => {
   it('serializes snapshot restore before replaying a pending local write', async () => {
     const store = new IndexedDbDomainChangeStore()
     const workspaceId = 'sync-restore-order-workspace'
-    for (const record of await db.getAll<{ id: string; workspaceId?: string }>('domainChangeSets')) {
+    for (const record of await db.getAll<{ id: string; workspaceId?: string }>(
+      'domainChangeSets',
+    )) {
       if (record.workspaceId === workspaceId) await db.delete('domainChangeSets', record.id)
     }
 

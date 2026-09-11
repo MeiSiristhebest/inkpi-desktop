@@ -1,4 +1,4 @@
-import type { SubtextDialogueRecord } from "../../ports/subtextRepository"
+import type { SubtextDialogueRecord } from '../../ports/subtextRepository'
 
 export type { SubtextDialogueRecord }
 

@@ -33,8 +33,10 @@ export function createDaemonDomainSyncRemote(client: RpcClient): DomainSyncRemot
   }
 }
 
-export interface DesktopProposalProjectionSnapshot
-  extends Omit<ProposalProjectionSnapshot, 'proposals'> {
+export interface DesktopProposalProjectionSnapshot extends Omit<
+  ProposalProjectionSnapshot,
+  'proposals'
+> {
   proposals: AiProposal[]
 }
 
@@ -58,7 +60,9 @@ export function proposalToProjectionState(proposal: AiProposal): ProposalProject
     ...(proposal.inversePatches === undefined
       ? {}
       : { inversePatch: proposal.inversePatches.map((patch) => ({ ...patch })) }),
-    ...(proposal.committedRevision === undefined ? {} : { committedRevision: proposal.committedRevision }),
+    ...(proposal.committedRevision === undefined
+      ? {}
+      : { committedRevision: proposal.committedRevision }),
   }
   validateProposalProjectionState(state)
   return state
@@ -105,7 +109,9 @@ function projectionStateToProposal(state: ProposalProjectionState): AiProposal {
     createdAt: state.createdAt,
     ...(state.updatedAt === state.createdAt ? {} : { updatedAt: state.updatedAt }),
     ...(state.inversePatch === undefined ? {} : { inversePatch: state.inversePatch }),
-    ...(state.committedRevision === undefined ? {} : { committedRevision: state.committedRevision }),
+    ...(state.committedRevision === undefined
+      ? {}
+      : { committedRevision: state.committedRevision }),
   })
 }
 

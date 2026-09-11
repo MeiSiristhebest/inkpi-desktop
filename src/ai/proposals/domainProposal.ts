@@ -99,9 +99,7 @@ export function domainProposalToAiProposal(
     createdAt: options.createdAt,
     ...(options.updatedAt === undefined ? {} : { updatedAt: options.updatedAt }),
     ...(proposal.sourceHash === undefined ? {} : { sourceHash: proposal.sourceHash }),
-    ...(proposal.evidence === undefined
-      ? {}
-      : { evidence: proposal.evidence.map(cloneEvidence) }),
+    ...(proposal.evidence === undefined ? {} : { evidence: proposal.evidence.map(cloneEvidence) }),
     ...(inversePatches === undefined ? {} : { inversePatches }),
     ...(options.committedRevision === undefined
       ? {}
@@ -144,10 +142,7 @@ function validateEvidence(value: unknown): void {
     }
     for (const key of ['semanticFrom', 'semanticTo']) {
       const range = candidate[key]
-      if (
-        range !== undefined &&
-        (!Number.isSafeInteger(range) || (range as number) < 0)
-      ) {
+      if (range !== undefined && (!Number.isSafeInteger(range) || (range as number) < 0)) {
         throw new Error(
           `Domain proposal evidence ${key} at index ${index} must be a non-negative integer`,
         )
@@ -227,9 +222,7 @@ function cloneDomainProposal(proposal: DomainProposal): DomainProposal {
     ...proposal,
     target: { ...proposal.target },
     patch: cloneJsonValue(proposal.patch),
-    ...(proposal.evidence === undefined
-      ? {}
-      : { evidence: proposal.evidence.map(cloneEvidence) }),
+    ...(proposal.evidence === undefined ? {} : { evidence: proposal.evidence.map(cloneEvidence) }),
   }
 }
 

@@ -154,9 +154,7 @@ export class CodexGraphStore {
     }
     line += `: ${e.summary || '暂无描述'}`
     if (e.relations && e.relations.length > 0) {
-      const relStr = e.relations
-        .map((r) => `${r.relationType}->${r.targetName}`)
-        .join(', ')
+      const relStr = e.relations.map((r) => `${r.relationType}->${r.targetName}`).join(', ')
       line += ` | 关系:[${relStr}]`
     }
     return line

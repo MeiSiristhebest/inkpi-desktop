@@ -31,7 +31,9 @@ describe('PressForge Components', () => {
   ]
 
   it('renders PressForgeMasterView', async () => {
-    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(fakeChapters as any)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
     vi.mocked(indexedDbPressConfigRepository.get).mockResolvedValue(undefined)
 
     render(<PressForgeMasterView projectId="proj-1" />)
@@ -43,12 +45,7 @@ describe('PressForge Components', () => {
   })
 
   it('renders PressForgeDrawer with formatting stats', async () => {
-    render(
-      <PressForgeDrawer
-        projectId="proj-1"
-        currentText="测试段落一\n测试段落二"
-      />
-    )
+    render(<PressForgeDrawer projectId="proj-1" currentText="测试段落一\n测试段落二" />)
     expect(screen.getByText(/标准排版压制/)).toBeInTheDocument()
     expect(screen.getByText(/一键复制标准段首缩进正文/)).toBeInTheDocument()
   })

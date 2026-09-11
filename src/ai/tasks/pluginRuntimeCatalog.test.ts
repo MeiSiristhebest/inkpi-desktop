@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { PluginProvider, usePluginRegistry } from '../../core/pluginRegistry'
 import { listPluginInstructionDefinitions } from '../instructions/pluginInstructions'
 import { FIRST_PARTY_PLUGIN_IDS } from './pluginCatalog'
-import { getPluginRuntimeEntry, PLUGIN_RUNTIME_CATALOG, type PluginRuntimeClass } from './pluginRuntimeCatalog'
+import {
+  getPluginRuntimeEntry,
+  PLUGIN_RUNTIME_CATALOG,
+  type PluginRuntimeClass,
+} from './pluginRuntimeCatalog'
 import { createPluginAnalysisTask } from './pluginTasks'
 
 describe('plugin runtime catalog', () => {
@@ -68,7 +72,9 @@ describe('plugin runtime catalog', () => {
 
   it('returns no runtime entry for unknown ids and keeps catalog ids unique', () => {
     expect(getPluginRuntimeEntry('missing-plugin')).toBeUndefined()
-    expect(new Set(Object.keys(PLUGIN_RUNTIME_CATALOG)).size).toBe(Object.keys(PLUGIN_RUNTIME_CATALOG).length)
+    expect(new Set(Object.keys(PLUGIN_RUNTIME_CATALOG)).size).toBe(
+      Object.keys(PLUGIN_RUNTIME_CATALOG).length,
+    )
   })
 
   it('does not duplicate a plugin when activation is repeated', () => {
@@ -82,7 +88,9 @@ describe('plugin runtime catalog', () => {
       result.current.enablePlugin('living-codex')
     })
 
-    expect(result.current.activePlugins.filter((plugin) => plugin.id === 'living-codex')).toHaveLength(1)
+    expect(
+      result.current.activePlugins.filter((plugin) => plugin.id === 'living-codex'),
+    ).toHaveLength(1)
     expect(result.current.enabledIds.has('living-codex')).toBe(true)
   })
 })

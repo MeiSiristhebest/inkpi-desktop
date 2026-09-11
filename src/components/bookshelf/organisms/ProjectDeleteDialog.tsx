@@ -23,7 +23,8 @@ export const ProjectDeleteDialog = ({ project, onCancel, onConfirm }: ProjectDel
     {project && (
       <>
         <p className="text-[13.5px] text-[var(--ink-text)]">
-          确定要删除《<span className="font-semibold text-[var(--ink-danger)]">{project.name}</span>》吗？
+          确定要删除《<span className="font-semibold text-[var(--ink-danger)]">{project.name}</span>
+          》吗？
         </p>
         <p className="text-[11.5px] text-[var(--ink-text-muted)] leading-relaxed">
           全书的大纲设定、人物卡与已撰正文将一并删除，不可撤销。建议删除前先导出备份。

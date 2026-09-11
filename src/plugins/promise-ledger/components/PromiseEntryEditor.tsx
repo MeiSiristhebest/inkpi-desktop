@@ -151,7 +151,10 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
               />
             </div>
             <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1" title="距埋设多少章内必须回收">
+              <label
+                className="block text-[var(--ink-text-muted)] mb-1"
+                title="距埋设多少章内必须回收"
+              >
                 硬红线跨度(章)
               </label>
               <input
@@ -165,7 +168,9 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
           </div>
 
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">埋设场景简述 / 线索上下文</label>
+            <label className="block text-[var(--ink-text-muted)] mb-1">
+              埋设场景简述 / 线索上下文
+            </label>
             <textarea
               rows={3}
               value={plantNote}

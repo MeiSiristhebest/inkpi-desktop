@@ -1,10 +1,10 @@
-import type { FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { StoryboardEngine } from "../engine/StoryboardEngine"
-import { Film } from "lucide-react"
+import type { FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { StoryboardEngine } from '../engine/StoryboardEngine'
+import { Film } from 'lucide-react'
 
 export const StoryboardDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
-  const extracted = StoryboardEngine.extractStoryboard("drawer_ch", "当前章节", currentText || "")
+  const extracted = StoryboardEngine.extractStoryboard('drawer_ch', '当前章节', currentText || '')
 
   return (
     <div className="p-3 space-y-3 text-xs">
@@ -29,4 +29,3 @@ export const StoryboardDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
     </div>
   )
 }
-

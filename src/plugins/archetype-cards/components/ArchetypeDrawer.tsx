@@ -1,15 +1,15 @@
-import { useState, type FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { ArchetypeEngine } from "../engine/ArchetypeEngine"
-import type { NarrativeArchetypeRecord } from "../types"
-import { Dna, Shuffle } from "lucide-react"
+import { useState, type FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { ArchetypeEngine } from '../engine/ArchetypeEngine'
+import type { NarrativeArchetypeRecord } from '../types'
+import { Dna, Shuffle } from 'lucide-react'
 
 export const ArchetypeDrawer: FC<DesktopPluginDrawerProps> = () => {
   const [engine] = useState(() => new ArchetypeEngine())
   const [drawn, setDrawn] = useState<NarrativeArchetypeRecord | null>(null)
 
   const handleDrawOne = () => {
-    const cards = engine.drawCards("character_archetype_36", 1)
+    const cards = engine.drawCards('character_archetype_36', 1)
     if (cards.length > 0) setDrawn(cards[0])
   }
 
@@ -33,15 +33,11 @@ export const ArchetypeDrawer: FC<DesktopPluginDrawerProps> = () => {
         </div>
       ) : (
         <div className="p-2.5 rounded-lg border bg-white dark:bg-slate-800 space-y-1.5">
-          <div className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">
-            {drawn.name}
-          </div>
+          <div className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">{drawn.name}</div>
           <div className="text-[11px] text-slate-600 dark:text-slate-300">
             核心渴望: {drawn.coreDesire}
           </div>
-          <div className="text-[10px] text-rose-500">
-            致命弱点: {drawn.fatalFlaw}
-          </div>
+          <div className="text-[10px] text-rose-500">致命弱点: {drawn.fatalFlaw}</div>
         </div>
       )}
     </div>

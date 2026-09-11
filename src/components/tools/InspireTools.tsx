@@ -1,31 +1,31 @@
-import React, { useState } from 'react';
-import { Sparkles, Copy, Check, Dices } from 'lucide-react';
-import { clipboardWriter } from '../../adapters/clipboardWriter';
+import React, { useState } from 'react'
+import { Sparkles, Copy, Check, Dices } from 'lucide-react'
+import { clipboardWriter } from '../../adapters/clipboardWriter'
 import {
   CATEGORIES,
   STYLES,
   generateInspiration,
   type InspireCategory,
   type InspireStyle,
-} from './inspireStrategies';
+} from './inspireStrategies'
 
 export const InspireTools: React.FC = () => {
-  const [activeCat, setActiveCat] = useState<InspireCategory>('人名');
-  const [activeStyle, setActiveStyle] = useState<InspireStyle>('仙侠');
+  const [activeCat, setActiveCat] = useState<InspireCategory>('人名')
+  const [activeStyle, setActiveStyle] = useState<InspireStyle>('仙侠')
   const [results, setResults] = useState<string[]>(() =>
-    Array.from({ length: 12 }, () => generateInspiration('人名', '仙侠'))
-  );
-  const [copiedText, setCopiedText] = useState<string | null>(null);
+    Array.from({ length: 12 }, () => generateInspiration('人名', '仙侠')),
+  )
+  const [copiedText, setCopiedText] = useState<string | null>(null)
 
   const handleRefresh = () => {
-    setResults(Array.from({ length: 12 }, () => generateInspiration(activeCat, activeStyle)));
-  };
+    setResults(Array.from({ length: 12 }, () => generateInspiration(activeCat, activeStyle)))
+  }
 
   const handleCopy = async (text: string) => {
-    await clipboardWriter.writeText(text);
-    setCopiedText(text);
-    setTimeout(() => setCopiedText(null), 1200);
-  };
+    await clipboardWriter.writeText(text)
+    setCopiedText(text)
+    setTimeout(() => setCopiedText(null), 1200)
+  }
 
   return (
     <div className="flex-1 h-screen overflow-y-auto bg-[var(--ink-bg)] text-[var(--ink-text)] p-6 select-none">
@@ -48,8 +48,10 @@ export const InspireTools: React.FC = () => {
               <button
                 key={cat}
                 onClick={() => {
-                  setActiveCat(cat);
-                  setResults(Array.from({ length: 12 }, () => generateInspiration(cat, activeStyle)));
+                  setActiveCat(cat)
+                  setResults(
+                    Array.from({ length: 12 }, () => generateInspiration(cat, activeStyle)),
+                  )
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   activeCat === cat
@@ -71,8 +73,8 @@ export const InspireTools: React.FC = () => {
               <button
                 key={st}
                 onClick={() => {
-                  setActiveStyle(st);
-                  setResults(Array.from({ length: 12 }, () => generateInspiration(activeCat, st)));
+                  setActiveStyle(st)
+                  setResults(Array.from({ length: 12 }, () => generateInspiration(activeCat, st)))
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   activeStyle === st
@@ -110,12 +112,16 @@ export const InspireTools: React.FC = () => {
                 {item}
               </span>
               <button className="text-[var(--ink-text-muted)] group-hover:text-[var(--ink-accent)]">
-                {copiedText === item ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedText === item ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
               </button>
             </div>
           ))}
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

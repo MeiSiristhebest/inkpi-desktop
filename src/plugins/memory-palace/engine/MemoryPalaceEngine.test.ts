@@ -82,7 +82,7 @@ describe('MemoryPalaceEngine', () => {
   it('detects entities in a given text fragment', () => {
     const detected = MemoryPalaceEngine.detectEntitiesInText(
       '清霜仙子御风而立，望着天际出神。',
-      fakeEntities
+      fakeEntities,
     )
     expect(detected.length).toBe(1)
     expect(detected[0].name).toBe('柳清霜')

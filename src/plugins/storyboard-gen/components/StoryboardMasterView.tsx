@@ -26,8 +26,8 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
 
   const localExtracted: ClimaxStoryboardExtraction = StoryboardEngine.extractStoryboard(
     chapterId,
-    "第一章 演武反杀",
-    sceneText
+    '第一章 演武反杀',
+    sceneText,
   )
   const [runtimeExtracted, setRuntimeExtracted] = useState<ClimaxStoryboardExtraction | null>(null)
 
@@ -72,7 +72,7 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
 
   useEffect(() => {
     onStats?.({
-      title: "角色立绘与分镜生成器",
+      title: '角色立绘与分镜生成器',
       wordCount: sceneText.length,
       updatedAt: clock.now(),
     })
@@ -82,7 +82,7 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext("2d")
+    const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     const w = canvas.width
@@ -90,7 +90,7 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
     ctx.clearRect(0, 0, w, h)
 
     // 背景深色底
-    ctx.fillStyle = "#090d16"
+    ctx.fillStyle = '#090d16'
     ctx.fillRect(0, 0, w, h)
 
     // 绘制四格布局 (2x2)
@@ -107,17 +107,17 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
       const y = pad + row * (cellH + pad)
 
       // 单格边框
-      ctx.fillStyle = "#161e2e"
+      ctx.fillStyle = '#161e2e'
       ctx.fillRect(x, y, cellW, cellH)
 
-      ctx.strokeStyle = idx === 2 ? "#e11d48" : "#3b82f6"
+      ctx.strokeStyle = idx === 2 ? '#e11d48' : '#3b82f6'
       ctx.lineWidth = 1.5
       ctx.strokeRect(x, y, cellW, cellH)
 
       // 构图引导线 (九宫格 / 对角线)
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)"
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)'
       ctx.lineWidth = 1
-      if (frame.compositionGuide === "rule_of_thirds") {
+      if (frame.compositionGuide === 'rule_of_thirds') {
         ctx.beginPath()
         ctx.moveTo(x + cellW / 3, y)
         ctx.lineTo(x + cellW / 3, y + cellH)
@@ -128,7 +128,7 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
         ctx.moveTo(x, y + (cellH * 2) / 3)
         ctx.lineTo(x + cellW, y + (cellH * 2) / 3)
         ctx.stroke()
-      } else if (frame.compositionGuide === "diagonal_impact") {
+      } else if (frame.compositionGuide === 'diagonal_impact') {
         ctx.beginPath()
         ctx.moveTo(x, y + cellH)
         ctx.lineTo(x + cellW, y)
@@ -136,24 +136,24 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
       }
 
       // 镜头标题标签
-      ctx.fillStyle = "#ffffff"
-      ctx.font = "bold 11px sans-serif"
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 11px sans-serif'
       ctx.fillText(frame.shotLabel, x + 10, y + 20)
 
       // 光影色调
-      ctx.fillStyle = "#94a3b8"
-      ctx.font = "10px sans-serif"
+      ctx.fillStyle = '#94a3b8'
+      ctx.font = '10px sans-serif'
       ctx.fillText(`构图: ${frame.compositionGuide} | 光影: ${frame.lightingMood}`, x + 10, y + 36)
     })
   }, [extracted])
 
   const handleSaveScene = async () => {
     const record: StoryboardSceneRecord = StoryboardEngine.createSceneRecord(
-      idGenerator.generate("storyboard"),
+      idGenerator.generate('storyboard'),
       projectId,
       chapterId,
       extracted,
-      clock.now()
+      clock.now(),
     )
     await indexedDbStoryboardRepository.save(record)
     await loadScenes()
@@ -164,7 +164,6 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
     setCopiedPromptId(id)
     setTimeout(() => setCopiedPromptId(null), 2000)
   }
-
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto text-slate-800 dark:text-slate-100">
@@ -232,7 +231,7 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             {scenes.length > 0 && (
               <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
                 <span className="font-bold text-slate-300">已保存分镜档案 ({scenes.length}): </span>
-                <span className="text-slate-500">{scenes.map((s) => s.sceneTitle).join("、")}</span>
+                <span className="text-slate-500">{scenes.map((s) => s.sceneTitle).join('、')}</span>
               </div>
             )}
           </div>
@@ -271,7 +270,11 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                       onClick={() => handleCopyPrompt(f.visualPrompt, f.id)}
                       className="text-slate-400 hover:text-rose-500 transition shrink-0"
                     >
-                      {copiedPromptId === f.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedPromptId === f.id ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -292,8 +295,12 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                   key={c.characterId}
                   className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-xs space-y-1.5"
                 >
-                  <div className="font-bold text-slate-800 dark:text-slate-100">{c.characterName}</div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">{c.visualFeatures}</p>
+                  <div className="font-bold text-slate-800 dark:text-slate-100">
+                    {c.characterName}
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                    {c.visualFeatures}
+                  </p>
                   <div className="pt-1 flex justify-end">
                     <button
                       type="button"

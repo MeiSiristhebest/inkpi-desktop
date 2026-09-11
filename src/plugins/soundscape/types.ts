@@ -2,7 +2,7 @@ import type {
   MechanicalSwitchType,
   AmbienceType,
   SoundscapeConfigRecord,
-} from "../../ports/soundscapeConfigRepository"
+} from '../../ports/soundscapeConfigRepository'
 
 export type { MechanicalSwitchType, AmbienceType, SoundscapeConfigRecord }
 

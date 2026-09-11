@@ -171,32 +171,38 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       const current = rewriteProposalRef.current
       if (!current || current.proposal.id !== event.proposalId) return
 
-      void proposalLedger.reload().then(() => {
-        if (disposed) return
-        const next = proposalLedger.get(event.proposalId)
-        if (!next) return
-        setRewriteProposal((value) => {
-          if (!value || value.proposal.id !== next.id) return value
-          const nextPatch = next.patches[0]
-          return {
-            ...value,
-            proposal: next,
-            proposedText: nextPatch?.text ?? value.proposedText,
-            status: next.status,
-            error: next.status === 'stale'
-              ? '提案与其他窗口的修改冲突，请重新审阅当前内容'
-              : undefined,
-          }
-        })
-      }).catch((error: unknown) => {
-        if (disposed) return
-        setRewriteProposal((value) => value && value.proposal.id === event.proposalId
-          ? {
+      void proposalLedger
+        .reload()
+        .then(() => {
+          if (disposed) return
+          const next = proposalLedger.get(event.proposalId)
+          if (!next) return
+          setRewriteProposal((value) => {
+            if (!value || value.proposal.id !== next.id) return value
+            const nextPatch = next.patches[0]
+            return {
               ...value,
-              error: `跨窗口刷新提案失败：${error instanceof Error ? error.message : String(error)}`,
+              proposal: next,
+              proposedText: nextPatch?.text ?? value.proposedText,
+              status: next.status,
+              error:
+                next.status === 'stale'
+                  ? '提案与其他窗口的修改冲突，请重新审阅当前内容'
+                  : undefined,
             }
-          : value)
-      })
+          })
+        })
+        .catch((error: unknown) => {
+          if (disposed) return
+          setRewriteProposal((value) =>
+            value && value.proposal.id === event.proposalId
+              ? {
+                  ...value,
+                  error: `跨窗口刷新提案失败：${error instanceof Error ? error.message : String(error)}`,
+                }
+              : value,
+          )
+        })
     })
 
     return () => {
@@ -209,8 +215,16 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
 
   const currentSemanticDocument = () =>
     typeof editor.state?.doc?.toJSON === 'function'
-      ? semanticDocumentFromProseMirror(activeChapterId || 'selection', editor.state.doc.toJSON(), activeChapterRevision)
-      : semanticDocumentFromText(activeChapterId || 'selection', editor.getText?.() || '', activeChapterRevision)
+      ? semanticDocumentFromProseMirror(
+          activeChapterId || 'selection',
+          editor.state.doc.toJSON(),
+          activeChapterRevision,
+        )
+      : semanticDocumentFromText(
+          activeChapterId || 'selection',
+          editor.getText?.() || '',
+          activeChapterRevision,
+        )
 
   const aiPolish = async () => {
     const { from, to } = editor.state.selection
@@ -252,7 +266,11 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         status: 'pending',
       })
     } catch (error) {
-      setRewriteProposal((current) => current ? { ...current, error: error instanceof Error ? error.message : String(error) } : current)
+      setRewriteProposal((current) =>
+        current
+          ? { ...current, error: error instanceof Error ? error.message : String(error) }
+          : current,
+      )
     } finally {
       setRewriteBusy(false)
     }
@@ -281,39 +299,59 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         },
         hashText(current.text),
       )
-      setRewriteProposal((value) => value ? { ...value, status: 'committed', error: undefined } : value)
+      setRewriteProposal((value) =>
+        value ? { ...value, status: 'committed', error: undefined } : value,
+      )
     } catch (error) {
       const stale =
         error instanceof ProposalConflictError ||
         isProposalSyncError(error) ||
         /source hash|stale/i.test(String(error))
-      setRewriteProposal((value) => value ? {
-        ...value,
-        status: stale ? 'stale' : value.status,
-        error: error instanceof Error ? error.message : String(error),
-      } : value)
+      setRewriteProposal((value) =>
+        value
+          ? {
+              ...value,
+              status: stale ? 'stale' : value.status,
+              error: error instanceof Error ? error.message : String(error),
+            }
+          : value,
+      )
     }
   }
 
   const rejectRewrite = () => {
     if (!rewriteProposal || rewriteProposal.status !== 'pending') return
     proposalLedger.reject(rewriteProposal.proposal.id)
-    setRewriteProposal((value) => value ? { ...value, status: 'rejected' } : value)
+    setRewriteProposal((value) => (value ? { ...value, status: 'rejected' } : value))
   }
 
   const undoRewrite = async () => {
     if (!rewriteProposal || rewriteProposal.status !== 'committed') return
     try {
-      await proposalLedger.undo(rewriteProposal.proposal.id, rewriteProposal.proposal.committedRevision ?? activeChapterRevision, (patches) => {
-        const current = currentSemanticDocument()
-        for (const patch of [...patches].sort((left, right) => right.from - left.from)) {
-          const range = current.sourceMap.semanticRangeToEditor(patch.from, patch.to)
-          editor.commands.insertContentAt({ from: range.from, to: range.to }, patch.text)
-        }
-      })
-      setRewriteProposal((value) => value ? { ...value, status: 'undone', error: undefined } : value)
+      await proposalLedger.undo(
+        rewriteProposal.proposal.id,
+        rewriteProposal.proposal.committedRevision ?? activeChapterRevision,
+        (patches) => {
+          const current = currentSemanticDocument()
+          for (const patch of [...patches].sort((left, right) => right.from - left.from)) {
+            const range = current.sourceMap.semanticRangeToEditor(patch.from, patch.to)
+            editor.commands.insertContentAt({ from: range.from, to: range.to }, patch.text)
+          }
+        },
+      )
+      setRewriteProposal((value) =>
+        value ? { ...value, status: 'undone', error: undefined } : value,
+      )
     } catch (error) {
-      setRewriteProposal((value) => value ? { ...value, status: 'stale', error: error instanceof Error ? error.message : String(error) } : value)
+      setRewriteProposal((value) =>
+        value
+          ? {
+              ...value,
+              status: 'stale',
+              error: error instanceof Error ? error.message : String(error),
+            }
+          : value,
+      )
     }
   }
 
@@ -326,36 +364,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       // 阻止 mousedown 抢占选区，确保点击工具条时选区不丢失
       onMouseDown={(e) => e.preventDefault()}
     >
-      {state.show && <>
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('bold') ? 'text-[var(--ink-accent)]' : ''}`}
-        title="加粗"
-      >
-        <Bold className="w-3.5 h-3.5" />
-      </button>
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('italic') ? 'text-[var(--ink-accent)]' : ''}`}
-        title="斜体"
-      >
-        <Italic className="w-3.5 h-3.5" />
-      </button>
-      <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
-      <button
-        type="button"
-        onClick={() => void aiPolish()}
-        className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors duration-150 cursor-pointer"
-        title="调用 InkPi AI 划词润色"
-      >
-        <Wand2 className="w-3 h-3" />
-        <span>{rewriteBusy ? '处理中…' : 'AI 润色'}</span>
-      </button>
-
-      {/* 划词直接触发断章张力分析抽屉 */}
-      {host && state.show && (
+      {state.show && (
         <>
           <motion.button
             type="button"

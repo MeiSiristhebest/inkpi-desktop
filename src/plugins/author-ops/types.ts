@@ -1,7 +1,4 @@
-import type {
-  MetricLogEntry,
-  AuthorOpsProfileRecord,
-} from "../../ports/authorOpsRepository"
+import type { MetricLogEntry, AuthorOpsProfileRecord } from '../../ports/authorOpsRepository'
 
 export type { MetricLogEntry, AuthorOpsProfileRecord }
 

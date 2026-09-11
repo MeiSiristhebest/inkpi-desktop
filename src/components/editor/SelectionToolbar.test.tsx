@@ -90,12 +90,18 @@ describe('SelectionToolbar', () => {
         activeChapterRevision={4}
       />,
     )
-    act(() => { handlers['selectionUpdate']?.() })
+    act(() => {
+      handlers['selectionUpdate']?.()
+    })
     fireEvent.click(screen.getByText('AI 润色'))
-    await waitFor(() => expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'))
+    await waitFor(() =>
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'),
+    )
 
     fireEvent.click(screen.getByText('接受'))
-    await waitFor(() => expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('committed'))
+    await waitFor(() =>
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('committed'),
+    )
     expect(getContent()).toBe('选改写本')
 
     view.rerender(
@@ -108,7 +114,9 @@ describe('SelectionToolbar', () => {
       />,
     )
     fireEvent.click(screen.getByText('撤销'))
-    await waitFor(() => expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('undone'))
+    await waitFor(() =>
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('undone'),
+    )
     expect(getContent()).toBe('选中文本')
   })
 
@@ -127,7 +135,9 @@ describe('SelectionToolbar', () => {
         activeChapterId="chapter-1"
       />,
     )
-    act(() => { handlers['selectionUpdate']?.() })
+    act(() => {
+      handlers['selectionUpdate']?.()
+    })
     fireEvent.click(screen.getByText('AI 润色'))
     await waitFor(() => expect(screen.getByText('接受')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }))
@@ -156,25 +166,36 @@ describe('SelectionToolbar', () => {
           workspaceId="workspace-cross-context"
         />,
       )
-      act(() => { handlers['selectionUpdate']?.() })
+      act(() => {
+        handlers['selectionUpdate']?.()
+      })
       fireEvent.click(screen.getByText('AI 润色'))
-      await waitFor(() => expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'))
+      await waitFor(() =>
+        expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'),
+      )
 
       const store = new IndexedDbProposalStore()
       await waitFor(async () => {
         const proposals = await store.list()
-        expect(proposals.some((proposal) => proposal.id === proposalId && proposal.status === 'pending')).toBe(true)
+        expect(
+          proposals.some((proposal) => proposal.id === proposalId && proposal.status === 'pending'),
+        ).toBe(true)
       })
 
       const otherLedger = new ProposalLedger({
         store,
-        eventScope: { workspaceId: 'workspace-cross-context', projectId: 'workspace-cross-context' },
+        eventScope: {
+          workspaceId: 'workspace-cross-context',
+          projectId: 'workspace-cross-context',
+        },
       })
       await otherLedger.ready
       otherLedger.accept(proposalId)
       await expect(otherLedger.commit(proposalId, 2, () => undefined)).rejects.toThrow(/stale/)
 
-      await waitFor(() => expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('stale'))
+      await waitFor(() =>
+        expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('stale'),
+      )
       expect(screen.getByTestId('rewrite-proposal-conflict')).toHaveTextContent('其他窗口')
     } finally {
       view?.unmount()

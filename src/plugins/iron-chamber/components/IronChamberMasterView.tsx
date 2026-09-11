@@ -1,26 +1,26 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbIronChamberRepository } from "../../../adapters/indexedDbIronChamberRepository"
-import { IronChamberEngine } from "../engine/IronChamberEngine"
-import type { IronChamberRecord, ChamberLockMode } from "../types"
-import { Lock, Unlock, ShieldAlert, AlertCircle } from "lucide-react"
-import { clock } from "../../../adapters/clock"
-import { idGenerator } from "../../../adapters/idGenerator"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbIronChamberRepository } from '../../../adapters/indexedDbIronChamberRepository'
+import { IronChamberEngine } from '../engine/IronChamberEngine'
+import type { IronChamberRecord, ChamberLockMode } from '../types'
+import { Lock, Unlock, ShieldAlert, AlertCircle } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
+import { idGenerator } from '../../../adapters/idGenerator'
 
 export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [activeRecord, setActiveRecord] = useState<IronChamberRecord | null>(null)
-  
-  const [mode, setMode] = useState<ChamberLockMode>("words")
+
+  const [mode, setMode] = useState<ChamberLockMode>('words')
   const [targetWords, setTargetWords] = useState(2000)
   const [targetMinutes, setTargetMinutes] = useState(45)
-  const [inputSimText, setInputSimText] = useState("")
-  const [emergencyReason, setEmergencyReason] = useState("")
+  const [inputSimText, setInputSimText] = useState('')
+  const [emergencyReason, setEmergencyReason] = useState('')
   const [showPanicModal, setShowPanicModal] = useState(false)
   const [panicError, setPanicError] = useState<string | null>(null)
 
   const loadData = async () => {
     const all = await indexedDbIronChamberRepository.getAll(projectId)
-    const active = all.find((r) => r.status === "locked")
+    const active = all.find((r) => r.status === 'locked')
     setActiveRecord(active || null)
   }
 
@@ -30,7 +30,7 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
 
   useEffect(() => {
     onStats?.({
-      title: "黑曜石小黑屋",
+      title: '黑曜石小黑屋',
       wordCount: inputSimText.length,
       updatedAt: clock.now(),
     })
@@ -38,14 +38,14 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
 
   const startLock = async () => {
     const newRecord: IronChamberRecord = {
-      id: idGenerator.generate("chamber"),
+      id: idGenerator.generate('chamber'),
       projectId,
       mode,
       targetWords,
       targetMinutes,
       startWords: inputSimText.length,
       currentWords: inputSimText.length,
-      status: "locked",
+      status: 'locked',
       pledgedAt: clock.now(),
     }
     await indexedDbIronChamberRepository.save(newRecord)
@@ -55,11 +55,15 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
 
   const handleAttemptUnlock = async () => {
     if (!activeRecord) return
-    const result = IronChamberEngine.transitionToUnlock(activeRecord, inputSimText.length, clock.now())
+    const result = IronChamberEngine.transitionToUnlock(
+      activeRecord,
+      inputSimText.length,
+      clock.now(),
+    )
     if (result.canUnlock) {
       const updated: IronChamberRecord = {
         ...activeRecord,
-        status: "completed",
+        status: 'completed',
         completedAt: clock.now(),
       }
       await indexedDbIronChamberRepository.save(updated)
@@ -74,20 +78,20 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
     if (!activeRecord) return
     const validation = IronChamberEngine.validateEmergencyAbort(emergencyReason)
     if (!validation.valid) {
-      setPanicError(validation.error || "说明不足")
+      setPanicError(validation.error || '说明不足')
       return
     }
 
     const updated: IronChamberRecord = {
       ...activeRecord,
-      status: "emergency_abort",
+      status: 'emergency_abort',
       completedAt: clock.now(),
       emergencyReasons: [...(activeRecord.emergencyReasons || []), emergencyReason],
     }
     await indexedDbIronChamberRepository.save(updated)
     setActiveRecord(null)
     setShowPanicModal(false)
-    setEmergencyReason("")
+    setEmergencyReason('')
     setPanicError(null)
     await loadData()
   }
@@ -117,10 +121,14 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
 
       {!activeRecord ? (
         <div className="border rounded-xl p-6 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">发起心流契约</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+            发起心流契约
+          </h3>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">锁定模式:</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                锁定模式:
+              </label>
               <select
                 className="mt-1 w-full border px-2 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
                 value={mode}
@@ -132,7 +140,9 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">目标新增字数:</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                目标新增字数:
+              </label>
               <input
                 type="number"
                 className="mt-1 w-full border px-2 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
@@ -141,7 +151,9 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">目标专注时长(分钟):</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                目标专注时长(分钟):
+              </label>
               <input
                 type="number"
                 className="mt-1 w-full border px-2 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
@@ -170,20 +182,32 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
               <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700">
                 <div className="text-xs text-slate-400 mb-1">字数达成进度</div>
                 <div className="text-3xl font-black text-indigo-400">
-                  {progress.deltaWords} <span className="text-sm font-normal text-slate-400">/ {progress.targetWords} 字</span>
+                  {progress.deltaWords}{' '}
+                  <span className="text-sm font-normal text-slate-400">
+                    / {progress.targetWords} 字
+                  </span>
                 </div>
                 <div className="w-full bg-slate-700 h-2 rounded-full mt-3 overflow-hidden">
-                  <div className="bg-indigo-500 h-full transition-all" style={{ width: `${progress.wordsPercentage}%` }} />
+                  <div
+                    className="bg-indigo-500 h-full transition-all"
+                    style={{ width: `${progress.wordsPercentage}%` }}
+                  />
                 </div>
               </div>
 
               <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700">
                 <div className="text-xs text-slate-400 mb-1">时间流逝倒计时</div>
                 <div className="text-3xl font-black text-amber-400">
-                  {Math.floor(progress.elapsedSeconds / 60)} <span className="text-sm font-normal text-slate-400">/ {activeRecord.targetMinutes} 分钟</span>
+                  {Math.floor(progress.elapsedSeconds / 60)}{' '}
+                  <span className="text-sm font-normal text-slate-400">
+                    / {activeRecord.targetMinutes} 分钟
+                  </span>
                 </div>
                 <div className="w-full bg-slate-700 h-2 rounded-full mt-3 overflow-hidden">
-                  <div className="bg-amber-500 h-full transition-all" style={{ width: `${progress.timePercentage}%` }} />
+                  <div
+                    className="bg-amber-500 h-full transition-all"
+                    style={{ width: `${progress.timePercentage}%` }}
+                  />
                 </div>
               </div>
             </div>
@@ -211,8 +235,8 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
               disabled={!progress?.isFulfilled}
               className={`px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition ${
                 progress?.isFulfilled
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg cursor-pointer"
-                  : "bg-slate-800 text-slate-500 cursor-not-allowed"
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg cursor-pointer'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               }`}
             >
               <Unlock className="w-4 h-4" /> 达成目标，正式解锁

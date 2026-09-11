@@ -13,9 +13,7 @@ describe('CodexWriterDrawer HUD Component', () => {
       aliases: ['渊哥'],
       category: 'character',
       attributes: { realm: '淬体九重' },
-      relations: [
-        { targetId: 'ent-2', targetName: '青岚宗', relationType: '所属宗门' },
-      ],
+      relations: [{ targetId: 'ent-2', targetName: '青岚宗', relationType: '所属宗门' }],
       summary: '主角，废脉觉醒吞天神体',
       createdAt: 1000,
       updatedAt: 1000,

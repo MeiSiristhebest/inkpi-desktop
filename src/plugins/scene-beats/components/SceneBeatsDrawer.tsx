@@ -7,10 +7,7 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { ListChecks, CheckCircle2, Circle } from 'lucide-react'
 
-export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({
-  projectId,
-  currentText,
-}) => {
+export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
 

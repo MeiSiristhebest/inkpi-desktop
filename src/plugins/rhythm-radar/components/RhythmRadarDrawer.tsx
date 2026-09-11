@@ -1,10 +1,10 @@
-import type { FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { RhythmRadarEngine } from "../engine/RhythmRadarEngine"
-import { Activity } from "lucide-react"
+import type { FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { RhythmRadarEngine } from '../engine/RhythmRadarEngine'
+import { Activity } from 'lucide-react'
 
 export const RhythmRadarDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
-  const analysis = RhythmRadarEngine.analyzeChapter(currentText, "cur", 1)
+  const analysis = RhythmRadarEngine.analyzeChapter(currentText, 'cur', 1)
 
   return (
     <div className="p-3 space-y-3 text-xs">

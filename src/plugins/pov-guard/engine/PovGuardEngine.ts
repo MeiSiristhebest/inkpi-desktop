@@ -1,13 +1,8 @@
-import type {
-  CharacterKnowledge,
-  SecretItem,
-  PovViolation,
-  PovAnalysisResult,
-} from "../types"
+import type { CharacterKnowledge, SecretItem, PovViolation, PovAnalysisResult } from '../types'
 
 export interface EpistemicContext {
   povCharacter: string
-  povMode: "first_person" | "third_limited" | "third_objective" | "omniscient"
+  povMode: 'first_person' | 'third_limited' | 'third_objective' | 'omniscient'
   allCharacters: CharacterKnowledge[]
   secrets: SecretItem[]
   currentLocation?: string
@@ -25,21 +20,21 @@ export interface EpistemicContext {
  */
 export class PovGuardEngine {
   private static readonly PSYCHOLOGICAL_PREDICATES = [
-    "心想",
-    "暗想",
-    "暗自思量",
-    "心里暗道",
-    "暗暗吃惊",
-    "心中冷笑",
-    "内心暗忖",
-    "暗道",
-    "心中大骇",
-    "感到一阵后怕",
-    "回忆起当年的秘密",
-    "不由得在心中盘算",
-    "心中暗忖",
-    "只觉内心冰凉",
-    "感到莫名恐惧",
+    '心想',
+    '暗想',
+    '暗自思量',
+    '心里暗道',
+    '暗暗吃惊',
+    '心中冷笑',
+    '内心暗忖',
+    '暗道',
+    '心中大骇',
+    '感到一阵后怕',
+    '回忆起当年的秘密',
+    '不由得在心中盘算',
+    '心中暗忖',
+    '只觉内心冰凉',
+    '感到莫名恐惧',
   ]
 
   /**
@@ -56,7 +51,7 @@ export class PovGuardEngine {
     let leakageCount = 0
 
     // 全知视角下允许自由洞悉所有角色心智与秘密
-    if (context.povMode === "omniscient") {
+    if (context.povMode === 'omniscient') {
       return {
         povCharacter: context.povCharacter,
         povMode: context.povMode,
@@ -69,13 +64,13 @@ export class PovGuardEngine {
     }
 
     const povChar = context.allCharacters.find(
-      (c) => c.characterName === context.povCharacter || c.characterId === context.povCharacter
+      (c) => c.characterName === context.povCharacter || c.characterId === context.povCharacter,
     )
     const povKnownSecretIds = new Set(povChar ? povChar.knownSecretIds : [])
 
     // 预编译非 POV 角色列表
     const otherCharacters = context.allCharacters.filter(
-      (c) => c.characterName !== context.povCharacter && c.characterId !== context.povCharacter
+      (c) => c.characterName !== context.povCharacter && c.characterId !== context.povCharacter,
     )
 
     paragraphs.forEach((para, pIdx) => {
@@ -91,7 +86,7 @@ export class PovGuardEngine {
             headHoppingCount++
             violations.push({
               id: `hh-${pIdx}-${other.characterId}-${predicate}`,
-              type: "head_hopping",
+              type: 'head_hopping',
               paragraphIndex: pIdx,
               characterName: other.characterName,
               snippet: match[0].slice(0, 40),
@@ -106,7 +101,7 @@ export class PovGuardEngine {
       // 2. Omniscience Leakage (全知泄露) 校验
       // 检查当前段落是否提到了受限机密，但 POV 主体并不知道该秘密
       for (const secret of context.secrets) {
-        if (secret.confidentialityLevel === "low") continue
+        if (secret.confidentialityLevel === 'low') continue
         if (povKnownSecretIds.has(secret.id)) continue
 
         // 若段落包含秘密标题或核心关键词
@@ -114,11 +109,14 @@ export class PovGuardEngine {
           leakageCount++
           violations.push({
             id: `leak-${pIdx}-${secret.id}`,
-            type: "omniscience_leak",
+            type: 'omniscience_leak',
             paragraphIndex: pIdx,
             characterName: context.povCharacter,
-            snippet: para.slice(Math.max(0, para.indexOf(secret.title) - 10), para.indexOf(secret.title) + secret.title.length + 10),
-            explanation: `视角角色「${context.povCharacter}」认知域尚未解锁机密「${secret.title}」（密级：${secret.confidentialityLevel}，知情者仅限：${secret.holders.join(", ") || "未知"}），正文中不可直接以客观叙述或POV自白披露该信息。`,
+            snippet: para.slice(
+              Math.max(0, para.indexOf(secret.title) - 10),
+              para.indexOf(secret.title) + secret.title.length + 10,
+            ),
+            explanation: `视角角色「${context.povCharacter}」认知域尚未解锁机密「${secret.title}」（密级：${secret.confidentialityLevel}，知情者仅限：${secret.holders.join(', ') || '未知'}），正文中不可直接以客观叙述或POV自白披露该信息。`,
             suggestedFix: `对此机密信息进行叙述脱敏，或通过配角在对话中不经意透露的方式合规引入认知。`,
           })
         }
@@ -128,9 +126,12 @@ export class PovGuardEngine {
     // 生成掩码脱敏版本文本 (Sanitized Mask)
     let sanitizedTextMask = text
     violations
-      .filter((v) => v.type === "omniscience_leak")
+      .filter((v) => v.type === 'omniscience_leak')
       .forEach((v) => {
-        sanitizedTextMask = sanitizedTextMask.replace(v.snippet, `[POV防火墙脱敏遮蔽: ${v.snippet}]`)
+        sanitizedTextMask = sanitizedTextMask.replace(
+          v.snippet,
+          `[POV防火墙脱敏遮蔽: ${v.snippet}]`,
+        )
       })
 
     return {

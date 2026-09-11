@@ -10,7 +10,7 @@ import { semanticTextFromContent } from '../../../domain/content'
 export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
   const [fragments, setFragments] = useState<ScrapbookFragmentRecord[]>([])
-  const [filterQuery, setFilterQuery] = useState("")
+  const [filterQuery, setFilterQuery] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [runtimeRankedIds, setRuntimeRankedIds] = useState<string[] | null>(null)
 
@@ -58,7 +58,7 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
 
   useEffect(() => {
     onStats?.({
-      title: "废稿灵感碎纸机",
+      title: '废稿灵感碎纸机',
       wordCount: fragments.reduce((acc, f) => acc + f.wordCount, 0),
       updatedAt: clock.now(),
     })
@@ -79,7 +79,7 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
       !filterQuery ||
       f.snippet.includes(filterQuery) ||
       f.tags.some((t) => t.includes(filterQuery)) ||
-      (f.sourceChapterTitle && f.sourceChapterTitle.includes(filterQuery))
+      (f.sourceChapterTitle && f.sourceChapterTitle.includes(filterQuery)),
   )
   const rank = runtimeRankedIds ? new Map(runtimeRankedIds.map((id, index) => [id, index])) : null
   const filtered = rank
@@ -99,7 +99,8 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           </p>
         </div>
         <div className="text-xs text-slate-400">
-          已安全归档 <span className="font-bold text-indigo-500">{fragments.length}</span> 处废稿切片
+          已安全归档 <span className="font-bold text-indigo-500">{fragments.length}</span>{' '}
+          处废稿切片
         </div>
       </div>
 
@@ -128,15 +129,19 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
             >
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="font-medium text-slate-600 dark:text-slate-300">
-                  来源: {f.sourceChapterTitle || "未命名章节"} ({f.wordCount} 字)
+                  来源: {f.sourceChapterTitle || '未命名章节'} ({f.wordCount} 字)
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleCopy(f)}
                     className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700"
                   >
-                    {copiedId === f.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedId === f.id ? "已准备复制" : "提取片段"}
+                    {copiedId === f.id ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    {copiedId === f.id ? '已准备复制' : '提取片段'}
                   </button>
                   <button
                     onClick={() => handleDelete(f.id)}

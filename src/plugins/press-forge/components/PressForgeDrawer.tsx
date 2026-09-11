@@ -12,7 +12,7 @@ export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
 
   const result = PressForgeEngine.formatText(
     textToFormat,
-    PressForgeEngine.PRESETS['qidian-standard'].defaultOptions
+    PressForgeEngine.PRESETS['qidian-standard'].defaultOptions,
   )
 
   const handleCopy = async () => {
@@ -77,7 +77,8 @@ export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
       </button>
 
       <div className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">
-        默认套用「起点/标准」预设（段首双全角缩进 + 标点规范化）。如需定制换行空行或各平台规范，请在顶栏开启「排版压制工坊」主视图。
+        默认套用「起点/标准」预设（段首双全角缩进 +
+        标点规范化）。如需定制换行空行或各平台规范，请在顶栏开启「排版压制工坊」主视图。
       </div>
     </div>
   )

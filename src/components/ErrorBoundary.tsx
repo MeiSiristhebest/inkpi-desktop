@@ -30,7 +30,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // 输出到控制台，便于排查（不再是无声白屏）
-    console.error(`[InkPi] 渲染错误已被错误边界捕获${this.props.label ? `（${this.props.label}）` : ''}:`, error, info)
+    console.error(
+      `[InkPi] 渲染错误已被错误边界捕获${this.props.label ? `（${this.props.label}）` : ''}:`,
+      error,
+      info,
+    )
     this.props.onError?.(error, info)
   }
 

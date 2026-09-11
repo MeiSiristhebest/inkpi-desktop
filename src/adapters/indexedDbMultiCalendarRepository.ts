@@ -1,5 +1,8 @@
 import { db } from '../db/indexedDB'
-import type { MultiCalendarProjectRecord, MultiCalendarRepository } from '../ports/multiCalendarRepository'
+import type {
+  MultiCalendarProjectRecord,
+  MultiCalendarRepository,
+} from '../ports/multiCalendarRepository'
 
 export const indexedDbMultiCalendarRepository: MultiCalendarRepository = {
   async get(projectId: string): Promise<MultiCalendarProjectRecord | undefined> {

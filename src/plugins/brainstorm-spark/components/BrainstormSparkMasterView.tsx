@@ -22,7 +22,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
       currentSituation: '四面受伏，警钟长鸣，灵力即将枯竭',
       protagonistGoal: '保全性命并带走九叶仙草逃离禁地',
       enemyAdvantage: '宗门主场压制，人多势众且有护宗大阵',
-    })
+    }),
   )
 
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
@@ -77,7 +77,8 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
             灵感火花与困境脱壳破局炉 (Brainstorm Spark)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            基于故事矛盾矩阵与八大逆向算子，终结卡文绝境（已收录 {historySparks.length} 条备选灵感）。
+            基于故事矛盾矩阵与八大逆向算子，终结卡文绝境（已收录 {historySparks.length}{' '}
+            条备选灵感）。
           </p>
         </div>
         {savedSuccessMsg && (
@@ -91,25 +92,27 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl space-y-3 shadow-sm">
         <div className="flex items-center gap-2 text-xs">
           <span className="text-slate-500">困境类型：</span>
-          {(['dead_end', 'moral_dilemma', 'identity_leak', 'clue_fracture'] as DilemmaType[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setDilemmaType(t)}
-              className={`px-2.5 py-1 rounded-full transition ${
-                dilemmaType === t
-                  ? 'bg-amber-500 text-white font-medium'
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-              }`}
-            >
-              {t === 'dead_end'
-                ? '必死绝境'
-                : t === 'moral_dilemma'
-                ? '两难抉择'
-                : t === 'identity_leak'
-                ? '身份暴雷'
-                : '逻辑断链'}
-            </button>
-          ))}
+          {(['dead_end', 'moral_dilemma', 'identity_leak', 'clue_fracture'] as DilemmaType[]).map(
+            (t) => (
+              <button
+                key={t}
+                onClick={() => setDilemmaType(t)}
+                className={`px-2.5 py-1 rounded-full transition ${
+                  dilemmaType === t
+                    ? 'bg-amber-500 text-white font-medium'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {t === 'dead_end'
+                  ? '必死绝境'
+                  : t === 'moral_dilemma'
+                    ? '两难抉择'
+                    : t === 'identity_leak'
+                      ? '身份暴雷'
+                      : '逻辑断链'}
+              </button>
+            ),
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">

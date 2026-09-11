@@ -45,9 +45,7 @@ export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = ({ currentText 
       <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3 rounded-lg border border-amber-500/30">
         <div className="flex items-baseline justify-between mb-1">
           <span className="font-medium text-[var(--ink-text)]">PPI 势能评分</span>
-          <span className="text-xl font-bold text-amber-500">
-            {audit.ppiScore} / 100
-          </span>
+          <span className="text-xl font-bold text-amber-500">{audit.ppiScore} / 100</span>
         </div>
         <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
           <div

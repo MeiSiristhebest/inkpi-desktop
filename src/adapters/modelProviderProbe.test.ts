@@ -21,14 +21,19 @@ describe('model provider probe adapter', () => {
   })
 
   it('tries compatible list endpoints and normalizes OpenAI-compatible model shapes', async () => {
-    const fetchImpl = vi.fn()
+    const fetchImpl = vi
+      .fn()
       .mockResolvedValueOnce(new Response('{}', { status: 404 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ id: 'gpt-test' }] }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'gpt-test' }] }), { status: 200 }),
+      )
 
-    await expect(fetchModelIds('https://example.test/', undefined, {
-      fetchImpl,
-      signal: new AbortController().signal,
-    })).resolves.toEqual(['gpt-test'])
+    await expect(
+      fetchModelIds('https://example.test/', undefined, {
+        fetchImpl,
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual(['gpt-test'])
     expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 })

@@ -40,7 +40,7 @@ export class RhythmMetronomeEngine {
    */
   static calculateBeats(
     totalChapters: number,
-    cadenceConfig?: Partial<RhythmCadenceRecord>
+    cadenceConfig?: Partial<RhythmCadenceRecord>,
   ): {
     micro: CycleBeatStatus
     meso: CycleBeatStatus
@@ -59,7 +59,12 @@ export class RhythmMetronomeEngine {
     return {
       micro: this.resolveCycleStatus('micro', '3章微循环 (起钩·压迫·爽点)', microStep, microLen),
       meso: this.resolveCycleStatus('meso', '15章中循环 (副本探索与终极收割)', mesoStep, mesoLen),
-      macro: this.resolveCycleStatus('macro', '50章宏观卷末大循环 (世界变迁与主线高潮)', macroStep, macroLen),
+      macro: this.resolveCycleStatus(
+        'macro',
+        '50章宏观卷末大循环 (世界变迁与主线高潮)',
+        macroStep,
+        macroLen,
+      ),
     }
   }
 
@@ -67,7 +72,7 @@ export class RhythmMetronomeEngine {
     type: 'micro' | 'meso' | 'macro',
     name: string,
     step: number,
-    total: number
+    total: number,
   ): CycleBeatStatus {
     const ratio = step / total
     let phase: CadencePhase = 'hook_plant'
@@ -109,7 +114,7 @@ export class RhythmMetronomeEngine {
    */
   static diagnoseStagnation(
     consecutiveStagnantChapters: number,
-    recentChapterLengths: number[]
+    recentChapterLengths: number[],
   ): StagnationReport {
     let score = 90 - consecutiveStagnantChapters * 20
     const avgLen =

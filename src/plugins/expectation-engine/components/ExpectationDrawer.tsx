@@ -5,16 +5,16 @@ import { expectationEngine } from '../engine/ExpectationEngine'
 import { indexedDbExpectationRepository } from '../../../adapters/indexedDbExpectationRepository'
 import { Sparkles, AlertTriangle, CheckCircle2, Flame } from 'lucide-react'
 
-export const ExpectationDrawer: FC<DesktopPluginDrawerProps> = ({
-  projectId,
-  currentText,
-}) => {
+export const ExpectationDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [contracts, setContracts] = useState<ExpectationContract[]>([])
 
   useEffect(() => {
-    indexedDbExpectationRepository.getAll().then((all) => {
-      setContracts(all.filter((c) => c.projectId === projectId))
-    }).catch(() => {})
+    indexedDbExpectationRepository
+      .getAll()
+      .then((all) => {
+        setContracts(all.filter((c) => c.projectId === projectId))
+      })
+      .catch(() => {})
   }, [projectId])
 
   const rhythm = useMemo(() => {
@@ -122,7 +122,9 @@ export const ExpectationDrawer: FC<DesktopPluginDrawerProps> = ({
               </div>
               <div className="flex items-center justify-between text-[10px] text-[var(--ink-text-muted)]">
                 <span>第 {c.plantedChapter} 章埋设</span>
-                <span className="text-[var(--ink-accent)]">预期第 {c.promisedResolveChapter} 章兑现</span>
+                <span className="text-[var(--ink-accent)]">
+                  预期第 {c.promisedResolveChapter} 章兑现
+                </span>
               </div>
             </div>
           ))

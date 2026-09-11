@@ -1,4 +1,5 @@
-export type ReaderPersonaType = "critical_toxic" | "plot_detective" | "romance_shipper" | "power_fantasy" | "lore_scholar"
+export type ReaderPersonaType =
+  'critical_toxic' | 'plot_detective' | 'romance_shipper' | 'power_fantasy' | 'lore_scholar'
 
 export interface ShadowDanmakuRecord {
   id: string
@@ -8,9 +9,9 @@ export interface ShadowDanmakuRecord {
   personaType: ReaderPersonaType
   personaName: string
   content: string
-  sentiment: "toxic_rage" | "applause" | "suspicious" | "excited"
+  sentiment: 'toxic_rage' | 'applause' | 'suspicious' | 'excited'
   isToxicAlert: boolean
-  toxicCategory?: "weak_protagonist" | "virgin_plot" | "book_breaking" | "cuckold_fear"
+  toxicCategory?: 'weak_protagonist' | 'virgin_plot' | 'book_breaking' | 'cuckold_fear'
   createdAt: number
 }
 

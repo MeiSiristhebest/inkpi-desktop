@@ -20,19 +20,22 @@ export class BrainstormSparkEngine {
     {
       id: 'op_third_party',
       name: '引狼入室 / 异数降临',
-      principle: '引入敌我双方均无法控制的第三方毁灭性力量（上古古兽、敌国大军、天劫法则），打乱原有纳什均衡。',
+      principle:
+        '引入敌我双方均无法控制的第三方毁灭性力量（上古古兽、敌国大军、天劫法则），打乱原有纳什均衡。',
       twistImpact: 'earthshaking' as const,
     },
     {
       id: 'op_rule_flip',
       name: '规则倒戈 / 掀桌破局',
-      principle: '利用世界观中早已明示但被众人忽略的底层冷门铁律，将敌方的压倒性优势转变为致命破绽。',
+      principle:
+        '利用世界观中早已明示但被众人忽略的底层冷门铁律，将敌方的压倒性优势转变为致命破绽。',
       twistImpact: 'dramatic' as const,
     },
     {
       id: 'op_dormant_clue',
       name: '沉睡伏笔 / 闲笔回响',
-      principle: '调动前文中主角随手赠予或忽视的小物件、微末人情，在生死攸关之际完成意想不到的闭环拯救。',
+      principle:
+        '调动前文中主角随手赠予或忽视的小物件、微末人情，在生死攸关之际完成意想不到的闭环拯救。',
       twistImpact: 'subtle' as const,
     },
     {

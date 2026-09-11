@@ -134,7 +134,7 @@ export class GeoMapEngine {
   static createInitialGrid(
     width: number = 8,
     height: number = 8,
-    defaultTerrain: TerrainType = 'land'
+    defaultTerrain: TerrainType = 'land',
   ): GeoMapCell[] {
     const cells: GeoMapCell[] = []
     for (let x = 0; x < width; x++) {

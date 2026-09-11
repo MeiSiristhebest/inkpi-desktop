@@ -46,10 +46,7 @@ describe('RhythmMetronome Components', () => {
 
   it('renders RhythmMetronomeDrawer with live cadence progress', async () => {
     render(
-      <RhythmMetronomeDrawer
-        projectId="p1"
-        currentText="天道崩塌，九星连珠，万仙俯首称臣！"
-      />
+      <RhythmMetronomeDrawer projectId="p1" currentText="天道崩塌，九星连珠，万仙俯首称臣！" />,
     )
 
     expect(screen.getByText(/黄金节律随动仪表/)).toBeInTheDocument()

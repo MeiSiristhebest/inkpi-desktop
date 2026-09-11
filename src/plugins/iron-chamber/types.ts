@@ -2,7 +2,7 @@ import type {
   ChamberLockMode,
   ChamberStatus,
   IronChamberRecord,
-} from "../../ports/ironChamberRepository"
+} from '../../ports/ironChamberRepository'
 
 export type { ChamberLockMode, ChamberStatus, IronChamberRecord }
 

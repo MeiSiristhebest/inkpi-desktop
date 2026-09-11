@@ -133,12 +133,16 @@ describe('AI artifact runtime', () => {
       metadata: { parentArtifactId: 'artifact-parent' },
     }
     const payload = { summary: { text: '持久化内容' } }
-    const artifact = await runtime.persistTaskResult(task, {
-      taskId: task.id,
-      kind: task.kind,
-      status: 'completed',
-      output: { format: 'structured', data: payload },
-    }, 'artifact-child')
+    const artifact = await runtime.persistTaskResult(
+      task,
+      {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'completed',
+        output: { format: 'structured', data: payload },
+      },
+      'artifact-child',
+    )
 
     payload.summary.text = '调用方修改'
     const rehydrated = await store.get('artifact-child')

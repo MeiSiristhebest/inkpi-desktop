@@ -1,8 +1,4 @@
-export type PaywallRecommendation =
-  | 'prime_paywall'
-  | 'acceptable'
-  | 'weak_cut'
-  | 'toxic_drop'
+export type PaywallRecommendation = 'prime_paywall' | 'acceptable' | 'weak_cut' | 'toxic_drop'
 
 export interface PaywallAuditResult {
   chapterId: string

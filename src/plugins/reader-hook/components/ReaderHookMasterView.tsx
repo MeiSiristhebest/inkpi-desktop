@@ -41,7 +41,11 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           setSelectedChapterId(defaultChap.id)
           setNewChapterNum(defaultChap.order || 1)
           // 抽取章末末尾 350 字
-          const tailText = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
+          const tailText = semanticTextFromContent(
+            defaultChap.id,
+            defaultChap.content || '',
+            defaultChap.revision,
+          )
             .slice(-350)
             .trim()
           setTestText(tailText || defaultChap.title || '')

@@ -71,9 +71,7 @@ export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
         </div>
         <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/60">
           <span className="text-[var(--ink-text-muted)] block">预估可精简</span>
-          <span className="font-bold text-emerald-500">
-            -{report.dehydrationRate}%
-          </span>
+          <span className="font-bold text-emerald-500">-{report.dehydrationRate}%</span>
         </div>
       </div>
 

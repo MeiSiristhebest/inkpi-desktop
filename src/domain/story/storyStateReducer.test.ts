@@ -63,8 +63,12 @@ describe('StoryState DomainChangeSet reducer', () => {
       ...createStoryState(7),
       entities: { [entity.id]: entity },
     }
-    const first = makeChangeSet(0, [change('state-1', 'story-state', 'workspace-1', 'upsert', snapshot, 7)])
-    const second = makeChangeSet(1, [change('entity-2', 'story.entity', 'hero', 'delete', undefined, 8)])
+    const first = makeChangeSet(0, [
+      change('state-1', 'story-state', 'workspace-1', 'upsert', snapshot, 7),
+    ])
+    const second = makeChangeSet(1, [
+      change('entity-2', 'story.entity', 'hero', 'delete', undefined, 8),
+    ])
 
     const result = replayStoryStateProjection([first, second])
 
@@ -76,14 +80,25 @@ describe('StoryState DomainChangeSet reducer', () => {
   it('rejects gaps, checksum corruption, and malformed typed payloads', () => {
     const initial = { domainRevision: 0, state: createStoryState() }
     const valid = makeChangeSet(0, [
-      change('entity-1', 'story.entity', 'hero', 'upsert', {
-        id: 'different',
-        provenance,
-      }, 1),
+      change(
+        'entity-1',
+        'story.entity',
+        'hero',
+        'upsert',
+        {
+          id: 'different',
+          provenance,
+        },
+        1,
+      ),
     ])
 
-    expect(() => reduceStoryStateProjection(initial, { ...valid, checksum: '00000000' })).toThrow(/checksum/)
-    expect(() => reduceStoryStateProjection({ ...initial, domainRevision: 2 }, valid)).toThrow(/revision conflict/)
+    expect(() => reduceStoryStateProjection(initial, { ...valid, checksum: '00000000' })).toThrow(
+      /checksum/,
+    )
+    expect(() => reduceStoryStateProjection({ ...initial, domainRevision: 2 }, valid)).toThrow(
+      /revision conflict/,
+    )
     expect(() => reduceStoryStateProjection(initial, valid)).toThrow(/id mismatch/)
   })
 })

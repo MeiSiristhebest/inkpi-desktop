@@ -32,7 +32,9 @@ export const DeleteVolumeDialog: React.FC<DeleteVolumeDialogProps> = ({ model })
             {otherVolumes.length > 0 ? (
               <span>删除后，这些章节将自动安全移入「{otherVolumes[0].title}」，绝不丢失内容。</span>
             ) : (
-              <span className="text-[var(--ink-danger)]">注意：这是全书唯一分卷，删除将连同章节一并清除。</span>
+              <span className="text-[var(--ink-danger)]">
+                注意：这是全书唯一分卷，删除将连同章节一并清除。
+              </span>
             )}
           </div>
         )}

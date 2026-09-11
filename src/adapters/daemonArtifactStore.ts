@@ -69,7 +69,10 @@ function fromRuntimeArtifact(artifact: unknown): AiArtifact {
   const { [DESKTOP_ARTIFACT_METADATA]: _desktopMetadata, ...provenance } = artifact.provenance
   return normalizeArtifactForPersistence({
     ...artifact,
-    taskId: readString(metadata?.taskId) ?? readString(artifact.provenance.taskId) ?? `artifact:${artifact.id}`,
+    taskId:
+      readString(metadata?.taskId) ??
+      readString(artifact.provenance.taskId) ??
+      `artifact:${artifact.id}`,
     kind: readString(metadata?.kind) ?? readString(artifact.provenance.taskKind) ?? artifact.type,
     ...(readString(metadata?.documentId) ? { documentId: readString(metadata?.documentId) } : {}),
     ...(readString(metadata?.contextFingerprint)

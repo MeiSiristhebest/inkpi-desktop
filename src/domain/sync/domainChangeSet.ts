@@ -1,4 +1,8 @@
-import { calculateDomainChangeSetChecksum, type DomainChange, type DomainChangeSet } from '@inkpi/protocol'
+import {
+  calculateDomainChangeSetChecksum,
+  type DomainChange,
+  type DomainChangeSet,
+} from '@inkpi/protocol'
 
 export interface CreateDomainChangeSetInput {
   id: string

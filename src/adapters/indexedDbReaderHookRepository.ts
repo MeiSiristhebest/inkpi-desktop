@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  ReaderHookRecord,
-  ReaderHookRepository,
-} from '../ports/readerHookRepository'
+import type { ReaderHookRecord, ReaderHookRepository } from '../ports/readerHookRepository'
 
 export const indexedDbReaderHookRepository: ReaderHookRepository = {
   async getAll(projectId?: string): Promise<ReaderHookRecord[]> {

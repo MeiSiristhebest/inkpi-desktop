@@ -1,4 +1,5 @@
-export type CameraShotType = "establishing_wide" | "medium_confrontation" | "dutch_closeup" | "impact_wide"
+export type CameraShotType =
+  'establishing_wide' | 'medium_confrontation' | 'dutch_closeup' | 'impact_wide'
 
 export interface ShotFrame {
   id: string
@@ -6,7 +7,8 @@ export interface ShotFrame {
   shotType: CameraShotType
   shotLabel: string // "远景全景·环境入胜", "中景对峙·剑拔弩张", "特写倾斜·绝命反转", "广角高潮·余波震撼"
   description: string
-  compositionGuide: "rule_of_thirds" | "diagonal_impact" | "leading_sightlines" | "center_monumental"
+  compositionGuide:
+    'rule_of_thirds' | 'diagonal_impact' | 'leading_sightlines' | 'center_monumental'
   lightingMood: string // "冷峻月光", "赤炎残阳", "雷暴雷光", "幽暗地窟"
   visualPrompt: string
 }
@@ -35,4 +37,3 @@ export interface StoryboardRepository {
   save(record: StoryboardSceneRecord): Promise<void>
   delete(id: string): Promise<void>
 }
-

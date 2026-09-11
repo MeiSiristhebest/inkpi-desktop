@@ -94,7 +94,9 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
                 }`}
               >
                 <div className="text-[12.5px] font-medium">完整项目</div>
-                <div className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">适合中长篇连载·功能最完整，开箱即用</div>
+                <div className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">
+                  适合中长篇连载·功能最完整，开箱即用
+                </div>
               </button>
               <button
                 type="button"
@@ -106,7 +108,9 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
                 }`}
               >
                 <div className="text-[12.5px] font-medium">自定义项目</div>
-                <div className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">从功能全集里自由选择模块</div>
+                <div className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">
+                  从功能全集里自由选择模块
+                </div>
               </button>
             </div>
           </div>

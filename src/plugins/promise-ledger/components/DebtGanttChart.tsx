@@ -21,7 +21,10 @@ export const DebtGanttChart: FC<DebtGanttChartProps> = ({
     ...entries.map((e) => e.plantChapter + e.dueChapterLimit + 5),
   )
 
-  const chapterTicks = Array.from({ length: Math.min(25, Math.ceil(maxCh / 5) + 1) }, (_, i) => i * 5)
+  const chapterTicks = Array.from(
+    { length: Math.min(25, Math.ceil(maxCh / 5) + 1) },
+    (_, i) => i * 5,
+  )
 
   return (
     <div className="w-full bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-lg p-4 overflow-x-auto">

@@ -30,7 +30,11 @@ describe('TaskRecoveryPanel', () => {
     const onDismiss = vi.fn(async () => true)
     render(
       <TaskRecoveryPanel
-        records={[makeRecord('restart-task', 'interrupted'), makeRecord('failed-task', 'failed'), makeRecord('running-task', 'running')]}
+        records={[
+          makeRecord('restart-task', 'interrupted'),
+          makeRecord('failed-task', 'failed'),
+          makeRecord('running-task', 'running'),
+        ]}
         onResume={onResume}
         onCancel={onCancel}
         onDismiss={onDismiss}
@@ -43,8 +47,12 @@ describe('TaskRecoveryPanel', () => {
     expect(screen.getByTestId('task-recovery-failed-task')).toHaveTextContent('provider failed')
     expect(screen.getByTestId('task-status-running-task')).toHaveTextContent('运行中')
 
-    fireEvent.click(screen.getByTestId('task-recovery-restart-task').querySelector('button') as HTMLButtonElement)
-    fireEvent.click(screen.getByTestId('task-recovery-running-task').querySelector('button') as HTMLButtonElement)
+    fireEvent.click(
+      screen.getByTestId('task-recovery-restart-task').querySelector('button') as HTMLButtonElement,
+    )
+    fireEvent.click(
+      screen.getByTestId('task-recovery-running-task').querySelector('button') as HTMLButtonElement,
+    )
 
     expect(onResume).toHaveBeenCalledWith('restart-task')
     expect(onCancel).toHaveBeenCalledWith('running-task')

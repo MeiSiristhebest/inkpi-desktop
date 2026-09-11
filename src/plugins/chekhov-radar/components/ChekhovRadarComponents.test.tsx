@@ -55,12 +55,7 @@ describe('ChekhovRadar Components', () => {
   })
 
   it('renders ChekhovRadarDrawer and detects mentioned gun in current text', async () => {
-    render(
-      <ChekhovRadarDrawer
-        projectId="p1"
-        currentText="主角拿出了随身的神秘黑鼎，轰然砸下！"
-      />
-    )
+    render(<ChekhovRadarDrawer projectId="p1" currentText="主角拿出了随身的神秘黑鼎，轰然砸下！" />)
 
     expect(screen.getByText(/契诃夫伏笔随动感知/)).toBeInTheDocument()
     await waitFor(() => {

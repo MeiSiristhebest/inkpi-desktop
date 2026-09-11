@@ -1,10 +1,4 @@
-export type ToneStyle =
-  | 'archaic'
-  | 'colloquial'
-  | 'aggressive'
-  | 'laconic'
-  | 'polite'
-  | 'custom'
+export type ToneStyle = 'archaic' | 'colloquial' | 'aggressive' | 'laconic' | 'polite' | 'custom'
 
 export interface CharacterVoiceprint {
   id: string

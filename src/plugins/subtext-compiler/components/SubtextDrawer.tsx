@@ -1,13 +1,13 @@
-import type { FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { SubtextCompilerEngine } from "../engine/SubtextCompilerEngine"
-import { MessageSquareQuote, Layers } from "lucide-react"
+import type { FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { SubtextCompilerEngine } from '../engine/SubtextCompilerEngine'
+import { MessageSquareQuote, Layers } from 'lucide-react'
 
 export const SubtextDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   // 从正文中提取首个带引号的台词
   const match = currentText.match(/“([^”]+)”/)
-  const sampleSpoken = match ? match[1] : "我从来没有在乎过你。"
-  const compiled = SubtextCompilerEngine.compile(sampleSpoken, "当前说话者", "pride")
+  const sampleSpoken = match ? match[1] : '我从来没有在乎过你。'
+  const compiled = SubtextCompilerEngine.compile(sampleSpoken, '当前说话者', 'pride')
 
   return (
     <div className="p-3 space-y-3 text-xs">

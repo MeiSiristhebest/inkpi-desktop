@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  SubPlotStrandRecord,
-  SubPlotRepository,
-} from '../ports/subPlotRepository'
+import type { SubPlotStrandRecord, SubPlotRepository } from '../ports/subPlotRepository'
 
 export const indexedDbSubPlotRepository: SubPlotRepository = {
   async getAll(projectId: string): Promise<SubPlotStrandRecord[]> {

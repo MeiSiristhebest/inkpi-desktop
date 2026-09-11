@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  EmotionAuditRecord,
-  EmotionAuditRepository,
-} from '../ports/emotionAuditRepository'
+import type { EmotionAuditRecord, EmotionAuditRepository } from '../ports/emotionAuditRepository'
 
 export const indexedDbEmotionAuditRepository: EmotionAuditRepository = {
   async getAll(projectId: string): Promise<EmotionAuditRecord[]> {

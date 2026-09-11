@@ -10,12 +10,12 @@ vi.mock('../../../adapters/indexedDbVolumeArcRepository', () => ({
 
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
-    getVolumesByProject: vi.fn().mockResolvedValue([
-      { id: 'vol-1', projectId: 'p1', title: '第一卷 潜龙在渊', order: 0 },
-    ]),
-    getChaptersByProject: vi.fn().mockResolvedValue([
-      { id: 'ch-1', projectId: 'p1', volumeId: 'vol-1', wordCount: 20000 },
-    ]),
+    getVolumesByProject: vi
+      .fn()
+      .mockResolvedValue([{ id: 'vol-1', projectId: 'p1', title: '第一卷 潜龙在渊', order: 0 }]),
+    getChaptersByProject: vi
+      .fn()
+      .mockResolvedValue([{ id: 'ch-1', projectId: 'p1', volumeId: 'vol-1', wordCount: 20000 }]),
   },
 }))
 

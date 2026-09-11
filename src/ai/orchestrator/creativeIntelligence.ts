@@ -105,7 +105,9 @@ export class CreativeIntelligence {
   private readonly artifactIdGenerator?: ArtifactIdGenerator
 
   constructor(gateway: CreativeTaskGateway, options: CreativeIntelligenceOptions = {}) {
-    const compatibilityLayeredCache = isLayeredContextCache(options.cache) ? options.cache : undefined
+    const compatibilityLayeredCache = isLayeredContextCache(options.cache)
+      ? options.cache
+      : undefined
     this.gateway = gateway
     this.layeredCache =
       options.layeredCache ??

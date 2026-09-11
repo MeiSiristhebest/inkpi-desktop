@@ -77,4 +77,3 @@ export interface DailyStatRecord {
 }
 
 export * from './plugin'
-

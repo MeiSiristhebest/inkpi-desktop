@@ -57,8 +57,9 @@ describe('RemoteProposalStore', () => {
   it('keeps local proposals authoritative and pushes successive states with the projection cursor', async () => {
     const local = new MemoryProposalStore()
     const snapshotProposals = vi.fn(async () => snapshot(3))
-    const pushProposalState = vi.fn(async (_workspaceId: string, proposal: AiProposal, expectedRevision: number) =>
-      acceptedResult(proposal, expectedRevision + 1),
+    const pushProposalState = vi.fn(
+      async (_workspaceId: string, proposal: AiProposal, expectedRevision: number) =>
+        acceptedResult(proposal, expectedRevision + 1),
     )
     const remote: ProposalSyncRemote = { snapshotProposals, pushProposalState }
     const store = new RemoteProposalStore({ local, remote, workspaceId: 'workspace-1' })
@@ -74,9 +75,7 @@ describe('RemoteProposalStore', () => {
       { ...localProposal, status: 'accepted', updatedAt: 11 },
       4,
     )
-    expect(await store.list()).toEqual([
-      { ...localProposal, status: 'accepted', updatedAt: 11 },
-    ])
+    expect(await store.list()).toEqual([{ ...localProposal, status: 'accepted', updatedAt: 11 }])
   })
 
   it('does not hydrate authoritative local state from a daemon snapshot', async () => {

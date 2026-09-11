@@ -3,8 +3,7 @@ import { dialogueDistillerEngine } from './DialogueDistillerEngine'
 
 describe('DialogueDistillerEngine', () => {
   it('extracts character quotes accurately from text', () => {
-    const text =
-      '陆沉冷笑道：“凭你也配向我出剑？”随后林夕淡淡道：“无需多言，拔剑吧。”'
+    const text = '陆沉冷笑道：“凭你也配向我出剑？”随后林夕淡淡道：“无需多言，拔剑吧。”'
     const quotes = dialogueDistillerEngine.extractCharacterQuotes(text, ['陆沉', '林夕'])
 
     expect(quotes['陆沉']).toContain('凭你也配向我出剑？')
@@ -12,10 +11,7 @@ describe('DialogueDistillerEngine', () => {
   })
 
   it('computes voiceprint vector with ASL, question ratio and tone style', () => {
-    const quotes = [
-      '凭你也配质问老夫？！',
-      '老夫纵横三千载，岂容尔等放肆！',
-    ]
+    const quotes = ['凭你也配质问老夫？！', '老夫纵横三千载，岂容尔等放肆！']
     const vp = dialogueDistillerEngine.computeVoiceprint('太上长老', quotes)
 
     expect(vp.sampleDialogueCount).toBe(2)

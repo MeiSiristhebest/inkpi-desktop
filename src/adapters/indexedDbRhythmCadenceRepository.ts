@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  RhythmCadenceRecord,
-  RhythmCadenceRepository,
-} from '../ports/rhythmCadenceRepository'
+import type { RhythmCadenceRecord, RhythmCadenceRepository } from '../ports/rhythmCadenceRepository'
 
 export const indexedDbRhythmCadenceRepository: RhythmCadenceRepository = {
   async get(projectId: string): Promise<RhythmCadenceRecord | undefined> {

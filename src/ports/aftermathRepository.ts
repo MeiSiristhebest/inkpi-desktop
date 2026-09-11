@@ -1,5 +1,6 @@
-export type PatchChangeType = "attribute_update" | "new_relation" | "ownership_transfer" | "status_change"
-export type PatchStatus = "pending" | "applied" | "rejected"
+export type PatchChangeType =
+  'attribute_update' | 'new_relation' | 'ownership_transfer' | 'status_change'
+export type PatchStatus = 'pending' | 'applied' | 'rejected'
 
 export interface AftermathPatchRecord {
   id: string

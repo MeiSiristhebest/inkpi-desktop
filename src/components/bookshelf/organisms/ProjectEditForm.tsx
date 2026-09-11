@@ -76,7 +76,9 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
 
         <div className="min-w-0 flex-1 space-y-2.5">
           <div>
-            <label className="text-[11.5px] text-[var(--ink-text-muted)] mb-1 block font-medium">书名 *</label>
+            <label className="text-[11.5px] text-[var(--ink-text-muted)] mb-1 block font-medium">
+              书名 *
+            </label>
             <input
               value={form.name}
               onChange={(e) => setField('name', e.target.value)}
@@ -88,7 +90,9 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
           </div>
 
           <div>
-            <label className="text-[11.5px] text-[var(--ink-text-muted)] mb-1 block font-medium">题材类型</label>
+            <label className="text-[11.5px] text-[var(--ink-text-muted)] mb-1 block font-medium">
+              题材类型
+            </label>
             <input
               value={form.genre}
               onChange={(e) => setField('genre', e.target.value)}
@@ -98,7 +102,9 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
           </div>
 
           <div>
-            <label className="text-[11.5px] text-[var(--ink-text-muted)] mb-1 block font-medium">作品简介 / 大纲梗概</label>
+            <label className="text-[11.5px] text-[var(--ink-text-muted)] mb-1 block font-medium">
+              作品简介 / 大纲梗概
+            </label>
             <textarea
               value={form.intro}
               onChange={(e) => setField('intro', e.target.value)}

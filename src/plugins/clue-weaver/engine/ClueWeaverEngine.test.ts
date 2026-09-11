@@ -104,7 +104,7 @@ describe('ClueWeaverEngine', () => {
       'char-lin',
       '林夕',
       dummyClues,
-      cognitions
+      cognitions,
     )
 
     // 陆沉知道 c1, c2；林夕知道 c1

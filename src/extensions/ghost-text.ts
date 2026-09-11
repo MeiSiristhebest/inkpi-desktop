@@ -67,7 +67,7 @@ export const GhostText = Extension.create({
                   side: 1,
                   // 不继承光标处的 marks，否则建议会跟着加粗/斜体
                   marks: [],
-                }
+                },
               ),
             ])
           },

@@ -78,10 +78,9 @@ describe('ContinuityDiagnostics extension', () => {
         '[data-ink-continuity-gutter-marker="finding-many"]',
       )
       expect(gutterMarkers).toHaveLength(2)
-      expect([...gutterMarkers].map((node) => node.getAttribute('data-ink-continuity-block-id'))).toEqual([
-        first.id,
-        second.id,
-      ])
+      expect(
+        [...gutterMarkers].map((node) => node.getAttribute('data-ink-continuity-block-id')),
+      ).toEqual([first.id, second.id])
       expect(
         editor.view.dom.querySelector('[data-ink-continuity-gutter-marker="finding-unlocated"]'),
       ).toBeNull()

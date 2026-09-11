@@ -27,7 +27,10 @@ const statusLabels: Record<TaskStatus, string> = {
 const taskStatusLabel = (status: TaskStatus): string => statusLabels[status]
 
 const canResume = (status: TaskStatus): boolean =>
-  status === 'interrupted' || status === 'failed' || status === 'cancelled' || status === 'waiting-user'
+  status === 'interrupted' ||
+  status === 'failed' ||
+  status === 'cancelled' ||
+  status === 'waiting-user'
 
 const canCancel = (status: TaskStatus): boolean =>
   status === 'queued' || status === 'running' || status === 'checkpointed'
@@ -65,7 +68,11 @@ export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
         {loading && <span className="text-[var(--ink-text-faint)]">读取中…</span>}
       </div>
 
-      {error && <p role="alert" className="mb-2 text-rose-500">任务状态保存失败：{error}</p>}
+      {error && (
+        <p role="alert" className="mb-2 text-rose-500">
+          任务状态保存失败：{error}
+        </p>
+      )}
 
       {!connected && records.some((record) => canResume(record.snapshot.status)) && (
         <p role="status" data-testid="task-recovery-offline" className="mb-2 text-amber-600">
@@ -85,20 +92,32 @@ export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
               className="rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-medium text-[var(--ink-text)]" title={record.task.kind}>
+                <span
+                  className="truncate font-medium text-[var(--ink-text)]"
+                  title={record.task.kind}
+                >
                   {record.task.kind}
                 </span>
-                <span data-testid={`task-status-${record.task.id}`} className="shrink-0 text-[var(--ink-text-muted)]">
+                <span
+                  data-testid={`task-status-${record.task.id}`}
+                  className="shrink-0 text-[var(--ink-text-muted)]"
+                >
                   {taskStatusLabel(status)}
                 </span>
               </div>
 
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[var(--ink-text-faint)]">
-                {record.snapshot.checkpoint && <span>检查点：{record.snapshot.checkpoint.step}</span>}
+                {record.snapshot.checkpoint && (
+                  <span>检查点：{record.snapshot.checkpoint.step}</span>
+                )}
                 {typeof record.snapshot.progress === 'number' && (
                   <span>进度：{Math.round(record.snapshot.progress * 100)}%</span>
                 )}
-                {record.snapshot.error && <span role="alert" className="text-rose-500">{record.snapshot.error.message}</span>}
+                {record.snapshot.error && (
+                  <span role="alert" className="text-rose-500">
+                    {record.snapshot.error.message}
+                  </span>
+                )}
               </div>
 
               <div className="mt-2 flex items-center gap-2">

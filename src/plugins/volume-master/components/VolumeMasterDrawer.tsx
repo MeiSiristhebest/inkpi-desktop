@@ -7,7 +7,11 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { Compass } from 'lucide-react'
 
 export const VolumeMasterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
-  const [activeVolume, setActiveVolume] = useState<{ id: string; title: string; order: number } | null>(null)
+  const [activeVolume, setActiveVolume] = useState<{
+    id: string
+    title: string
+    order: number
+  } | null>(null)
   const [arc, setArc] = useState<VolumeArcRecord | null>(null)
   const [stat, setStat] = useState<VolumeStat | null>(null)
 
@@ -24,7 +28,9 @@ export const VolumeMasterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) 
         setActiveVolume(firstVol)
         const matchingArc = (arcs || []).find((a) => a.volumeId === firstVol.id) || null
         setArc(matchingArc)
-        setStat(volumeMasterEngine.calculateVolumeStat(firstVol, chaps || [], matchingArc || undefined))
+        setStat(
+          volumeMasterEngine.calculateVolumeStat(firstVol, chaps || [], matchingArc || undefined),
+        )
       }
     } catch (e) {
       console.error('Failed to load volume drawer data:', e)
@@ -52,9 +58,7 @@ export const VolumeMasterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) 
           <Compass className="w-4 h-4 text-purple-400" />
           <span>分卷宏观罗盘</span>
         </div>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">
-          {activeVolume.title}
-        </span>
+        <span className="text-[10px] text-[var(--ink-text-muted)]">{activeVolume.title}</span>
       </div>
 
       {/* 字数燃烧率仪表 */}
@@ -83,9 +87,7 @@ export const VolumeMasterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) 
           <span className="text-purple-400">{actInfo.label}</span>
           <span className="text-[10px] text-[var(--ink-text-muted)]">{actInfo.progressRange}</span>
         </div>
-        <p className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">
-          {actInfo.desc}
-        </p>
+        <p className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">{actInfo.desc}</p>
       </div>
 
       {/* 核心冲突与卷高潮锚点 */}

@@ -72,7 +72,8 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const chaptersSnippet = chapters
       .slice(0, 15)
       .map(
-        (c) => `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 300)}...`,
+        (c) =>
+          `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 300)}...`,
       )
       .join('\n\n')
 

@@ -22,7 +22,9 @@ describe('PaywallSentry Components', () => {
   ]
 
   it('renders PaywallSentryMasterView and loads chapters', async () => {
-    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(fakeChapters as any)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
     render(<PaywallSentryMasterView projectId="proj-1" />)
     expect(screen.getByText(/付费卡点与首订转化哨兵/)).toBeInTheDocument()
     await waitFor(() => {
@@ -31,12 +33,7 @@ describe('PaywallSentry Components', () => {
   })
 
   it('renders PaywallSentryDrawer for currentText', async () => {
-    render(
-      <PaywallSentryDrawer
-        projectId="proj-1"
-        currentText="天劫降临，九霄雷动，那是……"
-      />
-    )
+    render(<PaywallSentryDrawer projectId="proj-1" currentText="天劫降临，九霄雷动，那是……" />)
     expect(screen.getByText(/付费卡点哨兵 \(PPI\)/)).toBeInTheDocument()
     expect(screen.getByText(/PPI 势能评分/)).toBeInTheDocument()
   })

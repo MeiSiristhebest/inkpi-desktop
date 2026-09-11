@@ -1,5 +1,5 @@
-export type CliffhangerType = "life_and_death" | "info_twist" | "emotional_climax" | "world_shatter"
-export type PacingStatus = "dragged" | "optimal" | "fatiguing"
+export type CliffhangerType = 'life_and_death' | 'info_twist' | 'emotional_climax' | 'world_shatter'
+export type PacingStatus = 'dragged' | 'optimal' | 'fatiguing'
 
 export interface CliffhangerSuggestion {
   type: CliffhangerType

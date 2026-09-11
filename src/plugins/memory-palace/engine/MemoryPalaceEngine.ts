@@ -43,7 +43,10 @@ export class MemoryPalaceEngine {
             // 提取上下文摘要 (前后 35 字)
             const start = Math.max(0, idx - 30)
             const end = Math.min(text.length, idx + term.length + 30)
-            const snippet = (start > 0 ? '...' : '') + text.slice(start, end).replace(/\n/g, ' ') + (end < text.length ? '...' : '')
+            const snippet =
+              (start > 0 ? '...' : '') +
+              text.slice(start, end).replace(/\n/g, ' ') +
+              (end < text.length ? '...' : '')
             occurrences.push({ chapter: ch, snippet })
             break // 该章已命中，避免同一章因多别名重复记录
           }
@@ -55,7 +58,9 @@ export class MemoryPalaceEngine {
       const lastOcc = occurrences[occurrences.length - 1]
 
       // 提取最新登场的几条摘要
-      const recentSnippets = occurrences.slice(-3).map((o) => `[第${o.chapter.order}章 ${o.chapter.title}] ${o.snippet}`)
+      const recentSnippets = occurrences
+        .slice(-3)
+        .map((o) => `[第${o.chapter.order}章 ${o.chapter.title}] ${o.snippet}`)
 
       // 计算相关度评分
       let relevanceScore = 50
@@ -74,7 +79,11 @@ export class MemoryPalaceEngine {
         relevanceScore,
         totalOccurrences,
         firstAppearedChapter: firstOcc
-          ? { id: firstOcc.chapter.id, title: firstOcc.chapter.title, order: firstOcc.chapter.order }
+          ? {
+              id: firstOcc.chapter.id,
+              title: firstOcc.chapter.title,
+              order: firstOcc.chapter.order,
+            }
           : undefined,
         lastAppearedChapter: lastOcc
           ? { id: lastOcc.chapter.id, title: lastOcc.chapter.title, order: lastOcc.chapter.order }
@@ -84,7 +93,9 @@ export class MemoryPalaceEngine {
     }
 
     // 按相关度与出现频次降序
-    results.sort((a, b) => b.relevanceScore - a.relevanceScore || b.totalOccurrences - a.totalOccurrences)
+    results.sort(
+      (a, b) => b.relevanceScore - a.relevanceScore || b.totalOccurrences - a.totalOccurrences,
+    )
     return results
   }
 

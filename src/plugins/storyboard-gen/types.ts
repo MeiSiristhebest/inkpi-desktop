@@ -3,14 +3,9 @@ import type {
   ShotFrame,
   CharacterVisualCard,
   StoryboardSceneRecord,
-} from "../../ports/storyboardRepository"
+} from '../../ports/storyboardRepository'
 
-export type {
-  CameraShotType,
-  ShotFrame,
-  CharacterVisualCard,
-  StoryboardSceneRecord,
-}
+export type { CameraShotType, ShotFrame, CharacterVisualCard, StoryboardSceneRecord }
 
 export interface ClimaxStoryboardExtraction {
   sceneTitle: string
@@ -18,4 +13,3 @@ export interface ClimaxStoryboardExtraction {
   frames: ShotFrame[]
   suggestedCharacters: CharacterVisualCard[]
 }
-

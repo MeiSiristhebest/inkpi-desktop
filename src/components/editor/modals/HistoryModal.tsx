@@ -218,7 +218,11 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
                     }`}
                   >
-                    {isMilestone ? <Bookmark className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
+                    {isMilestone ? (
+                      <Bookmark className="w-2.5 h-2.5" />
+                    ) : (
+                      <Clock className="w-2.5 h-2.5" />
+                    )}
                     <span>{isMilestone ? '里程碑' : '自动检查点'}</span>
                   </span>
 

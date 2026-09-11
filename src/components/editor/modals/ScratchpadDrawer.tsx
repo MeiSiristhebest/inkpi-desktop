@@ -31,9 +31,15 @@ interface ScratchItem {
 
 const TAG_CONFIG: Record<NoteTag, { bg: string; text: string }> = {
   伏笔: { bg: 'bg-amber-500/10 border-amber-500/30', text: 'text-amber-600 dark:text-amber-400' },
-  待办: { bg: 'bg-emerald-500/10 border-emerald-500/30', text: 'text-emerald-600 dark:text-emerald-400' },
+  待办: {
+    bg: 'bg-emerald-500/10 border-emerald-500/30',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
   设定: { bg: 'bg-blue-500/10 border-blue-500/30', text: 'text-blue-600 dark:text-blue-400' },
-  修辞: { bg: 'bg-purple-500/10 border-purple-500/30', text: 'text-purple-600 dark:text-purple-400' },
+  修辞: {
+    bg: 'bg-purple-500/10 border-purple-500/30',
+    text: 'text-purple-600 dark:text-purple-400',
+  },
 }
 
 export const ScratchpadDrawer: React.FC<ScratchpadDrawerProps> = ({
@@ -182,9 +188,7 @@ export const ScratchpadDrawer: React.FC<ScratchpadDrawerProps> = ({
           <div className="py-14 text-center text-xs text-[var(--ink-text-faint)] space-y-2">
             <Bookmark className="w-8 h-8 mx-auto opacity-30 text-[var(--ink-text-muted)]" />
             <p>本章暂无伏笔备忘与行旁批注</p>
-            <p className="text-[11px] opacity-70">
-              在上方记录伏笔、待补情节或修辞思路
-            </p>
+            <p className="text-[11px] opacity-70">在上方记录伏笔、待补情节或修辞思路</p>
           </div>
         ) : (
           items.map((item) => {

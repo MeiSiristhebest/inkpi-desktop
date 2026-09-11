@@ -3,21 +3,16 @@ import type {
   VoiceAgeGroup,
   VoiceTimbreFilter,
   VoiceCastProfileRecord,
-} from "../../ports/voicePreviewRepository"
+} from '../../ports/voicePreviewRepository'
 
-export type {
-  VoiceGender,
-  VoiceAgeGroup,
-  VoiceTimbreFilter,
-  VoiceCastProfileRecord,
-}
+export type { VoiceGender, VoiceAgeGroup, VoiceTimbreFilter, VoiceCastProfileRecord }
 
 export interface DialogueLine {
   lineIndex: number
   speakerName: string
   characterId?: string
   dialogueText: string
-  emotion: "neutral" | "angry" | "cold" | "whisper" | "excited"
+  emotion: 'neutral' | 'angry' | 'cold' | 'whisper' | 'excited'
   assignedVoice?: {
     pitch: number
     rate: number
@@ -30,4 +25,3 @@ export interface RadioDramaScript {
   characterSpeakers: string[]
   lines: DialogueLine[]
 }
-

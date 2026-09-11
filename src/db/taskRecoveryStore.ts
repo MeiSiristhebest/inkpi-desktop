@@ -73,11 +73,19 @@ function isTaskRecoveryRecord(value: unknown, projectId: string): value is TaskR
   const task = record.task
   const snapshot = record.snapshot
   if (record.projectId !== projectId || !Number.isFinite(record.updatedAt)) return false
-  if (!task || typeof task !== 'object' || typeof task.id !== 'string' || typeof task.kind !== 'string') return false
+  if (
+    !task ||
+    typeof task !== 'object' ||
+    typeof task.id !== 'string' ||
+    typeof task.kind !== 'string'
+  )
+    return false
   if (!task.input || typeof task.input !== 'object') return false
   if (!snapshot || typeof snapshot !== 'object') return false
-  return snapshot.taskId === task.id
-    && snapshot.kind === task.kind
-    && typeof snapshot.status === 'string'
-    && TASK_STATUSES.includes(snapshot.status as TaskStatus)
+  return (
+    snapshot.taskId === task.id &&
+    snapshot.kind === task.kind &&
+    typeof snapshot.status === 'string' &&
+    TASK_STATUSES.includes(snapshot.status as TaskStatus)
+  )
 }

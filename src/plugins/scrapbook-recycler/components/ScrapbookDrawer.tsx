@@ -1,18 +1,21 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { indexedDbScrapbookRepository } from "../../../adapters/indexedDbScrapbookRepository"
-import { ScrapbookEngine } from "../engine/ScrapbookEngine"
-import type { ScrapbookFragmentRecord, ScrapRecommendation } from "../types"
-import { Archive, Sparkles } from "lucide-react"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { indexedDbScrapbookRepository } from '../../../adapters/indexedDbScrapbookRepository'
+import { ScrapbookEngine } from '../engine/ScrapbookEngine'
+import type { ScrapbookFragmentRecord, ScrapRecommendation } from '../types'
+import { Archive, Sparkles } from 'lucide-react'
 
 export const ScrapbookDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [fragments, setFragments] = useState<ScrapbookFragmentRecord[]>([])
   const [recs, setRecs] = useState<ScrapRecommendation[]>([])
 
   useEffect(() => {
-    indexedDbScrapbookRepository.getAll(projectId).then((all) => {
-      setFragments(all)
-    }).catch(console.error)
+    indexedDbScrapbookRepository
+      .getAll(projectId)
+      .then((all) => {
+        setFragments(all)
+      })
+      .catch(console.error)
   }, [projectId])
 
   useEffect(() => {
@@ -30,9 +33,7 @@ export const ScrapbookDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curre
         <span className="font-bold flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
           <Archive className="w-4 h-4" /> 废稿灵感推荐
         </span>
-        <span className="text-[10px] text-slate-400">
-          池内 {fragments.length} 条
-        </span>
+        <span className="text-[10px] text-slate-400">池内 {fragments.length} 条</span>
       </div>
 
       {recs.length === 0 ? (

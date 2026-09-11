@@ -53,7 +53,12 @@ function getChannel(): DomainChangeChannel | undefined {
     const next = new Constructor(CHANNEL_NAME)
     next.addEventListener('message', (event: MessageEvent<unknown>) => {
       const data = event.data
-      if (!data || typeof data !== 'object' || typeof (data as { workspaceId?: unknown }).workspaceId !== 'string') return
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        typeof (data as { workspaceId?: unknown }).workspaceId !== 'string'
+      )
+        return
       const workspaceId = (data as { workspaceId: string }).workspaceId
       if (workspaceId.trim()) notify({ workspaceId })
     })

@@ -11,11 +11,11 @@ import { semanticTextFromContent } from '../../../domain/content'
 
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
-  const [spoken, setSpoken] = useState("你走吧，我一个人也可以很好。")
-  const [speakerName, setSpeakerName] = useState("苏雨柔")
-  const [emotion, setEmotion] = useState<"anger" | "fear" | "pride" | "affection" | "jealousy" | "guilt">("affection")
-  
-
+  const [spoken, setSpoken] = useState('你走吧，我一个人也可以很好。')
+  const [speakerName, setSpeakerName] = useState('苏雨柔')
+  const [emotion, setEmotion] = useState<
+    'anger' | 'fear' | 'pride' | 'affection' | 'jealousy' | 'guilt'
+  >('affection')
 
   const handleAiSubtextCompile = () => {
     if (!spoken.trim()) return
@@ -32,7 +32,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
 
   const loadList = async () => {
     await indexedDbSubtextRepository.getAll(projectId)
-    }
+  }
 
   useEffect(() => {
     loadList().catch(console.error)
@@ -40,7 +40,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
 
   useEffect(() => {
     onStats?.({
-      title: "潜台词与冰山对白双轨编译器",
+      title: '潜台词与冰山对白双轨编译器',
       wordCount: spoken.length,
       updatedAt: clock.now(),
     })
@@ -51,9 +51,9 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
 
   const handleSave = async () => {
     const record: SubtextDialogueRecord = {
-      id: idGenerator.generate("subtext"),
+      id: idGenerator.generate('subtext'),
       projectId,
-      chapterId: "manual",
+      chapterId: 'manual',
       speakerName: compiled.speakerName,
       spoken: compiled.spoken,
       subtext: compiled.subtext,
@@ -82,9 +82,13 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="border rounded-xl p-5 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">平淡台词输入</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
+            平淡台词输入
+          </h3>
           <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">说话角色名:</label>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              说话角色名:
+            </label>
             <input
               className="mt-1 w-full border px-3 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
               value={speakerName}
@@ -92,7 +96,9 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">内在隐藏情绪 / 动机:</label>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              内在隐藏情绪 / 动机:
+            </label>
             <select
               className="mt-1 w-full border px-3 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
               value={emotion}
@@ -107,7 +113,9 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
             </select>
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">嘴上说的表面台词:</label>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              嘴上说的表面台词:
+            </label>
             <textarea
               className="mt-1 w-full h-24 p-3 border rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
               value={spoken}
@@ -143,18 +151,26 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
 
           <div className="space-y-3 text-xs">
             <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">1. 表面台词 (Spoken - 露出水面 1/8)</div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase">
+                1. 表面台词 (Spoken - 露出水面 1/8)
+              </div>
               <div className="font-semibold text-amber-300">"{compiled.spoken}"</div>
             </div>
 
             <div className="p-3 rounded bg-slate-800/80 border border-indigo-800/60 space-y-1">
-              <div className="text-[10px] text-indigo-400 font-bold uppercase">2. 水下潜台词 (Subtext - 掩藏水下 7/8)</div>
+              <div className="text-[10px] text-indigo-400 font-bold uppercase">
+                2. 水下潜台词 (Subtext - 掩藏水下 7/8)
+              </div>
               <div className="font-serif italic text-indigo-200">"{compiled.subtext}"</div>
-              <div className="text-[10px] text-slate-400 pt-1">防御机制: {compiled.defenseMechanism}</div>
+              <div className="text-[10px] text-slate-400 pt-1">
+                防御机制: {compiled.defenseMechanism}
+              </div>
             </div>
 
             <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
-              <div className="text-[10px] text-emerald-400 font-bold uppercase">3. 伴随肢体微反应 (Beat Action)</div>
+              <div className="text-[10px] text-emerald-400 font-bold uppercase">
+                3. 伴随肢体微反应 (Beat Action)
+              </div>
               <div className="text-emerald-300">{compiled.beatAction}</div>
             </div>
           </div>

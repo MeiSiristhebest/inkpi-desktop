@@ -198,7 +198,9 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
             summary: 'A character pauses after the rain.',
             entities: [{ id: 'gate-character', kind: 'character', name: '她' }],
             events: [{ id: 'gate-event', type: 'pause', description: 'She does not look back.' }],
-            promises: [{ id: 'gate-promise', statement: 'The cold light remains.', status: 'open' }],
+            promises: [
+              { id: 'gate-promise', statement: 'The cold light remains.', status: 'open' },
+            ],
             confidence: 0.9,
           },
         },
@@ -240,7 +242,9 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
         if (item.task.outputContract?.persistence === 'artifact') {
           const artifactId = result.artifactIds?.[0]
           expect(artifactId).toEqual(expect.any(String))
-          const artifact = await first.client.request<RuntimeArtifact>('artifact.get', { id: artifactId })
+          const artifact = await first.client.request<RuntimeArtifact>('artifact.get', {
+            id: artifactId,
+          })
           expect(artifact).toMatchObject({
             id: artifactId,
             content: item.expectedOutput.data ?? item.expectedOutput.patch,
@@ -254,7 +258,8 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
 
       if (!rewriteResult) throw new Error('Expected rewrite result for proposal persistence')
       const proposalRemote = getProposalSyncRemote(rewriteResult)
-      if (!proposalRemote) throw new Error('Expected the task result to carry proposal sync capability')
+      if (!proposalRemote)
+        throw new Error('Expected the task result to carry proposal sync capability')
 
       const localProposals = new Map<string, AiProposal>()
       const localStore: ProposalStore = {
@@ -366,7 +371,10 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
   }, 45_000)
 })
 
-async function connectAssistant(): Promise<{ client: RpcClient; assistant: ReturnType<typeof createDaemonAiAssistant> }> {
+async function connectAssistant(): Promise<{
+  client: RpcClient
+  assistant: ReturnType<typeof createDaemonAiAssistant>
+}> {
   const client = await connectClient()
   return { client, assistant: createDaemonAiAssistant(client) }
 }
@@ -386,7 +394,8 @@ function createSkillRpcProbe(client: RpcClient) {
   return {
     discover: () => client.request<SkillManifest[]>('skill.discover'),
     load: (skillId: string) => client.request<SkillLoadResult>('skill.load', { skillId }),
-    activate: (skillId: string) => client.request<SkillActivationResult>('skill.activate', { skillId }),
+    activate: (skillId: string) =>
+      client.request<SkillActivationResult>('skill.activate', { skillId }),
     status: () => client.request<SkillRuntimeRegistrationSnapshot>('skill.status'),
   }
 }
@@ -410,7 +419,9 @@ function waitForDaemonReady(child: ChildProcess): Promise<DaemonReadyMessage> {
     let stderr = ''
     let settled = false
     const timeout = setTimeout(() => {
-      finishReject(new Error(`Timed out waiting for five-slice fixture. stdout=${stdout} stderr=${stderr}`))
+      finishReject(
+        new Error(`Timed out waiting for five-slice fixture. stdout=${stdout} stderr=${stderr}`),
+      )
     }, 20_000)
 
     const finishResolve = (message: DaemonReadyMessage) => {

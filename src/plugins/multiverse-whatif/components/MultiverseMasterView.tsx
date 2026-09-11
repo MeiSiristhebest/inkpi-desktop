@@ -10,17 +10,44 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
 
 const DEFAULT_CANON_CHAPTERS = [
-  { index: 12, title: "第12章 太虚秘境", summary: "主角林凡进入宗门禁地太虚秘境争夺造化", entities: ["林凡", "苏清月"] },
-  { index: 13, title: "第13章 阴阳煞阵", summary: "林凡偶遇被黑煞门围攻的青玄宗圣女苏清月", entities: ["林凡", "苏清月", "黑煞门长老"] },
-  { index: 14, title: "第14章 舍身相救", summary: "危急关头林凡施展禁术击退强敌，救下垂死的苏清月，获得青玄宗结盟青睐", entities: ["林凡", "苏清月"] },
-  { index: 15, title: "第15章 宗门大比", summary: "在苏清月圣药相助下，林凡在宗门大比中一举夺魁碾压赵家仇敌", entities: ["林凡", "赵家长老"] },
-  { index: 16, title: "第16章 踏平赵家", summary: "主角携手青玄宗大势彻底覆灭赵家，扬名东荒", entities: ["林凡", "赵家"] },
+  {
+    index: 12,
+    title: '第12章 太虚秘境',
+    summary: '主角林凡进入宗门禁地太虚秘境争夺造化',
+    entities: ['林凡', '苏清月'],
+  },
+  {
+    index: 13,
+    title: '第13章 阴阳煞阵',
+    summary: '林凡偶遇被黑煞门围攻的青玄宗圣女苏清月',
+    entities: ['林凡', '苏清月', '黑煞门长老'],
+  },
+  {
+    index: 14,
+    title: '第14章 舍身相救',
+    summary: '危急关头林凡施展禁术击退强敌，救下垂死的苏清月，获得青玄宗结盟青睐',
+    entities: ['林凡', '苏清月'],
+  },
+  {
+    index: 15,
+    title: '第15章 宗门大比',
+    summary: '在苏清月圣药相助下，林凡在宗门大比中一举夺魁碾压赵家仇敌',
+    entities: ['林凡', '赵家长老'],
+  },
+  {
+    index: 16,
+    title: '第16章 踏平赵家',
+    summary: '主角携手青玄宗大势彻底覆灭赵家，扬名东荒',
+    entities: ['林凡', '赵家'],
+  },
 ]
 
 export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
   const [forkIndex, setForkIndex] = useState<number>(14)
-  const [premise, setPremise] = useState<string>("如果主角在第14章没有现身救下女配苏清月，选择暗中取宝独善其身")
+  const [premise, setPremise] = useState<string>(
+    '如果主角在第14章没有现身救下女配苏清月，选择暗中取宝独善其身',
+  )
   const [branches, setBranches] = useState<MultiverseBranchRecord[]>([])
   const [activeBranch, setActiveBranch] = useState<MultiverseSimulationResult | null>(null)
 
@@ -35,7 +62,7 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
 
   useEffect(() => {
     onStats?.({
-      title: "平行宇宙因果沙盒",
+      title: '平行宇宙因果沙盒',
       wordCount: branches.length,
       updatedAt: clock.now(),
     })
@@ -78,10 +105,10 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
   const handleSaveBranch = async () => {
     if (!activeBranch) return
     const record: MultiverseBranchRecord = MultiverseEngine.createBranchRecord(
-      idGenerator.generate("branch"),
+      idGenerator.generate('branch'),
       projectId,
       activeBranch,
-      clock.now()
+      clock.now(),
     )
     await indexedDbMultiverseRepository.save(record)
     await loadBranches()
@@ -117,7 +144,9 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
       {/* 分支控制输入 */}
       <div className="p-4 rounded-xl border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
         <div>
-          <label className="text-xs font-bold text-slate-500 block mb-1">分歧奇点章节 (Fork Point):</label>
+          <label className="text-xs font-bold text-slate-500 block mb-1">
+            分歧奇点章节 (Fork Point):
+          </label>
           <select
             value={forkIndex}
             onChange={(e) => setForkIndex(Number(e.target.value))}
@@ -132,7 +161,9 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
         </div>
 
         <div className="md:col-span-3">
-          <label className="text-xs font-bold text-slate-500 block mb-1">“What-If” 假设前提假设词:</label>
+          <label className="text-xs font-bold text-slate-500 block mb-1">
+            “What-If” 假设前提假设词:
+          </label>
           <input
             type="text"
             value={premise}
@@ -162,10 +193,10 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                   key={canon.index}
                   className={`p-4 rounded-xl border grid grid-cols-1 md:grid-cols-2 gap-4 text-xs transition ${
                     isFork
-                      ? "border-purple-400 bg-purple-50/40 dark:bg-purple-950/20"
+                      ? 'border-purple-400 bg-purple-50/40 dark:bg-purple-950/20'
                       : isPost
-                      ? "border-slate-300 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60"
-                      : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
+                        ? 'border-slate-300 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950'
                   }`}
                 >
                   {/* 左侧：原著主宇宙 */}
@@ -186,20 +217,22 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                         <ArrowRight className="w-3.5 h-3.5" />
                         {branch?.chapterTitle}
                       </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                        (branch?.divergenceLevel || 0) >= 0.7
-                          ? "bg-rose-100 dark:bg-rose-950 text-rose-600"
-                          : (branch?.divergenceLevel || 0) > 0
-                          ? "bg-purple-100 dark:bg-purple-950 text-purple-600"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-400"
-                      }`}>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                          (branch?.divergenceLevel || 0) >= 0.7
+                            ? 'bg-rose-100 dark:bg-rose-950 text-rose-600'
+                            : (branch?.divergenceLevel || 0) > 0
+                              ? 'bg-purple-100 dark:bg-purple-950 text-purple-600'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                        }`}
+                      >
                         偏离度: {Math.round((branch?.divergenceLevel || 0) * 100)}%
                       </span>
                     </div>
                     <p className="text-slate-700 dark:text-slate-200">{branch?.eventSummary}</p>
                     {branch?.butterflyEffects && branch.butterflyEffects.length > 0 && (
                       <div className="text-[11px] text-purple-600 dark:text-purple-300 font-medium">
-                        {branch.butterflyEffects.join("；")}
+                        {branch.butterflyEffects.join('；')}
                       </div>
                     )}
                   </div>
@@ -225,7 +258,9 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                 <div>
                   <div className="flex items-center justify-between font-bold text-purple-600 dark:text-purple-400 mb-1">
                     <span>{b.name}</span>
-                    <span className="text-[10px] text-slate-400">第 {b.forkChapterIndex} 章奇点</span>
+                    <span className="text-[10px] text-slate-400">
+                      第 {b.forkChapterIndex} 章奇点
+                    </span>
                   </div>
                   <p className="text-slate-600 dark:text-slate-400">{b.divergencePremise}</p>
                 </div>

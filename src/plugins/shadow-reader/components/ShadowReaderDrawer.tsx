@@ -1,10 +1,10 @@
-import type { FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { ShadowReaderEngine } from "../engine/ShadowReaderEngine"
-import { MessageSquare, ShieldAlert } from "lucide-react"
+import type { FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { ShadowReaderEngine } from '../engine/ShadowReaderEngine'
+import { MessageSquare, ShieldAlert } from 'lucide-react'
 
 export const ShadowReaderDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
-  const sim = ShadowReaderEngine.simulate(currentText || "", "drawer_ch")
+  const sim = ShadowReaderEngine.simulate(currentText || '', 'drawer_ch')
 
   return (
     <div className="p-3 space-y-3 text-xs">
@@ -24,7 +24,9 @@ export const ShadowReaderDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
       <div className="p-2.5 rounded bg-slate-100 dark:bg-slate-800 space-y-2">
         <div className="flex justify-between text-[11px]">
           <span className="text-slate-500">推演弹幕数:</span>
-          <span className="font-bold text-slate-700 dark:text-slate-300">{sim.danmakus.length} 条</span>
+          <span className="font-bold text-slate-700 dark:text-slate-300">
+            {sim.danmakus.length} 条
+          </span>
         </div>
         <div className="text-[10px] text-slate-500 flex justify-between">
           <span>喝彩: {sim.sentimentSummary.applause}</span>

@@ -1,10 +1,5 @@
 export type FactionStance =
-  | 'allied'
-  | 'friendly'
-  | 'neutral'
-  | 'hostile'
-  | 'mortal_enemy'
-  | 'vassal'
+  'allied' | 'friendly' | 'neutral' | 'hostile' | 'mortal_enemy' | 'vassal'
 
 export interface FactionDiplomacyRecord {
   id: string

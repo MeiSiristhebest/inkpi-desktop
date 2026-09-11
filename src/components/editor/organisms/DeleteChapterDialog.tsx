@@ -18,7 +18,9 @@ export const DeleteChapterDialog: React.FC<DeleteChapterDialogProps> = ({ model 
         <p className="text-[12.5px] text-[var(--ink-text-muted)] leading-relaxed mb-4">
           确定要删除「<strong className="text-[var(--ink-text)]">{deletingChapter.title}</strong>
           」吗？包含{' '}
-          <span className="text-[var(--ink-accent)] font-mono">{deletingChapter.wordCount}</span>{' '}
+          <span className="text-[var(--ink-accent)] font-mono">
+            {deletingChapter.wordCount}
+          </span>{' '}
           字正文，删除后将无法通过编辑器直接撤销。
         </p>
         <div className="flex items-center justify-end gap-2">

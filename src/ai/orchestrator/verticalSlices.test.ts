@@ -14,7 +14,9 @@ const documents = ['d1', 'd2', 'd3'].map((documentId, index) => ({
   documentId,
   revision: index + 1,
   text: `章节 ${index + 1}`,
-  blocks: [{ id: `${documentId}-block`, type: 'paragraph', text: `章节 ${index + 1}`, from: 0, to: 4 }],
+  blocks: [
+    { id: `${documentId}-block`, type: 'paragraph', text: `章节 ${index + 1}`, from: 0, to: 4 },
+  ],
   sourceMap: {},
   representation: 'text',
 })) as unknown as SemanticDocument[]
@@ -29,24 +31,39 @@ function makeGateway(failTaskIds: Set<string> = new Set()) {
     getTaskStatus: async (taskId: string) => ({
       taskId,
       kind: taskId.includes('chunk') ? 'narrative.project.distill' : 'narrative.continuity.audit',
-      status: failTaskIds.has(taskId) ? 'failed' as const : 'completed' as const,
+      status: failTaskIds.has(taskId) ? ('failed' as const) : ('completed' as const),
       result: failTaskIds.has(taskId)
-        ? { taskId, kind: 'narrative.project.distill', status: 'failed' as const, error: { code: 'TEST', message: 'temporary' } }
+        ? {
+            taskId,
+            kind: 'narrative.project.distill',
+            status: 'failed' as const,
+            error: { code: 'TEST', message: 'temporary' },
+          }
         : taskId.includes('chunk')
           ? {
               taskId,
               kind: 'narrative.project.distill',
               status: 'completed' as const,
-              output: { format: 'structured' as const, data: { summary: taskId, entities: [], events: [], promises: [] } },
+              output: {
+                format: 'structured' as const,
+                data: { summary: taskId, entities: [], events: [], promises: [] },
+              },
             }
           : {
               taskId,
               kind: 'narrative.continuity.audit',
               status: 'completed' as const,
-              output: { format: 'structured' as const, data: [{ severity: 'warning', description: '发现冲突' }] },
+              output: {
+                format: 'structured' as const,
+                data: [{ severity: 'warning', description: '发现冲突' }],
+              },
             },
     }),
-    cancelTask: async (taskId: string) => ({ taskId, cancelled: true, status: 'cancelled' as const }),
+    cancelTask: async (taskId: string) => ({
+      taskId,
+      cancelled: true,
+      status: 'cancelled' as const,
+    }),
     submitted,
     failTaskIds,
   }
@@ -118,7 +135,8 @@ function createMemoryArtifactStore(): ArtifactStore {
       artifacts.set(artifact.id, artifact)
     },
     get: async (id) => artifacts.get(id),
-    list: async (taskId) => [...artifacts.values()].filter((artifact) => !taskId || artifact.taskId === taskId),
+    list: async (taskId) =>
+      [...artifacts.values()].filter((artifact) => !taskId || artifact.taskId === taskId),
   }
 }
 
@@ -176,7 +194,11 @@ describe('vertical slice orchestration', () => {
     expect(scheduler.pendingCount()).toBe(0)
     expect(gateway.submitted.size).toBe(1)
 
-    const pending = scheduler.schedule({ ...input, taskId: 'audit-cancelled', document: documents[1] })
+    const pending = scheduler.schedule({
+      ...input,
+      taskId: 'audit-cancelled',
+      document: documents[1],
+    })
     expect(scheduler.cancel(documents[1].documentId)).toBe(true)
     await expect(pending).rejects.toThrow(/cancelled|superseded/i)
   })
@@ -187,8 +209,14 @@ describe('vertical slice orchestration', () => {
       new CreativeIntelligence(gateway, { artifactStore: createMemoryArtifactStore() }),
       { debounceMs: 0 },
     )
-    const first = scheduler.schedule({ taskId: 'audit-rev-1', document: documents[0], scope: 'document' }, { pollIntervalMs: 0 })
-    const second = scheduler.schedule({ taskId: 'audit-rev-2', document: { ...documents[0], revision: 2 }, scope: 'document' }, { pollIntervalMs: 0 })
+    const first = scheduler.schedule(
+      { taskId: 'audit-rev-1', document: documents[0], scope: 'document' },
+      { pollIntervalMs: 0 },
+    )
+    const second = scheduler.schedule(
+      { taskId: 'audit-rev-2', document: { ...documents[0], revision: 2 }, scope: 'document' },
+      { pollIntervalMs: 0 },
+    )
 
     await expect(first).rejects.toThrow(/superseded/i)
     await expect(second).resolves.toEqual([
@@ -230,7 +258,11 @@ describe('vertical slice orchestration', () => {
       chunkSize: 2,
       continueOnError: true,
       pollIntervalMs: 0,
-      saveCheckpoint: (checkpoint) => checkpoints.push({ nextChunk: checkpoint.nextChunk, failedChunks: checkpoint.failedChunks }),
+      saveCheckpoint: (checkpoint) =>
+        checkpoints.push({
+          nextChunk: checkpoint.nextChunk,
+          failedChunks: checkpoint.failedChunks,
+        }),
     })
     expect(first.complete).toBe(false)
     expect(first.completedChunks).toBe(1)
@@ -248,7 +280,11 @@ describe('vertical slice orchestration', () => {
       chunkSize: 2,
       checkpoint: first.checkpoint,
       pollIntervalMs: 0,
-      saveCheckpoint: (checkpoint) => checkpoints.push({ nextChunk: checkpoint.nextChunk, failedChunks: checkpoint.failedChunks }),
+      saveCheckpoint: (checkpoint) =>
+        checkpoints.push({
+          nextChunk: checkpoint.nextChunk,
+          failedChunks: checkpoint.failedChunks,
+        }),
     })
     expect(resumed.complete).toBe(true)
     expect(resumed.completedChunks).toBe(2)
@@ -261,9 +297,9 @@ describe('vertical slice orchestration', () => {
       new CreativeIntelligence(gateway, { artifactStore: createMemoryArtifactStore() }),
     )
 
-    await expect(workflow.run({ taskId: 'invalid', documents }, { chunkSize: Number.NaN })).rejects.toThrow(
-      /chunk size/i,
-    )
+    await expect(
+      workflow.run({ taskId: 'invalid', documents }, { chunkSize: Number.NaN }),
+    ).rejects.toThrow(/chunk size/i)
     expect(gateway.submitted.size).toBe(0)
   })
 })

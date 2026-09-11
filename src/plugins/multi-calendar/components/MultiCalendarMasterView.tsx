@@ -90,7 +90,8 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const chaptersText = chapters
       .slice(0, 15)
       .map(
-        (c) => `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 250)}...`,
+        (c) =>
+          `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 250)}...`,
       )
       .join('\n\n')
 

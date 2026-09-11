@@ -104,7 +104,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       )
     } else {
       const chap = chapters.find((c) => c.id === chapId)
-      const content = chap ? semanticTextFromContent(chap.id, chap.content || '', chap.revision) : ''
+      const content = chap
+        ? semanticTextFromContent(chap.id, chap.content || '', chap.revision)
+        : ''
       setScanText(content)
       setViolations(clueWeaverEngine.scanGodViewLeakage(content, clues, cognitions))
     }

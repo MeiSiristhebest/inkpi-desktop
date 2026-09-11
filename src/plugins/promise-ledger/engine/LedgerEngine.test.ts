@@ -10,7 +10,7 @@ const makeEntry = (overrides: Partial<PromiseLedgerEntry> = {}): PromiseLedgerEn
   plantChapter: 5,
   plantNote: '主角在密室中偶得一枚残缺玉佩',
   dueChapterLimit: 20, // 5 + 20 = 25章必须兑现
-  softDeadline: 15,     // 5 + 15 = 20章开始预警
+  softDeadline: 15, // 5 + 15 = 20章开始预警
   status: 'planted',
   memoryDecayLambda: 0.05,
   progressHistory: [],
@@ -41,9 +41,7 @@ describe('LedgerEngine — 伏笔记忆衰减与债务状态分析', () => {
 
   it('boosts memory heat when progress points are recorded', () => {
     const entry = makeEntry({
-      progressHistory: [
-        { chapter: 15, note: '玉佩在拍卖行引起黑衣人关注', memoryBoost: 0.6 },
-      ],
+      progressHistory: [{ chapter: 15, note: '玉佩在拍卖行引起黑衣人关注', memoryBoost: 0.6 }],
     })
 
     // 在第 15 章发生推进，热度得到恢复
@@ -103,7 +101,13 @@ describe('LedgerEngine — 伏笔记忆衰减与债务状态分析', () => {
 
     const overdueEntries = [
       makeEntry({ id: 'p1', plantChapter: 1, softDeadline: 5, dueChapterLimit: 10 }), // at ch 25, overdue by 14
-      makeEntry({ id: 'p2', tier: 'power_system', plantChapter: 2, softDeadline: 6, dueChapterLimit: 12 }),
+      makeEntry({
+        id: 'p2',
+        tier: 'power_system',
+        plantChapter: 2,
+        softDeadline: 6,
+        dueChapterLimit: 12,
+      }),
     ]
     const score = engine.computeNarrativeHealthScore(overdueEntries, 25)
     expect(score).toBeLessThan(80)

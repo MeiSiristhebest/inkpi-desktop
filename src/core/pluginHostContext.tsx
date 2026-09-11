@@ -108,7 +108,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           const context = contextProvider
             ? await contextProvider({
                 projectId,
-                currentText: typeof input === 'string' ? input : JSON.stringify(input) ?? '',
+                currentText: typeof input === 'string' ? input : (JSON.stringify(input) ?? ''),
                 activeChapterId: activeChapter?.id,
               })
             : undefined

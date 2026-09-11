@@ -1,52 +1,87 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbAuthorOpsRepository } from "../../../adapters/indexedDbAuthorOpsRepository"
-import { AuthorOpsEngine } from "../engine/AuthorOpsEngine"
-import type { AuthorOpsProfileRecord, MetricLogEntry } from "../types"
-import { TrendingDown, Award, UserCheck, AlertTriangle, Save } from "lucide-react"
-import { clock } from "../../../adapters/clock"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbAuthorOpsRepository } from '../../../adapters/indexedDbAuthorOpsRepository'
+import { AuthorOpsEngine } from '../engine/AuthorOpsEngine'
+import type { AuthorOpsProfileRecord, MetricLogEntry } from '../types'
+import { TrendingDown, Award, UserCheck, AlertTriangle, Save } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
 
 export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [profile, setProfile] = useState<AuthorOpsProfileRecord>({
     projectId,
-    authorName: "InkPi Author",
-    bio: "专注于极致心流商业网络文学创作。",
+    authorName: 'InkPi Author',
+    bio: '专注于极致心流商业网络文学创作。',
     works: [
-      { title: "万古天帝诀", genre: "玄幻修真", totalWords: 420000, status: "serialized" },
-      { title: "赛博大明1644", genre: "科幻历史", totalWords: 1500000, status: "finished" }
+      { title: '万古天帝诀', genre: '玄幻修真', totalWords: 420000, status: 'serialized' },
+      { title: '赛博大明1644', genre: '科幻历史', totalWords: 1500000, status: 'finished' },
     ],
     supportChannels: {
-      customUrl: "https://afdian.com/a/inkpi",
+      customUrl: 'https://afdian.com/a/inkpi',
     },
     metricLogs: [
-      { date: "09-01", chasingReadCount: 12000, averageSubscription: 4500, retentionRate: 88, dropOffChapter: 10, dropOffReason: "正常自然流失", counterAction: "保持节奏" },
-      { date: "09-02", chasingReadCount: 11600, averageSubscription: 4400, retentionRate: 85, dropOffChapter: 11, dropOffReason: "平稳", counterAction: "铺垫副本" },
-      { date: "09-03", chasingReadCount: 9500, averageSubscription: 3900, retentionRate: 70, dropOffChapter: 12, dropOffReason: "配角过分喧宾夺主", counterAction: "主角强力登场打脸" },
-      { date: "09-04", chasingReadCount: 9200, averageSubscription: 3800, retentionRate: 67, dropOffChapter: 13, dropOffReason: "打脸推进", counterAction: "持续回拉" },
+      {
+        date: '09-01',
+        chasingReadCount: 12000,
+        averageSubscription: 4500,
+        retentionRate: 88,
+        dropOffChapter: 10,
+        dropOffReason: '正常自然流失',
+        counterAction: '保持节奏',
+      },
+      {
+        date: '09-02',
+        chasingReadCount: 11600,
+        averageSubscription: 4400,
+        retentionRate: 85,
+        dropOffChapter: 11,
+        dropOffReason: '平稳',
+        counterAction: '铺垫副本',
+      },
+      {
+        date: '09-03',
+        chasingReadCount: 9500,
+        averageSubscription: 3900,
+        retentionRate: 70,
+        dropOffChapter: 12,
+        dropOffReason: '配角过分喧宾夺主',
+        counterAction: '主角强力登场打脸',
+      },
+      {
+        date: '09-04',
+        chasingReadCount: 9200,
+        averageSubscription: 3800,
+        retentionRate: 67,
+        dropOffChapter: 13,
+        dropOffReason: '打脸推进',
+        counterAction: '持续回拉',
+      },
     ],
     updatedAt: clock.now(),
   })
 
-  const [activeTab, setActiveTab] = useState<"metrics" | "card">("metrics")
+  const [activeTab, setActiveTab] = useState<'metrics' | 'card'>('metrics')
   const [newLog, setNewLog] = useState<MetricLogEntry>({
-    date: "09-05",
+    date: '09-05',
     chasingReadCount: 9000,
     averageSubscription: 3750,
     retentionRate: 65,
     dropOffChapter: 14,
-    dropOffReason: "",
-    counterAction: "",
+    dropOffReason: '',
+    counterAction: '',
   })
 
   useEffect(() => {
-    indexedDbAuthorOpsRepository.get(projectId).then((saved) => {
-      if (saved) setProfile(saved)
-    }).catch(console.error)
+    indexedDbAuthorOpsRepository
+      .get(projectId)
+      .then((saved) => {
+        if (saved) setProfile(saved)
+      })
+      .catch(console.error)
   }, [projectId])
 
   useEffect(() => {
     onStats?.({
-      title: "连载运营台账",
+      title: '连载运营台账',
       wordCount: profile.works.reduce((s, w) => s + w.totalWords, 0),
       updatedAt: profile.updatedAt,
     })
@@ -57,7 +92,7 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     profile.authorName,
     profile.bio,
     profile.works,
-    profile.supportChannels.customUrl
+    profile.supportChannels.customUrl,
   )
 
   const handleSaveProfile = async () => {
@@ -88,18 +123,18 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab("metrics")}
+            onClick={() => setActiveTab('metrics')}
             className={`px-3 py-1.5 text-xs rounded font-medium transition ${
-              activeTab === "metrics" ? "bg-blue-600 text-white" : "bg-slate-200 dark:bg-slate-800"
+              activeTab === 'metrics' ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-800'
             }`}
           >
             运营台账与留存分析
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("card")}
+            onClick={() => setActiveTab('card')}
             className={`px-3 py-1.5 text-xs rounded font-medium transition ${
-              activeTab === "card" ? "bg-blue-600 text-white" : "bg-slate-200 dark:bg-slate-800"
+              activeTab === 'card' ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-800'
             }`}
           >
             商业名片生成器
@@ -107,7 +142,7 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
         </div>
       </div>
 
-      {activeTab === "metrics" && (
+      {activeTab === 'metrics' && (
         <div className="space-y-6">
           {/* 断崖点预警 */}
           {dropAnalyses.filter((d) => d.isSevereCliff).length > 0 && (
@@ -117,16 +152,27 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                 <span>严重追读流失断崖警告 (单章留存骤降 &ge; 12%)</span>
               </div>
               <div className="space-y-2 text-xs">
-                {dropAnalyses.filter((d) => d.isSevereCliff).map((cliff, idx) => (
-                  <div key={idx} className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-rose-200 dark:border-rose-800">
-                    <div className="font-bold text-rose-600 flex justify-between">
-                      <span>第 {cliff.dropOffChapter} 章：留存骤降 {cliff.gradientLoss}%</span>
-                      <span className="text-rose-500 font-normal">疑似踩雷毒点</span>
+                {dropAnalyses
+                  .filter((d) => d.isSevereCliff)
+                  .map((cliff, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-rose-200 dark:border-rose-800"
+                    >
+                      <div className="font-bold text-rose-600 flex justify-between">
+                        <span>
+                          第 {cliff.dropOffChapter} 章：留存骤降 {cliff.gradientLoss}%
+                        </span>
+                        <span className="text-rose-500 font-normal">疑似踩雷毒点</span>
+                      </div>
+                      <div className="mt-1 text-slate-600 dark:text-slate-300">
+                        原因判定：{cliff.probableReason}
+                      </div>
+                      <div className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                        应对策略：{cliff.recommendedCounterAction}
+                      </div>
                     </div>
-                    <div className="mt-1 text-slate-600 dark:text-slate-300">原因判定：{cliff.probableReason}</div>
-                    <div className="mt-1 text-blue-600 dark:text-blue-400 font-medium">应对策略：{cliff.recommendedCounterAction}</div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           )}
@@ -155,12 +201,16 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                   {profile.metricLogs.map((log, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
                       <td className="p-2.5 font-mono">{log.date}</td>
-                      <td className="p-2.5 font-bold text-blue-600 dark:text-blue-400">{log.chasingReadCount}</td>
+                      <td className="p-2.5 font-bold text-blue-600 dark:text-blue-400">
+                        {log.chasingReadCount}
+                      </td>
                       <td className="p-2.5">{log.averageSubscription}</td>
                       <td className="p-2.5 font-bold">{log.retentionRate}%</td>
                       <td className="p-2.5">第 {log.dropOffChapter} 章</td>
-                      <td className="p-2.5 text-slate-500">{log.dropOffReason || "-"}</td>
-                      <td className="p-2.5 text-emerald-600 dark:text-emerald-400">{log.counterAction || "-"}</td>
+                      <td className="p-2.5 text-slate-500">{log.dropOffReason || '-'}</td>
+                      <td className="p-2.5 text-emerald-600 dark:text-emerald-400">
+                        {log.counterAction || '-'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -187,7 +237,9 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                 type="number"
                 placeholder="均订"
                 value={newLog.averageSubscription}
-                onChange={(e) => setNewLog({ ...newLog, averageSubscription: Number(e.target.value) })}
+                onChange={(e) =>
+                  setNewLog({ ...newLog, averageSubscription: Number(e.target.value) })
+                }
                 className="p-1.5 border rounded bg-slate-50 dark:bg-slate-900"
               />
               <input
@@ -216,7 +268,7 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
         </div>
       )}
 
-      {activeTab === "card" && (
+      {activeTab === 'card' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-4">
             <h3 className="text-sm font-bold flex items-center gap-2">
@@ -248,11 +300,13 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                 <label className="text-slate-500 block mb-1">读者赞赏或商务联系链接:</label>
                 <input
                   type="text"
-                  value={profile.supportChannels.customUrl || ""}
-                  onChange={(e) => setProfile({
-                    ...profile,
-                    supportChannels: { ...profile.supportChannels, customUrl: e.target.value }
-                  })}
+                  value={profile.supportChannels.customUrl || ''}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      supportChannels: { ...profile.supportChannels, customUrl: e.target.value },
+                    })
+                  }
                   className="w-full p-2 border rounded bg-slate-50 dark:bg-slate-900"
                 />
               </div>
@@ -268,7 +322,9 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           </div>
 
           <div className="border rounded-xl p-5 bg-slate-900 text-slate-200 border-slate-800 font-mono text-xs space-y-2 overflow-y-auto max-h-[450px]">
-            <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">生成的 Markdown 商业名片预览:</div>
+            <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+              生成的 Markdown 商业名片预览:
+            </div>
             <pre className="whitespace-pre-wrap leading-relaxed text-slate-300">
               {businessCardMarkdown}
             </pre>
@@ -278,4 +334,3 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     </div>
   )
 }
-

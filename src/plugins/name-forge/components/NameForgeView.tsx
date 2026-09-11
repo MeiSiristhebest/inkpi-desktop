@@ -1,10 +1,6 @@
 import { useState, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import type {
-  NameCategory,
-  NameStyle,
-  GeneratedNameItem,
-} from '../types'
+import type { NameCategory, NameStyle, GeneratedNameItem } from '../types'
 import { nameForgeEngine } from '../engine/NameForgeEngine'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
@@ -86,7 +82,8 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
     let codexCategory: CodexCategory = 'character'
     if (item.category === 'sect_faction') codexCategory = 'faction'
-    else if (item.category === 'technique_spell' || item.category === 'item_artifact') codexCategory = 'item'
+    else if (item.category === 'technique_spell' || item.category === 'item_artifact')
+      codexCategory = 'item'
     else if (item.category === 'location_realm') codexCategory = 'location'
 
     const now = clock.now()

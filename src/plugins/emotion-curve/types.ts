@@ -1,10 +1,5 @@
 export type EmotionType =
-  | 'tension'
-  | 'catharsis'
-  | 'frustration'
-  | 'anticipation'
-  | 'sorrow'
-  | 'joy'
+  'tension' | 'catharsis' | 'frustration' | 'anticipation' | 'sorrow' | 'joy'
 
 export interface EmotionVector {
   tension: number // 紧张度 0 - 100

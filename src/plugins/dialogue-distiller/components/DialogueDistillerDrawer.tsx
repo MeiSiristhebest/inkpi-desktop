@@ -3,10 +3,18 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { dialogueDistillerEngine } from '../engine/DialogueDistillerEngine'
 import { Mic, Search, Users } from 'lucide-react'
 
-export const DialogueDistillerDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
+export const DialogueDistillerDrawer: FC<DesktopPluginDrawerProps> = ({
+  projectId,
+  currentText,
+}) => {
   const [inputText, setInputText] = useState('')
   const [charactersInput, setCharactersInput] = useState('陆沉, 林夕, 王铁柱')
-  const [result, setResult] = useState<Array<{ name: string; quoteCount: number; asl: number; tone: string }> | null>(null)
+  const [result, setResult] = useState<Array<{
+    name: string
+    quoteCount: number
+    asl: number
+    tone: string
+  }> | null>(null)
 
   const textToScan = inputText || currentText || ''
 

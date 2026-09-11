@@ -1,17 +1,19 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbAftermathRepository } from "../../../adapters/indexedDbAftermathRepository"
-import { indexedDbCodexEntityRepository } from "../../../adapters/indexedDbCodexEntityRepository"
-import { pluginEventBus } from "../../../core/pluginEventBus"
-import { AftermathEngine } from "../engine/AftermathEngine"
-import type { AftermathPatchRecord } from "../types"
-import { GitPullRequest, Check, X, Sparkles } from "lucide-react"
-import { clock } from "../../../adapters/clock"
-import { idGenerator } from "../../../adapters/idGenerator"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
+import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { pluginEventBus } from '../../../core/pluginEventBus'
+import { AftermathEngine } from '../engine/AftermathEngine'
+import type { AftermathPatchRecord } from '../types'
+import { GitPullRequest, Check, X, Sparkles } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
+import { idGenerator } from '../../../adapters/idGenerator'
 
 export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [patches, setPatches] = useState<AftermathPatchRecord[]>([])
-  const [chapterText, setChapterText] = useState("林凡在洞府闭关七七四十九日，轰然一声巨响，林凡一举迈入金丹初期！随后他在废墟中搜寻，伸手夺得九幽魔印。")
+  const [chapterText, setChapterText] = useState(
+    '林凡在洞府闭关七七四十九日，轰然一声巨响，林凡一举迈入金丹初期！随后他在废墟中搜寻，伸手夺得九幽魔印。',
+  )
 
   const loadPatches = async () => {
     const all = await indexedDbAftermathRepository.getAll(projectId)
@@ -24,24 +26,24 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
 
   useEffect(() => {
     onStats?.({
-      title: "章后设定回写器",
+      title: '章后设定回写器',
       wordCount: chapterText.length,
       updatedAt: clock.now(),
     })
   }, [chapterText, onStats])
 
   const handleScan = async () => {
-    const res = AftermathEngine.analyzeChapter(chapterText, "ch-manual", 1, [
-      { id: "c1", name: "林凡", category: "character", currentTier: "筑基大圆满" },
-      { id: "i1", name: "九幽魔印", category: "item", currentOwner: "神秘魔修" },
+    const res = AftermathEngine.analyzeChapter(chapterText, 'ch-manual', 1, [
+      { id: 'c1', name: '林凡', category: 'character', currentTier: '筑基大圆满' },
+      { id: 'i1', name: '九幽魔印', category: 'item', currentOwner: '神秘魔修' },
     ])
 
     for (const p of res.patches) {
       const record: AftermathPatchRecord = {
         ...p,
-        id: idGenerator.generate("patch"),
+        id: idGenerator.generate('patch'),
         projectId,
-        status: "pending",
+        status: 'pending',
         createdAt: clock.now(),
       }
       await indexedDbAftermathRepository.save(record)
@@ -49,20 +51,20 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     await loadPatches()
   }
 
-  const handleResolve = async (id: string, status: "applied" | "rejected") => {
+  const handleResolve = async (id: string, status: 'applied' | 'rejected') => {
     const patch = patches.find((p) => p.id === id)
     if (!patch) return
     const updated: AftermathPatchRecord = {
       ...patch,
       status,
-      appliedAt: status === "applied" ? clock.now() : undefined,
+      appliedAt: status === 'applied' ? clock.now() : undefined,
     }
     await indexedDbAftermathRepository.save(updated)
 
-    if (status === "applied") {
+    if (status === 'applied') {
       const allEntities = await indexedDbCodexEntityRepository.getAll()
       const targetEntity = allEntities.find(
-        (e) => e.name === patch.entityName && e.projectId === projectId
+        (e) => e.name === patch.entityName && e.projectId === projectId,
       )
 
       if (targetEntity) {
@@ -82,11 +84,11 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           updatedAt: clock.now(),
         }
         await indexedDbCodexEntityRepository.save(updatedEntity)
-        pluginEventBus.scopedBus(projectId).emit("CODEX_ENTITY_TOUCHED", {
+        pluginEventBus.scopedBus(projectId).emit('CODEX_ENTITY_TOUCHED', {
           projectId,
           entityId: targetEntity.id,
           entityName: targetEntity.name,
-          category: targetEntity.category || "character",
+          category: targetEntity.category || 'character',
         })
       }
     }
@@ -107,12 +109,18 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           </p>
         </div>
         <div className="text-xs text-slate-400">
-          待审批补丁: <span className="font-bold text-amber-500">{patches.filter((p) => p.status === "pending").length}</span> 处
+          待审批补丁:{' '}
+          <span className="font-bold text-amber-500">
+            {patches.filter((p) => p.status === 'pending').length}
+          </span>{' '}
+          处
         </div>
       </div>
 
       <div className="border rounded-xl p-5 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-3">
-        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">最新完卷章节正文分析试炼:</label>
+        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          最新完卷章节正文分析试炼:
+        </label>
         <textarea
           className="w-full h-28 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800"
           value={chapterText}
@@ -144,25 +152,27 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                   <span>{patch.entityName}</span>
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    patch.status === "applied"
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                      : patch.status === "rejected"
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
-                      : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                  }`}>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      patch.status === 'applied'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                        : patch.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+                    }`}
+                  >
                     {patch.status.toUpperCase()}
                   </span>
-                  {patch.status === "pending" && (
+                  {patch.status === 'pending' && (
                     <>
                       <button
-                        onClick={() => handleResolve(patch.id, "applied")}
+                        onClick={() => handleResolve(patch.id, 'applied')}
                         className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => handleResolve(patch.id, "rejected")}
+                        onClick={() => handleResolve(patch.id, 'rejected')}
                         className="p-1 rounded bg-rose-600 text-white hover:bg-rose-700"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -176,7 +186,9 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                 <span>{patch.propertyName}:</span>
                 <span className="line-through text-slate-400">{patch.beforeValue}</span>
                 <span>➔</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">{patch.afterValue}</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  {patch.afterValue}
+                </span>
               </div>
 
               <div className="text-[11px] font-mono text-slate-500 bg-slate-50 dark:bg-slate-950 p-2 rounded">

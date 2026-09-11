@@ -124,7 +124,8 @@ export function createTextSourceMap(
 
     const semanticSpan = segment.semanticTo - segment.semanticFrom
     const editorSpan = segment.editorTo - segment.editorFrom
-    const offset = clamp(safePosition, segment.semanticFrom, segment.semanticTo) - segment.semanticFrom
+    const offset =
+      clamp(safePosition, segment.semanticFrom, segment.semanticTo) - segment.semanticFrom
     const mappedOffset = semanticSpan === 0 ? 0 : Math.round((offset / semanticSpan) * editorSpan)
     const editorPosition = clamp(
       segment.editorFrom + mappedOffset,

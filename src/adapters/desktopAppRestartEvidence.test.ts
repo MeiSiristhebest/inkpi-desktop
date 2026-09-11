@@ -57,10 +57,12 @@ describe('Desktop App restart recovery evidence', () => {
     const assistant = makeAssistant()
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
     const afterRestart = new IndexedDbTaskRecoveryStore()
-    const hook = renderHook(() => useAiConversation('ws://daemon', null, projectId, {
-      taskRecoveryStore: afterRestart,
-      clock: fixedClock,
-    }))
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, projectId, {
+        taskRecoveryStore: afterRestart,
+        clock: fixedClock,
+      }),
+    )
 
     await waitFor(() => expect(hook.result.current.taskRecovery).toHaveLength(1))
     expect(hook.result.current.taskRecovery[0]).toMatchObject({
@@ -75,13 +77,15 @@ describe('Desktop App restart recovery evidence', () => {
     })
 
     await waitFor(async () => {
-      await expect(afterRestart.list(projectId)).resolves.toMatchObject([{
-        task,
-        snapshot: expect.objectContaining({
-          status: 'interrupted',
-          checkpoint: { step: 'chunk-12', updatedAt: 150 },
-        }),
-      }])
+      await expect(afterRestart.list(projectId)).resolves.toMatchObject([
+        {
+          task,
+          snapshot: expect.objectContaining({
+            status: 'interrupted',
+            checkpoint: { step: 'chunk-12', updatedAt: 150 },
+          }),
+        },
+      ])
     })
 
     await act(async () => {
@@ -123,10 +127,12 @@ describe('Desktop App restart recovery evidence', () => {
     const assistant = makeAssistant(getTaskExecution)
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
     const afterRestart = new IndexedDbTaskRecoveryStore()
-    const hook = renderHook(() => useAiConversation('ws://daemon', null, projectId, {
-      taskRecoveryStore: afterRestart,
-      clock: fixedClock,
-    }))
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, projectId, {
+        taskRecoveryStore: afterRestart,
+        clock: fixedClock,
+      }),
+    )
 
     await waitFor(() => expect(getTaskExecution).toHaveBeenCalledWith(task.id))
     await waitFor(async () => {
@@ -180,13 +186,17 @@ describe('Desktop App restart recovery evidence', () => {
       .mockResolvedValueOnce({ client: first, connected: true })
       .mockResolvedValueOnce({ client: second, connected: true })
 
-    const hook = renderHook(() => useAiConversation('ws://daemon', null, projectId, {
-      taskRecoveryStore: store,
-      clock: fixedClock,
-    }))
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, projectId, {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
 
     await waitFor(() => expect(firstExecution).toHaveBeenCalledWith(task.id))
-    await waitFor(() => expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('running'))
+    await waitFor(() =>
+      expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('running'),
+    )
 
     await act(async () => {
       hook.result.current.reconnect()

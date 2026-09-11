@@ -1,4 +1,5 @@
-export type ArchetypeCategory = "character_archetype_36" | "mbti_matrix" | "narrative_motif_12" | "conflict_deck"
+export type ArchetypeCategory =
+  'character_archetype_36' | 'mbti_matrix' | 'narrative_motif_12' | 'conflict_deck'
 
 export interface NarrativeArchetypeRecord {
   id: string

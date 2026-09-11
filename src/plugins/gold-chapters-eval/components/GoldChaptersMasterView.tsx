@@ -27,7 +27,10 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
         // 自动提取前三章（黄金开篇前 4000 字）
         const firstThree = allChapters
           .slice(0, 3)
-          .map((c) => `【第 ${c.order} 章 · ${c.title}】\n${semanticTextFromContent(c.id, c.content || '', c.revision)}`)
+          .map(
+            (c) =>
+              `【第 ${c.order} 章 · ${c.title}】\n${semanticTextFromContent(c.id, c.content || '', c.revision)}`,
+          )
           .join('\n\n')
         setChaptersText(firstThree)
       }

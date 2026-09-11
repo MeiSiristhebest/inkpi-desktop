@@ -151,11 +151,27 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         <div className="flex items-center gap-2">
           <span className="font-semibold text-slate-500">地形笔刷：</span>
           {[
-            { id: 'land', label: '平原/大地', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-            { id: 'mountain', label: '山脉/险峰', color: 'bg-amber-100 text-amber-800 border-amber-300' },
+            {
+              id: 'land',
+              label: '平原/大地',
+              color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+            },
+            {
+              id: 'mountain',
+              label: '山脉/险峰',
+              color: 'bg-amber-100 text-amber-800 border-amber-300',
+            },
             { id: 'water', label: '江河/重洋', color: 'bg-blue-100 text-blue-800 border-blue-300' },
-            { id: 'city', label: '都城/宗门', color: 'bg-purple-100 text-purple-800 border-purple-300' },
-            { id: 'barrier', label: '天堑/禁地', color: 'bg-rose-100 text-rose-800 border-rose-300' },
+            {
+              id: 'city',
+              label: '都城/宗门',
+              color: 'bg-purple-100 text-purple-800 border-purple-300',
+            },
+            {
+              id: 'barrier',
+              label: '天堑/禁地',
+              color: 'bg-rose-100 text-rose-800 border-rose-300',
+            },
           ].map((t) => (
             <button
               key={t.id}
@@ -210,8 +226,12 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center">
           <div className="mb-3 text-xs text-slate-400 flex items-center gap-3">
             <span>点击任意单元格应用所选地形笔刷</span>
-            <span>起点: ({startPos.x},{startPos.y})</span>
-            <span>终点: ({targetPos.x},{targetPos.y})</span>
+            <span>
+              起点: ({startPos.x},{startPos.y})
+            </span>
+            <span>
+              终点: ({targetPos.x},{targetPos.y})
+            </span>
           </div>
 
           <div className="grid grid-cols-8 gap-1.5 p-3 bg-slate-100 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -219,7 +239,8 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               const isStart = cell.x === startPos.x && cell.y === startPos.y
               const isTarget = cell.x === targetPos.x && cell.y === targetPos.y
 
-              let bgClass = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 border-emerald-200'
+              let bgClass =
+                'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 border-emerald-200'
               if (cell.terrainType === 'mountain') {
                 bgClass = 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 border-amber-300'
               } else if (cell.terrainType === 'water') {
@@ -248,7 +269,9 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                   ) : cell.terrainType === 'mountain' ? (
                     <Mountain className="w-3.5 h-3.5" />
                   ) : (
-                    <span>{cell.x},{cell.y}</span>
+                    <span>
+                      {cell.x},{cell.y}
+                    </span>
                   )}
                 </button>
               )
@@ -300,7 +323,8 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               </div>
 
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                💡 测算结果可直接注入大纲时间线与多历法引擎，防止出现“上午还在边关、下午就飞到帝都”的战力/时空硬伤。
+                💡
+                测算结果可直接注入大纲时间线与多历法引擎，防止出现“上午还在边关、下午就飞到帝都”的战力/时空硬伤。
               </p>
             </div>
           </div>

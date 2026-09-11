@@ -126,9 +126,7 @@ export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = ({ projectI
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
             第 {chapterCount} 章
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            实时咬合全书三层推进时钟
-          </div>
+          <div className="text-[11px] text-slate-500 mt-1">实时咬合全书三层推进时钟</div>
         </div>
 
         <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -138,8 +136,8 @@ export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = ({ projectI
               stagnationReport.pacingPacingScore > 70
                 ? 'text-emerald-500'
                 : stagnationReport.pacingPacingScore > 50
-                ? 'text-amber-500'
-                : 'text-red-500'
+                  ? 'text-amber-500'
+                  : 'text-red-500'
             }`}
           >
             {stagnationReport.pacingPacingScore} / 100
@@ -235,9 +233,7 @@ export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = ({ projectI
             <div className="font-semibold text-slate-800 dark:text-slate-200">
               当前阶段：{beats.micro.phaseDescription}
             </div>
-            <div className="text-slate-500 leading-relaxed">
-              {beats.micro.recommendedAction}
-            </div>
+            <div className="text-slate-500 leading-relaxed">{beats.micro.recommendedAction}</div>
           </div>
           <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-400">
             设计准则：每 3 篇连载必须出现一次局部战术逆转或打脸兑现。
@@ -264,9 +260,7 @@ export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = ({ projectI
             <div className="font-semibold text-slate-800 dark:text-slate-200">
               当前阶段：{beats.meso.phaseDescription}
             </div>
-            <div className="text-slate-500 leading-relaxed">
-              {beats.meso.recommendedAction}
-            </div>
+            <div className="text-slate-500 leading-relaxed">{beats.meso.recommendedAction}</div>
           </div>
           <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-400">
             设计准则：每 10-15 章必须彻底打通一个支线或斩杀一名重要反派。
@@ -293,9 +287,7 @@ export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = ({ projectI
             <div className="font-semibold text-slate-800 dark:text-slate-200">
               当前阶段：{beats.macro.phaseDescription}
             </div>
-            <div className="text-slate-500 leading-relaxed">
-              {beats.macro.recommendedAction}
-            </div>
+            <div className="text-slate-500 leading-relaxed">{beats.macro.recommendedAction}</div>
           </div>
           <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-400">
             设计准则：整卷完结时必须换地图、大升级或重构世界地缘格局。

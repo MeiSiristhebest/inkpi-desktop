@@ -1,5 +1,5 @@
-export type MechanicalSwitchType = "blue" | "brown" | "vintage" | "silent"
-export type AmbienceType = "none" | "rain" | "campfire" | "temple"
+export type MechanicalSwitchType = 'blue' | 'brown' | 'vintage' | 'silent'
+export type AmbienceType = 'none' | 'rain' | 'campfire' | 'temple'
 
 export interface SoundscapeConfigRecord {
   projectId: string

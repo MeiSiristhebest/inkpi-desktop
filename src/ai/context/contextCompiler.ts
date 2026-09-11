@@ -31,7 +31,13 @@ export function compileCreativeContext(input: CreativeContextInput): CreativeCon
     revision: input.document.revision,
     text: input.document.text,
     selectionText: input.document.text.slice(selection.from, selection.to),
-    blocks: input.document.blocks.map(({ id, type, text, from, to }) => ({ id, type, text, from, to })),
+    blocks: input.document.blocks.map(({ id, type, text, from, to }) => ({
+      id,
+      type,
+      text,
+      from,
+      to,
+    })),
     neighboringDocuments: (input.neighboringDocuments || []).map((document) => ({
       documentId: document.documentId,
       revision: document.revision,

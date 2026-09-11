@@ -1,9 +1,9 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { indexedDbPovGuardRepository } from "../../../adapters/indexedDbPovGuardRepository"
-import { PovGuardEngine } from "../engine/PovGuardEngine"
-import type { PovAnalysisResult } from "../types"
-import { ShieldAlert, AlertTriangle, EyeOff } from "lucide-react"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { indexedDbPovGuardRepository } from '../../../adapters/indexedDbPovGuardRepository'
+import { PovGuardEngine } from '../engine/PovGuardEngine'
+import type { PovAnalysisResult } from '../types'
+import { ShieldAlert, AlertTriangle, EyeOff } from 'lucide-react'
 
 export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [result, setResult] = useState<PovAnalysisResult | null>(null)
@@ -17,24 +17,24 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
     const loadAndAudit = async () => {
       const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
       const latestSnapshot = snapshots[0]
-      const povChar = latestSnapshot?.povCharacterName || "林凡"
-      const povMode = latestSnapshot?.povMode || "third_limited"
+      const povChar = latestSnapshot?.povCharacterName || '林凡'
+      const povMode = latestSnapshot?.povMode || 'third_limited'
 
       const auditRes = PovGuardEngine.analyze(currentText, {
         povCharacter: povChar,
         povMode,
         allCharacters: latestSnapshot?.allowedCharacters || [
-          { characterId: "c1", characterName: povChar, knownSecretIds: [] },
-          { characterId: "c2", characterName: "苏雨柔", knownSecretIds: ["s-poison"] },
-          { characterId: "c3", characterName: "黑衣人", knownSecretIds: ["s-secret"] },
+          { characterId: 'c1', characterName: povChar, knownSecretIds: [] },
+          { characterId: 'c2', characterName: '苏雨柔', knownSecretIds: ['s-poison'] },
+          { characterId: 'c3', characterName: '黑衣人', knownSecretIds: ['s-secret'] },
         ],
         secrets: latestSnapshot?.secrets || [
           {
-            id: "s-poison",
-            title: "噬灵绝命丹",
-            confidentialityLevel: "top_secret",
+            id: 's-poison',
+            title: '噬灵绝命丹',
+            confidentialityLevel: 'top_secret',
             originChapterOrder: 1,
-            holders: ["苏雨柔"],
+            holders: ['苏雨柔'],
           },
         ],
       })
@@ -81,8 +81,12 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
                 className="p-2 rounded border bg-white dark:bg-slate-800 border-amber-200 dark:border-amber-900 space-y-1"
               >
                 <div className="flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
-                  {v.type === "head_hopping" ? <AlertTriangle className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                  <span>{v.type === "head_hopping" ? "越界偷窥心理" : "未解锁情报泄露"}</span>
+                  {v.type === 'head_hopping' ? (
+                    <AlertTriangle className="w-3 h-3" />
+                  ) : (
+                    <EyeOff className="w-3 h-3" />
+                  )}
+                  <span>{v.type === 'head_hopping' ? '越界偷窥心理' : '未解锁情报泄露'}</span>
                 </div>
                 <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300">
                   "{v.snippet}"

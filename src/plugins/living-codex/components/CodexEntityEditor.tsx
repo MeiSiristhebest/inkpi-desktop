@@ -62,10 +62,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
     const targetName = targetObj ? targetObj.name : newRelTarget
     const targetId = targetObj ? targetObj.id : newRelTarget
 
-    setRelations((prev) => [
-      ...prev,
-      { targetId, targetName, relationType: newRelType },
-    ])
+    setRelations((prev) => [...prev, { targetId, targetName, relationType: newRelType }])
     setNewRelTarget('')
   }
 
@@ -105,9 +102,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
     <div className="h-full flex flex-col bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden border-l border-[var(--ink-border)]">
       {/* 顶栏 */}
       <div className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)]">
-        <span className="text-[13px] font-medium">
-          {entity?.id ? '编辑实体档案' : '新建实体'}
-        </span>
+        <span className="text-[13px] font-medium">{entity?.id ? '编辑实体档案' : '新建实体'}</span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setIsTemplateModalOpen(true)}
@@ -134,7 +129,10 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
             <Save className="w-3.5 h-3.5" />
             {isSaving ? '保存中...' : '保存'}
           </button>
-          <button onClick={onClose} className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]">
+          <button
+            onClick={onClose}
+            className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -155,7 +153,9 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-[13px]">
         {/* 名称与别名 */}
         <div className="space-y-1">
-          <label className="text-[12px] font-medium text-[var(--ink-text-muted)]">实体主名称 *</label>
+          <label className="text-[12px] font-medium text-[var(--ink-text-muted)]">
+            实体主名称 *
+          </label>
           <input
             className="w-full px-3 py-1.5 bg-[var(--ink-bg-sidebar)] border border-[var(--ink-border)] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"
             value={name}
@@ -213,7 +213,9 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
 
         {/* 关联图谱关系 */}
         <div className="space-y-2 pt-2 border-t border-[var(--ink-border)]">
-          <label className="text-[12px] font-medium text-[var(--ink-text-muted)]">关联实体与关系</label>
+          <label className="text-[12px] font-medium text-[var(--ink-text-muted)]">
+            关联实体与关系
+          </label>
           <div className="space-y-1.5">
             {relations.map((rel, idx) => (
               <div
@@ -266,7 +268,9 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
 
         {/* 详细设定 Markdown */}
         <div className="space-y-1 pt-2 border-t border-[var(--ink-border)]">
-          <label className="text-[12px] font-medium text-[var(--ink-text-muted)]">完整设定详情 (Markdown)</label>
+          <label className="text-[12px] font-medium text-[var(--ink-text-muted)]">
+            完整设定详情 (Markdown)
+          </label>
           <textarea
             rows={6}
             className="w-full p-2 font-mono bg-[var(--ink-bg-sidebar)] border border-[var(--ink-border)] rounded text-[12px] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"

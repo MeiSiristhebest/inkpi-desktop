@@ -93,9 +93,13 @@ export const Bookshelf = ({
           </div>
           <h1 className="text-2xl font-bold text-[var(--ink-text)] tracking-tight flex items-baseline justify-center gap-2">
             InkPi
-            <span className="text-xs font-normal text-[var(--ink-text-muted)] border border-[var(--ink-border)] px-1.5 py-0.5 rounded-full">v0.1.0</span>
+            <span className="text-xs font-normal text-[var(--ink-text-muted)] border border-[var(--ink-border)] px-1.5 py-0.5 rounded-full">
+              v0.1.0
+            </span>
           </h1>
-          <p className="mt-2 text-[13px] text-[var(--ink-text-muted)] tracking-wide">AI 驱动的现代小说创作工作台</p>
+          <p className="mt-2 text-[13px] text-[var(--ink-text-muted)] tracking-wide">
+            AI 驱动的现代小说创作工作台
+          </p>
         </header>
 
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4 border-b border-[var(--ink-border)] pb-4">
@@ -143,8 +147,12 @@ export const Bookshelf = ({
         {projects.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[var(--ink-border-strong)] bg-[var(--ink-bg-panel)]/60 py-16 text-center shadow-xs">
             <BookPlus size={28} className="mx-auto text-[var(--ink-text-faint)] mb-3" />
-            <div className="text-[13px] text-[var(--ink-text)] font-medium">还没有作品，点击右上角「新建小说项目」开启第一本书</div>
-            <div className="mt-1.5 text-[11.5px] text-[var(--ink-text-muted)]">开启属于你的沉浸式创作旅程</div>
+            <div className="text-[13px] text-[var(--ink-text)] font-medium">
+              还没有作品，点击右上角「新建小说项目」开启第一本书
+            </div>
+            <div className="mt-1.5 text-[11.5px] text-[var(--ink-text-muted)]">
+              开启属于你的沉浸式创作旅程
+            </div>
           </div>
         ) : (
           <motion.div

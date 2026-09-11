@@ -51,7 +51,13 @@ describe('proposal state events', () => {
     )
     FakeBroadcastChannel.throwOnConstruct = true
 
-    expect(() => proposalStateEvents.publish({ ...event, workspaceId: 'workspace-fallback', projectId: 'project-fallback' })).not.toThrow()
+    expect(() =>
+      proposalStateEvents.publish({
+        ...event,
+        workspaceId: 'workspace-fallback',
+        projectId: 'project-fallback',
+      }),
+    ).not.toThrow()
     expect(listener).toHaveBeenCalledOnce()
     unsubscribe()
   })
@@ -61,9 +67,15 @@ describe('proposal state events', () => {
     const workspaceOnly = vi.fn()
     const otherWorkspace = vi.fn()
     const subscriptions = [
-      proposalStateEvents.subscribe({ workspaceId: 'workspace-1', projectId: 'project-1' }, matching),
+      proposalStateEvents.subscribe(
+        { workspaceId: 'workspace-1', projectId: 'project-1' },
+        matching,
+      ),
       proposalStateEvents.subscribe({ workspaceId: 'workspace-1' }, workspaceOnly),
-      proposalStateEvents.subscribe({ workspaceId: 'workspace-2', projectId: 'project-1' }, otherWorkspace),
+      proposalStateEvents.subscribe(
+        { workspaceId: 'workspace-2', projectId: 'project-1' },
+        otherWorkspace,
+      ),
     ]
 
     proposalStateEvents.publish(event)
@@ -77,7 +89,10 @@ describe('proposal state events', () => {
 
   it('accepts only valid external events for the subscribed scope', () => {
     const listener = vi.fn()
-    const unsubscribe = proposalStateEvents.subscribe({ workspaceId: 'workspace-1', projectId: 'project-1' }, listener)
+    const unsubscribe = proposalStateEvents.subscribe(
+      { workspaceId: 'workspace-1', projectId: 'project-1' },
+      listener,
+    )
     const channel = FakeBroadcastChannel.instances[FakeBroadcastChannel.instances.length - 1]
 
     channel?.emit(event)

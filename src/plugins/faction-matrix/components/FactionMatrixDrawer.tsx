@@ -6,9 +6,27 @@ import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodex
 import { Shield } from 'lucide-react'
 
 const DEFAULT_DEMO_FACTIONS: FactionNode[] = [
-  { id: 'f-xuanjian', name: '玄剑宗', type: 'righteous', powerTier: '正道七大派', protagonistReputation: 35 },
-  { id: 'f-zixia', name: '紫霞派', type: 'righteous', powerTier: '名门宗派', protagonistReputation: 15 },
-  { id: 'f-xuesha', name: '血煞门', type: 'demonic', powerTier: '魔道巨擘', protagonistReputation: -45 },
+  {
+    id: 'f-xuanjian',
+    name: '玄剑宗',
+    type: 'righteous',
+    powerTier: '正道七大派',
+    protagonistReputation: 35,
+  },
+  {
+    id: 'f-zixia',
+    name: '紫霞派',
+    type: 'righteous',
+    powerTier: '名门宗派',
+    protagonistReputation: 15,
+  },
+  {
+    id: 'f-xuesha',
+    name: '血煞门',
+    type: 'demonic',
+    powerTier: '魔道巨擘',
+    protagonistReputation: -45,
+  },
 ]
 
 export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
@@ -67,8 +85,14 @@ export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId })
                   <span className="font-semibold text-[var(--ink-text)] block">{f.name}</span>
                   <span className="text-[10px] text-[var(--ink-text-muted)]">{rep.desc}</span>
                 </div>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded border font-medium ${rep.badgeClass}`}>
-                  {rep.label} ({f.protagonistReputation > 0 ? `+${f.protagonistReputation}` : f.protagonistReputation})
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded border font-medium ${rep.badgeClass}`}
+                >
+                  {rep.label} (
+                  {f.protagonistReputation > 0
+                    ? `+${f.protagonistReputation}`
+                    : f.protagonistReputation}
+                  )
                 </span>
               </div>
             )

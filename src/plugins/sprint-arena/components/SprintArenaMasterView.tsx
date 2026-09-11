@@ -2,14 +2,7 @@ import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { SprintRecord } from '../types'
 import { indexedDbSprintRepository } from '../../../adapters/indexedDbSprintRepository'
-import {
-  Flame,
-  Clock,
-  Zap,
-  Trophy,
-  Trash2,
-  CheckCircle2,
-} from 'lucide-react'
+import { Flame, Clock, Zap, Trophy, Trash2, CheckCircle2 } from 'lucide-react'
 
 export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const [records, setRecords] = useState<SprintRecord[]>([])
@@ -79,7 +72,9 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
           <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] flex items-center justify-between">
             <div>
               <span className="text-[11px] text-[var(--ink-text-muted)] block">累计冲刺字数</span>
-              <span className="text-lg font-bold text-[var(--ink-text)]">{stats.totalWords} 字</span>
+              <span className="text-lg font-bold text-[var(--ink-text)]">
+                {stats.totalWords} 字
+              </span>
             </div>
             <Flame className="w-6 h-6 text-orange-500 opacity-80" />
           </div>
@@ -118,7 +113,9 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-xs text-[var(--ink-text-muted)]">加载冲刺战绩中...</div>
+          <div className="p-8 text-center text-xs text-[var(--ink-text-muted)]">
+            加载冲刺战绩中...
+          </div>
         ) : records.length === 0 ? (
           <div className="p-12 text-center text-xs text-[var(--ink-text-muted)]">
             暂无历史冲刺记录。打开写作台右侧「冲刺擂台」抽屉，开启你的第一次专注冲刺吧！
@@ -133,11 +130,11 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1">
                     <span className="text-sm font-bold text-[var(--ink-text)] flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      +{r.wordsWritten} 字
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />+{r.wordsWritten} 字
                     </span>
                     <span className="text-[10px] text-[var(--ink-text-muted)] block">
-                      时长: {Math.round(r.durationSeconds / 60)} 分钟 · {new Date(r.completedAt).toLocaleDateString('zh-CN')}
+                      时长: {Math.round(r.durationSeconds / 60)} 分钟 ·{' '}
+                      {new Date(r.completedAt).toLocaleDateString('zh-CN')}
                     </span>
                   </div>
 

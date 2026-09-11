@@ -60,9 +60,8 @@ import React from 'react'
 
 describe('usePluginRegistry hook & Provider coverage', () => {
   it('toggles, enables, and disables plugins via Provider', async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
       React.createElement(PluginProvider, null, children)
-    )
     const { result } = renderHook(() => usePluginRegistry(), { wrapper })
     expect(result.current.allPlugins.length).toBeGreaterThan(0)
     expect(result.current.isPluginEnabled('living-codex')).toBe(false)
@@ -98,4 +97,3 @@ describe('usePluginRegistry hook & Provider coverage', () => {
     expect(result.current.isPluginEnabled('custom-test-plugin')).toBe(true)
   })
 })
-

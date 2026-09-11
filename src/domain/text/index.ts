@@ -8,4 +8,8 @@ export {
   applyFindReplace,
 } from './contentFormatter'
 export { exportChapter, fontStackFor } from './chapterExporter'
-export { analyzeWordFrequency, type WordFrequencyItem, type WordAnalysisResult } from './wordFrequency'
+export {
+  analyzeWordFrequency,
+  type WordFrequencyItem,
+  type WordAnalysisResult,
+} from './wordFrequency'

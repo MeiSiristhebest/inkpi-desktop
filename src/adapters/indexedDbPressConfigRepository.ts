@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  PressExportConfigRecord,
-  PressConfigRepository,
-} from '../ports/pressConfigRepository'
+import type { PressExportConfigRecord, PressConfigRepository } from '../ports/pressConfigRepository'
 
 export const indexedDbPressConfigRepository: PressConfigRepository = {
   async get(projectId: string): Promise<PressExportConfigRecord | undefined> {

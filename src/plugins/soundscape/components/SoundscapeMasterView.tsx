@@ -1,35 +1,38 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbSoundscapeConfigRepository } from "../../../adapters/indexedDbSoundscapeConfigRepository"
-import { AudioSynthesizerEngine } from "../engine/AudioSynthesizerEngine"
-import type { MechanicalSwitchType, AmbienceType, SoundscapeConfigRecord } from "../types"
-import { Headphones, Volume2, VolumeX, CloudRain, Flame, Music, Sparkles } from "lucide-react"
-import { clock } from "../../../adapters/clock"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbSoundscapeConfigRepository } from '../../../adapters/indexedDbSoundscapeConfigRepository'
+import { AudioSynthesizerEngine } from '../engine/AudioSynthesizerEngine'
+import type { MechanicalSwitchType, AmbienceType, SoundscapeConfigRecord } from '../types'
+import { Headphones, Volume2, VolumeX, CloudRain, Flame, Music, Sparkles } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
 
 export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [synth] = useState(() => new AudioSynthesizerEngine())
-  const [switchType, setSwitchType] = useState<MechanicalSwitchType>("blue")
-  const [ambience, setAmbience] = useState<AmbienceType>("rain")
+  const [switchType, setSwitchType] = useState<MechanicalSwitchType>('blue')
+  const [ambience, setAmbience] = useState<AmbienceType>('rain')
   const [volumeKey, setVolumeKey] = useState(0.6)
   const [volumeAmbience, setVolumeAmbience] = useState(0.4)
   const [enabled, setEnabled] = useState(true)
   const [isAmbiencePlaying, setIsAmbiencePlaying] = useState(false)
 
   useEffect(() => {
-    indexedDbSoundscapeConfigRepository.get(projectId).then((cfg) => {
-      if (cfg) {
-        setSwitchType(cfg.switchType)
-        setAmbience(cfg.backgroundAmbience)
-        setVolumeKey(cfg.volumeKey)
-        setVolumeAmbience(cfg.volumeAmbience)
-        setEnabled(cfg.enabled)
-      }
-    }).catch(console.error)
+    indexedDbSoundscapeConfigRepository
+      .get(projectId)
+      .then((cfg) => {
+        if (cfg) {
+          setSwitchType(cfg.switchType)
+          setAmbience(cfg.backgroundAmbience)
+          setVolumeKey(cfg.volumeKey)
+          setVolumeAmbience(cfg.volumeAmbience)
+          setEnabled(cfg.enabled)
+        }
+      })
+      .catch(console.error)
   }, [projectId])
 
   useEffect(() => {
     onStats?.({
-      title: "键盘声学与白噪音伴奏",
+      title: '键盘声学与白噪音伴奏',
       wordCount: 0,
       updatedAt: clock.now(),
     })
@@ -40,7 +43,7 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
     nextAmb = ambience,
     nextVKey = volumeKey,
     nextVAmb = volumeAmbience,
-    nextEn = enabled
+    nextEn = enabled,
   ) => {
     const record: SoundscapeConfigRecord = {
       projectId,
@@ -76,7 +79,8 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             <span>机械键盘声学与白噪音伴奏 (Soundscape)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            纯 Web Audio API 物理声学建模，零音频文件依赖，高保真还原青轴/茶轴/打字机触感并伴奏沉浸白噪音
+            纯 Web Audio API
+            物理声学建模，零音频文件依赖，高保真还原青轴/茶轴/打字机触感并伴奏沉浸白噪音
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -87,11 +91,11 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
               saveConfig(switchType, ambience, volumeKey, volumeAmbience, next)
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-              enabled ? "bg-indigo-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-500"
+              enabled ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
             }`}
           >
             {enabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-            {enabled ? "声学系统已开启" : "声学系统已静音"}
+            {enabled ? '声学系统已开启' : '声学系统已静音'}
           </button>
         </div>
       </div>
@@ -104,13 +108,15 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
           </h3>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">选择轴体音效:</label>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              选择轴体音效:
+            </label>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { id: "blue", name: "清脆青轴 (Clicky)", desc: "高频瞬态冲击与金属簧片共鸣" },
-                { id: "brown", name: "微段落茶轴 (Tactile)", desc: "温润段落感，无刺耳高音" },
-                { id: "vintage", name: "古典打字机 (Vintage)", desc: "厚重机簧反弹与深沉腔体" },
-                { id: "silent", name: "静音红轴 (Silent)", desc: "极轻微阻尼轻叩" },
+                { id: 'blue', name: '清脆青轴 (Clicky)', desc: '高频瞬态冲击与金属簧片共鸣' },
+                { id: 'brown', name: '微段落茶轴 (Tactile)', desc: '温润段落感，无刺耳高音' },
+                { id: 'vintage', name: '古典打字机 (Vintage)', desc: '厚重机簧反弹与深沉腔体' },
+                { id: 'silent', name: '静音红轴 (Silent)', desc: '极轻微阻尼轻叩' },
               ].map((s) => (
                 <div
                   key={s.id}
@@ -121,8 +127,8 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                   }}
                   className={`p-3 rounded-lg border cursor-pointer transition text-xs ${
                     switchType === s.id
-                      ? "bg-white dark:bg-slate-800 border-indigo-500 shadow-sm"
-                      : "bg-transparent border-slate-300 dark:border-slate-800 opacity-60 hover:opacity-100"
+                      ? 'bg-white dark:bg-slate-800 border-indigo-500 shadow-sm'
+                      : 'bg-transparent border-slate-300 dark:border-slate-800 opacity-60 hover:opacity-100'
                   }`}
                 >
                   <div className="font-bold">{s.name}</div>
@@ -167,12 +173,14 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
           </h3>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">选择伴奏氛围:</label>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              选择伴奏氛围:
+            </label>
             <div className="grid grid-cols-3 gap-2 text-xs">
               {[
-                { id: "rain", name: "窗外暴雨", icon: CloudRain },
-                { id: "campfire", name: "壁炉炭火", icon: Flame },
-                { id: "temple", name: "古刹木鱼", icon: Music },
+                { id: 'rain', name: '窗外暴雨', icon: CloudRain },
+                { id: 'campfire', name: '壁炉炭火', icon: Flame },
+                { id: 'temple', name: '古刹木鱼', icon: Music },
               ].map((amb) => {
                 const Icon = amb.icon
                 return (
@@ -187,8 +195,8 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                     }}
                     className={`p-3 rounded-lg border text-center cursor-pointer transition ${
                       ambience === amb.id
-                        ? "bg-white dark:bg-slate-800 border-indigo-500 shadow-sm"
-                        : "bg-transparent border-slate-300 dark:border-slate-800 opacity-60"
+                        ? 'bg-white dark:bg-slate-800 border-indigo-500 shadow-sm'
+                        : 'bg-transparent border-slate-300 dark:border-slate-800 opacity-60'
                     }`}
                   >
                     <Icon className="w-5 h-5 mx-auto mb-1 text-indigo-500" />
@@ -226,11 +234,11 @@ export const SoundscapeMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             onClick={toggleAmbience}
             className={`w-full py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
               isAmbiencePlaying
-                ? "bg-rose-600 hover:bg-rose-700 text-white"
-                : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
             }`}
           >
-            {isAmbiencePlaying ? "停止播放白噪音" : "开始播放背景白噪音"}
+            {isAmbiencePlaying ? '停止播放白噪音' : '开始播放背景白噪音'}
           </button>
         </div>
       </div>

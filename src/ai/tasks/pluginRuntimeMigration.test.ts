@@ -202,7 +202,7 @@ const EXPECTED_BOUNDARIES = {
     runtimeTarget: 'desktop-local-engine',
     disposition: 'desktop-local-by-design',
   },
-  'soundscape': {
+  soundscape: {
     runtimeClass: 'ui-only',
     runtimeTarget: 'desktop-ui',
     disposition: 'desktop-local-by-design',
@@ -305,7 +305,9 @@ const EVIDENCE = Object.fromEntries(
   FIRST_PARTY_PLUGIN_IDS.map((pluginId) => [pluginId, pluginEvidence(pluginId)]),
 ) as Record<FirstPartyPluginId, ReturnType<typeof pluginEvidence>>
 
-const instructionIds = new Set(listPluginInstructionDefinitions().map((definition) => definition.id))
+const instructionIds = new Set(
+  listPluginInstructionDefinitions().map((definition) => definition.id),
+)
 const definitionIds = new Set(ALL_PLUGIN_DEFINITIONS.map((definition) => definition.id))
 const availablePluginIds = new Set(ALL_AVAILABLE_PLUGINS.map((plugin) => plugin.id))
 const definitionSource = readFileSync(DEFINITION_FILE, 'utf8')
@@ -513,7 +515,9 @@ describe('Phase 21 Desktop legacy AI cleanup', () => {
     expect(hostSource).toContain('createPluginAnalysisTask')
     expect(hostSource).toMatch(/runTask\s*\(/)
 
-    const pluginSources = FIRST_PARTY_PLUGIN_IDS.map((pluginId) => EVIDENCE[pluginId].source).join('\n')
+    const pluginSources = FIRST_PARTY_PLUGIN_IDS.map((pluginId) => EVIDENCE[pluginId].source).join(
+      '\n',
+    )
     expect(pluginSources).not.toMatch(/\b(?:generateText|generateObject|streamAi)\s*\(/)
     expect(pluginSources).not.toMatch(
       /(?:from|import)\s*['"](?:@inkpi\/ai|@ai-sdk\/|@anthropic-ai\/|@google\/|@mistralai\/)/,

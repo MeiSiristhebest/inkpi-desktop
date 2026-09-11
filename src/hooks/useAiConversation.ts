@@ -164,7 +164,9 @@ export function useAiConversation(
   const connectionSubscriptionRef = useRef<(() => void) | null>(null)
   const mountedRef = useRef(false)
   const workspaceIdRef = useRef(workspaceId)
-  const activeTasksRef = useRef(new Map<string, { projectId?: string; controller: AbortController; task: AiTask }>())
+  const activeTasksRef = useRef(
+    new Map<string, { projectId?: string; controller: AbortController; task: AiTask }>(),
+  )
   const recoveryRecordsRef = useRef<TaskRecoveryRecord[]>([])
 
   const [aiPanelOpen, setAiPanelOpen] = useState(initialPanelOpen)
@@ -335,14 +337,7 @@ export function useAiConversation(
     return () => {
       alive = false
     }
-  }, [
-    clockPort,
-    connectionEpoch,
-    isConnected,
-    replaceRecoveryRecords,
-    taskStore,
-    workspaceId,
-  ])
+  }, [clockPort, connectionEpoch, isConnected, replaceRecoveryRecords, taskStore, workspaceId])
 
   useEffect(() => {
     if (!workspaceId || !isConnected || !clientRef.current?.syncDomain) return

@@ -1,11 +1,11 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbVoicePreviewRepository } from "../../../adapters/indexedDbVoicePreviewRepository"
-import { VoicePreviewEngine } from "../engine/VoicePreviewEngine"
-import type { VoiceCastProfileRecord } from "../types"
-import { Volume2, Play, Square, Mic, Sliders, Users, Sparkles } from "lucide-react"
-import { clock } from "../../../adapters/clock"
-import { idGenerator } from "../../../adapters/idGenerator"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbVoicePreviewRepository } from '../../../adapters/indexedDbVoicePreviewRepository'
+import { VoicePreviewEngine } from '../engine/VoicePreviewEngine'
+import type { VoiceCastProfileRecord } from '../types'
+import { Volume2, Play, Square, Mic, Sliders, Users, Sparkles } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
+import { idGenerator } from '../../../adapters/idGenerator'
 
 const DEFAULT_CHAPTER_TEXT = `林凡冷笑道：“三十年河东，三十年河西，莫欺少年穷！今日退婚之耻，林某记下了。”
 赵家长老厉声喝道：“放肆！区区经脉尽断的废人，安敢在老夫面前狂妄自大，给我受死！”
@@ -31,24 +31,24 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
   useEffect(() => {
     onStats?.({
-      title: "角色有声对白试听器",
+      title: '角色有声对白试听器',
       wordCount: chapterText.length,
       updatedAt: clock.now(),
     })
   }, [chapterText, onStats])
 
   const handlePlayLine = (text: string, pitch = 1.0, rate = 1.0) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.pitch = pitch
     utterance.rate = rate
-    utterance.lang = "zh-CN"
+    utterance.lang = 'zh-CN'
     window.speechSynthesis.speak(utterance)
   }
 
   const handlePlayAll = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
     setIsPlaying(true)
 
@@ -62,11 +62,11 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
       const line = script.lines[current]
       setCurrentLineIndex(line.lineIndex)
       const utterance = new SpeechSynthesisUtterance(line.dialogueText)
-      utterance.lang = "zh-CN"
+      utterance.lang = 'zh-CN'
 
       // 匹配角色配置
       const profile = casts.find((c) => c.characterName === line.speakerName)
-      utterance.pitch = profile?.pitch || (line.emotion === "angry" ? 1.2 : 1.0)
+      utterance.pitch = profile?.pitch || (line.emotion === 'angry' ? 1.2 : 1.0)
       utterance.rate = profile?.rate || 1.0
 
       utterance.onend = () => {
@@ -84,7 +84,7 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
   }
 
   const handleStop = () => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel()
     }
     setIsPlaying(false)
@@ -97,12 +97,12 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
       const isElder = /(老|祖|宗主|尊|伯|父)/.test(speaker)
       const defaults = VoicePreviewEngine.deriveDefaultProfile(
         speaker,
-        isFemale ? "female" : "male",
-        isElder ? "elder" : "youth"
+        isFemale ? 'female' : 'male',
+        isElder ? 'elder' : 'youth',
       )
 
       const record: VoiceCastProfileRecord = {
-        id: idGenerator.generate("cast"),
+        id: idGenerator.generate('cast'),
         projectId,
         characterId: `char_${speaker}`,
         ...defaults,
@@ -177,7 +177,9 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                 <Mic className="w-4 h-4 text-emerald-500" />
                 <span>广播剧音轨台本 ({script.lines.length} 句)</span>
               </span>
-              <span className="text-xs text-slate-400">已识别人数: {script.characterSpeakers.length}</span>
+              <span className="text-xs text-slate-400">
+                已识别人数: {script.characterSpeakers.length}
+              </span>
             </h3>
 
             <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
@@ -186,8 +188,8 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                   key={line.lineIndex}
                   className={`p-3 rounded-lg border text-xs flex items-start justify-between gap-3 transition ${
                     currentLineIndex === line.lineIndex
-                      ? "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400"
-                      : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400'
+                      : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
                   }`}
                 >
                   <div className="space-y-1">
@@ -199,7 +201,9 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                         情绪: {line.emotion}
                       </span>
                     </div>
-                    <p className="text-slate-800 dark:text-slate-200 font-serif">“{line.dialogueText}”</p>
+                    <p className="text-slate-800 dark:text-slate-200 font-serif">
+                      “{line.dialogueText}”
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -236,29 +240,37 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                   <div className="flex items-center justify-between font-bold">
                     <span>{c.characterName}</span>
                     <span className="text-[10px] text-slate-400">
-                      {c.gender === "female" ? "女性" : "男性"} · {c.ageGroup}
+                      {c.gender === 'female' ? '女性' : '男性'} · {c.ageGroup}
                     </span>
                   </div>
 
                   <div className="space-y-1 text-[11px] text-slate-500">
                     <div className="flex justify-between">
                       <span>音调 (Pitch):</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">{c.pitch}x</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">
+                        {c.pitch}x
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>语速 (Rate):</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">{c.rate}x</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">
+                        {c.rate}x
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>DSP 滤波模式:</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">{c.timbreFilter}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        {c.timbreFilter}
+                      </span>
                     </div>
                   </div>
 
                   <div className="pt-2 flex justify-end">
                     <button
                       type="button"
-                      onClick={() => handlePlayLine(`${c.characterName}声音测试，请多指教。`, c.pitch, c.rate)}
+                      onClick={() =>
+                        handlePlayLine(`${c.characterName}声音测试，请多指教。`, c.pitch, c.rate)
+                      }
                       className="px-2.5 py-1 text-[10px] bg-slate-200 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white rounded transition flex items-center gap-1"
                     >
                       <Sliders className="w-3 h-3" /> 测试此音色
@@ -273,4 +285,3 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
     </div>
   )
 }
-

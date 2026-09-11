@@ -39,7 +39,8 @@ export const CombatSandboxDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
           <div className="p-2.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] space-y-2">
             <div className="flex items-center justify-between font-bold text-xs">
               <span className="text-blue-500 flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5" /> {activeDuel.protagonistName} ({activeDuel.protagonistTier})
+                <Zap className="w-3.5 h-3.5" /> {activeDuel.protagonistName} (
+                {activeDuel.protagonistTier})
               </span>
               <span className="text-stone-400">VS</span>
               <span className="text-rose-500 flex items-center gap-1">
@@ -54,7 +55,7 @@ export const CombatSandboxDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
                   width: `${Math.round(
                     (activeDuel.protagonistRankValue /
                       (activeDuel.protagonistRankValue + activeDuel.enemyRankValue)) *
-                      100
+                      100,
                   )}%`,
                 }}
               />
@@ -64,7 +65,7 @@ export const CombatSandboxDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
                   width: `${Math.round(
                     (activeDuel.enemyRankValue /
                       (activeDuel.protagonistRankValue + activeDuel.enemyRankValue)) *
-                      100
+                      100,
                   )}%`,
                 }}
               />
@@ -77,8 +78,8 @@ export const CombatSandboxDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
               activeDuel.breachAudit.riskLevel === 'CRITICAL_COLLAPSE'
                 ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
                 : activeDuel.breachAudit.riskLevel === 'WARNING'
-                ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
-                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
             }`}
           >
             <div className="font-bold flex items-center gap-1">
@@ -91,8 +92,8 @@ export const CombatSandboxDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
               {activeDuel.breachAudit.riskLevel === 'SAFE'
                 ? '通过'
                 : activeDuel.breachAudit.riskLevel === 'WARNING'
-                ? '越级预警'
-                : '严重崩坏'}
+                  ? '越级预警'
+                  : '严重崩坏'}
             </div>
             <p className="text-[10px] opacity-90">{activeDuel.breachAudit.diagnostic}</p>
           </div>

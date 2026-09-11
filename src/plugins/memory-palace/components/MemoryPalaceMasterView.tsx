@@ -139,7 +139,9 @@ export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               <div>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-base text-slate-900 dark:text-white">{r.entityName}</span>
+                    <span className="font-bold text-base text-slate-900 dark:text-white">
+                      {r.entityName}
+                    </span>
                     <span className="px-2 py-0.5 text-[10px] bg-slate-100 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-300">
                       {r.category}
                     </span>
@@ -153,13 +155,17 @@ export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                   <div>
                     <span className="text-slate-400 block text-[10px]">首次登场：</span>
                     <span className="font-medium text-slate-700 dark:text-slate-200 line-clamp-1">
-                      {r.firstAppearedChapter ? `第 ${r.firstAppearedChapter.order} 章 · ${r.firstAppearedChapter.title}` : '暂无正文提及'}
+                      {r.firstAppearedChapter
+                        ? `第 ${r.firstAppearedChapter.order} 章 · ${r.firstAppearedChapter.title}`
+                        : '暂无正文提及'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">最近一次登场：</span>
                     <span className="font-medium text-slate-700 dark:text-slate-200 line-clamp-1">
-                      {r.lastAppearedChapter ? `第 ${r.lastAppearedChapter.order} 章 · ${r.lastAppearedChapter.title}` : '暂无正文提及'}
+                      {r.lastAppearedChapter
+                        ? `第 ${r.lastAppearedChapter.order} 章 · ${r.lastAppearedChapter.title}`
+                        : '暂无正文提及'}
                     </span>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-export type LinterSeverity = "error" | "warning" | "info"
+export type LinterSeverity = 'error' | 'warning' | 'info'
 
 export interface LinterRuleConfig {
   ruleId: string

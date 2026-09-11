@@ -1,7 +1,4 @@
-import type {
-  MultiverseBranchRecord,
-  MultiverseNode,
-} from "../../ports/multiverseRepository"
+import type { MultiverseBranchRecord, MultiverseNode } from '../../ports/multiverseRepository'
 
 export type { MultiverseBranchRecord, MultiverseNode }
 
@@ -20,4 +17,3 @@ export interface MultiverseSimulationResult {
   nodes: MultiverseNode[]
   butterflyEffects: ButterflyEffectLog[]
 }
-

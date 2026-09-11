@@ -751,7 +751,13 @@ function normalizeTaskProgress(value: number | undefined): number | undefined {
 }
 
 function isTaskInFlight(status: TaskStatusSnapshot['status']): boolean {
-  return status === 'created' || status === 'queued' || status === 'running' || status === 'checkpointed' || status === 'interrupted'
+  return (
+    status === 'created' ||
+    status === 'queued' ||
+    status === 'running' ||
+    status === 'checkpointed' ||
+    status === 'interrupted'
+  )
 }
 
 function taskStatusLabel(status: TaskStatusSnapshot['status']): string {

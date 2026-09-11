@@ -3,14 +3,7 @@
 export type SenseType = 'sight' | 'sound' | 'scent' | 'taste' | 'touch' | 'metaphor'
 
 export type GenreType =
-  | 'all'
-  | 'xianxia'
-  | 'fantasy'
-  | 'scifi'
-  | 'urban'
-  | 'wuxia'
-  | 'horror'
-  | 'history'
+  'all' | 'xianxia' | 'fantasy' | 'scifi' | 'urban' | 'wuxia' | 'horror' | 'history'
 
 export interface SensorySnippet {
   id: string

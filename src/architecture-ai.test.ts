@@ -145,9 +145,7 @@ describe('AI Runtime Phase 0 Desktop architecture guards', () => {
         return [...matches].map((specifier) => `${relativeFile} -> ${specifier}`)
       })
       .sort()
-    expect(violations, `Desktop LLM provider imports:\n${violations.join('\n')}`).toEqual(
-      [],
-    )
+    expect(violations, `Desktop LLM provider imports:\n${violations.join('\n')}`).toEqual([])
   })
 
   it('React components do not add direct Prompt construction', () => {

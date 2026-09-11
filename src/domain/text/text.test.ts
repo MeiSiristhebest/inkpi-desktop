@@ -36,7 +36,9 @@ describe('formatChineseParagraphs — 中文段落一键缩进(HTML)', () => {
     expect(formatChineseParagraphs('第一行\n第二行')).toBe('<p>　　第一行</p><p>　　第二行</p>')
   })
   it('trims leading/trailing whitespace on each line', () => {
-    expect(formatChineseParagraphs('  第一行  \n  第二行  ')).toBe('<p>　　第一行</p><p>　　第二行</p>')
+    expect(formatChineseParagraphs('  第一行  \n  第二行  ')).toBe(
+      '<p>　　第一行</p><p>　　第二行</p>',
+    )
   })
   it('removes empty lines', () => {
     expect(formatChineseParagraphs('第一段\n\n\n第二段')).toBe('<p>　　第一段</p><p>　　第二段</p>')

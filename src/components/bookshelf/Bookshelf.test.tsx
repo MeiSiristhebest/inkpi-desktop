@@ -8,7 +8,9 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(screen.getByText('InkPi')).toBeInTheDocument()
     expect(screen.getByText('AI 驱动的现代小说创作工作台')).toBeInTheDocument()
     expect(screen.getByText(/我的作品 \(0\)/)).toBeInTheDocument()
-    expect(screen.getByText('还没有作品，点击右上角「新建小说项目」开启第一本书')).toBeInTheDocument()
+    expect(
+      screen.getByText('还没有作品，点击右上角「新建小说项目」开启第一本书'),
+    ).toBeInTheDocument()
   })
 
   it('渲染项目卡片并点击打开项目', () => {
@@ -16,7 +18,13 @@ describe('Bookshelf (InkPi 主页)', () => {
     render(
       <Bookshelf
         projects={[
-          { id: 'p1', name: '吞天神脉', genre: '东方玄幻', intro: '废脉？我吞的就是天！', updatedAt: Date.now() },
+          {
+            id: 'p1',
+            name: '吞天神脉',
+            genre: '东方玄幻',
+            intro: '废脉？我吞的就是天！',
+            updatedAt: Date.now(),
+          },
         ]}
         onOpenProject={onOpen}
         onCreateProject={vi.fn()}
@@ -46,13 +54,7 @@ describe('Bookshelf (InkPi 主页)', () => {
   })
 
   it('不渲染创建示范项目等外来冗余按钮', () => {
-    render(
-      <Bookshelf
-        projects={[]}
-        onOpenProject={vi.fn()}
-        onCreateProject={vi.fn()}
-      />,
-    )
+    render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={vi.fn()} />)
     expect(screen.queryByText('创建示范项目')).not.toBeInTheDocument()
   })
 
@@ -62,7 +64,15 @@ describe('Bookshelf (InkPi 主页)', () => {
     const onDelete = vi.fn()
     render(
       <Bookshelf
-        projects={[{ id: 'p1', name: '吞天神脉', genre: '东方玄幻', intro: '测试简介', updatedAt: Date.now() }]}
+        projects={[
+          {
+            id: 'p1',
+            name: '吞天神脉',
+            genre: '东方玄幻',
+            intro: '测试简介',
+            updatedAt: Date.now(),
+          },
+        ]}
         onOpenProject={vi.fn()}
         onCreateProject={vi.fn()}
         onExportProject={onExport}
@@ -99,4 +109,3 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(onDelete).toHaveBeenCalledWith('p1')
   })
 })
-

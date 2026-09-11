@@ -67,12 +67,23 @@ export class CapabilityRouter {
   select(task: AiTask): RouteDecision {
     const required = task.requirements?.capabilities || []
     const network = task.requirements?.network || 'optional'
-    const outputFormats = task.requirements?.outputFormats || (task.outputContract ? [task.outputContract.format] : [])
+    const outputFormats =
+      task.requirements?.outputFormats || (task.outputContract ? [task.outputContract.format] : [])
     const candidates = this.routes
       .filter((route) => network !== 'required' || route.online)
-      .filter((route) => network !== 'offline' || route.modelCapabilities?.offline === true || !route.modelCapabilities)
+      .filter(
+        (route) =>
+          network !== 'offline' ||
+          route.modelCapabilities?.offline === true ||
+          !route.modelCapabilities,
+      )
       .filter((route) => satisfiesModel(route, task, outputFormats))
-      .map((route) => ({ route, matchedCapabilities: required.filter((capability) => route.capabilities.includes(capability)) }))
+      .map((route) => ({
+        route,
+        matchedCapabilities: required.filter((capability) =>
+          route.capabilities.includes(capability),
+        ),
+      }))
       .filter(({ matchedCapabilities }) => matchedCapabilities.length === required.length)
       .map((candidate) => ({ ...candidate, score: routeScore(candidate.route) }))
       .sort((left, right) => {
@@ -81,7 +92,11 @@ export class CapabilityRouter {
       })
     const selected = candidates[0]
     if (!selected) throw new NoCapableRouteError(task)
-    return { route: cloneRoute(selected.route), matchedCapabilities: [...selected.matchedCapabilities], score: selected.score }
+    return {
+      route: cloneRoute(selected.route),
+      matchedCapabilities: [...selected.matchedCapabilities],
+      score: selected.score,
+    }
   }
 }
 
@@ -100,38 +115,68 @@ function satisfiesModel(route: RuntimeRoute, task: AiTask, outputFormats: string
   if (!capabilities) {
     return !requiresExplicitModelCapability(task, outputFormats)
   }
-  if ((requirements?.streaming === true || requirements?.needsStreaming === true) && capabilities.streaming !== true) return false
-  if ((task.executionPolicy?.strategy === 'reasoning' || requirements?.needsReasoning === true) && capabilities.reasoning !== true) return false
-  if ((requirements?.tools?.length || requirements?.needsTools === true) && capabilities.toolCalling !== true && capabilities.tools !== true) return false
-  if (requirements?.needsStructuredOutput === true && capabilities.structuredOutput !== true) return false
-  if (requirements?.modalities?.includes('vision') && capabilities.imageInput !== true && capabilities.vision !== true) return false
+  if (
+    (requirements?.streaming === true || requirements?.needsStreaming === true) &&
+    capabilities.streaming !== true
+  )
+    return false
+  if (
+    (task.executionPolicy?.strategy === 'reasoning' || requirements?.needsReasoning === true) &&
+    capabilities.reasoning !== true
+  )
+    return false
+  if (
+    (requirements?.tools?.length || requirements?.needsTools === true) &&
+    capabilities.toolCalling !== true &&
+    capabilities.tools !== true
+  )
+    return false
+  if (requirements?.needsStructuredOutput === true && capabilities.structuredOutput !== true)
+    return false
+  if (
+    requirements?.modalities?.includes('vision') &&
+    capabilities.imageInput !== true &&
+    capabilities.vision !== true
+  )
+    return false
   const minimumContext = requirements?.minContextTokens ?? requirements?.minimumContext
   if (minimumContext !== undefined && capabilities.maxContextTokens < minimumContext) return false
-  if (requirements?.maxLatencyMs !== undefined && capabilities.latencyMs !== undefined && capabilities.latencyMs > requirements.maxLatencyMs) return false
-  if (requirements?.maxCostUsd !== undefined && capabilities.costUsdPerMillionTokens !== undefined && capabilities.costUsdPerMillionTokens > requirements.maxCostUsd) return false
+  if (
+    requirements?.maxLatencyMs !== undefined &&
+    capabilities.latencyMs !== undefined &&
+    capabilities.latencyMs > requirements.maxLatencyMs
+  )
+    return false
+  if (
+    requirements?.maxCostUsd !== undefined &&
+    capabilities.costUsdPerMillionTokens !== undefined &&
+    capabilities.costUsdPerMillionTokens > requirements.maxCostUsd
+  )
+    return false
   return outputFormats.every((format) =>
     format === 'text'
       ? capabilities.text !== false
       : format === 'structured'
         ? capabilities.structuredOutput === true &&
           (task.outputContract?.schemaId === undefined || capabilities.jsonSchema === true)
-        : capabilities.patchOutput === true)
+        : capabilities.patchOutput === true,
+  )
 }
 
 function requiresExplicitModelCapability(task: AiTask, outputFormats: string[]): boolean {
   const requirements = task.requirements
   return Boolean(
     requirements?.streaming === true ||
-      requirements?.needsStreaming === true ||
-      requirements?.needsTools === true ||
-      requirements?.tools?.length ||
-      requirements?.needsStructuredOutput === true ||
-      requirements?.needsReasoning === true ||
-      task.executionPolicy?.strategy === 'reasoning' ||
-      requirements?.modalities?.includes('vision') ||
-      requirements?.minContextTokens !== undefined ||
-      requirements?.minimumContext !== undefined ||
-      outputFormats.some((format) => format === 'structured' || format === 'patch'),
+    requirements?.needsStreaming === true ||
+    requirements?.needsTools === true ||
+    requirements?.tools?.length ||
+    requirements?.needsStructuredOutput === true ||
+    requirements?.needsReasoning === true ||
+    task.executionPolicy?.strategy === 'reasoning' ||
+    requirements?.modalities?.includes('vision') ||
+    requirements?.minContextTokens !== undefined ||
+    requirements?.minimumContext !== undefined ||
+    outputFormats.some((format) => format === 'structured' || format === 'patch'),
   )
 }
 

@@ -7,10 +7,7 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import type { AiProposal } from '../ai/proposals/proposalLedger'
 import type { RpcClient } from '../ports/aiGateway'
-import {
-  createDaemonProposalSyncRemote,
-  proposalToProjectionState,
-} from './daemonDomainSyncRemote'
+import { createDaemonProposalSyncRemote, proposalToProjectionState } from './daemonDomainSyncRemote'
 
 const proposal: AiProposal = {
   id: 'proposal-1',
@@ -51,7 +48,10 @@ describe('daemon proposal sync adapter', () => {
       }
       return response as T
     })
-    const remote = createDaemonProposalSyncRemote({ request, close: vi.fn() } as unknown as RpcClient)
+    const remote = createDaemonProposalSyncRemote({
+      request,
+      close: vi.fn(),
+    } as unknown as RpcClient)
 
     await expect(remote.pushProposalState('workspace-1', proposal, 0)).resolves.toMatchObject({
       accepted: true,
@@ -68,7 +68,9 @@ describe('daemon proposal sync adapter', () => {
       proposal: state,
       stateHash: expect.any(String),
     })
-    expect(request).toHaveBeenNthCalledWith(2, 'proposal.sync.snapshot', { workspaceId: 'workspace-1' })
+    expect(request).toHaveBeenNthCalledWith(2, 'proposal.sync.snapshot', {
+      workspaceId: 'workspace-1',
+    })
   })
 
   it('preserves a revision conflict result for the review caller', async () => {
@@ -85,7 +87,10 @@ describe('daemon proposal sync adapter', () => {
         currentHash: 'current-snapshot-hash',
       } as ProposalSyncPushResult as T
     })
-    const remote = createDaemonProposalSyncRemote({ request, close: vi.fn() } as unknown as RpcClient)
+    const remote = createDaemonProposalSyncRemote({
+      request,
+      close: vi.fn(),
+    } as unknown as RpcClient)
 
     await expect(remote.pushProposalState('workspace-1', proposal, 2)).resolves.toMatchObject({
       accepted: false,
@@ -107,7 +112,10 @@ describe('daemon proposal sync adapter', () => {
         updatedAt: 20,
       } as T
     })
-    const remote = createDaemonProposalSyncRemote({ request, close: vi.fn() } as unknown as RpcClient)
+    const remote = createDaemonProposalSyncRemote({
+      request,
+      close: vi.fn(),
+    } as unknown as RpcClient)
 
     await expect(remote.snapshotProposals('workspace-1')).rejects.toThrow(
       'Domain proposal evidence range at index 0 is inverted',

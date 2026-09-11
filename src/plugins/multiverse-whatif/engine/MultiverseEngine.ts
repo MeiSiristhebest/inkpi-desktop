@@ -3,8 +3,7 @@ import type {
   MultiverseNode,
   MultiverseSimulationResult,
   ButterflyEffectLog,
-} from "../types"
-
+} from '../types'
 
 /**
  * MultiverseEngine (平行宇宙因果沙盒推演器引擎)
@@ -23,7 +22,7 @@ export class MultiverseEngine {
   public static simulateFork(
     canonChapters: Array<{ index: number; title: string; summary: string; entities: string[] }>,
     forkChapterIndex: number,
-    divergencePremise: string
+    divergencePremise: string,
   ): MultiverseSimulationResult {
     const nodes: MultiverseNode[] = []
     const butterflyEffects: ButterflyEffectLog[] = []
@@ -61,20 +60,23 @@ export class MultiverseEngine {
         // 3. 分歧之后的章节：非线性因果涟漪扩散
         const delta = ch.index - forkChapterIndex
         // 偏离度增长模型：D(t) = min(1.0, 0.35 + 0.15 * ln(1 + delta))
-        const divergence = Math.min(1.0, Math.round((0.35 + 0.18 * Math.log(1 + delta)) * 100) / 100)
-        
+        const divergence = Math.min(
+          1.0,
+          Math.round((0.35 + 0.18 * Math.log(1 + delta)) * 100) / 100,
+        )
+
         let branchSummary = `因第 ${forkChapterIndex} 章分歧演化：`
         const chapterEffects: string[] = []
 
         if (divergence >= 0.7) {
           branchSummary += `原著盟友反目成仇，宗门覆灭轨迹彻底改写，主角被迫踏上全新独行杀戮线。`
-          chapterEffects.push("【世界线重组】原著关键盟友阵亡或黑化")
+          chapterEffects.push('【世界线重组】原著关键盟友阵亡或黑化')
         } else if (divergence >= 0.5) {
           branchSummary += `主线情报断裂，敌对势力提前十年发动围剿，原定大比决战取消。`
-          chapterEffects.push("【蝴蝶效应】危机提前爆发，因果链断裂")
+          chapterEffects.push('【蝴蝶效应】危机提前爆发，因果链断裂')
         } else {
           branchSummary += `剧情微偏：配角势力未加入战场，主角孤身破阵，受暗伤隐患。`
-          chapterEffects.push("【局部异化】战局代价加剧")
+          chapterEffects.push('【局部异化】战局代价加剧')
         }
 
         nodes.push({
@@ -89,7 +91,7 @@ export class MultiverseEngine {
         butterflyEffects.push({
           chapterIndex: ch.index,
           rippleFactor: divergence,
-          description: chapterEffects[0] || "剧情渐进偏离",
+          description: chapterEffects[0] || '剧情渐进偏离',
           affectedCharacters: ch.entities,
         })
       }
@@ -112,14 +114,14 @@ export class MultiverseEngine {
     id: string,
     projectId: string,
     sim: MultiverseSimulationResult,
-    createdAt: number
+    createdAt: number,
   ): MultiverseBranchRecord {
     return {
       id,
       projectId,
       name: sim.branchName,
       forkChapterIndex: sim.forkChapterIndex,
-      divergencePremise: sim.butterflyEffects[0]?.description || "未知假设",
+      divergencePremise: sim.butterflyEffects[0]?.description || '未知假设',
       nodes: sim.nodes,
       createdAt,
     }

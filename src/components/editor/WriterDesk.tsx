@@ -18,10 +18,7 @@ import {
   Layers,
   Sparkles,
 } from 'lucide-react'
-import {
-  useOptionalPluginRegistry,
-  ALL_AVAILABLE_PLUGINS,
-} from '../../core/pluginRegistry'
+import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
 
 interface WriterDeskProps {
   projectId: string
@@ -366,9 +363,7 @@ export const WriterDesk: FC<WriterDeskProps> = ({
               const Icon = p.icon || Layers
               const isActive = activeDrawerId === p.id
               const title =
-                p.id === 'living-codex'
-                  ? '切换活体世界观随动抽屉'
-                  : `切换${p.name}随动抽屉`
+                p.id === 'living-codex' ? '切换活体世界观随动抽屉' : `切换${p.name}随动抽屉`
 
               return (
                 <button

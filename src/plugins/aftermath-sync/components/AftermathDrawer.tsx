@@ -1,16 +1,19 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginDrawerProps } from "../../../types/plugin"
-import { indexedDbAftermathRepository } from "../../../adapters/indexedDbAftermathRepository"
-import type { AftermathPatchRecord } from "../types"
-import { GitPullRequest } from "lucide-react"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginDrawerProps } from '../../../types/plugin'
+import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
+import type { AftermathPatchRecord } from '../types'
+import { GitPullRequest } from 'lucide-react'
 
 export const AftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
   const [pendingPatches, setPendingPatches] = useState<AftermathPatchRecord[]>([])
 
   useEffect(() => {
-    indexedDbAftermathRepository.getAll(projectId).then((all) => {
-      setPendingPatches(all.filter((p) => p.status === "pending"))
-    }).catch(console.error)
+    indexedDbAftermathRepository
+      .getAll(projectId)
+      .then((all) => {
+        setPendingPatches(all.filter((p) => p.status === 'pending'))
+      })
+      .catch(console.error)
   }, [projectId])
 
   return (
@@ -19,9 +22,7 @@ export const AftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => 
         <span className="font-bold flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
           <GitPullRequest className="w-4 h-4" /> 设定回写提案
         </span>
-        <span className="text-[10px] text-amber-500 font-bold">
-          {pendingPatches.length} 待确认
-        </span>
+        <span className="text-[10px] text-amber-500 font-bold">{pendingPatches.length} 待确认</span>
       </div>
 
       {pendingPatches.length === 0 ? (
@@ -37,7 +38,8 @@ export const AftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => 
                 <span className="text-emerald-500 font-normal">{p.propertyName}</span>
               </div>
               <div className="text-[11px] text-slate-500">
-                {p.beforeValue} ➔ <span className="font-semibold text-emerald-600">{p.afterValue}</span>
+                {p.beforeValue} ➔{' '}
+                <span className="font-semibold text-emerald-600">{p.afterValue}</span>
               </div>
             </div>
           ))}

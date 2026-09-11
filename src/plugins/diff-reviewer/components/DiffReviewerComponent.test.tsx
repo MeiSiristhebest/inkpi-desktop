@@ -23,13 +23,8 @@ describe('DiffReviewer UI Components', () => {
     expect(screen.getByText(/双栏 Plan\/Apply 审校与合并器/)).toBeDefined()
   })
 
-  it("DiffReviewerDrawer renders correctly with stats", () => {
-    render(
-      <DiffReviewerDrawer
-        projectId="p1"
-        currentText="林凡走在大街上。"
-      />
-    )
+  it('DiffReviewerDrawer renders correctly with stats', () => {
+    render(<DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />)
     expect(screen.getByText(/双栏审校随动/)).toBeDefined()
   })
 

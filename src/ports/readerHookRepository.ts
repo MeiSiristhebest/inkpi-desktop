@@ -1,10 +1,5 @@
 export type ReaderHookType =
-  | 'question'
-  | 'anomaly'
-  | 'crisis'
-  | 'battle_cut'
-  | 'epiphany'
-  | 'countdown'
+  'question' | 'anomaly' | 'crisis' | 'battle_cut' | 'epiphany' | 'countdown'
 
 export interface ReaderHookRecord {
   id: string

@@ -12,7 +12,8 @@ export class ReaderSimulatorEngine {
       alert: '⚠️ 检测到高烈度受辱/下跪情节，若无立即反杀暗示，极易触发读者怒弃！',
       persona: 'toxic_hunter' as const,
       author: '十年老书虫_退订狂魔',
-      generateComment: (snippet: string) => `这破剧情直接让主角下跪受辱？（“${snippet}”）作者你到底在写爽文还是写自虐？怒退订！`,
+      generateComment: (snippet: string) =>
+        `这破剧情直接让主角下跪受辱？（“${snippet}”）作者你到底在写爽文还是写自虐？怒退订！`,
     },
     {
       id: 'over_merciful',
@@ -21,7 +22,8 @@ export class ReaderSimulatorEngine {
       alert: '⚠️ 检测到放虎归山/无原则宽恕情节，容易引发杀伐果断受众强烈反弹。',
       persona: 'toxic_hunter' as const,
       author: '杀伐果断真爱党',
-      generateComment: (snippet: string) => `敌人杀人夺宝还要圣母原谅？（“${snippet}”）反派转头就叫老祖灭门，主角长点脑子吧！`,
+      generateComment: (snippet: string) =>
+        `敌人杀人夺宝还要圣母原谅？（“${snippet}”）反派转头就叫老祖灭门，主角长点脑子吧！`,
     },
     {
       id: 'crippled_nerf',
@@ -30,7 +32,8 @@ export class ReaderSimulatorEngine {
       alert: '⚠️ 检测到修为残废倒退情节，若无立即补偿爽点，代入感会剧烈受挫。',
       persona: 'pleasure_seeker' as const,
       author: '无敌推图流老哥',
-      generateComment: (snippet: string) => `好不容易升级又被废丹田？（“${snippet}”）这波毒点直接劝退，不想看抑郁倒退剧情！`,
+      generateComment: (snippet: string) =>
+        `好不容易升级又被废丹田？（“${snippet}”）这波毒点直接劝退，不想看抑郁倒退剧情！`,
     },
     {
       id: 'physics_collapse',
@@ -39,7 +42,8 @@ export class ReaderSimulatorEngine {
       alert: '⚠️ 疑似时空距离或战力跨度失真，容易被考据党纠错抓虫。',
       persona: 'logic_critic' as const,
       author: '修仙物理研究所所长',
-      generateComment: (snippet: string) => `时空战力完全崩塌（“${snippet}”），前文刚设定万里迢迢，转眼就到，战力体系崩了！`,
+      generateComment: (snippet: string) =>
+        `时空战力完全崩塌（“${snippet}”），前文刚设定万里迢迢，转眼就到，战力体系崩了！`,
     },
   ]
 
@@ -50,12 +54,14 @@ export class ReaderSimulatorEngine {
     {
       re: /(一剑破万法|杀伐果断|斩草除根|底牌尽出|神王陨落|全场死寂|震撼全场)/,
       author: '催更第一名',
-      generateComment: (snippet: string) => `卧槽！这波绝杀太帅了（“${snippet}”）！杀伐果断不废话，看得热血沸腾！`,
+      generateComment: (snippet: string) =>
+        `卧槽！这波绝杀太帅了（“${snippet}”）！杀伐果断不废话，看得热血沸腾！`,
     },
     {
       re: /(原来如此|伏笔|细思极恐|布局万载|惊天逆转|原来是你)/,
       author: '列文虎克看网文',
-      generateComment: (snippet: string) => `原来在这里收回了伏笔（“${snippet}”）！作者大纲功底真扎实，给大佬打赏！`,
+      generateComment: (snippet: string) =>
+        `原来在这里收回了伏笔（“${snippet}”）！作者大纲功底真扎实，给大佬打赏！`,
     },
   ]
 
@@ -143,7 +149,9 @@ export class ReaderSimulatorEngine {
     // 生成智能防杠建议
     const suggestions: string[] = []
     if (toxicityRaw > 40) {
-      suggestions.push('建议在主角受制环节增加“暗中留有绝对反制底牌/传音后手”的伏笔描写，削弱憋屈感。')
+      suggestions.push(
+        '建议在主角受制环节增加“暗中留有绝对反制底牌/传音后手”的伏笔描写，削弱憋屈感。',
+      )
     }
     if (logicRaw < 75) {
       suggestions.push('涉及大境界差距对决时，补充“法宝品阶压制”、“借用地脉大阵”等合理解释。')

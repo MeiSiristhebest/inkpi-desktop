@@ -6,14 +6,25 @@ import { compileStoryContext, createStoryContextProvider } from './storyContextC
 describe('story context compiler', () => {
   it('separates canonical facts from hypotheses and respects per-bucket maxItems', () => {
     let state = createStoryState(4)
-    for (const [id, factLevel] of [['fact-1', 'canonical-fact'], ['fact-2', 'canonical-fact'], ['guess-1', 'hypothesis']] as const) {
-      state = upsertEntity(state, createStoryEntity({
-        id,
-        kind: 'character',
-        name: id,
-        summary: `${id} summary`,
-        provenance: { sourceType: factLevel === 'canonical-fact' ? 'author' : 'ai-proposed', factLevel, confidence: 0.5 },
-      }))
+    for (const [id, factLevel] of [
+      ['fact-1', 'canonical-fact'],
+      ['fact-2', 'canonical-fact'],
+      ['guess-1', 'hypothesis'],
+    ] as const) {
+      state = upsertEntity(
+        state,
+        createStoryEntity({
+          id,
+          kind: 'character',
+          name: id,
+          summary: `${id} summary`,
+          provenance: {
+            sourceType: factLevel === 'canonical-fact' ? 'author' : 'ai-proposed',
+            factLevel,
+            confidence: 0.5,
+          },
+        }),
+      )
     }
 
     const context = compileStoryContext(state, { maxItems: 1 })!
@@ -26,15 +37,22 @@ describe('story context compiler', () => {
 
   it('omits hypotheses only when requested and lazily returns no fragment without state', () => {
     let state = createStoryState(5)
-    state = upsertEntity(state, createStoryEntity({
-      id: 'guess', kind: 'character', name: 'guess',
-      provenance: { sourceType: 'ai-proposed', factLevel: 'hypothesis' },
-    }))
+    state = upsertEntity(
+      state,
+      createStoryEntity({
+        id: 'guess',
+        kind: 'character',
+        name: 'guess',
+        provenance: { sourceType: 'ai-proposed', factLevel: 'hypothesis' },
+      }),
+    )
     const context = compileStoryContext(state, { includeHypotheses: false })!
     const provider = createStoryContextProvider(() => undefined)
 
     expect(context.hypotheses).toEqual([])
-    expect(provider.supports({ task: { contextPolicy: { includeProjectState: false } } })).toBe(false)
+    expect(provider.supports({ task: { contextPolicy: { includeProjectState: false } } })).toBe(
+      false,
+    )
     expect(provider.provide({ task: { contextPolicy: { metadata: {} } } })).toEqual([])
   })
 

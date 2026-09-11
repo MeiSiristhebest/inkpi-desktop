@@ -16,7 +16,7 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [options, setOptions] = useState<PressFormatOptions>(
-    PressForgeEngine.PRESETS['qidian-standard'].defaultOptions
+    PressForgeEngine.PRESETS['qidian-standard'].defaultOptions,
   )
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -199,7 +199,9 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   min={0}
                   max={4}
                   value={options.indentSpaces}
-                  onChange={(e) => setOptions({ ...options, indentSpaces: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setOptions({ ...options, indentSpaces: parseInt(e.target.value) || 0 })
+                  }
                   className="w-14 p-1 bg-slate-50 dark:bg-slate-900 border rounded text-center"
                 />
               </div>
@@ -211,7 +213,9 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   min={0}
                   max={3}
                   value={options.paragraphSpacing}
-                  onChange={(e) => setOptions({ ...options, paragraphSpacing: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setOptions({ ...options, paragraphSpacing: parseInt(e.target.value) || 0 })
+                  }
                   className="w-14 p-1 bg-slate-50 dark:bg-slate-900 border rounded text-center"
                 />
               </div>
@@ -230,7 +234,9 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 <input
                   type="checkbox"
                   checked={options.checkSensitiveWords}
-                  onChange={(e) => setOptions({ ...options, checkSensitiveWords: e.target.checked })}
+                  onChange={(e) =>
+                    setOptions({ ...options, checkSensitiveWords: e.target.checked })
+                  }
                   className="rounded text-cyan-600"
                 />
                 <span>开启平台违禁敏感词智能排查</span>

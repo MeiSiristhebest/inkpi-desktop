@@ -1,19 +1,19 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { ArchetypeEngine } from "../engine/ArchetypeEngine"
-import type { NarrativeArchetypeRecord, ArchetypeCategory, ChemistryResult } from "../types"
-import { Dna, Shuffle, Users, Swords } from "lucide-react"
-import { clock } from "../../../adapters/clock"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { ArchetypeEngine } from '../engine/ArchetypeEngine'
+import type { NarrativeArchetypeRecord, ArchetypeCategory, ChemistryResult } from '../types'
+import { Dna, Shuffle, Users, Swords } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
 
 export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const [engine] = useState(() => new ArchetypeEngine())
-  const [category, setCategory] = useState<ArchetypeCategory>("character_archetype_36")
+  const [category, setCategory] = useState<ArchetypeCategory>('character_archetype_36')
   const [drawnCards, setDrawnCards] = useState<NarrativeArchetypeRecord[]>([])
   const [chemistry, setChemistry] = useState<ChemistryResult | null>(null)
 
   useEffect(() => {
     onStats?.({
-      title: "人格原型与母题卡牌",
+      title: '人格原型与母题卡牌',
       wordCount: 0,
       updatedAt: clock.now(),
     })
@@ -39,7 +39,8 @@ export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => 
             <span>人格原型素材库与叙事母题卡牌 (ArchetypeCards)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            收录 36 经典戏剧人格原型、MBTI 16 极性张力对与 12 大英雄之旅母题，一键抽取注入对手戏戏剧张力
+            收录 36 经典戏剧人格原型、MBTI 16 极性张力对与 12
+            大英雄之旅母题，一键抽取注入对手戏戏剧张力
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -81,18 +82,29 @@ export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => 
                     {card.category}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{card.name}</h3>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                  {card.name}
+                </h3>
 
                 <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                  <div><span className="text-slate-400 font-semibold">核心渴望:</span> {card.coreDesire}</div>
-                  <div><span className="text-rose-500 font-semibold">阿喀琉斯之踵:</span> {card.fatalFlaw}</div>
+                  <div>
+                    <span className="text-slate-400 font-semibold">核心渴望:</span>{' '}
+                    {card.coreDesire}
+                  </div>
+                  <div>
+                    <span className="text-rose-500 font-semibold">阿喀琉斯之踵:</span>{' '}
+                    {card.fatalFlaw}
+                  </div>
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
                   <div className="text-[11px] text-slate-400 font-semibold">典型行为模式:</div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {card.typicalBehaviors.map((b, bIdx) => (
-                      <span key={bIdx} className="px-2 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                      <span
+                        key={bIdx}
+                        className="px-2 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                      >
                         {b}
                       </span>
                     ))}
@@ -114,7 +126,8 @@ export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => 
               </div>
 
               <div className="text-xs text-slate-300">
-                <span className="font-bold text-slate-400">核心伦理冲突:</span> {chemistry.coreEthicalConflict}
+                <span className="font-bold text-slate-400">核心伦理冲突:</span>{' '}
+                {chemistry.coreEthicalConflict}
               </div>
 
               <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-amber-200 font-serif leading-relaxed">

@@ -58,7 +58,7 @@ describe('MultiCalendar Components', () => {
       <MultiCalendarDrawer
         projectId="p1"
         currentText="那一年正是大炎天历三百年九月十五日，血月当空。"
-      />
+      />,
     )
 
     expect(screen.getByText(/多历法时间轴感知/)).toBeInTheDocument()

@@ -6,14 +6,7 @@ import { indexedDbSprintRepository } from '../../../adapters/indexedDbSprintRepo
 import { webAudioSynthesizer } from '../../../adapters/webAudioSynthesizer'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import {
-  Flame,
-  Play,
-  Square,
-  Volume2,
-  VolumeX,
-  Zap,
-} from 'lucide-react'
+import { Flame, Play, Square, Volume2, VolumeX, Zap } from 'lucide-react'
 
 const FLOW_LEVEL_NAMES: Record<FlowStateLevel, string> = {
   idle: '静止待命',
@@ -23,10 +16,7 @@ const FLOW_LEVEL_NAMES: Record<FlowStateLevel, string> = {
   zen_mode: '人键合一',
 }
 
-export const SprintArenaDrawer: FC<DesktopPluginDrawerProps> = ({
-  projectId,
-  currentText,
-}) => {
+export const SprintArenaDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [isActive, setIsActive] = useState(false)
   const [mode, setMode] = useState<'time' | 'word_count'>('time')
   const [targetMinutes, setTargetMinutes] = useState(15)
@@ -155,7 +145,11 @@ export const SprintArenaDrawer: FC<DesktopPluginDrawerProps> = ({
             className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)]"
             title={soundType === 'none' ? '开启按键音效' : '静音'}
           >
-            {soundType === 'none' ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-orange-500" />}
+            {soundType === 'none' ? (
+              <VolumeX className="w-3.5 h-3.5" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5 text-orange-500" />
+            )}
           </button>
         </div>
 
@@ -232,7 +226,9 @@ export const SprintArenaDrawer: FC<DesktopPluginDrawerProps> = ({
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-orange-500 flex items-center gap-1">
                 <Zap className="w-3.5 h-3.5 animate-pulse" />
-                <span>冲刺中 ({Math.floor(elapsedSeconds / 60)}分{elapsedSeconds % 60}秒)</span>
+                <span>
+                  冲刺中 ({Math.floor(elapsedSeconds / 60)}分{elapsedSeconds % 60}秒)
+                </span>
               </span>
               <button
                 onClick={handleFinishSprint}
@@ -260,7 +256,8 @@ export const SprintArenaDrawer: FC<DesktopPluginDrawerProps> = ({
         <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] text-center space-y-1">
           <span className="text-[10px] text-[var(--ink-text-muted)] block">当前实时手速</span>
           <div className="text-3xl font-black text-orange-500 font-mono tracking-tight">
-            {currentWpm} <span className="text-xs font-normal text-[var(--ink-text-muted)]">WPM</span>
+            {currentWpm}{' '}
+            <span className="text-xs font-normal text-[var(--ink-text-muted)]">WPM</span>
           </div>
           <div className="flex items-center justify-center gap-1 text-[11px] font-semibold text-[var(--ink-text)] pt-1">
             <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
@@ -283,7 +280,9 @@ export const SprintArenaDrawer: FC<DesktopPluginDrawerProps> = ({
 
         {/* 音效选择器 */}
         <div className="p-2.5 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] space-y-1.5">
-          <label className="text-[10px] text-[var(--ink-text-muted)] block">键盘击键音效算法：</label>
+          <label className="text-[10px] text-[var(--ink-text-muted)] block">
+            键盘击键音效算法：
+          </label>
           <div className="grid grid-cols-3 gap-1 text-[10px]">
             <button
               onClick={() => setSoundType('mechanical')}

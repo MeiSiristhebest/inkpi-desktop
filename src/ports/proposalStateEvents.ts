@@ -83,7 +83,10 @@ function getChannel(): ProposalStateChannel | undefined {
 
 function normalizeScope(scope: ProposalEventScope): ProposalEventScope | undefined {
   if (!scope || typeof scope.workspaceId !== 'string' || !scope.workspaceId.trim()) return undefined
-  if (scope.projectId !== undefined && (typeof scope.projectId !== 'string' || !scope.projectId.trim())) {
+  if (
+    scope.projectId !== undefined &&
+    (typeof scope.projectId !== 'string' || !scope.projectId.trim())
+  ) {
     return undefined
   }
   return {
@@ -96,7 +99,8 @@ function normalizeEvent(value: unknown): ProposalStateChangedEvent | undefined {
   if (!value || typeof value !== 'object') return undefined
   const candidate = value as Partial<ProposalStateChangedEvent>
   const scope = normalizeScope(candidate as ProposalEventScope)
-  if (!scope || typeof candidate.proposalId !== 'string' || !candidate.proposalId.trim()) return undefined
+  if (!scope || typeof candidate.proposalId !== 'string' || !candidate.proposalId.trim())
+    return undefined
   if (!isProposalStatus(candidate.status) || !isEventKind(candidate.kind)) return undefined
   if (candidate.updatedAt !== undefined && !Number.isFinite(candidate.updatedAt)) return undefined
 
@@ -110,17 +114,21 @@ function normalizeEvent(value: unknown): ProposalStateChangedEvent | undefined {
 }
 
 function matchesScope(event: ProposalStateChangedEvent, scope: ProposalEventScope): boolean {
-  return event.workspaceId === scope.workspaceId &&
+  return (
+    event.workspaceId === scope.workspaceId &&
     (scope.projectId === undefined || event.projectId === scope.projectId)
+  )
 }
 
 function isProposalStatus(value: unknown): value is ProposalStatus {
-  return value === 'pending' ||
+  return (
+    value === 'pending' ||
     value === 'accepted' ||
     value === 'rejected' ||
     value === 'stale' ||
     value === 'committed' ||
     value === 'undone'
+  )
 }
 
 function isEventKind(value: unknown): value is ProposalStateEventKind {

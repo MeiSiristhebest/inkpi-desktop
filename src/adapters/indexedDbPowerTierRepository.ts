@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  PowerTierSystem,
-  PowerTierRepository,
-} from '../ports/powerTierRepository'
+import type { PowerTierSystem, PowerTierRepository } from '../ports/powerTierRepository'
 
 export const indexedDbPowerTierRepository: PowerTierRepository = {
   async get(projectId: string): Promise<PowerTierSystem | null> {

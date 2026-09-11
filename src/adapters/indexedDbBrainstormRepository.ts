@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  BrainstormSparkRecord,
-  BrainstormRepository,
-} from '../ports/brainstormRepository'
+import type { BrainstormSparkRecord, BrainstormRepository } from '../ports/brainstormRepository'
 
 export const indexedDbBrainstormRepository: BrainstormRepository = {
   async getAll(projectId: string): Promise<BrainstormSparkRecord[]> {

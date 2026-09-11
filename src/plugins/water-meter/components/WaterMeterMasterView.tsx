@@ -25,7 +25,11 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             ? list.find((c) => c.id === hostContext.activeChapter?.id) || list[0]
             : list[0]
           setSelectedChapterId(defaultChap.id)
-      const text = semanticTextFromContent(defaultChap.id, defaultChap.content || '', defaultChap.revision)
+          const text = semanticTextFromContent(
+            defaultChap.id,
+            defaultChap.content || '',
+            defaultChap.revision,
+          )
           setInputText(text)
           setReport(waterMeterEngine.auditText(text))
         }

@@ -6,7 +6,9 @@ import { DaemonArtifactStore } from './daemonArtifactStore'
 
 describe('DaemonArtifactStore', () => {
   it('preserves desktop artifact metadata across Runtime RPC', async () => {
-    const request = vi.fn<RpcClient['request']>().mockResolvedValue({ saved: true, id: 'artifact-1' })
+    const request = vi
+      .fn<RpcClient['request']>()
+      .mockResolvedValue({ saved: true, id: 'artifact-1' })
     const store = new DaemonArtifactStore({ request, close: vi.fn() })
     const artifact = createArtifact()
 
@@ -48,7 +50,9 @@ describe('DaemonArtifactStore', () => {
       .mockResolvedValueOnce(runtimeArtifact)
     const store = new DaemonArtifactStore({ request, close: vi.fn() })
 
-    await expect(store.list('task-2')).resolves.toEqual([expect.objectContaining({ taskId: 'task-2' })])
+    await expect(store.list('task-2')).resolves.toEqual([
+      expect.objectContaining({ taskId: 'task-2' }),
+    ])
     await expect(store.listByType('creative.story-plan')).resolves.toEqual([
       expect.objectContaining({ kind: 'narrative.plan' }),
     ])

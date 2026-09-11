@@ -64,7 +64,7 @@ describe('CombatSandbox Components', () => {
       <CombatSandboxDrawer
         projectId="p1"
         currentText="韩立祭出法宝，与王蝉少主展开激烈交手对轰！"
-      />
+      />,
     )
 
     expect(screen.getByText(/战力对招随动感知/)).toBeInTheDocument()

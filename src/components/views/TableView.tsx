@@ -1,15 +1,15 @@
-import React from 'react';
-import type { TableRowRecord } from '../../types';
-import type { TableRecordRepository } from '../../ports/tableRecordRepository';
-import { useTableViewModel } from '../../hooks/useTableViewModel';
-import { Plus, Trash2, Edit2, X, Check } from 'lucide-react';
-import { confirmDialog } from '../../adapters/confirmDialog';
+import React from 'react'
+import type { TableRowRecord } from '../../types'
+import type { TableRecordRepository } from '../../ports/tableRecordRepository'
+import { useTableViewModel } from '../../hooks/useTableViewModel'
+import { Plus, Trash2, Edit2, X, Check } from 'lucide-react'
+import { confirmDialog } from '../../adapters/confirmDialog'
 
 export interface TableViewProps {
-  projectId: string;
-  tabId: string;
-  tabMeta: any;
-  repository?: TableRecordRepository;
+  projectId: string
+  tabId: string
+  tabMeta: any
+  repository?: TableRecordRepository
 }
 
 export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta, repository }) => {
@@ -27,14 +27,14 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
     tabId,
     codeRule: tabMeta?.codeRule,
     repository,
-  });
+  })
 
-  const columns = tabMeta?.columns || [{ name: '名称' }, { name: '说明' }];
+  const columns = tabMeta?.columns || [{ name: '名称' }, { name: '说明' }]
 
   const handleDelete = async (id: string) => {
-    if (!(await confirmDialog.confirm('确定删除该行记录？'))) return;
-    await deleteRow(id);
-  };
+    if (!(await confirmDialog.confirm('确定删除该行记录？'))) return
+    await deleteRow(id)
+  }
 
   return (
     <div className="flex-1 h-screen flex flex-col justify-between bg-[var(--ink-bg)] text-[var(--ink-text)] p-6 select-none overflow-hidden">
@@ -42,7 +42,9 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
         <div className="flex items-center justify-between pb-4 border-b border-[var(--ink-border)]">
           <div>
             <h2 className="text-lg font-bold">{tabMeta?.name || '设定台账'}</h2>
-            <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">{tabMeta?.description || '台账记录与管理'}</p>
+            <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
+              {tabMeta?.description || '台账记录与管理'}
+            </p>
           </div>
           <button
             onClick={createRow}
@@ -70,7 +72,10 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
               <tbody className="divide-y divide-[var(--ink-border)]">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={columns.length + 2} className="p-8 text-center text-[var(--ink-text-muted)] text-xs">
+                    <td
+                      colSpan={columns.length + 2}
+                      className="p-8 text-center text-[var(--ink-text-muted)] text-xs"
+                    >
                       暂无记录，点击右上角「新增行记录」添加
                     </td>
                   </tr>
@@ -87,7 +92,10 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
                           {row.data[col.name] !== undefined ? String(row.data[col.name]) : '-'}
                         </td>
                       ))}
-                      <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td
+                        className="p-3 text-right whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => setEditingRow({ ...row })}
@@ -142,10 +150,12 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
 
             <div className="flex-1 overflow-y-auto py-4 space-y-3 pr-1">
               {columns.map((col: any, idx: number) => {
-                const val = editingRow.data[col.name] || '';
+                const val = editingRow.data[col.name] || ''
                 return (
                   <div key={idx} className="space-y-1">
-                    <label className="text-xs font-semibold text-[var(--ink-text)]">{col.name}</label>
+                    <label className="text-xs font-semibold text-[var(--ink-text)]">
+                      {col.name}
+                    </label>
                     {col.options ? (
                       <select
                         value={val}
@@ -178,7 +188,7 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
                       />
                     )}
                   </div>
-                );
+                )
               })}
             </div>
 
@@ -201,5 +211,5 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
         </div>
       )}
     </div>
-  );
-};
+  )
+}

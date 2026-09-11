@@ -1,8 +1,5 @@
 import { db } from '../db/indexedDB'
-import type {
-  VolumeArcRecord,
-  VolumeArcRepository,
-} from '../ports/volumeArcRepository'
+import type { VolumeArcRecord, VolumeArcRepository } from '../ports/volumeArcRepository'
 
 export const indexedDbVolumeArcRepository: VolumeArcRepository = {
   async getAll(projectId: string): Promise<VolumeArcRecord[]> {

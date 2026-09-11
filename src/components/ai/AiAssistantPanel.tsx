@@ -32,7 +32,11 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
           AI 副驾驶
         </span>
-        <button onClick={onClose} title="收起" className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150">
+        <button
+          onClick={onClose}
+          title="收起"
+          className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150"
+        >
           <X className="w-3.5 h-3.5" />
         </button>
       </div>

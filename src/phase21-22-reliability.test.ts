@@ -153,7 +153,9 @@ describe('Phase 21/22 local reliability boundaries', () => {
     const task = createContinueTask({ taskId: 'offline-unavailable', document })
     task.requirements = { ...task.requirements, network: 'offline' }
 
-    await expect(intelligence.run(task, { pollIntervalMs: 0 })).rejects.toBeInstanceOf(NoCapableRouteError)
+    await expect(intelligence.run(task, { pollIntervalMs: 0 })).rejects.toBeInstanceOf(
+      NoCapableRouteError,
+    )
     expect(harness.submitted).toHaveLength(0)
   })
 

@@ -53,7 +53,9 @@ describe('CodexMasterView Component', () => {
     fireEvent.click(loadXianxiaBtn)
 
     // 应该灌入陈渊、青岚宗、青铜小塔等
-    expect(await screen.findByText('废脉觉醒吞天神体的男主，行事果决沉稳，不信天命，深藏不露。')).toBeInTheDocument()
+    expect(
+      await screen.findByText('废脉觉醒吞天神体的男主，行事果决沉稳，不信天命，深藏不露。'),
+    ).toBeInTheDocument()
     expect(screen.getByText(/已载入 8 个实体/)).toBeInTheDocument()
   })
 

@@ -95,24 +95,22 @@ export const ReaderSimulatorDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
                     c.sentiment === 'toxic_alert'
                       ? 'bg-red-500/20 text-red-500'
                       : c.sentiment === 'criticism'
-                      ? 'bg-amber-500/20 text-amber-500'
-                      : 'bg-emerald-500/20 text-emerald-500'
+                        ? 'bg-amber-500/20 text-amber-500'
+                        : 'bg-emerald-500/20 text-emerald-500'
                   }`}
                 >
                   {c.sentiment === 'toxic_alert'
                     ? '毒点弃书'
                     : c.sentiment === 'criticism'
-                    ? '逻辑质疑'
-                    : '爽快催更'}
+                      ? '逻辑质疑'
+                      : '爽快催更'}
                 </span>
               </div>
               <p className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">
                 “{c.commentText}”
               </p>
               <div className="pt-1 flex items-center justify-between border-t border-[var(--ink-border)]/50">
-                <span className="text-[9px] text-[var(--ink-text-muted)]">
-                  点赞: {c.upvotes}
-                </span>
+                <span className="text-[9px] text-[var(--ink-text-muted)]">点赞: {c.upvotes}</span>
                 <button
                   onClick={() => handleCopyComment(c.commentText, idx)}
                   className="p-1 rounded hover:bg-[var(--ink-bg-panel)] text-[var(--ink-text-muted)] transition"

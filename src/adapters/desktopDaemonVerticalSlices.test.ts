@@ -99,7 +99,9 @@ describe('Desktop ↔ InkPi daemon vertical slice integration', () => {
         expect(progress.map((snapshot) => snapshot.status)).toContain('completed')
         expect(result.artifactIds?.length).toBeGreaterThan(0)
 
-        const persisted = await client.request<TaskStatusSnapshot>('task.status', { taskId: task.id })
+        const persisted = await client.request<TaskStatusSnapshot>('task.status', {
+          taskId: task.id,
+        })
         expect(persisted).toMatchObject({
           taskId: task.id,
           kind: task.kind,
@@ -148,7 +150,9 @@ function waitForDaemonReady(child: ChildProcess): Promise<DaemonReadyMessage> {
     let stderr = ''
     let settled = false
     const timeout = setTimeout(() => {
-      finishReject(new Error(`Timed out waiting for daemon fixture. stdout=${stdout} stderr=${stderr}`))
+      finishReject(
+        new Error(`Timed out waiting for daemon fixture. stdout=${stdout} stderr=${stderr}`),
+      )
     }, 20_000)
 
     const finishResolve = (message: DaemonReadyMessage) => {

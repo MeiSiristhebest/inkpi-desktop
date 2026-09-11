@@ -8,7 +8,10 @@ import { projectContent } from '../../domain/content'
 import { clock } from '../../adapters/clock'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
-import { projectContinuityFindingsToEditor, type ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
+import {
+  projectContinuityFindingsToEditor,
+  type ContinuityDiagnosticMarker,
+} from '../../ai/results/continuityDiagnostics'
 import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
 import type { SemanticDocument } from '../../domain/content'
 import type {
@@ -33,11 +36,19 @@ interface CreativeWorkflowsPanelProps {
   connected: boolean
   onContinuityAudit: (
     input: ContinuityAuditTaskInput,
-    options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void },
+    options?: {
+      signal?: AbortSignal
+      pollIntervalMs?: number
+      onProgress?: (snapshot: TaskStatusSnapshot) => void
+    },
   ) => Promise<ContinuityFinding[] | null>
   onDeepReasoning: (
     input: DeepReasoningTaskInput,
-    options?: { signal?: AbortSignal; pollIntervalMs?: number; onProgress?: (snapshot: TaskStatusSnapshot) => void },
+    options?: {
+      signal?: AbortSignal
+      pollIntervalMs?: number
+      onProgress?: (snapshot: TaskStatusSnapshot) => void
+    },
   ) => Promise<DeepReasoningResult | null>
   onDistillationWorkflow: (
     input: ProjectDistillationInput,
@@ -271,7 +282,9 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
               kind: 'narrative.project.distill',
               status: completedChunks === totalChunks ? 'completed' : 'running',
               progress: totalChunks ? completedChunks / totalChunks : 0,
-              checkpoint: failedChunks.length ? { step: 'retry-failed-chunks', updatedAt: clock.now() } : undefined,
+              checkpoint: failedChunks.length
+                ? { step: 'retry-failed-chunks', updatedAt: clock.now() }
+                : undefined,
             }),
         },
       )
@@ -307,21 +320,44 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   }
 
   return (
-    <section data-testid="creative-workflows-panel" className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-3">
+    <section
+      data-testid="creative-workflows-panel"
+      className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-3"
+    >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[13px] font-medium">
           <Activity className="h-3.5 w-3.5 text-[var(--ink-accent)]" /> 创作工作流
         </div>
-        <span className="text-[10px] text-[var(--ink-text-faint)]">{connected ? 'Runtime 已连接' : '离线'}</span>
+        <span className="text-[10px] text-[var(--ink-text-faint)]">
+          {connected ? 'Runtime 已连接' : '离线'}
+        </span>
       </div>
       <div className="mb-2 grid grid-cols-3 gap-1">
-        <TabButton active={tab === 'audit'} onClick={() => setTab('audit')}><Activity className="h-3 w-3" />连续性</TabButton>
-        <TabButton active={tab === 'reason'} onClick={() => setTab('reason')}><Brain className="h-3 w-3" />深度推理</TabButton>
-        <TabButton active={tab === 'distill'} onClick={() => setTab('distill')}><Database className="h-3 w-3" />项目提炼</TabButton>
+        <TabButton active={tab === 'audit'} onClick={() => setTab('audit')}>
+          <Activity className="h-3 w-3" />
+          连续性
+        </TabButton>
+        <TabButton active={tab === 'reason'} onClick={() => setTab('reason')}>
+          <Brain className="h-3 w-3" />
+          深度推理
+        </TabButton>
+        <TabButton active={tab === 'distill'} onClick={() => setTab('distill')}>
+          <Database className="h-3 w-3" />
+          项目提炼
+        </TabButton>
       </div>
       {tab !== 'distill' && (
-        <select aria-label="选择章节" value={selectedChapterId} onChange={(event) => setSelectedChapterId(event.target.value)} className="mb-2 w-full rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs">
-          {chapters.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
+        <select
+          aria-label="选择章节"
+          value={selectedChapterId}
+          onChange={(event) => setSelectedChapterId(event.target.value)}
+          className="mb-2 w-full rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs"
+        >
+          {chapters.map((chapter) => (
+            <option key={chapter.id} value={chapter.id}>
+              {chapter.title}
+            </option>
+          ))}
         </select>
       )}
       <motion.button
@@ -468,14 +504,6 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           )}
         </div>
       )}
-      {busy && <button type="button" onClick={() => activeController.current?.abort()} className="mt-2 flex items-center gap-1 text-xs text-rose-500"><Square className="h-3 w-3" />取消{tab === 'audit' ? '审计' : tab === 'reason' ? '深度推理' : '项目提炼'}</button>}
-      {progress?.status === 'waiting-user' && <div data-testid="workflow-waiting-user" className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 p-1.5 text-xs text-amber-600">Runtime 等待人工输入，可继续提供 steering。</div>}
-      {progress && <div data-testid="workflow-progress" className="mt-2 text-[11px] text-[var(--ink-text-faint)]">{Math.round((progress.progress ?? 0) * 100)}% · {progress.status}</div>}
-      {error && <div role="alert" className="mt-2 text-xs text-rose-500">{error}</div>}
-      {tab === 'audit' && auditMarkers.length > 0 && <div data-testid="continuity-findings" className="mt-2 space-y-1">{auditMarkers.map((marker) => <div key={marker.findingId} data-testid="continuity-diagnostic" data-finding-id={marker.findingId} data-location-kind={marker.locationStatus} className="rounded border border-[var(--ink-border)] p-1.5 text-xs"><div><span className="mr-1 font-medium">{marker.severity}</span>{marker.description}</div>{marker.locations.length > 0 ? <div className="mt-1 flex flex-wrap gap-1" aria-label="编辑器诊断位置">{marker.locations.map((location) => <span key={`${marker.findingId}-${location.blockId}`} data-testid="continuity-diagnostic-location" data-block-id={location.blockId} data-semantic-from={location.semanticFrom} data-semantic-to={location.semanticTo} data-editor-from={location.editorFrom} data-editor-to={location.editorTo} className="rounded bg-[var(--ink-bg-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--ink-text-faint)]">编辑器位置 {location.editorFrom}–{location.editorTo}</span>)}</div> : <span data-testid="continuity-diagnostic-unlocated" className="mt-1 inline-block text-[10px] text-[var(--ink-text-faint)]">未定位到编辑器位置</span>}</div>)}</div>}
-      {tab === 'audit' && !busy && auditMarkers.length === 0 && <p className="mt-2 text-xs text-[var(--ink-text-faint)]">暂无诊断结果。</p>}
-      {tab === 'reason' && deepResult && <div data-testid="deep-reasoning-result" className="mt-2 space-y-1 text-xs"><p>{deepResult.answer}</p>{deepResult.risks.length > 0 && <p className="text-rose-500">风险：{deepResult.risks.join('；')}</p>}</div>}
-      {tab === 'distill' && distillation && <div data-testid="distillation-result" className="mt-2 space-y-1 text-xs"><p>{distillation.facts.summary}</p><p className="text-[var(--ink-text-faint)]">{distillation.completedChunks}/{distillation.totalChunks} chunks · 实体 {distillation.facts.entities.length} · 事件 {distillation.facts.events.length} · 伏笔 {distillation.facts.promises.length}</p>{distillation.failedChunks.length > 0 && <p className="text-amber-500">待重试：{distillation.failedChunks.length}</p>}</div>}
     </section>
   )
 }

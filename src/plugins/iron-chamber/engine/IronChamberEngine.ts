@@ -1,8 +1,4 @@
-import type {
-  ChamberStatus,
-  IronChamberRecord,
-  LockProgress,
-} from "../types"
+import type { ChamberStatus, IronChamberRecord, LockProgress } from '../types'
 
 /**
  * IronChamberEngine (黑曜石小黑屋锁定器引擎)
@@ -19,7 +15,7 @@ export class IronChamberEngine {
   public static calculateProgress(
     record: IronChamberRecord,
     currentWordCount: number,
-    nowMs: number
+    nowMs: number,
   ): LockProgress {
     const deltaWords = Math.max(0, currentWordCount - record.startWords)
     const elapsedSeconds = Math.max(0, Math.floor((nowMs - record.pledgedAt) / 1000))
@@ -31,16 +27,14 @@ export class IronChamberEngine {
         : 100
 
     const timePercentage =
-      targetSeconds > 0
-        ? Math.min(100, Math.round((elapsedSeconds / targetSeconds) * 100))
-        : 100
+      targetSeconds > 0 ? Math.min(100, Math.round((elapsedSeconds / targetSeconds) * 100)) : 100
 
     let isFulfilled = false
-    if (record.mode === "words") {
+    if (record.mode === 'words') {
       isFulfilled = deltaWords >= record.targetWords
-    } else if (record.mode === "minutes") {
+    } else if (record.mode === 'minutes') {
       isFulfilled = elapsedSeconds >= targetSeconds
-    } else if (record.mode === "dual") {
+    } else if (record.mode === 'dual') {
       isFulfilled = deltaWords >= record.targetWords && elapsedSeconds >= targetSeconds
     }
 
@@ -61,27 +55,27 @@ export class IronChamberEngine {
   public static transitionToUnlock(
     record: IronChamberRecord,
     currentWordCount: number,
-    nowMs: number
+    nowMs: number,
   ): { nextStatus: ChamberStatus; canUnlock: boolean; message: string } {
-    if (record.status !== "locked") {
+    if (record.status !== 'locked') {
       return {
         nextStatus: record.status,
         canUnlock: true,
-        message: "当前不在锁定状态",
+        message: '当前不在锁定状态',
       }
     }
 
     const progress = this.calculateProgress(record, currentWordCount, nowMs)
     if (progress.isFulfilled) {
       return {
-        nextStatus: "completed",
+        nextStatus: 'completed',
         canUnlock: true,
-        message: "恭喜！契约目标已圆满达成，小黑屋门禁已安全解除。",
+        message: '恭喜！契约目标已圆满达成，小黑屋门禁已安全解除。',
       }
     }
 
     return {
-      nextStatus: "locked",
+      nextStatus: 'locked',
       canUnlock: false,
       message: `尚未达成契约目标！还需编写 ${Math.max(0, record.targetWords - progress.deltaWords)} 字或坚持 ${Math.max(0, Math.ceil((record.targetMinutes * 60 - progress.elapsedSeconds) / 60))} 分钟。`,
     }
@@ -95,7 +89,7 @@ export class IronChamberEngine {
     if (trimmed.length < 15) {
       return {
         valid: false,
-        error: "紧急脱逃反思说明不得少于15字，请如实记录被迫中断创作的原因与代价。",
+        error: '紧急脱逃反思说明不得少于15字，请如实记录被迫中断创作的原因与代价。',
       }
     }
     return { valid: true }

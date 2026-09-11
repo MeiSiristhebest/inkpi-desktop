@@ -66,7 +66,12 @@ export function projectContinuityFindingsToEditor(
       locationStatus: locations.length > 0 ? 'located' : 'unlocated',
       ...(locations.length > 0
         ? {}
-        : { unlocatedReason: blockIds.length === 0 ? 'missing-block-evidence' as const : 'unknown-block' as const }),
+        : {
+            unlocatedReason:
+              blockIds.length === 0
+                ? ('missing-block-evidence' as const)
+                : ('unknown-block' as const),
+          }),
       unresolvedBlockIds,
       locations,
     }

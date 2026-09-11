@@ -1,4 +1,4 @@
-export type HunkResolution = "pending" | "applied" | "rejected"
+export type HunkResolution = 'pending' | 'applied' | 'rejected'
 
 export interface DiffHunkRecord {
   id: string
@@ -18,7 +18,7 @@ export interface DiffReviewRecord {
   sourceText: string
   proposedText: string
   hunks: DiffHunkRecord[]
-  status: "open" | "partially_applied" | "completed" | "discarded"
+  status: 'open' | 'partially_applied' | 'completed' | 'discarded'
   summaryStats: {
     additions: number
     deletions: number

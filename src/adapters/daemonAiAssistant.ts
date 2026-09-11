@@ -225,14 +225,22 @@ function assertInstructionRegistration(
   }
   for (let index = 0; index < value.results.length; index += 1) {
     const result = value.results[index]
-    if (!isRecord(result) || result.id !== expectedIds[index] || typeof result.version !== 'string') {
+    if (
+      !isRecord(result) ||
+      result.id !== expectedIds[index] ||
+      typeof result.version !== 'string'
+    ) {
       throw new Error('Daemon instruction registration receipt is inconsistent')
     }
   }
 }
 
 function sameStringArray(value: unknown, expected: readonly string[]): boolean {
-  return Array.isArray(value) && value.length === expected.length && value.every((item, index) => item === expected[index])
+  return (
+    Array.isArray(value) &&
+    value.length === expected.length &&
+    value.every((item, index) => item === expected[index])
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

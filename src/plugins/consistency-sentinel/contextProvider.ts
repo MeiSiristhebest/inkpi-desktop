@@ -6,7 +6,8 @@ export async function provideConsistencyContext(
   request: PluginContextRequest,
 ): Promise<PluginContextFragment> {
   try {
-    const system = (await indexedDbPowerTierRepository.get(request.projectId)) ||
+    const system =
+      (await indexedDbPowerTierRepository.get(request.projectId)) ||
       consistencyEngine.getDefaultSystem()
     return {
       id: `consistency:${request.projectId}:${system.tiers.join('|')}`,

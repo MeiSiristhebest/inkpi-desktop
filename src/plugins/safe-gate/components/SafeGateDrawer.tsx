@@ -118,9 +118,7 @@ export const SafeGateDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) =>
                 </span>
               </div>
 
-              <div className="text-[10px] text-[var(--ink-text-muted)]">
-                推荐文学平替：
-              </div>
+              <div className="text-[10px] text-[var(--ink-text-muted)]">推荐文学平替：</div>
               <div className="flex flex-wrap gap-1">
                 {v.suggestions.map((sug, i) => (
                   <button

@@ -6,28 +6,105 @@ export class EmotionCurveEngine {
    */
   private static readonly EMOTION_LEXICON: Record<EmotionType, string[]> = {
     tension: [
-      '危机', '杀意', '窒息', '压迫', '紧绷', '倒吸一口凉气', '惊骇', '千钧一发',
-      '瞳孔骤缩', '心头巨震', '死寂', '轰然', '剧变', '撕裂', '暴怒', '恐怖'
+      '危机',
+      '杀意',
+      '窒息',
+      '压迫',
+      '紧绷',
+      '倒吸一口凉气',
+      '惊骇',
+      '千钧一发',
+      '瞳孔骤缩',
+      '心头巨震',
+      '死寂',
+      '轰然',
+      '剧变',
+      '撕裂',
+      '暴怒',
+      '恐怖',
     ],
     catharsis: [
-      '暴爽', '碾压', '秒杀', '一剑破万法', '吐气扬眉', '倒下', '跪伏', '震撼',
-      '俯瞰', '神王', '突破', '名震八荒', '狂笑', '诛灭', '登顶', '天下第一'
+      '暴爽',
+      '碾压',
+      '秒杀',
+      '一剑破万法',
+      '吐气扬眉',
+      '倒下',
+      '跪伏',
+      '震撼',
+      '俯瞰',
+      '神王',
+      '突破',
+      '名震八荒',
+      '狂笑',
+      '诛灭',
+      '登顶',
+      '天下第一',
     ],
     frustration: [
-      '重伤', '被辱', '封印', '狼狈', '吐血', '绝望', '夺走', '背叛',
-      '嘲讽', '蝼蚁', '残废', '囚禁', '受制于人', '无力回天', '咬牙切齿'
+      '重伤',
+      '被辱',
+      '封印',
+      '狼狈',
+      '吐血',
+      '绝望',
+      '夺走',
+      '背叛',
+      '嘲讽',
+      '蝼蚁',
+      '残废',
+      '囚禁',
+      '受制于人',
+      '无力回天',
+      '咬牙切齿',
     ],
     anticipation: [
-      '究竟', '到底', '倒计时', '下一刻', '谜底', '传承', '宝藏', '那是……',
-      '等待着', '究竟是谁', '暗流涌动', '契约', '揭秘', '机缘', '异动'
+      '究竟',
+      '到底',
+      '倒计时',
+      '下一刻',
+      '谜底',
+      '传承',
+      '宝藏',
+      '那是……',
+      '等待着',
+      '究竟是谁',
+      '暗流涌动',
+      '契约',
+      '揭秘',
+      '机缘',
+      '异动',
     ],
     sorrow: [
-      '陨落', '悲恸', '泪水', '永别', '残阳', '枯骨', '萧索', '祭奠',
-      '遗憾', '化为灰烬', '悲凉', '叹息', '孤独', '惨烈'
+      '陨落',
+      '悲恸',
+      '泪水',
+      '永别',
+      '残阳',
+      '枯骨',
+      '萧索',
+      '祭奠',
+      '遗憾',
+      '化为灰烬',
+      '悲凉',
+      '叹息',
+      '孤独',
+      '惨烈',
     ],
     joy: [
-      '大笑', '欢呼', '庆功', '喜悦', '收获', '美酒', '团聚', '融洽',
-      '心满意足', '春风得意', '欣慰', '温馨', '神采飞扬'
+      '大笑',
+      '欢呼',
+      '庆功',
+      '喜悦',
+      '收获',
+      '美酒',
+      '团聚',
+      '融洽',
+      '心满意足',
+      '春风得意',
+      '欣慰',
+      '温馨',
+      '神采飞扬',
     ],
   }
 
@@ -76,7 +153,14 @@ export class EmotionCurveEngine {
       joy: 0,
     }
 
-    const types: EmotionType[] = ['tension', 'catharsis', 'frustration', 'anticipation', 'sorrow', 'joy']
+    const types: EmotionType[] = [
+      'tension',
+      'catharsis',
+      'frustration',
+      'anticipation',
+      'sorrow',
+      'joy',
+    ]
     for (const t of types) {
       for (const kw of this.EMOTION_LEXICON[t]) {
         let pos = 0
@@ -110,12 +194,16 @@ export class EmotionCurveEngine {
     // 3. 净情绪极性 (Net Emotional Polarity): [-100, 100]
     // 积极代偿 = 0.40 catharsis + 0.35 joy + 0.25 anticipation
     // 消极蓄势 = 0.40 frustration + 0.35 tension + 0.25 sorrow
-    const positiveScore = 0.40 * vector.catharsis + 0.35 * vector.joy + 0.25 * vector.anticipation
-    const negativeScore = 0.40 * vector.frustration + 0.35 * vector.tension + 0.25 * vector.sorrow
+    const positiveScore = 0.4 * vector.catharsis + 0.35 * vector.joy + 0.25 * vector.anticipation
+    const negativeScore = 0.4 * vector.frustration + 0.35 * vector.tension + 0.25 * vector.sorrow
     const netPolarity = Math.max(-100, Math.min(100, Math.round(positiveScore - negativeScore)))
 
     // 4. 代入共鸣深度 (Resonance Score: 0 - 100)
-    const rawResonance = (vector.tension * 0.25 + vector.catharsis * 0.35 + vector.anticipation * 0.25 + vector.frustration * 0.15)
+    const rawResonance =
+      vector.tension * 0.25 +
+      vector.catharsis * 0.35 +
+      vector.anticipation * 0.25 +
+      vector.frustration * 0.15
     const resonanceScore = Math.max(10, Math.min(100, Math.round(rawResonance)))
 
     // 5. 警报与建议
@@ -126,7 +214,9 @@ export class EmotionCurveEngine {
       warnings.push('⚠️ 情绪心电图过平：当前章缺乏明显起伏与冲突张力，易使读者产生阅读困倦。')
       suggestions.push('建议在章中注入“突发异数”或制造“认知反差”以唤醒情绪波澜。')
     } else if (netPolarity < -35) {
-      warnings.push('📉 深度蓄势/高压打压区：读者情绪处于沉重受挫状态，注意不要连续多章保持该状态。')
+      warnings.push(
+        '📉 深度蓄势/高压打压区：读者情绪处于沉重受挫状态，注意不要连续多章保持该状态。',
+      )
       suggestions.push('下章必须安排核心反击契机或局部爽点释放，防止读者抑郁弃书。')
     } else if (netPolarity > 45) {
       suggestions.push('🔥 情绪巅峰释放：大爽点/关键突破已兑现，建议随后适当引入后续宏观隐患。')
@@ -171,12 +261,16 @@ export class EmotionCurveEngine {
       }
 
       if (consecutiveFrustration >= 3) {
-        alerts.push(`🚨 连载弃书高危：第 ${ev.chapterOrder} 章前已连续 3 章处于高压憋屈期，急需剧情反转打脸！`)
+        alerts.push(
+          `🚨 连载弃书高危：第 ${ev.chapterOrder} 章前已连续 3 章处于高压憋屈期，急需剧情反转打脸！`,
+        )
         break
       }
 
       if (consecutiveClimax >= 3) {
-        alerts.push(`⚡ 审美疲劳警报：第 ${ev.chapterOrder} 章前已连续 3 章高频轰炸爽点，缺少中场蓄势铺垫，易让读者麻木。`)
+        alerts.push(
+          `⚡ 审美疲劳警报：第 ${ev.chapterOrder} 章前已连续 3 章高频轰炸爽点，缺少中场蓄势铺垫，易让读者麻木。`,
+        )
         break
       }
     }

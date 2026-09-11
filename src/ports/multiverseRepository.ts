@@ -22,4 +22,3 @@ export interface MultiverseRepository {
   save(record: MultiverseBranchRecord): Promise<void>
   delete(id: string): Promise<void>
 }
-

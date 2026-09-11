@@ -27,7 +27,10 @@ export class ShadowReaderEngine {
   /**
    * 生成统一任务运行时使用的结构化读者模拟输入。
    */
-  public static buildAnalysisInput(chapterTitle: string, chapterText: string): Record<string, unknown> {
+  public static buildAnalysisInput(
+    chapterTitle: string,
+    chapterText: string,
+  ): Record<string, unknown> {
     return {
       chapterTitle: chapterTitle || '未命名章节',
       chapterText: chapterText.slice(0, 2000),
@@ -38,7 +41,14 @@ export class ShadowReaderEngine {
         'plot_detective',
         'pleasure_seeker',
       ],
-      outputFields: ['paragraphIndex', 'persona', 'authorName', 'commentText', 'sentiment', 'isToxic'],
+      outputFields: [
+        'paragraphIndex',
+        'persona',
+        'authorName',
+        'commentText',
+        'sentiment',
+        'isToxic',
+      ],
     }
   }
 

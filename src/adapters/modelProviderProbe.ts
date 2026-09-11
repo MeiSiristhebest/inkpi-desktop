@@ -65,7 +65,11 @@ function modelEndpoint(baseUrl: string): string {
 
 function extractModelIds(data: unknown): string[] {
   const record = asRecord(data)
-  const models = Array.isArray(record?.data) ? record.data : Array.isArray(record?.models) ? record.models : []
+  const models = Array.isArray(record?.data)
+    ? record.data
+    : Array.isArray(record?.models)
+      ? record.models
+      : []
   return models
     .map((model) => {
       const item = asRecord(model)

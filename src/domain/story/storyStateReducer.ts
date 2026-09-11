@@ -126,17 +126,26 @@ function fullStoryState(change: DomainChange): StoryState {
 
 function recordPayload(change: DomainChange): Record<string, unknown> {
   if (!isRecord(change.payload)) {
-    throw new Error(`Story ${change.aggregateType} payload must be an object: ${change.aggregateId}`)
+    throw new Error(
+      `Story ${change.aggregateType} payload must be an object: ${change.aggregateId}`,
+    )
   }
   const payload = structuredClone(change.payload)
   if (payload.id !== change.aggregateId) {
     throw new Error(`Story ${change.aggregateType} payload id mismatch: ${change.aggregateId}`)
   }
   if (!isRecord(payload.provenance)) {
-    throw new Error(`Story ${change.aggregateType} payload is missing provenance: ${change.aggregateId}`)
+    throw new Error(
+      `Story ${change.aggregateType} payload is missing provenance: ${change.aggregateId}`,
+    )
   }
-  if (typeof payload.provenance.sourceType !== 'string' || typeof payload.provenance.factLevel !== 'string') {
-    throw new Error(`Story ${change.aggregateType} payload has invalid provenance: ${change.aggregateId}`)
+  if (
+    typeof payload.provenance.sourceType !== 'string' ||
+    typeof payload.provenance.factLevel !== 'string'
+  ) {
+    throw new Error(
+      `Story ${change.aggregateType} payload has invalid provenance: ${change.aggregateId}`,
+    )
   }
   return payload
 }
@@ -144,7 +153,10 @@ function recordPayload(change: DomainChange): Record<string, unknown> {
 type StoryCollection = Exclude<keyof StoryState, 'revision'>
 
 function collectionForAggregate(aggregateType: string): StoryCollection | undefined {
-  const normalized = aggregateType.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  const normalized = aggregateType
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
   switch (normalized) {
     case 'entity':
     case 'entities':
@@ -191,12 +203,21 @@ function collectionForAggregate(aggregateType: string): StoryCollection | undefi
 }
 
 function isFullStoryStateAggregate(aggregateType: string): boolean {
-  const normalized = aggregateType.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
-  return normalized === 'story' || normalized === 'storystate' || normalized === 'storystatesnapshot'
+  const normalized = aggregateType
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+  return (
+    normalized === 'story' || normalized === 'storystate' || normalized === 'storystatesnapshot'
+  )
 }
 
 function assertProjection(projection: StoryStateProjection): void {
-  if (!projection || !Number.isInteger(projection.domainRevision) || projection.domainRevision < 0) {
+  if (
+    !projection ||
+    !Number.isInteger(projection.domainRevision) ||
+    projection.domainRevision < 0
+  ) {
     throw new Error('StoryState projection has an invalid domain revision')
   }
   assertStoryState(projection.state)
