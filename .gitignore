@@ -63,7 +63,6 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Tauri build artifacts & sidecar binary
-# src-tauri/binaries/*.exe 是 copy-daemon-sidecar 从 inkpi 仓库 dist-bin 复制来的构建产物，不应入库
+# src-tauri/binaries/ 整个目录都是 copy-daemon-sidecar 的构建产物（exe/dll 从 inkpi 仓库 dist-bin 复制，skills/*.md 从 inkpi 仓库 skills/ 复制），每次 tauri build/dev 前自动重新生成，不应入库
 src-tauri/target/
-src-tauri/binaries/*.exe
-src-tauri/binaries/*.dll
+src-tauri/binaries/
