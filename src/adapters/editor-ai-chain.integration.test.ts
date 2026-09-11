@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Editor } from '@tiptap/core'
+import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
