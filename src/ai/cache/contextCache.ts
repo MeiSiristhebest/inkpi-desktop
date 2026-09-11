@@ -253,47 +253,53 @@ export function createDeterministicTaskCacheKey(
 
   const instructionVersion = firstString(metadata.instructionVersion, defaults.instructionVersion)
   const skillVersion = firstString(metadata.skillVersion, defaults.skillVersion)
-  const instruction = firstString(
-    metadata.instructionId,
-    instructionVersion,
-    metadata.instruction,
-    defaults.instruction,
-    'runtime-default',
-  ) ?? 'runtime-default'
-  const skill = firstString(
-    metadata.skillId,
-    skillVersion,
-    metadata.skill,
-    defaults.skill,
-    'skill-default',
-  ) ?? 'skill-default'
+  const instruction =
+    firstString(
+      metadata.instructionId,
+      instructionVersion,
+      metadata.instruction,
+      defaults.instruction,
+      'runtime-default',
+    ) ?? 'runtime-default'
+  const skill =
+    firstString(metadata.skillId, skillVersion, metadata.skill, defaults.skill, 'skill-default') ??
+    'skill-default'
   const projectRevision = firstNumber(
     metadata.projectRevision,
     contextMetadata.projectRevision,
     context.projectRevision,
     task.input.selection?.revision,
   )
-  const contextFingerprint = firstString(
-    metadata.contextFingerprint,
-    contextMetadata.contextFingerprint,
-    context.fingerprint,
-    hash(stableSerialize({ input: task.input, intent: task.intent })),
-  ) ?? 'context-unknown'
+  const contextFingerprint =
+    firstString(
+      metadata.contextFingerprint,
+      contextMetadata.contextFingerprint,
+      context.fingerprint,
+      hash(stableSerialize({ input: task.input, intent: task.intent })),
+    ) ?? 'context-unknown'
   const model =
-    firstString(route?.modelId, route?.model, metadata.modelId, metadata.model, defaults.model, defaults.modelId, 'model-unknown') ??
-    'model-unknown'
-  const provider = firstString(
-    route?.providerId,
-    route?.provider,
-    routeMetadata.providerId,
-    routeMetadata.provider,
-    metadata.providerId,
-    metadata.provider,
-    defaults.provider,
-    defaults.providerId,
-    route?.id,
-    'provider-unknown',
-  ) ?? 'provider-unknown'
+    firstString(
+      route?.modelId,
+      route?.model,
+      metadata.modelId,
+      metadata.model,
+      defaults.model,
+      defaults.modelId,
+      'model-unknown',
+    ) ?? 'model-unknown'
+  const provider =
+    firstString(
+      route?.providerId,
+      route?.provider,
+      routeMetadata.providerId,
+      routeMetadata.provider,
+      metadata.providerId,
+      metadata.provider,
+      defaults.provider,
+      defaults.providerId,
+      route?.id,
+      'provider-unknown',
+    ) ?? 'provider-unknown'
 
   return {
     layer: 'provider',
@@ -326,7 +332,9 @@ function firstString(...values: unknown[]): string | undefined {
 }
 
 function firstNumber(...values: unknown[]): number | undefined {
-  return values.find((value): value is number => typeof value === 'number' && Number.isFinite(value))
+  return values.find(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
+  )
 }
 
 function stableSerialize(value: unknown): string {

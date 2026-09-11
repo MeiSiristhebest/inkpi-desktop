@@ -245,7 +245,9 @@ describe('StoryStateProvider', () => {
       </StoryStateProvider>,
     )
 
-    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('indexeddb unavailable'))
+    await waitFor(() =>
+      expect(screen.getByTestId('error')).toHaveTextContent('indexeddb unavailable'),
+    )
     expect(screen.getByTestId('revision')).toHaveTextContent('empty')
     expect(screen.getByTestId('loading')).toHaveTextContent('idle')
   })

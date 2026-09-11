@@ -109,7 +109,11 @@ describe('context fingerprint cache', () => {
     const task = {
       id: 'task-1',
       kind: 'creative.continue',
-      input: { documentId: 'doc-1', text: '旧内容', payload: { context: { fingerprint: 'ctx-1' } } },
+      input: {
+        documentId: 'doc-1',
+        text: '旧内容',
+        payload: { context: { fingerprint: 'ctx-1' } },
+      },
       intent: '继续写作',
       metadata: {
         projectRevision: 3,
@@ -129,8 +133,12 @@ describe('context fingerprint cache', () => {
     for (const changed of changedTasks) {
       expect(createDeterministicTaskCacheKey(changed, route)).not.toEqual(base)
     }
-    expect(createDeterministicTaskCacheKey(task, { ...route, modelId: 'model-2' })).not.toEqual(base)
-    expect(createDeterministicTaskCacheKey(task, { ...route, providerId: 'provider-2' })).not.toEqual(base)
+    expect(createDeterministicTaskCacheKey(task, { ...route, modelId: 'model-2' })).not.toEqual(
+      base,
+    )
+    expect(
+      createDeterministicTaskCacheKey(task, { ...route, providerId: 'provider-2' }),
+    ).not.toEqual(base)
   })
 
   it('exposes only the newest value when the same key is replaced', async () => {

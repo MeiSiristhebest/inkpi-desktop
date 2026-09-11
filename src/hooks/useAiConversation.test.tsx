@@ -25,7 +25,9 @@ const makeSnapshot = (task: AiTask, status: TaskStatusSnapshot['status']): TaskS
   status,
 })
 
-function makeStore(initial: TaskRecoveryRecord[] = []): TaskRecoveryStore & { records: Map<string, TaskRecoveryRecord> } {
+function makeStore(
+  initial: TaskRecoveryRecord[] = [],
+): TaskRecoveryStore & { records: Map<string, TaskRecoveryRecord> } {
   const records = new Map(initial.map((record) => [record.task.id, record]))
   return {
     records,
@@ -196,22 +198,30 @@ describe('useAiConversation task recovery', () => {
   it('cancels an active task through its AbortSignal and records cancellation', async () => {
     const task = makeTask('cancelled-task')
     const store = makeStore()
-    const runTask = vi.fn(async (_task: AiTask, options?: Parameters<AiAssistant['runTask']>[1]) => {
-      options?.onProgress?.(makeSnapshot(task, 'running'))
-      return new Promise<never>((_resolve, reject) => {
-        options?.signal?.addEventListener('abort', () => {
-          const error = new Error('aborted')
-          error.name = 'AbortError'
-          reject(error)
-        }, { once: true })
-      })
-    })
+    const runTask = vi.fn(
+      async (_task: AiTask, options?: Parameters<AiAssistant['runTask']>[1]) => {
+        options?.onProgress?.(makeSnapshot(task, 'running'))
+        return new Promise<never>((_resolve, reject) => {
+          options?.signal?.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('aborted')
+              error.name = 'AbortError'
+              reject(error)
+            },
+            { once: true },
+          )
+        })
+      },
+    )
     const assistant = makeAssistant(runTask)
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
-    const hook = renderHook(() => useAiConversation('ws://daemon', null, 'project-1', {
-      taskRecoveryStore: store,
-      clock: fixedClock,
-    }))
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
     await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
 
     let pending!: Promise<unknown>
@@ -222,7 +232,9 @@ describe('useAiConversation task recovery', () => {
       await expect(hook.result.current.cancelTask(task.id)).resolves.toBe(true)
     })
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-    await waitFor(() => expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('cancelled'))
+    await waitFor(() =>
+      expect(hook.result.current.taskRecovery[0]?.snapshot.status).toBe('cancelled'),
+    )
     expect(store.records.get(task.id)?.snapshot.status).toBe('cancelled')
     hook.unmount()
   })
@@ -241,10 +253,12 @@ describe('useAiConversation task recovery', () => {
     } satisfies AiAssistant
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
     const store = makeStore()
-    const hook = renderHook(() => useAiConversation('ws://daemon', null, 'project-1', {
-      taskRecoveryStore: store,
-      clock: fixedClock,
-    }))
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
 
     await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
     await waitFor(() => expect(syncDomain).toHaveBeenCalledWith('project-1'))

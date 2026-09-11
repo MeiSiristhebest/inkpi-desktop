@@ -15,7 +15,10 @@ import {
   type CreativeTaskGateway,
 } from '../ai/orchestrator/creativeIntelligence'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
-import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
+import {
+  listPluginInstructionDefinitions,
+  type DesktopInstructionDefinition,
+} from '../ai/instructions/pluginInstructions'
 import {
   ContinuityAuditScheduler,
   ProjectDistillationWorkflow,
@@ -55,12 +58,12 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   const ensurePluginInstructionsRegistered = (): Promise<void> => {
     if (!pluginInstructionsReady) {
       pluginInstructionsReady = (async () => {
-        await client.request('instruction.register', {
-          instructions: [
-            ...listCoreInstructionDefinitions(),
-            ...listPluginInstructionDefinitions(),
-          ],
-        })
+        const instructions = [
+          ...listCoreInstructionDefinitions(),
+          ...listPluginInstructionDefinitions(),
+        ]
+        const result = await client.request<unknown>('instruction.register', { instructions })
+        assertInstructionRegistration(result, instructions)
       })().catch((error) => {
         // A failed first handshake must be retryable, while concurrent callers
         // still share the same in-flight registration promise.
@@ -122,4 +125,53 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
 
     close: () => client.close(),
   }
+}
+
+/**
+ * Validate the versioned registration receipt returned by the current Daemon.
+ * Older compatible daemons only returned `{ success: true }`, so the richer
+ * fields are enforced whenever they are present without breaking that boundary.
+ */
+function assertInstructionRegistration(
+  value: unknown,
+  definitions: readonly DesktopInstructionDefinition[],
+): void {
+  if (!isRecord(value) || value.success !== true) {
+    throw new Error('Daemon instruction registration did not succeed')
+  }
+
+  const hasVersionedReceipt =
+    'registered' in value || 'count' in value || 'instructionIds' in value || 'results' in value
+  if (!hasVersionedReceipt) return
+
+  if (value.registered !== true) throw new Error('Daemon did not confirm instruction registration')
+  if (value.count !== definitions.length) {
+    throw new Error(
+      `Daemon registered ${String(value.count)} instructions; expected ${definitions.length}`,
+    )
+  }
+  const expectedIds = definitions.map((definition) => definition.id)
+  if (!sameStringArray(value.instructionIds, expectedIds)) {
+    throw new Error('Daemon instruction registration IDs do not match the Desktop catalog')
+  }
+  if (typeof value.version !== 'string' || !value.version.trim()) {
+    throw new Error('Daemon instruction registration version is unavailable')
+  }
+  if (!Array.isArray(value.results) || value.results.length !== definitions.length) {
+    throw new Error('Daemon instruction registration receipt is incomplete')
+  }
+  for (let index = 0; index < value.results.length; index += 1) {
+    const result = value.results[index]
+    if (!isRecord(result) || result.id !== expectedIds[index] || typeof result.version !== 'string') {
+      throw new Error('Daemon instruction registration receipt is inconsistent')
+    }
+  }
+}
+
+function sameStringArray(value: unknown, expected: readonly string[]): boolean {
+  return Array.isArray(value) && value.length === expected.length && value.every((item, index) => item === expected[index])
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

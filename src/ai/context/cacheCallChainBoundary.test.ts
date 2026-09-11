@@ -137,20 +137,20 @@ describe('Desktop cache call-chain boundary', () => {
     expect(intelligence.cacheStats()).toMatchObject({ hits: 1, misses: 1 })
   })
 
-  it('captures the compile-time seam that prevents passing all three layers today', () => {
+  it('accepts a layered cache through the compatibility cache option', async () => {
     const gateway = {
-      submitTask: async () => ({ taskId: 'task', status: 'queued' as const }),
+      submitTask: vi.fn(async (task: AiTask) => ({ taskId: task.id, status: 'queued' as const })),
       cancelTask: async (taskId: string) => ({
         taskId,
         cancelled: true,
         status: 'cancelled' as const,
       }),
-      getTaskStatus: async () => ({
-        taskId: 'task',
+      getTaskStatus: async (taskId: string) => ({
+        taskId,
         kind: 'creative.continue',
         status: 'completed' as const,
         result: {
-          taskId: 'task',
+          taskId,
           kind: 'creative.continue',
           status: 'completed' as const,
           output: { format: 'text' as const, text: 'done' },
@@ -158,14 +158,16 @@ describe('Desktop cache call-chain boundary', () => {
       }),
     }
     const layered = new LayeredContextCache<TaskResult>()
+    const intelligence = new CreativeIntelligence(gateway, { cache: layered })
 
-    // @ts-expect-error CreativeIntelligence currently accepts one ContextCache, not LayeredContextCache.
-    new CreativeIntelligence(gateway, { cache: layered })
+    await intelligence.run(makeTask('compat-layered-1'), { pollIntervalMs: 0 })
+    await intelligence.run(makeTask('compat-layered-2'), { pollIntervalMs: 0 })
 
+    expect(gateway.submitTask).toHaveBeenCalledTimes(1)
     expect(layered.stats()).toMatchObject({
-      context: { hits: 0, misses: 0 },
-      semantic: { hits: 0, misses: 0 },
-      provider: { hits: 0, misses: 0 },
+      context: { hits: 1, misses: 1 },
+      semantic: { hits: 1, misses: 1 },
+      provider: { hits: 1, misses: 1 },
     })
   })
 })

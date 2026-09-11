@@ -19,7 +19,9 @@ const ProjectWorkspace: FC<{
   projectId: string
   projectName?: string
   isConnected: boolean
-  onAiTask: (task: import('@inkpi/protocol').AiTask) => Promise<import('@inkpi/protocol').TaskResult | null>
+  onAiTask: (
+    task: import('@inkpi/protocol').AiTask,
+  ) => Promise<import('@inkpi/protocol').TaskResult | null>
   children: ReactNode
 }> = ({ projectId, projectName, isConnected, onAiTask, children }) => {
   const { chapters, volumes, reloadChapters } = useProjectData()
@@ -46,7 +48,9 @@ const ProjectEngine: FC<{
   isReconnecting: boolean
   onReconnect: () => void
   onRequestGhost: (chapterId: string, text: string) => Promise<string | null>
-  onAiTask: (task: import('@inkpi/protocol').AiTask) => Promise<import('@inkpi/protocol').TaskResult | null>
+  onAiTask: (
+    task: import('@inkpi/protocol').AiTask,
+  ) => Promise<import('@inkpi/protocol').TaskResult | null>
   onOpenAssistant: () => void
   aiPanelOpen: boolean
   setAiPanelOpen: (open: boolean) => void

@@ -72,7 +72,8 @@ export interface RunTaskOptions {
 }
 
 export interface CreativeIntelligenceOptions extends TaskCacheKeyDefaults {
-  cache?: ContextCache<TaskResult>
+  /** A provider-only cache or the shared three-layer cache compatibility entry. */
+  cache?: ContextCache<TaskResult> | LayeredContextCache<TaskResult>
   /** Shared three-layer cache. The provider layer is used for task results. */
   layeredCache?: LayeredContextCache<unknown>
   cacheMetrics?: SharedCacheMetricsPort
@@ -104,12 +105,15 @@ export class CreativeIntelligence {
   private readonly artifactIdGenerator?: ArtifactIdGenerator
 
   constructor(gateway: CreativeTaskGateway, options: CreativeIntelligenceOptions = {}) {
+    const compatibilityLayeredCache = isLayeredContextCache(options.cache) ? options.cache : undefined
     this.gateway = gateway
     this.layeredCache =
-      options.layeredCache ?? (options.cache ? undefined : new LayeredContextCache<unknown>())
+      options.layeredCache ??
+      compatibilityLayeredCache ??
+      (options.cache ? undefined : new LayeredContextCache<unknown>())
     this.cache = this.layeredCache
       ? (this.layeredCache.provider as unknown as ContextCache<TaskResult>)
-      : (options.cache ?? new ContextCache<TaskResult>())
+      : ((options.cache as ContextCache<TaskResult> | undefined) ?? new ContextCache<TaskResult>())
     this.cacheMetrics =
       options.cacheMetrics ?? options.sharedCacheMetrics ?? new SharedCacheMetrics()
     this.capabilityRouter =
@@ -290,11 +294,7 @@ export class CreativeIntelligence {
     return cached
   }
 
-  private writeCached(
-    task: AiTask,
-    cacheKey: DeterministicTaskCacheKey,
-    result: TaskResult,
-  ): void {
+  private writeCached(task: AiTask, cacheKey: DeterministicTaskCacheKey, result: TaskResult): void {
     const documentId = task.input.documentId ?? 'unknown-document'
     const previousEvictions = this.cache.stats().evictions
     this.cache.set(cacheKey, result)
@@ -356,11 +356,17 @@ export class CreativeIntelligence {
   }
 }
 
+function isLayeredContextCache(
+  value: ContextCache<TaskResult> | LayeredContextCache<TaskResult> | undefined,
+): value is LayeredContextCache<TaskResult> {
+  return value instanceof LayeredContextCache
+}
+
 function hasCachedRevisionVariant(cache: { keys(): string[] }, serializedKey: string): boolean {
   const identity = withoutProjectRevision(serializedKey)
-  return cache.keys().some(
-    (key) => key !== serializedKey && withoutProjectRevision(key) === identity,
-  )
+  return cache
+    .keys()
+    .some((key) => key !== serializedKey && withoutProjectRevision(key) === identity)
 }
 
 function hasCachedRevisionForDocument(
