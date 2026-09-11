@@ -71,8 +71,10 @@ const makeMockEditor = () => {
   return inst
 }
 
-vi.mock('@tiptap/react', () => {
+vi.mock('@tiptap/react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
+    ...actual,
     useEditor: (opts: any) => {
       h.capturedOnUpdate = opts.onUpdate
       if (!editorInstance) editorInstance = makeMockEditor()

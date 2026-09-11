@@ -20,7 +20,8 @@ const render = (
 }
 
 // Engine 默认挂载 RichEditor（富文本内核），需 mock 掉 TipTap 以免在 jsdom 中实例化 ProseMirror
-vi.mock('@tiptap/react', () => {
+vi.mock('@tiptap/react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
   const noop = () => {}
   const makeCommands = () => ({
     setContent: vi.fn(),
@@ -43,7 +44,7 @@ vi.mock('@tiptap/react', () => {
   })
   const EditorContent = () => <div data-testid="tiptap-editor" />
   const BubbleMenu = ({ children }: any) => <>{children}</>
-  return { useEditor, EditorContent, BubbleMenu }
+  return { ...actual, useEditor, EditorContent, BubbleMenu }
 })
 
 afterEach(() => cleanup())

@@ -1,4 +1,4 @@
-import { Extension, type Editor } from '@tiptap/react'
+import { Extension, type Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 
