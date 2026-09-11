@@ -81,6 +81,19 @@ export interface RichEditorProps {
  * 所有业务状态与命令来自 useChapterEditorModel（单一 useReducer），
  * 大块展示逻辑下放至 organisms/*，自身不再持有 useState。
  */
+const STORAGE_KEY_WIDGET_CONFIG = 'inkpi-writer-assistant-widget-config'
+const STORAGE_KEY_WIDGET_VISIBLE = 'inkpi-writer-assistant-widget-visible'
+
+const DEFAULT_WIDGET_CONFIG: WordCountConfig = {
+  headerType: 'mascot',
+  showMascotMotto: true,
+  showSessionWords: true,
+  showSpeed: true,
+  showWritingTime: true,
+  showIdleTime: true,
+  layout: 'layout2',
+}
+
 export const RichEditor: FC<RichEditorProps> = ({
   projectId,
   isTypewriter = false,
@@ -182,23 +195,53 @@ export const RichEditor: FC<RichEditorProps> = ({
     }
   })
 
-  // 悬浮小组件开关：默认开启悬浮小组件
-  const [showFloatingWidget, setShowFloatingWidget] = useState(true)
+  // 悬浮小组件开关：默认读取持久化状态（默认为开启）
+  const [showFloatingWidget, setShowFloatingWidgetState] = useState<boolean>(() => {
+    try {
+      const saved = localStorageKeyValueStore.getSync(STORAGE_KEY_WIDGET_VISIBLE)
+      return saved !== null ? saved === 'true' : true
+    } catch {
+      return true
+    }
+  })
+
+  const setShowFloatingWidget = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
+    setShowFloatingWidgetState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val
+      void localStorageKeyValueStore.set(STORAGE_KEY_WIDGET_VISIBLE, String(next))
+      return next
+    })
+  }, [])
+
   const [showGoalModal, setShowGoalModal] = useState(false)
   const [dailyGoalTarget, setDailyGoalTarget] = useState(() => {
     const saved = localStorageKeyValueStore.getSync(`inkpi-daily-goal-${projectId}`)
     return saved ? Number(saved) || 4600 : 4600
   })
 
-  const [widgetConfig, setWidgetConfig] = useState<WordCountConfig>({
-    headerType: 'mascot',
-    showMascotMotto: true,
-    showSessionWords: true,
-    showSpeed: true,
-    showWritingTime: true,
-    showIdleTime: true,
-    layout: 'layout2',
+  const [widgetConfig, setWidgetConfigState] = useState<WordCountConfig>(() => {
+    try {
+      const raw = localStorageKeyValueStore.getSync(STORAGE_KEY_WIDGET_CONFIG)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return { ...DEFAULT_WIDGET_CONFIG, ...parsed }
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_WIDGET_CONFIG
   })
+
+  const setWidgetConfig = useCallback(
+    (cfg: WordCountConfig | ((prev: WordCountConfig) => WordCountConfig)) => {
+      setWidgetConfigState((prev) => {
+        const next = typeof cfg === 'function' ? cfg(prev) : cfg
+        void localStorageKeyValueStore.set(STORAGE_KEY_WIDGET_CONFIG, JSON.stringify(next))
+        return next
+      })
+    },
+    [],
+  )
 
   // 设定集实体与正文高亮联动
   const [entities, setEntities] = useState<CodexEntity[]>([])
@@ -697,6 +740,7 @@ export const RichEditor: FC<RichEditorProps> = ({
             todayTarget={dailyGoalTarget}
             onOpenSettings={() => actions.setShowWordCountPanelModal(true)}
             onOpenGoalModal={() => setShowGoalModal(true)}
+            onConfigChange={setWidgetConfig}
             onClose={() => setShowFloatingWidget(false)}
           />
         )}

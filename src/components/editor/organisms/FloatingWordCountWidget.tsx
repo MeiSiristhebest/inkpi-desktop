@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { X, Feather, SlidersHorizontal, Settings, Bell } from 'lucide-react'
 import type { WritingSessionStats } from '../hooks/useWritingSessionStats'
-import { formatTime, type WordCountConfig } from '../modals/WordCountPanelModal'
+import { formatTime, type WordCountConfig, type LayoutType } from '../modals/WordCountPanelModal'
 import { MascotFigure } from './MascotFigure'
 import { BookCover } from '../../../ui/atoms/BookCover'
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
@@ -42,6 +42,7 @@ interface FloatingWordCountWidgetProps {
   todayTarget?: number
   onOpenSettings: () => void
   onOpenGoalModal?: () => void
+  onConfigChange?: (cfg: WordCountConfig) => void
   onClose: () => void
 }
 
@@ -53,13 +54,11 @@ export const FloatingWordCountWidget: React.FC<FloatingWordCountWidgetProps> = (
   todayTarget = 4600,
   onOpenSettings,
   onOpenGoalModal,
+  onConfigChange,
   onClose,
 }) => {
   const nodeRef = useRef<HTMLDivElement>(null)
-  const posRef = useRef<{ x: number; y: number }>({
-    x: Math.max(20, typeof window !== 'undefined' ? window.innerWidth - 380 : 800),
-    y: Math.max(40, typeof window !== 'undefined' ? window.innerHeight - 380 : 400),
-  })
+  const posRef = useRef<{ x: number; y: number }>(getInitialWidgetPosition())
   const isDraggingRef = useRef(false)
   const dragOffsetRef = useRef({ x: 0, y: 0 })
   const rafIdRef = useRef<number | null>(null)
@@ -130,14 +129,29 @@ export const FloatingWordCountWidget: React.FC<FloatingWordCountWidgetProps> = (
           rafIdRef.current = null
         }
         updateDomTransform(posRef.current.x, posRef.current.y)
+        localStorageKeyValueStore.set(STORAGE_KEY_WIDGET_POS, JSON.stringify(posRef.current))
+      }
+    }
+
+    const handleResize = () => {
+      const maxX = Math.max(20, window.innerWidth - 100)
+      const maxY = Math.max(40, window.innerHeight - 100)
+      const clampedX = Math.min(Math.max(10, posRef.current.x), maxX)
+      const clampedY = Math.min(Math.max(10, posRef.current.y), maxY)
+      if (clampedX !== posRef.current.x || clampedY !== posRef.current.y) {
+        posRef.current = { x: clampedX, y: clampedY }
+        updateDomTransform(clampedX, clampedY)
+        localStorageKeyValueStore.set(STORAGE_KEY_WIDGET_POS, JSON.stringify(posRef.current))
       }
     }
 
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
     window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('resize', handleResize)
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('resize', handleResize)
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current)
     }
   }, [updateDomTransform])
