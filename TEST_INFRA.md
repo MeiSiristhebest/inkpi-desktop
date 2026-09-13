@@ -97,3 +97,24 @@ npx vitest run tests/e2e/tier2-boundaries
 npx vitest run tests/e2e/tier3-combinations
 npx vitest run tests/e2e/tier4-scenarios
 ```
+
+### Tauri release smoke
+
+The Windows GNU release path is also covered locally:
+
+```bash
+pnpm run tauri:build
+```
+
+The current verification produced the NSIS installer at
+`src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/InkPi Desktop_0.1.0_x64-setup.exe`,
+verified that the package contains the `inkpi.exe` sidecar, four skill manifests,
+WebView2Loader, and MinGW runtime DLLs, and started the release application twice.
+Both starts spawned the sidecar and exposed TCP ports 8848 and 8849; the test
+processes were closed after each run. This is a startup/restart smoke test, not
+the full App task-recovery or production-provider gate.
+
+The `Architecture Gates` workflow accepts an optional `runtime_ref` input when
+started with `workflow_dispatch`. Use a Runtime branch or commit there when the
+Desktop change must be verified against an unpublished Runtime revision; normal
+push and pull-request runs continue to use Runtime `master`.

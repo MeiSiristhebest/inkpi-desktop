@@ -1,6 +1,6 @@
 # InkPi Desktop 技术架构
 
-状态：正式基线。AI Runtime v1 已完成全量 Phase 0–23 验收矩阵并正式冻结（Frozen v1 Final）。
+状态：正式基线（冻结候选，Final Freeze pending）。AI Runtime v1 的本地 Phase 0–22 实现与自动化验收矩阵已完成；Phase 23 仍缺真实 Provider、人工标注、跨设备、安装后 GUI 和生产可靠性证据。
 
 本文记录 InkPi Desktop 与 InkPi Daemon 的进程边界、数据所有权、AI 任务入口和当前实现状态。规范性契约见 inkpi/docs/specs/AI_RUNTIME_SPEC_v1.md。
 
@@ -247,7 +247,7 @@ Proposal Ledger 以 IndexedDB 为 Desktop authoritative store；`RemoteProposalS
 
 ProgressiveSkillRuntime 复用 ExtensionHost、DynamicPluginLoader、ToolRegistry 和 SkillDiscoveryEngine。SkillManifest 包含 id、version、title、description、intents、capabilities、taskKinds、tools 和 eager | lazy | on-demand activation。discovery 只读取 metadata；load 才读取完整 markdown body；扩展工具在加载后镜像到现有 ToolRegistry。
 
-通用 progressive disclosure runtime 已存在。hook、promise、character-voice、timeline-consistency 四个第一批 creative skill 的 manifest 已存在；Runtime 生命周期测试覆盖共享 ExtensionHost、ToolRegistry、TaskRegistry、ContextPipeline 的注册、失败回滚、重试和并发幂等；`tests/first-party-skill-activation.test.ts` 已逐个加载真实 manifest 并验证激活；`tests/skill-runtime-cross-process.test.ts` 已通过真实 Daemon 子进程和 RPC 逐个验证 discovery、lazy load、activate 及 instruction provenance。Desktop 生产环境的注册和 CI 验收仍未确认。
+通用 progressive disclosure runtime 已存在。hook、promise、character-voice、timeline-consistency 四个第一批 creative skill 的 manifest 已存在；Runtime 生命周期测试覆盖共享 ExtensionHost、ToolRegistry、TaskRegistry、ContextPipeline 的注册、失败回滚、重试和并发幂等；`tests/first-party-skill-activation.test.ts` 已逐个加载真实 manifest 并验证激活；`tests/skill-runtime-cross-process.test.ts` 已通过真实 Daemon 子进程和 RPC 逐个验证 discovery、lazy load、activate 及 instruction provenance；packaged sidecar opt-in 验收还会通过 RPC 执行 4 个 Runtime Tool 和 2 个 Runtime Workflow。Desktop 生产环境的注册和 CI 验收仍未确认。
 
 ### Artifacts
 
@@ -281,7 +281,7 @@ TaskRouter observer 和 task.event 可记录 taskId、kind、状态、时间、p
 
 ## 11. 插件与 Legacy 状态
 
-src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id；src/ai/tasks/pluginRuntimeCatalog.ts 为 44 个条目逐一标注 pure-local、ai-task、context-provider、tool、workflow、ui-only 或 hybrid 边界。当前 22 个 AI 插件组件通过 PluginHostContext.aiAssistant.runPluginTask 生成 plugin.<id>.analysis 任务，再由宿主映射到通用 runTask；其余条目也已显式分类和指向 Desktop、本地引擎、Story Context、Extension Tool 或 Runtime Workflow。`src/ai/tasks/pluginRuntimeMigration.test.ts` 对 44 个目录、定义、运行时分类、任务/Context Provider 证据和 legacy 入口扫描做一致性校验；其中 4 个 Extension Tool 和 2 个 Runtime Workflow 仍是明确的 classification-only 目标。
+src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id；src/ai/tasks/pluginRuntimeCatalog.ts 为 44 个条目逐一标注 pure-local、ai-task、context-provider、tool、workflow、ui-only 或 hybrid 边界。当前 22 个 AI 插件组件通过 PluginHostContext.aiAssistant.runPluginTask 生成 plugin.<id>.analysis 任务，再由宿主映射到通用 runTask；其余条目也已显式分类和指向 Desktop、本地引擎、Story Context、Extension Tool 或 Runtime Workflow。`src/ai/tasks/pluginRuntimeMigration.test.ts` 对 44 个目录、定义、运行时分类、任务/Context Provider 证据和 legacy 入口扫描做一致性校验；packaged sidecar opt-in 已实际执行 4 个 Extension Tool 和 2 个 Runtime Workflow，生产环境的完整插件运行和 interface 审计仍待完成。
 
 src/architecture-ai.test.ts 已覆盖：
 
