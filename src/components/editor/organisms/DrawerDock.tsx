@@ -28,7 +28,7 @@ export const DrawerDock: FC<DrawerDockProps> = ({ projectId, currentText }) => {
   return (
     <aside
       data-testid="editor-plugin-drawer-dock"
-      className="w-80 h-full shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex flex-col z-20 shadow-sm animate-in slide-in-from-right duration-200"
+      className="editor-plugin-drawer-dock w-80 h-full shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex flex-col z-20 shadow-sm animate-in slide-in-from-right duration-200"
     >
       <div className="h-10 shrink-0 px-3 border-b border-[var(--ink-border)] flex items-center justify-between bg-[var(--ink-bg)]/50">
         <div className="flex items-center gap-2 min-w-0">
