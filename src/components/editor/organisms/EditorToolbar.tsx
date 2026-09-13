@@ -118,7 +118,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       {/* 左侧：返回作品库 + 导航展开 + 翻章导航 + 目录展开 + 章节标题输入 + 状态选择器 */}
       <div className="editor-toolbar-left flex items-center gap-1.5 min-w-0 flex-1">
         {onToggleNav && !isNavOpen && (
-          <IconButton onClick={onToggleNav} title="展开导航">
+          <IconButton onClick={onToggleNav} title="展开导航" className="editor-toolbar-nav-toggle">
             <PanelLeftOpen className="w-4 h-4" />
           </IconButton>
         )}

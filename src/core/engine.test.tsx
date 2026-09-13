@@ -76,6 +76,19 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.getByText('InkPi')).toBeInTheDocument()
   })
 
+  it('keeps one compact navigation toggle when the left panel is collapsed', () => {
+    render(<Engine projectId="p1" />)
+    const compactToggle = screen.getByTestId('sidebar-nav-compact-toggle')
+    expect(compactToggle).toHaveAttribute('aria-label', '收起导航')
+
+    fireEvent.click(compactToggle)
+    expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
+    expect(compactToggle).toHaveAttribute('aria-label', '展开导航')
+
+    fireEvent.click(compactToggle)
+    expect(screen.getByText('InkPi')).toBeInTheDocument()
+  })
+
   it('toggles the right info panel', () => {
     render(<Engine projectId="p1" defaultRightOpen={true} />)
     expect(screen.getByText('文档信息')).toBeInTheDocument()

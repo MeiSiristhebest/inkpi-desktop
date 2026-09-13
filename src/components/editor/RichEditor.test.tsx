@@ -110,7 +110,8 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' }),
     ).toBeInTheDocument()
     expect(screen.getByText('章节目录')).toBeInTheDocument()
-    expect(screen.getByText(/Local IndexedDB/)).toBeInTheDocument()
+    expect(screen.queryByText(/Local IndexedDB/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/编码：UTF-8/)).not.toBeInTheDocument()
     expect(screen.getByText(/全书/)).toBeInTheDocument()
   })
 

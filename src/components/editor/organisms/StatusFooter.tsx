@@ -9,8 +9,6 @@ interface StatusFooterProps {
   model: EditorModel
   isTypewriter: boolean
   onTypewriterChange?: (v: boolean) => void
-  /** 存储实现标识，由上层/模型层派发注入，避免视图层硬编码底层数据库名 */
-  storageLabel?: string
   isConnected?: boolean
   isReconnecting?: boolean
   onReconnect?: () => void
@@ -21,7 +19,6 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
   model,
   isTypewriter,
   onTypewriterChange,
-  storageLabel = 'Local IndexedDB',
   isConnected = false,
   isReconnecting = false,
   onReconnect,
@@ -109,7 +106,7 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
         </button>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="editor-status-secondary min-w-0 flex items-center gap-3 shrink-0">
         {ghostText && (
           <button
             onClick={() => actions.acceptGhostText()}

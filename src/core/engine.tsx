@@ -1,5 +1,13 @@
 import { useState, useEffect, Suspense, type FC, type ReactNode } from 'react'
-import { PanelRight, Maximize2, Minimize2, Home, PanelLeftOpen, Sparkles } from 'lucide-react'
+import {
+  PanelRight,
+  Maximize2,
+  Minimize2,
+  Home,
+  PanelLeftOpen,
+  PanelLeftClose,
+  Sparkles,
+} from 'lucide-react'
 import { RichEditor, type RichEditorProps } from '../components/editor/RichEditor'
 import { SettingsView } from '../components/settings/SettingsView'
 import { DashboardView } from '../components/dashboard/DashboardView'
@@ -231,7 +239,7 @@ export const Engine: FC<EngineProps> = ({
   return (
     <div
       data-testid="project-engine-root"
-      className="project-engine-root h-screen w-screen flex overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)]"
+      className="project-engine-root relative h-screen w-screen flex overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)]"
     >
       {/* 42 模块与全景侧边栏 */}
       {!isFullscreen && !focusMode && leftOpen && (
@@ -243,6 +251,24 @@ export const Engine: FC<EngineProps> = ({
           onOpenSettings={() => setSettingsOpen(true)}
           onClose={() => setLeftOpen(false)}
         />
+      )}
+
+      {/* 窄屏时不保留整条导航栏，只保留一个可展开/收起的按钮。 */}
+      {!isFullscreen && !focusMode && (
+        <button
+          type="button"
+          data-testid="sidebar-nav-compact-toggle"
+          aria-label={leftOpen ? '收起导航' : '展开导航'}
+          title={leftOpen ? '收起侧栏' : '展开侧栏'}
+          onClick={() => setLeftOpen((open) => !open)}
+          className="sidebar-nav-compact-toggle items-center justify-center w-7 h-7 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
+        >
+          {leftOpen ? (
+            <PanelLeftClose className="w-4 h-4" />
+          ) : (
+            <PanelLeftOpen className="w-4 h-4" />
+          )}
+        </button>
       )}
 
       {/* 主区 */}

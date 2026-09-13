@@ -31,7 +31,6 @@ interface WriterDeskProps {
   projectRepo?: ProjectRepository
   idGen?: IdGenerator
   clockPort?: Clock
-  storageLabel?: string
 }
 
 const FONT_MIN = 12
@@ -59,7 +58,6 @@ export const WriterDesk: FC<WriterDeskProps> = ({
   projectRepo = indexedDbProjectRepository,
   idGen = idGenerator,
   clockPort = clock,
-  storageLabel = 'Local IndexedDB',
 }) => {
   const [volumes, setVolumes] = useState<VolumeRecord[]>([])
   const [chapters, setChapters] = useState<ChapterRecord[]>([])
