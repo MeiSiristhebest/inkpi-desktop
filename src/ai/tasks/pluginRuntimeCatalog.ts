@@ -24,6 +24,7 @@ export interface PluginRuntimeCatalogEntry {
   readonly runtimeClass: PluginRuntimeClass
   readonly runtimeTarget: PluginRuntimeTarget
   readonly taskKind?: string
+  readonly toolName?: string
   readonly contextProviderId?: string
 }
 
@@ -48,7 +49,12 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
   },
   'describe-palette': { pluginId: 'describe-palette', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
   'dialogue-distiller': taskEntry('dialogue-distiller'),
-  'diff-reviewer': { pluginId: 'diff-reviewer', runtimeClass: 'tool', runtimeTarget: 'extension-tool' },
+  'diff-reviewer': {
+    pluginId: 'diff-reviewer',
+    runtimeClass: 'tool',
+    runtimeTarget: 'extension-tool',
+    toolName: 'plugin.diff-reviewer.compute',
+  },
   'emotion-curve': taskEntry('emotion-curve'),
   'expectation-engine': taskEntry('expectation-engine'),
   'faction-matrix': taskEntry('faction-matrix'),
@@ -61,14 +67,37 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     runtimeTarget: 'story-context-compiler',
     contextProviderId: 'story.context.living-codex',
   },
-  'memory-palace': { pluginId: 'memory-palace', runtimeClass: 'tool', runtimeTarget: 'extension-tool' },
+  'memory-palace': {
+    pluginId: 'memory-palace',
+    runtimeClass: 'tool',
+    runtimeTarget: 'extension-tool',
+    toolName: 'plugin.memory-palace.search',
+  },
   'multi-calendar': taskEntry('multi-calendar'),
-  'multiverse-whatif': { pluginId: 'multiverse-whatif', runtimeClass: 'workflow', runtimeTarget: 'runtime-workflow' },
-  'name-forge': { pluginId: 'name-forge', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
+  'multiverse-whatif': {
+    pluginId: 'multiverse-whatif',
+    runtimeClass: 'workflow',
+    runtimeTarget: 'runtime-workflow',
+    taskKind: 'plugin.multiverse-whatif.workflow',
+  },
+  'name-forge': {
+    pluginId: 'name-forge',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
   'narrative-linter': taskEntry('narrative-linter'),
   'paywall-sentry': taskEntry('paywall-sentry'),
-  'pov-guard': { pluginId: 'pov-guard', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
-  'press-forge': { pluginId: 'press-forge', runtimeClass: 'tool', runtimeTarget: 'extension-tool' },
+  'pov-guard': {
+    pluginId: 'pov-guard',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
+  'press-forge': {
+    pluginId: 'press-forge',
+    runtimeClass: 'tool',
+    runtimeTarget: 'extension-tool',
+    toolName: 'plugin.press-forge.format',
+  },
   'promise-ledger': taskEntry('promise-ledger'),
   'reader-hook': taskEntry('reader-hook'),
   'reader-simulator': taskEntry('reader-simulator'),
@@ -76,11 +105,29 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
   'rhythm-radar': { pluginId: 'rhythm-radar', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
   'safe-gate': taskEntry('safe-gate'),
   'scene-beats': taskEntry('scene-beats'),
-  'scrapbook-recycler': { pluginId: 'scrapbook-recycler', runtimeClass: 'tool', runtimeTarget: 'extension-tool' },
-  'shadow-reader': { pluginId: 'shadow-reader', runtimeClass: 'pure-local', runtimeTarget: 'desktop-local-engine' },
-  'soundscape': { pluginId: 'soundscape', runtimeClass: 'ui-only', runtimeTarget: 'desktop-ui' },
-  'sprint-arena': { pluginId: 'sprint-arena', runtimeClass: 'ui-only', runtimeTarget: 'desktop-ui' },
-  'storyboard-gen': { pluginId: 'storyboard-gen', runtimeClass: 'workflow', runtimeTarget: 'runtime-workflow' },
+  'scrapbook-recycler': {
+    pluginId: 'scrapbook-recycler',
+    runtimeClass: 'tool',
+    runtimeTarget: 'extension-tool',
+    toolName: 'plugin.scrapbook-recycler.recommend',
+  },
+  'shadow-reader': {
+    pluginId: 'shadow-reader',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
+  soundscape: { pluginId: 'soundscape', runtimeClass: 'ui-only', runtimeTarget: 'desktop-ui' },
+  'sprint-arena': {
+    pluginId: 'sprint-arena',
+    runtimeClass: 'ui-only',
+    runtimeTarget: 'desktop-ui',
+  },
+  'storyboard-gen': {
+    pluginId: 'storyboard-gen',
+    runtimeClass: 'workflow',
+    runtimeTarget: 'runtime-workflow',
+    taskKind: 'plugin.storyboard-gen.workflow',
+  },
   'sub-plot-braid': taskEntry('sub-plot-braid'),
   'subtext-compiler': taskEntry('subtext-compiler'),
   'timeline-grid': taskEntry('timeline-grid'),

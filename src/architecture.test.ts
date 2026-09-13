@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { dirname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /**
  * 架构依赖方向守卫。
@@ -64,7 +65,9 @@ function walk(dir: string): string[] {
 }
 
 describe('架构依赖方向守卫', () => {
-  const root = process.cwd()
+  // Resolve from the test file so the guard also works when Vitest is invoked
+  // through an absolute config/root path instead of the Desktop cwd.
+  const root = dirname(dirname(fileURLToPath(import.meta.url)))
   for (const layer of FORBIDDEN_LAYERS) {
     describe(layer, () => {
       let files: string[] = []

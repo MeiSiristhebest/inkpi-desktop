@@ -12,7 +12,7 @@ import { ALL_LAZY_PLUGINS } from './pluginDefinitions'
 import { indexedDbKeyValueStore } from '../adapters/indexedDbKeyValueStore'
 import { localStorageKeyValueStore } from '../adapters/localStorageKeyValueStore'
 
-export const STORAGE_KEY_ENABLED_PLUGINS = 'inkpi_enabled_plugins_v1'
+export const STORAGE_KEY_ENABLED_PLUGINS = 'inkpi_enabled_plugins_v2'
 
 // 系统内所有可用插件按需懒加载注册列表（体积大幅缩减，首屏零冗余）
 export const ALL_AVAILABLE_PLUGINS: DesktopPlugin[] = ALL_LAZY_PLUGINS

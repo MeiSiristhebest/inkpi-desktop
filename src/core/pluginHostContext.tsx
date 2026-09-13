@@ -34,6 +34,12 @@ export interface DesktopPluginHostProviderProps {
   onChapterUpdate?: (updated: ChapterRecord) => void
   onRefreshHierarchy?: () => Promise<void>
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
+  onPluginTool?: (pluginId: string, input: Record<string, unknown>) => Promise<unknown | null>
+  onPluginWorkflow?: (
+    pluginId: string,
+    input: unknown,
+    metadata?: Record<string, unknown>,
+  ) => Promise<unknown | null>
   isAiConnected?: boolean
   children: ReactNode
 }
@@ -47,6 +53,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
   onChapterUpdate,
   onRefreshHierarchy,
   onAiTask,
+  onPluginTool,
+  onPluginWorkflow,
   isAiConnected = false,
   children,
 }) => {
@@ -82,8 +90,9 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
   }, [onRefreshHierarchy])
 
   const aiAssistant = useMemo(() => {
-    if (!onAiTask) return undefined
+    if (!onAiTask && !onPluginTool && !onPluginWorkflow) return undefined
     const runTask = async (task: AiTask): Promise<TaskResult | null> => {
+      if (!onAiTask) return null
       return onAiTask(task)
     }
     return {
@@ -118,8 +127,34 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           return null
         }
       },
+      ...(onPluginTool
+        ? {
+            runPluginTool: async (pluginId: string, input: Record<string, unknown>) => {
+              try {
+                return await onPluginTool(pluginId, input)
+              } catch {
+                return null
+              }
+            },
+          }
+        : {}),
+      ...(onPluginWorkflow
+        ? {
+            runPluginWorkflow: async (
+              pluginId: string,
+              input: unknown,
+              metadata?: Record<string, unknown>,
+            ) => {
+              try {
+                return await onPluginWorkflow(pluginId, input, metadata)
+              } catch {
+                return null
+              }
+            },
+          }
+        : {}),
     }
-  }, [onAiTask, isAiConnected, projectId, activeChapter?.id])
+  }, [onAiTask, onPluginTool, onPluginWorkflow, isAiConnected, projectId, activeChapter?.id])
 
   const mutateActiveChapter = useCallback(
     async (patch: ChapterMutationPatch): Promise<ChapterMutationResult> => {

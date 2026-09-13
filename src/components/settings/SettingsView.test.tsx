@@ -51,28 +51,28 @@ describe('SettingsView', () => {
     })
   })
 
-  it('自定义 AI：选择 provider 并手动填写模型 ID，保存后写入 aiModel', async () => {
+  it('自定义 AI：通过「添加服务」选择 provider 并手动填写模型 ID，保存后写入 aiModel', async () => {
     renderSettings({ open: true, onClose: vi.fn() })
     fireEvent.click(screen.getByText('自定义 AI 模型'))
 
-    // 点击 DeepSeek 厂商胶囊药丸，自动填充默认 baseUrl
-    fireEvent.click(screen.getByText('DeepSeek'))
-    await waitFor(() =>
-      expect(screen.getByDisplayValue('https://api.deepseek.com/v1')).toBeInTheDocument(),
-    )
+    // 点击「添加服务」
+    fireEvent.click(screen.getByText('添加服务'))
 
-    // 手动输入模型 ID 与名称
-    fireEvent.change(screen.getByPlaceholderText('输入模型 ID 或点击右侧获取'), {
+    // 选择 DeepSeek 厂商并填写模型 ID
+    const selects = screen.getAllByRole('combobox')
+    fireEvent.change(selects[0], { target: { value: 'deepseek' } })
+
+    // 添加模型 ID
+    fireEvent.change(screen.getByPlaceholderText('输入模型 ID，如 my-model-v2'), {
       target: { value: 'deepseek-chat' },
     })
-    fireEvent.change(screen.getByPlaceholderText('界面展示名'), { target: { value: 'DeepSeek' } })
+    fireEvent.click(screen.getByText('添加'))
 
-    fireEvent.click(screen.getByText('保存配置'))
+    fireEvent.click(screen.getByText('保存服务'))
     await waitFor(() => {
       const s = readStored()
       expect(s.aiModel?.provider).toBe('deepseek')
       expect(s.aiModel?.id).toBe('deepseek-chat')
-      expect(s.aiModel?.name).toBe('DeepSeek')
     })
   })
 
@@ -80,7 +80,10 @@ describe('SettingsView', () => {
     renderSettings({ open: true, onClose: vi.fn() })
     fireEvent.click(screen.getByText('自定义 AI 模型'))
 
-    fireEvent.click(screen.getByText('DeepSeek'))
+    fireEvent.click(screen.getByText('添加服务'))
+
+    const selects = screen.getAllByRole('combobox')
+    fireEvent.change(selects[0], { target: { value: 'deepseek' } })
 
     await waitFor(() =>
       expect(screen.getByDisplayValue('https://api.deepseek.com/v1')).toBeInTheDocument(),

@@ -14,9 +14,7 @@ import {
 } from './pluginRuntimeCatalog'
 
 type MigrationDisposition =
-  | 'migrated-to-runtime'
-  | 'desktop-local-by-design'
-  | 'classification-only'
+  'migrated-to-runtime' | 'desktop-local-by-design'
 
 interface BoundaryExpectation {
   runtimeClass: PluginRuntimeClass
@@ -25,9 +23,8 @@ interface BoundaryExpectation {
 }
 
 /**
- * Phase 20 decision record. `classification-only` is intentional: the
- * Desktop catalog names the future Runtime target, but no task/context
- * registration is claimed for those plugins by this test.
+ * Phase 20 decision record. Every non-local AI boundary must have a concrete
+ * task, tool, or workflow invocation in the plugin implementation.
  */
 const EXPECTED_BOUNDARIES = {
   'aftermath-sync': {
@@ -83,7 +80,7 @@ const EXPECTED_BOUNDARIES = {
   'diff-reviewer': {
     runtimeClass: 'tool',
     runtimeTarget: 'extension-tool',
-    disposition: 'classification-only',
+    disposition: 'migrated-to-runtime',
   },
   'emotion-curve': {
     runtimeClass: 'ai-task',
@@ -123,7 +120,7 @@ const EXPECTED_BOUNDARIES = {
   'memory-palace': {
     runtimeClass: 'tool',
     runtimeTarget: 'extension-tool',
-    disposition: 'classification-only',
+    disposition: 'migrated-to-runtime',
   },
   'multi-calendar': {
     runtimeClass: 'ai-task',
@@ -133,7 +130,7 @@ const EXPECTED_BOUNDARIES = {
   'multiverse-whatif': {
     runtimeClass: 'workflow',
     runtimeTarget: 'runtime-workflow',
-    disposition: 'classification-only',
+    disposition: 'migrated-to-runtime',
   },
   'name-forge': {
     runtimeClass: 'pure-local',
@@ -158,7 +155,7 @@ const EXPECTED_BOUNDARIES = {
   'press-forge': {
     runtimeClass: 'tool',
     runtimeTarget: 'extension-tool',
-    disposition: 'classification-only',
+    disposition: 'migrated-to-runtime',
   },
   'promise-ledger': {
     runtimeClass: 'ai-task',
@@ -198,7 +195,7 @@ const EXPECTED_BOUNDARIES = {
   'scrapbook-recycler': {
     runtimeClass: 'tool',
     runtimeTarget: 'extension-tool',
-    disposition: 'classification-only',
+    disposition: 'migrated-to-runtime',
   },
   'shadow-reader': {
     runtimeClass: 'pure-local',
@@ -218,7 +215,7 @@ const EXPECTED_BOUNDARIES = {
   'storyboard-gen': {
     runtimeClass: 'workflow',
     runtimeTarget: 'runtime-workflow',
-    disposition: 'classification-only',
+    disposition: 'migrated-to-runtime',
   },
   'sub-plot-braid': {
     runtimeClass: 'ai-task',
@@ -285,15 +282,21 @@ function pluginEvidence(pluginId: FirstPartyPluginId) {
   const directory = join(PLUGIN_ROOT, pluginId)
   const files = existsSync(directory) ? implementationFiles(directory) : []
   const source = stripComments(files.map((file) => readFileSync(file, 'utf8')).join('\n'))
-  const taskInvocations = [
-    ...source.matchAll(/\brunPluginTask\s*\(\s*['"`]([^'"`]+)['"`]/g),
+  const runtimeInvocations = [
+    ...source.matchAll(
+      /\b(?:runPluginTask|runPluginTool|runPluginWorkflow)\s*\(\s*['"`]([^'"`]+)['"`]/g,
+    ),
   ].map((match) => match[1])
+  const runtimeInvocationCount = [
+    ...source.matchAll(/\b(?:runPluginTask|runPluginTool|runPluginWorkflow)\s*\(/g),
+  ].length
 
   return {
     directory,
     files,
     source,
-    taskInvocations: [...new Set(taskInvocations)],
+    runtimeInvocations: [...new Set(runtimeInvocations)],
+    runtimeInvocationCount,
     hasContextProviderFile: existsSync(join(directory, 'contextProvider.ts')),
   }
 }
@@ -310,6 +313,12 @@ const definitionSource = readFileSync(DEFINITION_FILE, 'utf8')
 function expectedTask(pluginId: FirstPartyPluginId): boolean {
   const runtimeClass = EXPECTED_BOUNDARIES[pluginId].runtimeClass
   return runtimeClass === 'ai-task' || runtimeClass === 'hybrid'
+}
+
+function expectedRuntimeInvocation(pluginId: FirstPartyPluginId): boolean {
+  return ['ai-task', 'hybrid', 'tool', 'workflow'].includes(
+    EXPECTED_BOUNDARIES[pluginId].runtimeClass,
+  )
 }
 
 function expectedContextProvider(pluginId: FirstPartyPluginId): boolean {
@@ -409,15 +418,26 @@ describe('Phase 20 first-party plugin migration matrix', () => {
     expect(indexSource).toMatch(new RegExp(`\\bid\\s*:\\s*['"]${pluginId}['"]`))
     expect(definitionSource).toContain(`../plugins/${pluginId}`)
 
-    expect(evidence.taskInvocations).toEqual(expectedTask(pluginId) ? [pluginId] : [])
+    expect(evidence.runtimeInvocations).toEqual(expectedRuntimeInvocation(pluginId) ? [pluginId] : [])
+    expect(evidence.runtimeInvocationCount).toBe(expectedRuntimeInvocation(pluginId) ? 1 : 0)
     expect(evidence.hasContextProviderFile).toBe(expectedContextProvider(pluginId))
     expect(Boolean(definition?.contextProvider)).toBe(expectedContextProvider(pluginId))
 
     if (expectedTask(pluginId)) {
       expect(entry.taskKind).toBe(`plugin.${pluginId}.analysis`)
       expect(instructionIds).toContain(entry.taskKind)
+      expect(entry.toolName).toBeUndefined()
+    } else if (expected.runtimeClass === 'tool') {
+      expect(entry.taskKind).toBeUndefined()
+      expect(entry.toolName).toBe(`plugin.${pluginId}.${pluginId === 'memory-palace' ? 'search' : pluginId === 'press-forge' ? 'format' : pluginId === 'scrapbook-recycler' ? 'recommend' : 'compute'}`)
+      expect(instructionIds).not.toContain(`plugin.${pluginId}.analysis`)
+    } else if (expected.runtimeClass === 'workflow') {
+      expect(entry.taskKind).toBe(`plugin.${pluginId}.workflow`)
+      expect(entry.toolName).toBeUndefined()
+      expect(instructionIds).not.toContain(entry.taskKind)
     } else {
       expect(entry.taskKind).toBeUndefined()
+      expect(entry.toolName).toBeUndefined()
       expect(instructionIds).not.toContain(`plugin.${pluginId}.analysis`)
     }
 
@@ -429,41 +449,45 @@ describe('Phase 20 first-party plugin migration matrix', () => {
   })
 
   it('keeps source-discovered task and context-provider sets aligned with the catalog', () => {
-    const taskIds = FIRST_PARTY_PLUGIN_IDS.filter((pluginId) => EVIDENCE[pluginId].taskInvocations.length > 0)
+    const runtimeIds = FIRST_PARTY_PLUGIN_IDS.filter(
+      (pluginId) => EVIDENCE[pluginId].runtimeInvocations.length > 0,
+    )
     const contextProviderIds = FIRST_PARTY_PLUGIN_IDS.filter(
       (pluginId) => EVIDENCE[pluginId].hasContextProviderFile,
     )
-    const expectedTaskIds = FIRST_PARTY_PLUGIN_IDS.filter((pluginId) => expectedTask(pluginId))
+    const expectedRuntimeIds = FIRST_PARTY_PLUGIN_IDS.filter((pluginId) => expectedRuntimeInvocation(pluginId))
     const expectedContextProviderIds = FIRST_PARTY_PLUGIN_IDS.filter((pluginId) =>
       expectedContextProvider(pluginId),
     )
 
-    expect(taskIds).toEqual(expectedTaskIds)
+    expect(runtimeIds).toEqual(expectedRuntimeIds)
     expect(contextProviderIds).toEqual(expectedContextProviderIds)
     expect(
       Object.values(PLUGIN_RUNTIME_CATALOG)
-        .filter((entry) => entry.taskKind)
+        .filter((entry) => entry.taskKind && entry.runtimeClass === 'ai-task' || entry.taskKind && entry.runtimeClass === 'hybrid')
         .map((entry) => entry.pluginId),
-    ).toEqual(expectedTaskIds)
+    ).toEqual(FIRST_PARTY_PLUGIN_IDS.filter((pluginId) => expectedTask(pluginId)))
   })
 
-  it('keeps tool/workflow classification-only targets and UI-only plugins out of Runtime tasks', () => {
-    const classificationOnlyIds = FIRST_PARTY_PLUGIN_IDS.filter(
-      (pluginId) => EXPECTED_BOUNDARIES[pluginId].disposition === 'classification-only',
+  it('keeps tool/workflow targets concrete and UI-only plugins out of Runtime calls', () => {
+    const runtimeBoundaryIds = FIRST_PARTY_PLUGIN_IDS.filter(
+      (pluginId) =>
+        EXPECTED_BOUNDARIES[pluginId].runtimeClass === 'tool' ||
+        EXPECTED_BOUNDARIES[pluginId].runtimeClass === 'workflow',
     )
-    const actualClassificationOnlyIds = FIRST_PARTY_PLUGIN_IDS.filter(
+    const actualRuntimeBoundaryIds = FIRST_PARTY_PLUGIN_IDS.filter(
       (pluginId) =>
         (PLUGIN_RUNTIME_CATALOG[pluginId].runtimeClass === 'tool' ||
           PLUGIN_RUNTIME_CATALOG[pluginId].runtimeClass === 'workflow') &&
-        EVIDENCE[pluginId].taskInvocations.length === 0 &&
+        EVIDENCE[pluginId].runtimeInvocations.length > 0 &&
         !EVIDENCE[pluginId].hasContextProviderFile,
     )
     const uiOnlyIds = FIRST_PARTY_PLUGIN_IDS.filter(
       (pluginId) => EXPECTED_BOUNDARIES[pluginId].runtimeClass === 'ui-only',
     )
 
-    expect(actualClassificationOnlyIds).toEqual(classificationOnlyIds)
-    expect(classificationOnlyIds).toEqual([
+    expect(actualRuntimeBoundaryIds).toEqual(runtimeBoundaryIds)
+    expect(runtimeBoundaryIds).toEqual([
       'diff-reviewer',
       'memory-palace',
       'multiverse-whatif',
@@ -471,9 +495,10 @@ describe('Phase 20 first-party plugin migration matrix', () => {
       'scrapbook-recycler',
       'storyboard-gen',
     ])
-    for (const pluginId of [...classificationOnlyIds, ...uiOnlyIds]) {
+    for (const pluginId of uiOnlyIds) {
       expect(PLUGIN_RUNTIME_CATALOG[pluginId].taskKind).toBeUndefined()
-      expect(EVIDENCE[pluginId].taskInvocations).toEqual([])
+      expect(PLUGIN_RUNTIME_CATALOG[pluginId].toolName).toBeUndefined()
+      expect(EVIDENCE[pluginId].runtimeInvocations).toEqual([])
     }
   })
 })

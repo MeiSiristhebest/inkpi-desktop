@@ -9,7 +9,12 @@ import { DEFAULT_DAEMON_URL } from '../config'
 import type { AiTask, TaskResult, TaskStatus, TaskStatusSnapshot } from '@inkpi/protocol'
 import { semanticDocumentFromText } from '../domain/content'
 import type { StoryState } from '../domain/story'
-import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
+import {
+  createAssistantTask,
+  createContinueTask,
+  createContinuityAuditTask,
+  createDeepReasoningTask,
+} from '../ai/tasks/taskFactories'
 import { taskResultText } from '../ai/tasks/pluginTasks'
 import { idGenerator } from '../adapters/idGenerator'
 import type { DomainSyncResult } from '../domain/sync/domainSyncService'
@@ -123,6 +128,12 @@ export interface AiConversation {
     input: ProjectDistillationInput,
     options?: DistillationWorkflowOptions,
   ) => Promise<DistillationWorkflowResult | null>
+  runPluginTool: (pluginId: string, input: Record<string, unknown>) => Promise<unknown | null>
+  runPluginWorkflow: (
+    pluginId: string,
+    input: unknown,
+    metadata?: Record<string, unknown>,
+  ) => Promise<unknown | null>
   syncDomain: (workspaceId: string) => Promise<DomainSyncResult | null>
 }
 
@@ -544,6 +555,47 @@ export function useAiConversation(
 
   const runAiTask = runTrackedTask
 
+  const runTrackedConvenienceTask = useCallback(
+    async <T>(
+      task: AiTask,
+      run: (onProgress: (snapshot: TaskStatusSnapshot) => void) => Promise<T>,
+    ): Promise<T | null> => {
+      const client = clientRef.current
+      if (!client || !isConnected) return null
+
+      let latestSnapshot = initialTaskSnapshot(task)
+      trackTaskSnapshot(task, latestSnapshot)
+      try {
+        const result = await run((snapshot) => {
+          latestSnapshot = snapshot
+          trackTaskSnapshot(task, snapshot)
+        })
+        const record = recoveryRecordsRef.current.find((item) => item.task.id === task.id)
+        if (record) {
+          removeRecoveryRecord(task.id)
+          removePersistedRecoveryRecord(record)
+        }
+        return result
+      } catch (error: unknown) {
+        const cancelled = isAbortError(error)
+        trackTaskSnapshot(task, {
+          ...latestSnapshot,
+          status: cancelled ? 'cancelled' : 'failed',
+          finishedAt: clockPort.now(),
+          error: cancelled ? undefined : errorSnapshot(error, 'desktop-task-failed'),
+        })
+        throw error
+      }
+    },
+    [
+      clockPort,
+      isConnected,
+      removePersistedRecoveryRecord,
+      removeRecoveryRecord,
+      trackTaskSnapshot,
+    ],
+  )
+
   const steerTask = useCallback(
     async (taskId: string, input: unknown) => {
       if (!clientRef.current?.steerTask || !isConnected) return false
@@ -553,36 +605,75 @@ export function useAiConversation(
   )
 
   const runContinuityAudit = useCallback(
-    async (input: ContinuityAuditTaskInput, options = {}) => {
-      if (!clientRef.current?.runContinuityAudit || !isConnected) return null
-      return clientRef.current.runContinuityAudit(
-        { ...input, storyState: input.storyState ?? storyState },
-        options,
+    async (
+      input: ContinuityAuditTaskInput,
+      options: Parameters<NonNullable<AiAssistant['runContinuityAudit']>>[1] = {},
+    ) => {
+      const client = clientRef.current
+      if (!client?.runContinuityAudit || !isConnected) return null
+      const taskInput = { ...input, storyState: input.storyState ?? storyState }
+      const task = createContinuityAuditTask(taskInput)
+      return runTrackedConvenienceTask(task, (onProgress) =>
+        client.runContinuityAudit!(taskInput, {
+          ...options,
+          onProgress: (snapshot) => {
+            onProgress(snapshot)
+            options.onProgress?.(snapshot)
+          },
+        }),
       )
     },
-    [isConnected, storyState],
+    [isConnected, runTrackedConvenienceTask, storyState],
   )
 
   const runDeepReasoning = useCallback(
-    async (input: DeepReasoningTaskInput, options = {}) => {
-      if (!clientRef.current?.runDeepReasoning || !isConnected) return null
-      return clientRef.current.runDeepReasoning(
-        { ...input, storyState: input.storyState ?? storyState },
-        options,
+    async (
+      input: DeepReasoningTaskInput,
+      options: Parameters<NonNullable<AiAssistant['runDeepReasoning']>>[1] = {},
+    ) => {
+      const client = clientRef.current
+      if (!client?.runDeepReasoning || !isConnected) return null
+      const taskInput = { ...input, storyState: input.storyState ?? storyState }
+      const task = createDeepReasoningTask(taskInput)
+      return runTrackedConvenienceTask(task, (onProgress) =>
+        client.runDeepReasoning!(taskInput, {
+          ...options,
+          onProgress: (snapshot) => {
+            onProgress(snapshot)
+            options.onProgress?.(snapshot)
+          },
+        }),
       )
     },
-    [isConnected, storyState],
+    [isConnected, runTrackedConvenienceTask, storyState],
   )
 
   const runDistillationWorkflow = useCallback(
     async (input: ProjectDistillationInput, options: DistillationWorkflowOptions = {}) => {
-      if (!clientRef.current?.runDistillationWorkflow || !isConnected) return null
-      return clientRef.current.runDistillationWorkflow(
+      const client = clientRef.current
+      if (!client?.runDistillationWorkflow || !isConnected) return null
+      return client.runDistillationWorkflow(
         { ...input, storyState: input.storyState ?? storyState },
         options,
       )
     },
     [isConnected, storyState],
+  )
+
+  const runPluginTool = useCallback(
+    async (pluginId: string, input: Record<string, unknown>) => {
+      if (!clientRef.current?.runPluginTool || !isConnected) return null
+      return clientRef.current.runPluginTool(pluginId, input)
+    },
+    [isConnected],
+  )
+
+  const runPluginWorkflow = useCallback(
+    async (pluginId: string, input: unknown, metadata?: Record<string, unknown>) => {
+      if (!clientRef.current?.runPluginWorkflow || !isConnected) return null
+      return clientRef.current.runPluginWorkflow(pluginId, input, metadata)
+    },
+    [isConnected],
   )
 
   const syncDomain = useCallback(
@@ -616,6 +707,8 @@ export function useAiConversation(
     runContinuityAudit,
     runDeepReasoning,
     runDistillationWorkflow,
+    runPluginTool,
+    runPluginWorkflow,
     syncDomain,
   }
 }

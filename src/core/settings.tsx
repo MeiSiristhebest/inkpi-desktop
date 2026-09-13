@@ -32,7 +32,15 @@ import { withMirror } from '../adapters/mirroringSettingsRepository'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type FontKind = 'serif' | 'sans' | 'mono' | 'wenkai' | 'kaiti' | 'fangsong'
-export type ThemeSkin = 'default' | 'youth' | 'ink' | 'forest'
+export type ThemeSkin =
+  | 'default' // 浅色：经典石墨白 (Notion Minimal)
+  | 'sepia' // 浅色：羊皮纸暖纸 (Kindle / Apple Books)
+  | 'sage' // 浅色：护眼青苔绿 (Ulysses Sage)
+  | 'dark' // 深色：碳素黑曜石 (Notion Obsidian)
+  | 'midnight' // 深色：夜读深渊蓝 (Apple Books Midnight)
+  | 'forest' // 深色：松柏夜林绿 (Nightfall Pine)
+  | 'youth' // 兼容 alias -> sage
+  | 'ink' // 兼容 alias -> sepia
 
 /**
  * 完全对齐 @inkpi/ai / @inkpi/protocol 的 ProviderType。
@@ -60,8 +68,17 @@ export type ProviderType =
   | 'faux'
 
 /**
+ * 思考等级档位（对齐 @inkpi/protocol 的 ThinkingLevel 词表）。
+ * "none" = 关闭思考；其余档位在支持思考的模型上按轮次下发。
+ */
+export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/**
  * 完全对齐 @inkpi/ai 的 ModelConfig —— Daemon Runtime 接收的全部模型配置字段。
  * 自定义 AI 界面把这些字段全盘暴露给用户配置。
+ * 末尾四个可选字段为桌面端 UI 管理字段（enabled / contextWindow /
+ * availableModelIds / thinkingLevel）：daemon 侧 JSON 透传时直接忽略未知键，
+ * 不影响运行时行为，仅供设置界面的启用开关、模型目录与思考等级档位使用。
  */
 export interface ModelConfig {
   id: string
@@ -77,6 +94,18 @@ export interface ModelConfig {
   thinkingBudget?: number
   supportsThinking?: boolean
   supportsPromptCache?: boolean
+  /** 是否启用该供应商配置；禁用后不可被设为默认模型（缺省视为启用） */
+  enabled?: boolean
+  /** 该模型的上下文窗口（token 数），用于界面展示与高级参数预填（对齐参考实现的 ModelBinding.contextWindow） */
+  contextWindow?: number
+  /** 该供应商端点已拉取到的可用模型 ID 快照（"获取列表"结果持久化，供模型目录与勾选面板复用） */
+  availableModelIds?: string[]
+  /** 思考等级档位（对齐 protocol ThinkingLevel；"none"=关闭） */
+  thinkingLevel?: ThinkingLevel
+  /** 模型别名 (Alias)，在显示模型名称的地方生效（对齐参考实现的 ModelBinding.alias） */
+  alias?: string
+  /** 显式图像输入开关（true/false/undefined，对齐参考实现的 supportsImages） */
+  supportsImages?: boolean
 }
 
 /** 段落首行缩进方式：none=不缩进 / full=全角空格 / space2=两个半角空格 */

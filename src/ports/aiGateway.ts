@@ -72,6 +72,14 @@ export interface AiAssistant {
     input: ProjectDistillationInput,
     options?: DistillationWorkflowOptions,
   ): Promise<DistillationWorkflowResult>
+  /** Execute a Runtime-owned first-party Extension Tool across the Daemon boundary. */
+  runPluginTool?(pluginId: string, input: Record<string, unknown>): Promise<unknown | null>
+  /** Execute a Runtime-owned first-party Workflow task across the Daemon boundary. */
+  runPluginWorkflow?(
+    pluginId: string,
+    input: unknown,
+    metadata?: Record<string, unknown>,
+  ): Promise<unknown | null>
   steerTask?(taskId: string, input: unknown): Promise<boolean>
   resumeTask?(taskId: string): Promise<void>
   syncDomain?(workspaceId: string): Promise<DomainSyncResult>

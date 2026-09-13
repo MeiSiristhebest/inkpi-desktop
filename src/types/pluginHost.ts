@@ -50,6 +50,12 @@ export interface DesktopPluginHostContextValue {
       input: unknown,
       metadata?: Record<string, unknown>,
     ) => Promise<string | null>
+    runPluginTool?: (pluginId: string, input: Record<string, unknown>) => Promise<unknown | null>
+    runPluginWorkflow?: (
+      pluginId: string,
+      input: unknown,
+      metadata?: Record<string, unknown>,
+    ) => Promise<unknown | null>
     isAvailable: boolean
   }
 }

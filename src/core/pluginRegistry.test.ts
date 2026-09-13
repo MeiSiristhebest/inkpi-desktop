@@ -12,9 +12,10 @@ describe('pluginRegistry state persistence & defaults', () => {
     localStorage.clear()
   })
 
-  it('loads default enabled plugins when storage is empty', () => {
+  it('loads default enabled plugins when storage is empty (clean minimal default)', () => {
     const ids = loadEnabledPluginIds()
-    expect(ids.has('living-codex')).toBe(true)
+    // 纯粹模式默认全关：不污染用户左侧导航栏
+    expect(ids.size).toBe(0)
   })
 
   it('persists and restores enabled plugin set accurately', () => {
@@ -29,7 +30,7 @@ describe('pluginRegistry state persistence & defaults', () => {
   it('handles invalid json gracefully in storage', () => {
     localStorage.setItem(STORAGE_KEY_ENABLED_PLUGINS, 'invalid-json{')
     const ids = loadEnabledPluginIds()
-    expect(ids.has('living-codex')).toBe(true)
+    expect(ids.size).toBe(0)
   })
 
   it('contains registered plugins with complete metadata', () => {
@@ -45,7 +46,7 @@ describe('pluginRegistry state persistence & defaults', () => {
     saveEnabledPluginIds(custom)
     // 模拟 Tauri WebView localStorage 被清空/不持久化
     localStorage.clear()
-    expect(loadEnabledPluginIds().has('living-codex')).toBe(true) // 回到默认值
+    expect(loadEnabledPluginIds().size).toBe(0) // 回到默认值（纯粹模式下为 0）
 
     const fromIDB = await loadEnabledPluginIdsFromIDB()
     expect(fromIDB).not.toBeNull()
@@ -64,11 +65,6 @@ describe('usePluginRegistry hook & Provider coverage', () => {
     )
     const { result } = renderHook(() => usePluginRegistry(), { wrapper })
     expect(result.current.allPlugins.length).toBeGreaterThan(0)
-    expect(result.current.isPluginEnabled('living-codex')).toBe(true)
-
-    act(() => {
-      result.current.disablePlugin('living-codex')
-    })
     expect(result.current.isPluginEnabled('living-codex')).toBe(false)
 
     act(() => {
@@ -77,9 +73,14 @@ describe('usePluginRegistry hook & Provider coverage', () => {
     expect(result.current.isPluginEnabled('living-codex')).toBe(true)
 
     act(() => {
-      result.current.togglePlugin('living-codex')
+      result.current.disablePlugin('living-codex')
     })
     expect(result.current.isPluginEnabled('living-codex')).toBe(false)
+
+    act(() => {
+      result.current.togglePlugin('living-codex')
+    })
+    expect(result.current.isPluginEnabled('living-codex')).toBe(true)
 
     act(() => {
       result.current.enablePlugin('custom-test-plugin')

@@ -5,6 +5,7 @@ import type { AiAssistant } from '../ports/aiGateway'
 import type { Clock } from '../ports/clock'
 import type { TaskRecoveryRecord, TaskRecoveryStore } from '../db/taskRecoveryStore'
 import { createStoryState } from '../domain/story'
+import { semanticDocumentFromText } from '../domain/content'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { useAiConversation } from './useAiConversation'
 
@@ -192,6 +193,58 @@ describe('useAiConversation task recovery', () => {
       message: 'provider failed',
     })
     expect(store.records.get(task.id)?.snapshot.status).toBe('failed')
+    hook.unmount()
+  })
+
+  it('tracks convenience vertical-slice tasks in the same recovery store', async () => {
+    const taskId = 'deep-reasoning-recovery-task'
+    const store = makeStore()
+    const runDeepReasoning = vi.fn(
+      async (
+        _input: Parameters<NonNullable<AiAssistant['runDeepReasoning']>>[0],
+        options?: Parameters<NonNullable<AiAssistant['runDeepReasoning']>>[1],
+      ) => {
+        options?.onProgress?.({
+          taskId,
+          kind: 'narrative.deep.reason',
+          status: 'running',
+          progress: 0.5,
+        })
+        return { answer: 'answer', assumptions: [], alternatives: [], risks: [] }
+      },
+    )
+    const assistant = {
+      ...makeAssistant(vi.fn(async () => null)),
+      runDeepReasoning,
+    } satisfies AiAssistant
+    connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
+
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    await act(async () => {
+      await expect(
+        hook.result.current.runDeepReasoning({
+          taskId,
+          document: semanticDocumentFromText('chapter-1', '正文', 1),
+          question: '为什么？',
+        }),
+      ).resolves.toMatchObject({ answer: 'answer' })
+    })
+
+    expect(runDeepReasoning).toHaveBeenCalledOnce()
+    await waitFor(() => expect(hook.result.current.taskRecovery).toEqual([]))
+    await expect(store.list('project-1')).resolves.toEqual([])
+    expect(store.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: expect.objectContaining({ id: taskId, kind: 'narrative.deep.reason' }),
+        snapshot: expect.objectContaining({ status: 'running', progress: 0.5 }),
+      }),
+    )
     hook.unmount()
   })
 

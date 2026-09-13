@@ -70,7 +70,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     author: 'InkPi Core Team',
     category: 'lore',
     tags: ['世界书', '实体图谱', 'AC扫描', '智能提示'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Layers,
     contextProvider: provideLivingCodexContext,
     loadMainView: () =>
@@ -85,7 +85,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['伏笔', '债务', '记忆衰减', '契诃夫之枪'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: BookOpen,
     loadMainView: () =>
       import('../plugins/promise-ledger').then((m) => ({ default: m.LedgerMasterView })),
@@ -99,7 +99,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['时间线', '因果律', '拓扑排序', '冲突预警'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Clock,
     loadMainView: () =>
       import('../plugins/timeline-grid').then((m) => ({ default: m.TimelineGridView })),
@@ -111,7 +111,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['合规', '敏感词', '文学平替', 'AC自动机'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: ShieldCheck,
     loadMainView: () => import('../plugins/safe-gate').then((m) => ({ default: m.SafeGateView })),
     loadDrawerSnippetView: () =>
@@ -124,7 +124,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['节拍', '张力', '情绪反转', '戏剧弧'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Heart,
     loadMainView: () =>
       import('../plugins/scene-beats').then((m) => ({ default: m.SceneBeatsMasterView })),
@@ -138,7 +138,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['五感', '修辞', '词库', '通感'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Palette,
     loadMainView: () =>
       import('../plugins/describe-palette').then((m) => ({ default: m.DescribePaletteView })),
@@ -152,7 +152,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['起名', '音律', '平仄', '宗门'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Sparkles,
     loadMainView: () => import('../plugins/name-forge').then((m) => ({ default: m.NameForgeView })),
     loadDrawerSnippetView: () =>
@@ -165,7 +165,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'rhythm',
     tags: ['期待感', '情绪释放', '爽点', '先抑后扬'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Award,
     loadMainView: () =>
       import('../plugins/expectation-engine').then((m) => ({ default: m.ExpectationMasterView })),
@@ -179,7 +179,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['境界体系', '一致性', '偏序闭包', '战力崩坏'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Gauge,
     contextProvider: provideConsistencyContext,
     loadMainView: () =>
@@ -194,7 +194,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'flow',
     tags: ['WPM', '码字速度', '心流', '专注模式'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Flame,
     loadMainView: () =>
       import('../plugins/sprint-arena').then((m) => ({ default: m.SprintArenaMasterView })),
@@ -208,7 +208,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'rhythm',
     tags: ['断章', '钩子', '黄金三章', '留存转化'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Anchor,
     loadMainView: () =>
       import('../plugins/reader-hook').then((m) => ({ default: m.ReaderHookMasterView })),
@@ -222,7 +222,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['悬疑', '红鲱鱼', '信息差', '线索链'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: GitBranch,
     loadMainView: () =>
       import('../plugins/clue-weaver').then((m) => ({ default: m.ClueWeaverMasterView })),
@@ -236,7 +236,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['信息熵', '水文分析', '精简', '动词密度'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Droplet,
     loadMainView: () =>
       import('../plugins/water-meter').then((m) => ({ default: m.WaterMeterMasterView })),
@@ -250,7 +250,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['分卷', '戏剧弧', '燃尽率', '三幕剧'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: BookMarked,
     loadMainView: () =>
       import('../plugins/volume-master').then((m) => ({ default: m.VolumeMasterMasterView })),
@@ -264,7 +264,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['对白', '声纹', '废话率', '人物口癖'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: MessageSquare,
     loadMainView: () =>
       import('../plugins/dialogue-distiller').then((m) => ({
@@ -280,7 +280,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'lore',
     tags: ['门派', '好感度', '外交', '天下大势'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Users,
     loadMainView: () =>
       import('../plugins/faction-matrix').then((m) => ({ default: m.FactionMatrixMasterView })),
@@ -294,7 +294,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'rhythm',
     tags: ['首订', '上架卡点', '悬念留白', '防流失'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: DollarSign,
     loadMainView: () =>
       import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryMasterView })),
@@ -309,7 +309,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'tools',
     tags: ['出版', '排版', '开本', '版权页'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Printer,
     loadMainView: () =>
       import('../plugins/press-forge').then((m) => ({ default: m.PressForgeMasterView })),
@@ -323,7 +323,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'rhythm',
     tags: ['情绪流', '心跳线', '起伏', '折线图'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: TrendingUp,
     loadMainView: () =>
       import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveMasterView })),
@@ -338,7 +338,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['灵感', '卡文破局', 'SCAMPER', '脑洞'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Lightbulb,
     loadMainView: () =>
       import('../plugins/brainstorm-spark').then((m) => ({ default: m.BrainstormSparkMasterView })),
@@ -352,7 +352,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['读者视角', '吐槽', '毒点排查', '用户画像'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: UserCheck,
     loadMainView: () =>
       import('../plugins/reader-simulator').then((m) => ({ default: m.ReaderSimulatorMasterView })),
@@ -366,7 +366,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['契诃夫之枪', '伏笔预警', '锈蚀率', '闭环率'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Crosshair,
     loadMainView: () =>
       import('../plugins/chekhov-radar').then((m) => ({ default: m.ChekhovRadarMasterView })),
@@ -380,7 +380,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['句式长短', '韵律', '节奏感', '波长'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Music,
     loadMainView: () =>
       import('../plugins/rhythm-metronome').then((m) => ({ default: m.RhythmMetronomeMasterView })),
@@ -394,7 +394,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'lore',
     tags: ['地图', '坐标', '行军日程', '地理空间'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: MapPin,
     loadMainView: () =>
       import('../plugins/geography-map').then((m) => ({ default: m.GeographyMapMasterView })),
@@ -408,7 +408,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['战力', '越级战斗', '数值平衡', '胜率推演'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Swords,
     loadMainView: () =>
       import('../plugins/combat-sandbox').then((m) => ({ default: m.CombatSandboxMasterView })),
@@ -422,7 +422,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'lore',
     tags: ['历法', '纪元', '时间线', '换算'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Calendar,
     loadMainView: () =>
       import('../plugins/multi-calendar').then((m) => ({ default: m.MultiCalendarMasterView })),
@@ -436,7 +436,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['视角', 'POV', '乱视角', '人称'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Eye,
     loadMainView: () =>
       import('../plugins/pov-guard').then((m) => ({ default: m.PovGuardMasterView })),
@@ -450,7 +450,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['语病', 'Linter', '修辞瑕疵', '质检'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: AlertCircle,
     loadMainView: () =>
       import('../plugins/narrative-linter').then((m) => ({ default: m.NarrativeLinterMasterView })),
@@ -464,7 +464,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'tools',
     tags: ['Diff', '版本对比', '合稿', '审校'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: GitCompare,
     loadMainView: () =>
       import('../plugins/diff-reviewer').then((m) => ({ default: m.DiffReviewerMasterView })),
@@ -478,7 +478,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['公理', '降智排查', '逻辑自洽', '反噬'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Lock,
     loadMainView: () =>
       import('../plugins/iron-chamber').then((m) => ({ default: m.IronChamberMasterView })),
@@ -492,7 +492,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'flow',
     tags: ['机械键盘', '白噪音', '沉浸音效', '心流'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Headphones,
     loadMainView: () =>
       import('../plugins/soundscape').then((m) => ({ default: m.SoundscapeMasterView })),
@@ -506,7 +506,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'tools',
     tags: ['废稿', '碎屑回收', '草稿箱', '资产复用'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Recycle,
     loadMainView: () =>
       import('../plugins/scrapbook-recycler').then((m) => ({ default: m.ScrapbookMasterView })),
@@ -520,7 +520,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'lore',
     tags: ['战后清点', '伤残同步', '底蕴损耗', '级联更新'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: RefreshCw,
     loadMainView: () =>
       import('../plugins/aftermath-sync').then((m) => ({ default: m.AftermathMasterView })),
@@ -534,7 +534,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['潜台词', '微表情', '心理对白', '戏剧反差'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: EyeOff,
     loadMainView: () =>
       import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextMasterView })),
@@ -549,7 +549,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'rhythm',
     tags: ['断章', '张力指数', '生死反转', '追更率'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Activity,
     loadMainView: () =>
       import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarMasterView })),
@@ -564,7 +564,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['信息差', '读者视角', '盲审', '伏笔接收度'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: UserX,
     loadMainView: () =>
       import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderMasterView })),
@@ -579,7 +579,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['What-If', '分叉推演', '命运线', '蝴蝶效应'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Split,
     loadMainView: () =>
       import('../plugins/multiverse-whatif').then((m) => ({ default: m.MultiverseMasterView })),
@@ -593,7 +593,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['TTS', '语音试听', '角色对白', '有声预览'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Mic,
     loadMainView: () =>
       import('../plugins/voice-preview').then((m) => ({ default: m.VoicePreviewMasterView })),
@@ -607,7 +607,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['分镜', '画面感', '九宫格', '景别机位'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Film,
     loadMainView: () =>
       import('../plugins/storyboard-gen').then((m) => ({ default: m.StoryboardMasterView })),
@@ -621,7 +621,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'craft',
     tags: ['人格原型', '戏剧张力', '对手戏'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Dna,
     loadMainView: () =>
       import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeMasterView })),
@@ -635,7 +635,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'flow',
     tags: ['运营台账', '作者品牌', '版权'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: TrendingUp,
     loadMainView: () =>
       import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsMasterView })),
@@ -649,7 +649,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'review',
     tags: ['黄金三章', '签约诊断', '开篇'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Award,
     loadMainView: () =>
       import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersMasterView })),
@@ -663,7 +663,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'tools',
     tags: ['记忆宫殿', '实体召回', '历史轨迹'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: Sparkles,
     loadMainView: () =>
       import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceMasterView })),
@@ -677,7 +677,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     version: '1.0.0',
     category: 'plot',
     tags: ['多线', '支线', '合流'],
-    enabledByDefault: true,
+    enabledByDefault: false,
     icon: GitMerge,
     loadMainView: () =>
       import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidMasterView })),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type FC, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, type FC } from 'react'
 import {
   Settings as Gear,
   Palette,
@@ -6,8 +6,6 @@ import {
   Wifi,
   Info,
   Type,
-  Eye,
-  EyeOff,
   Trash2,
   X,
   Puzzle,
@@ -21,14 +19,11 @@ import {
   Feather,
   Trees,
   Zap,
-  Download,
-  Loader2,
   Plus,
   Edit3,
-  Copy,
-  Search,
-  Check,
   Keyboard,
+  ChevronDown,
+  RotateCcw,
 } from 'lucide-react'
 import { PluginSettingsView } from '../plugins/PluginSettingsView'
 import { WritingHabitsTab } from './WritingHabitsTab'
@@ -40,12 +35,24 @@ import {
   PROVIDER_META,
   type AppSettings,
   type ModelConfig,
-  type ProviderType,
   type ThemeMode,
   type FontKind,
   type ParagraphIndent,
   type ThemeSkin,
 } from '../../core/settings'
+import { MODEL_CATALOG, catalogUpdatedAtLabel, type CatalogMeta } from '../../core/modelCatalog'
+import { readCatalogMeta, writeCatalogMeta } from '../../adapters/localStorageCatalogMetaStore'
+import { ProviderDetailView } from './ProviderDetailView'
+import {
+  Section,
+  Row,
+  Segmented,
+  Slider,
+  Switch,
+  PrimaryButton,
+  fieldLabel,
+  inputCls,
+} from './SettingsShared'
 
 type TabKey =
   'appearance' | 'editor' | 'writing' | 'shortcuts' | 'plugins' | 'ai' | 'connection' | 'about'
@@ -129,8 +136,8 @@ interface SkinCardItem {
 const SKIN_CARDS: SkinCardItem[] = [
   {
     v: 'default',
-    label: '默认',
-    subtitle: '石墨灰',
+    label: '石墨白',
+    subtitle: '浅色 · Notion 极简',
     icon: Palette,
     primaryCol: '#2383e2',
     accentCol: '#1a6fc4',
@@ -139,37 +146,59 @@ const SKIN_CARDS: SkinCardItem[] = [
     dots: ['#2383e2', '#787774', '#e9e9e7', '#37352f'],
   },
   {
-    v: 'youth',
-    label: '青春绿',
-    subtitle: '春苔绿',
-    icon: Leaf,
-    primaryCol: '#10b981',
-    accentCol: '#059669',
-    canvasCol: '#f4f8f5',
-    textCol: '#1a2e22',
-    dots: ['#10b981', '#059669', '#d1fae5', '#064e3b'],
+    v: 'sepia',
+    label: '羊皮纸',
+    subtitle: '浅色 · 暖纸护眼',
+    icon: Feather,
+    primaryCol: '#b45309',
+    accentCol: '#92400e',
+    canvasCol: '#f9f5eb',
+    textCol: '#342e28',
+    dots: ['#b45309', '#ded4c1', '#f4e8d3', '#342e28'],
   },
   {
-    v: 'ink',
-    label: '水墨',
-    subtitle: '宣纸白',
-    icon: Feather,
-    primaryCol: '#c4544a',
-    accentCol: '#9e3b33',
-    canvasCol: '#faf7f2',
-    textCol: '#2c2a29',
-    dots: ['#c4544a', '#8c7b75', '#f5efe6', '#2c2a29'],
+    v: 'sage',
+    label: '春苔绿',
+    subtitle: '浅色 · 520nm 抗疲劳',
+    icon: Leaf,
+    primaryCol: '#2e7d32',
+    accentCol: '#226126',
+    canvasCol: '#eef3eb',
+    textCol: '#2d3748',
+    dots: ['#2e7d32', '#cbd5c5', '#dceeda', '#2d3748'],
+  },
+  {
+    v: 'dark',
+    label: '黑曜石',
+    subtitle: '深色 · 碳素沉浸',
+    icon: Palette,
+    primaryCol: '#529cca',
+    accentCol: '#6bb0da',
+    canvasCol: '#191919',
+    textCol: '#e9e9e7',
+    dots: ['#529cca', '#2f2f2f', '#1e3444', '#e9e9e7'],
+  },
+  {
+    v: 'midnight',
+    label: '夜读深渊',
+    subtitle: '深色 · 经典冷夜蓝',
+    icon: Moon,
+    primaryCol: '#3b82f6',
+    accentCol: '#60a5fa',
+    canvasCol: '#11141a',
+    textCol: '#e2e8f0',
+    dots: ['#3b82f6', '#242c3b', '#1e293b', '#e2e8f0'],
   },
   {
     v: 'forest',
-    label: '森夜',
-    subtitle: '松柏青',
+    label: '松柏森夜',
+    subtitle: '深色 · 哑光护眼绿',
     icon: Trees,
-    primaryCol: '#d97706',
-    accentCol: '#b45309',
-    canvasCol: '#131a16',
-    textCol: '#e2eae5',
-    dots: ['#d97706', '#15803d', '#1a2e26', '#fef3c7'],
+    primaryCol: '#e5a93b',
+    accentCol: '#f59e0b',
+    canvasCol: '#141a16',
+    textCol: '#e2ede5',
+    dots: ['#e5a93b', '#28342c', '#2d261a', '#e2ede5'],
   },
 ]
 
@@ -235,109 +264,7 @@ const FONT_MIN = 12
 const FONT_MAX = 36
 
 // ── 统一视觉原子 ──────────────────────────────────────────
-const fieldLabel = 'text-[11.5px] font-medium text-[var(--ink-text-faint)] mb-1.5'
-const inputCls =
-  'w-full px-3 py-2 rounded-lg text-[13px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]'
-const segBase = 'px-3 py-1.5 rounded-lg text-[12.5px] transition-colors duration-150'
-const segActive = 'bg-[var(--ink-accent)] text-white shadow-2xs font-medium'
-const segIdle = 'bg-transparent text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]'
-
-const Section: FC<{ title: string; desc?: string; children: ReactNode }> = ({
-  title,
-  desc,
-  children,
-}) => (
-  <section className="space-y-2.5">
-    <div className="px-1">
-      <h3 className="text-[14px] font-semibold text-[var(--ink-text)]">{title}</h3>
-      {desc && (
-        <p className="text-[12px] text-[var(--ink-text-faint)] mt-0.5 leading-relaxed">{desc}</p>
-      )}
-    </div>
-    <div className="rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] divide-y divide-[var(--ink-border)] overflow-hidden shadow-2xs">
-      {children}
-    </div>
-  </section>
-)
-
-const Row: FC<{ label: string; hint?: string; children: ReactNode }> = ({
-  label,
-  hint,
-  children,
-}) => (
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5">
-    <div className="min-w-0 flex-1 sm:pr-4">
-      <div className="text-[13px] text-[var(--ink-text)] font-medium">{label}</div>
-      {hint && (
-        <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5 leading-relaxed">
-          {hint}
-        </div>
-      )}
-    </div>
-    <div className="shrink-0 flex items-center sm:justify-end w-full sm:w-auto">{children}</div>
-  </div>
-)
-
-const Segmented = <T extends string | number>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T
-  options: { v: T; label: string }[]
-  onChange: (v: T) => void
-}) => (
-  <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] max-w-full">
-    {options.map((o) => (
-      <button
-        key={String(o.v)}
-        type="button"
-        onClick={() => onChange(o.v)}
-        className={`${segBase} ${value === o.v ? segActive : segIdle} cursor-pointer`}
-      >
-        {o.label}
-      </button>
-    ))}
-  </div>
-)
-
-const Slider: FC<{
-  min: number
-  max: number
-  step?: number
-  value: number
-  onChange: (v: number) => void
-}> = ({ min, max, step = 1, value, onChange }) => (
-  <input
-    type="range"
-    min={min}
-    max={max}
-    step={step}
-    value={value}
-    onChange={(e) => onChange(Number(e.target.value))}
-    className="w-48 sm:w-56 accent-[var(--ink-accent)] cursor-pointer"
-  />
-)
-
-const Switch: FC<{ checked: boolean; onChange: (v: boolean) => void }> = ({
-  checked,
-  onChange,
-}) => (
-  <button
-    role="switch"
-    aria-checked={checked}
-    onClick={() => onChange(!checked)}
-    className={`relative w-10 h-5.5 rounded-full transition-colors duration-150 cursor-pointer ${
-      checked ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'
-    }`}
-  >
-    <span
-      className={`absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white transition-transform duration-150 shadow-xs ${
-        checked ? 'translate-x-4.5' : ''
-      }`}
-    />
-  </button>
-)
+// ── 通用设置组件已统一抽取至 SettingsShared 供各 Tab 严格复用 ──
 
 interface SettingsViewProps {
   open: boolean
@@ -499,96 +426,224 @@ export const SettingsView: FC<SettingsViewProps> = ({ open, onClose }) => {
 const AppearanceTab: FC<{
   settings: AppSettings
   update: (p: Partial<AppSettings>) => void
-}> = ({ settings, update }) => (
-  <>
-    <Section title="配色模式" desc="控制整体明暗氛围：支持浅色、深色或跟随系统自适应。">
-      <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {THEME_CARDS.map((tc) => {
-          const isSelected = settings.themeMode === tc.v
-          return (
-            <button
-              key={tc.v}
-              type="button"
-              onClick={() => update({ themeMode: tc.v })}
-              className={`text-left rounded-xl p-3 border transition-all duration-200 cursor-pointer group flex flex-col justify-between ${
-                isSelected
-                  ? 'border-[var(--ink-accent)] ring-2 ring-[var(--ink-accent)]/20 bg-[var(--ink-bg-elevated)] shadow-sm'
-                  : 'border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/60 hover:border-[var(--ink-border-strong)] hover:bg-[var(--ink-bg-elevated)]'
-              }`}
-            >
-              {/* 微缩窗口展示 */}
-              <div
-                className="h-20 w-full rounded-lg border border-[var(--ink-border)] overflow-hidden flex shadow-2xs mb-2.5"
-                style={{ background: tc.bg }}
+}> = ({ settings, update }) => {
+  // 当前环境是否为深色
+  const isDark =
+    settings.themeMode === 'dark' ||
+    (settings.themeMode === 'system' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-color-scheme: dark)').matches)
+
+  // 浅色主题卡片
+  const lightSkins = SKIN_CARDS.filter((s) => ['default', 'sepia', 'sage'].includes(s.v))
+  // 深色主题卡片
+  const darkSkins = SKIN_CARDS.filter((s) => ['dark', 'midnight', 'forest'].includes(s.v))
+
+  return (
+    <>
+      <Section title="配色模式" desc="控制整体明暗氛围：支持浅色、深色或跟随系统自适应。">
+        <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {THEME_CARDS.map((tc) => {
+            const isSelected = settings.themeMode === tc.v
+            return (
+              <button
+                key={tc.v}
+                type="button"
+                onClick={() => {
+                  if (tc.v === 'dark') {
+                    // 切换深色模式时，自动联动匹配深色沉浸主题
+                    const currentIsDark = ['dark', 'midnight', 'forest'].includes(
+                      settings.themeSkin,
+                    )
+                    update({
+                      themeMode: tc.v,
+                      themeSkin: currentIsDark ? settings.themeSkin : 'dark',
+                    })
+                  } else if (tc.v === 'light') {
+                    // 切换浅色模式时，自动联动匹配浅色护眼主题
+                    const currentIsLight = ['default', 'sepia', 'sage'].includes(settings.themeSkin)
+                    update({
+                      themeMode: tc.v,
+                      themeSkin: currentIsLight ? settings.themeSkin : 'default',
+                    })
+                  } else {
+                    update({ themeMode: tc.v })
+                  }
+                }}
+                className={`text-left rounded-xl p-3 border transition-all duration-200 cursor-pointer group flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-[var(--ink-accent)] ring-2 ring-[var(--ink-accent)]/20 bg-[var(--ink-bg-elevated)] shadow-sm'
+                    : 'border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/60 hover:border-[var(--ink-border-strong)] hover:bg-[var(--ink-bg-elevated)]'
+                }`}
               >
+                {/* 微缩窗口展示 */}
                 <div
-                  className="w-1/3 border-r border-[var(--ink-border)] p-1.5 flex flex-col justify-between"
-                  style={{ background: tc.sidebar }}
+                  className="h-20 w-full rounded-lg border border-[var(--ink-border)] overflow-hidden flex shadow-2xs mb-2.5"
+                  style={{ background: tc.bg }}
                 >
-                  <div className="space-y-1">
-                    <div className="w-5 h-1.5 rounded-full bg-[var(--ink-border-strong)]" />
-                    <div className="w-8 h-1.5 rounded-full bg-[var(--ink-border-strong)]/70" />
-                    <div className="w-6 h-1.5 rounded-full bg-[var(--ink-border-strong)]/50" />
-                  </div>
                   <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: tc.accent }}
-                  />
-                </div>
-                <div className="flex-1 p-2 flex flex-col justify-between">
-                  <div className="space-y-1">
+                    className="w-1/3 border-r border-[var(--ink-border)] p-1.5 flex flex-col justify-between"
+                    style={{ background: tc.sidebar }}
+                  >
+                    <div className="space-y-1">
+                      <div className="w-5 h-1.5 rounded-full bg-[var(--ink-border-strong)]" />
+                      <div className="w-8 h-1.5 rounded-full bg-[var(--ink-border-strong)]/70" />
+                      <div className="w-6 h-1.5 rounded-full bg-[var(--ink-border-strong)]/50" />
+                    </div>
                     <div
-                      className="w-12 h-2 rounded font-bold text-[8px] flex items-center font-serif"
-                      style={{ color: tc.textCol }}
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: tc.accent }}
+                    />
+                  </div>
+                  <div className="flex-1 p-2 flex flex-col justify-between">
+                    <div className="space-y-1">
+                      <div
+                        className="w-12 h-2 rounded font-bold text-[8px] flex items-center font-serif"
+                        style={{ color: tc.textCol }}
+                      >
+                        Aa
+                      </div>
+                      <div className="w-full h-1 rounded bg-[var(--ink-border-strong)]/60" />
+                      <div className="w-3/4 h-1 rounded bg-[var(--ink-border-strong)]/40" />
+                    </div>
+                    <div className="flex gap-1">
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: tc.accent }}
+                      />
+                      <div className="w-2 h-2 rounded-full bg-[var(--ink-border-strong)]" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[13px] font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
+                      <tc.icon className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
+                      <span>{tc.label}</span>
+                    </div>
+                    <div className="text-[10.5px] text-[var(--ink-text-faint)] mt-0.5">
+                      {tc.desc}
+                    </div>
+                  </div>
+                  {isSelected && (
+                    <div className="w-4 h-4 rounded-full bg-[var(--ink-accent)] text-white flex items-center justify-center text-[9px] shrink-0 font-bold shadow-2xs">
+                      ✓
+                    </div>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </Section>
+
+      <Section
+        title={isDark ? '深色夜读主题（当前生效）' : '浅色护眼主题（当前生效）'}
+        desc={
+          isDark
+            ? '为夜间暗室创作定制的 3 款亚光护眼夜读色系（无纯黑眩光与视网膜晕影）。'
+            : '为日间长篇写作定制的 3 款柔光色系（滤除刺眼蓝光，舒缓睫状肌疲劳）。'
+        }
+      >
+        <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {(isDark ? darkSkins : lightSkins).map((sc) => {
+            const isSelected = settings.themeSkin === sc.v
+            return (
+              <button
+                key={sc.v}
+                type="button"
+                onClick={() => update({ themeSkin: sc.v as ThemeSkin })}
+                className={`text-left rounded-xl p-3 border transition-all duration-200 cursor-pointer group flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-[var(--ink-accent)] ring-2 ring-[var(--ink-accent)]/20 bg-[var(--ink-bg-elevated)] shadow-sm'
+                    : 'border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/60 hover:border-[var(--ink-border-strong)] hover:bg-[var(--ink-bg-elevated)]'
+                }`}
+              >
+                {/* 微缩配色窗口（带 4 个调色板色点） */}
+                <div
+                  className="h-20 w-full rounded-lg border border-[var(--ink-border)] overflow-hidden flex shadow-2xs mb-2.5 p-2 flex-col justify-between"
+                  style={{ backgroundColor: sc.canvasCol }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="text-[11px] font-bold font-serif leading-none"
+                      style={{ color: sc.textCol }}
                     >
                       Aa
+                    </span>
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: sc.primaryCol }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div
+                      className="h-1 rounded-full w-4/5"
+                      style={{ backgroundColor: sc.textCol, opacity: 0.35 }}
+                    />
+                    <div
+                      className="h-1 rounded-full w-3/5"
+                      style={{ backgroundColor: sc.textCol, opacity: 0.2 }}
+                    />
+                  </div>
+                  {/* 4 个调色板颜色圆点 */}
+                  <div className="flex items-center gap-1 pt-1">
+                    {sc.dots.map((dot, idx) => (
+                      <span
+                        key={idx}
+                        className="w-2 h-2 rounded-full shadow-2xs"
+                        style={{ backgroundColor: dot }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <sc.icon className="w-3.5 h-3.5 shrink-0 text-[var(--ink-accent)]" />
+                    <span className="text-[12.5px] font-semibold text-[var(--ink-text)] truncate">
+                      {sc.label}
+                    </span>
+                    <span className="text-[10px] text-[var(--ink-text-faint)] truncate">
+                      · {sc.subtitle}
+                    </span>
+                  </div>
+                  {isSelected && (
+                    <div className="w-4 h-4 rounded-full bg-[var(--ink-accent)] text-white flex items-center justify-center text-[9px] shrink-0 font-bold shadow-2xs">
+                      ✓
                     </div>
-                    <div className="w-full h-1 rounded bg-[var(--ink-border-strong)]/60" />
-                    <div className="w-3/4 h-1 rounded bg-[var(--ink-border-strong)]/40" />
-                  </div>
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tc.accent }} />
-                    <div className="w-2 h-2 rounded-full bg-[var(--ink-border-strong)]" />
-                  </div>
+                  )}
                 </div>
-              </div>
+              </button>
+            )
+          })}
+        </div>
+      </Section>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[13px] font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-                    <tc.icon className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                    <span>{tc.label}</span>
-                  </div>
-                  <div className="text-[10.5px] text-[var(--ink-text-faint)] mt-0.5">{tc.desc}</div>
-                </div>
-                {isSelected && (
-                  <div className="w-4 h-4 rounded-full bg-[var(--ink-accent)] text-white flex items-center justify-center text-[9px] shrink-0 font-bold shadow-2xs">
-                    ✓
-                  </div>
-                )}
-              </div>
-            </button>
-          )
-        })}
-      </div>
-    </Section>
-
-    <Section title="界面皮肤风格" desc="沉浸氛围换肤：底色、纸张质感与强调色全套切换。">
-      <div className="p-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {SKIN_CARDS.map((sc) => {
-          const isSelected = settings.themeSkin === sc.v
-          return (
+      <Section
+        title={isDark ? '备选浅色主题' : '备选深色主题'}
+        desc={
+          isDark
+            ? '点击即可一键切换到浅色日间模式并应用该主题。'
+            : '点击即可一键切换到深色夜读模式并应用该主题。'
+        }
+      >
+        <div className="p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-3 opacity-80 hover:opacity-100 transition-opacity">
+          {(isDark ? lightSkins : darkSkins).map((sc) => (
             <button
               key={sc.v}
               type="button"
-              onClick={() => update({ themeSkin: sc.v as ThemeSkin })}
-              className={`text-left rounded-xl p-3 border transition-all duration-200 cursor-pointer group flex flex-col justify-between ${
-                isSelected
-                  ? 'border-[var(--ink-accent)] ring-2 ring-[var(--ink-accent)]/20 bg-[var(--ink-bg-elevated)] shadow-sm'
-                  : 'border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/60 hover:border-[var(--ink-border-strong)] hover:bg-[var(--ink-bg-elevated)]'
-              }`}
+              onClick={() => {
+                // 点击对向主题时，自动切换对应的明暗模式
+                update({
+                  themeMode: isDark ? 'light' : 'dark',
+                  themeSkin: sc.v as ThemeSkin,
+                })
+              }}
+              className="text-left rounded-xl p-3 border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/60 hover:border-[var(--ink-accent)] hover:bg-[var(--ink-bg-elevated)] transition-all duration-200 cursor-pointer group flex flex-col justify-between"
             >
-              {/* 微缩配色窗口（带 4 个调色板色点） */}
+              {/* 微缩配色窗口 */}
               <div
                 className="h-20 w-full rounded-lg border border-[var(--ink-border)] overflow-hidden flex shadow-2xs mb-2.5 p-2 flex-col justify-between"
                 style={{ backgroundColor: sc.canvasCol }}
@@ -615,7 +670,6 @@ const AppearanceTab: FC<{
                     style={{ backgroundColor: sc.textCol, opacity: 0.2 }}
                   />
                 </div>
-                {/* 4 个调色板颜色圆点 */}
                 <div className="flex items-center gap-1 pt-1">
                   {sc.dots.map((dot, idx) => (
                     <span
@@ -637,42 +691,37 @@ const AppearanceTab: FC<{
                     · {sc.subtitle}
                   </span>
                 </div>
-                {isSelected && (
-                  <div className="w-4 h-4 rounded-full bg-[var(--ink-accent)] text-white flex items-center justify-center text-[9px] shrink-0 font-bold shadow-2xs">
-                    ✓
-                  </div>
-                )}
               </div>
             </button>
-          )
-        })}
-      </div>
-    </Section>
-
-    <Section
-      title="软件界面字号与缩放"
-      desc="调整整个软件界面（侧栏、顶栏、按钮与面板）的基础字号，便于不同屏幕尺寸舒适浏览。"
-    >
-      <Row
-        label={`界面字号 · ${settings.uiFontSize || 13}px`}
-        hint="拖动滑块即可等比缩放应用视口内所有侧栏与按钮尺寸（11px ~ 17px）。"
-      >
-        <div className="flex items-center gap-3 w-full sm:w-64">
-          <Slider
-            min={11}
-            max={17}
-            step={1}
-            value={settings.uiFontSize || 13}
-            onChange={(v) => update({ uiFontSize: v })}
-          />
-          <span className="text-[13px] font-mono text-[var(--ink-accent)] font-semibold w-12 text-right shrink-0">
-            {settings.uiFontSize || 13}px
-          </span>
+          ))}
         </div>
-      </Row>
-    </Section>
-  </>
-)
+      </Section>
+
+      <Section
+        title="软件界面字号与缩放"
+        desc="调整整个软件界面（侧栏、顶栏、按钮与面板）的基础字号，便于不同屏幕尺寸舒适浏览。"
+      >
+        <Row
+          label={`界面字号 · ${settings.uiFontSize || 13}px`}
+          hint="拖动滑块即可等比缩放应用视口内所有侧栏与按钮尺寸（11px ~ 17px）。"
+        >
+          <div className="flex items-center gap-3 w-full sm:w-64">
+            <Slider
+              min={11}
+              max={17}
+              step={1}
+              value={settings.uiFontSize || 13}
+              onChange={(v) => update({ uiFontSize: v })}
+            />
+            <span className="text-[13px] font-mono text-[var(--ink-accent)] font-semibold w-12 text-right shrink-0">
+              {settings.uiFontSize || 13}px
+            </span>
+          </div>
+        </Row>
+      </Section>
+    </>
+  )
+}
 
 // ── 编辑器（核心写作排版、正文字号、行距、存盘与视口）────────────────────
 const EditorTab: FC<{
@@ -866,62 +915,11 @@ const EditorTab: FC<{
   </>
 )
 
-const emptyModel = (): ModelConfig => ({
-  id: '',
-  name: '',
-  provider: 'openai',
-})
-
-const NumField: FC<{
-  label: string
-  value?: number
-  min?: number
-  max?: number
-  step?: number
-  placeholder?: string
-  hint?: string
-  onChange: (v?: number) => void
-}> = ({ label, value, min, max, step, placeholder, hint, onChange }) => (
-  <div>
-    <div className={fieldLabel}>{label}</div>
-    <input
-      type="number"
-      className={inputCls}
-      min={min}
-      max={max}
-      step={step}
-      placeholder={placeholder}
-      value={value ?? ''}
-      onChange={(e) => {
-        const v = e.target.value.trim()
-        onChange(v === '' ? undefined : Number(v))
-      }}
-    />
-    {hint && <div className="text-[10px] text-[var(--ink-text-faint)] mt-1">{hint}</div>}
-  </div>
-)
-
-const Toggle: FC<{
-  label: string
-  checked: boolean
-  onChange: (v: boolean) => void
-}> = ({ label, checked, onChange }) => (
-  <label className="flex items-center gap-2 cursor-pointer text-[12px] text-[var(--ink-text-muted)] select-none">
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
-      className="rounded text-[var(--ink-accent)]"
-    />
-    <span>{label}</span>
-  </label>
-)
-
 const AiTab: FC<{
   settings: AppSettings
   update: (p: Partial<AppSettings>) => void
 }> = ({ settings, update }) => {
-  // 当前已保存的所有供应商列表（多供应商架构，对齐 cc-switch）
+  // 当前已保存的所有供应商列表
   const savedList = useMemo<ModelConfig[]>(() => {
     if (settings.savedAiModels && settings.savedAiModels.length > 0) {
       return settings.savedAiModels
@@ -929,174 +927,57 @@ const AiTab: FC<{
     return settings.aiModel ? [settings.aiModel] : []
   }, [settings.savedAiModels, settings.aiModel])
 
-  // 当前编辑的草稿（正在新建或编辑某一个供应商）
-  const [draft, setDraft] = useState<ModelConfig | null>(settings.aiModel)
-  const [isEditing, setIsEditing] = useState<boolean>(!settings.aiModel)
-  const [showKey, setShowKey] = useState(false)
-  const [, setIsSaved] = useState(false)
+  // 控制独立弹窗（ProviderSetupDialog）开关及传入的目标配置
+  const [editingTarget, setEditingTarget] = useState<ModelConfig | null | undefined>(undefined)
+  const isDialogOpen = editingTarget !== undefined
 
-  // 端点测速状态
-  const [speedTesting, setSpeedTesting] = useState(false)
-  const [speedResult, setSpeedResult] = useState<{
-    status: 'ok' | 'err'
-    latency?: number
-    msg: string
-  } | null>(null)
+  // 默认项更改下拉面板
+  const [showDefaultPicker, setShowDefaultPicker] = useState(false)
 
-  // 模型拉取状态 (对齐 cc-switch 的 ModelInputWithFetch)
-  const [fetchingModels, setFetchingModels] = useState(false)
-  const [fetchedModels, setFetchedModels] = useState<{ id: string }[]>([])
-  const [modelSearch, setModelSearch] = useState('')
-  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  // 模型目录状态
+  const [catalogMeta, setCatalogMeta] = useState<CatalogMeta>(() => readCatalogMeta())
+  const [catalogBusy, setCatalogBusy] = useState(false)
+  const [catalogMsg, setCatalogMsg] = useState<string | null>(null)
 
-  // 单独针对各卡片的测速结果缓存 { [modelId]: { latency: number, status: 'ok' | 'err' } }
+  // 测速结果缓存
   const [cardSpeedResults, setCardSpeedResults] = useState<
     Record<string, { latency?: number; status: 'ok' | 'err'; msg: string }>
   >({})
 
-  useEffect(() => {
-    if (!draft && settings.aiModel) {
-      setDraft(settings.aiModel)
-    }
-  }, [settings.aiModel, draft])
-
-  const provider = draft?.provider
-  const meta = provider ? PROVIDER_META[provider] : undefined
-
-  const patchDraft = (patch: Partial<ModelConfig>) =>
-    setDraft((d) => ({ ...(d || emptyModel()), ...patch }))
-
-  const onProviderChange = (p: ProviderType) => {
-    const m = PROVIDER_META[p]
-    setDraft((d) => {
-      const next = { ...(d || emptyModel()), provider: p }
-      // 切换厂商时，自动同步更新为该厂商的官方默认 Base URL；若为自定义厂商则清空供自由输入
-      next.baseUrl = m?.defaultBaseUrl ?? ''
-      return next
-    })
-    setSpeedResult(null)
-    setFetchedModels([])
-  }
-
-  // 1. 实时端点测速 (对齐 cc-switch EndpointSpeedTest)
-  const handleTestSpeed = async (
-    urlOverride?: string,
-    apiKeyOverride?: string,
-    resultTargetId?: string,
-  ) => {
-    const targetUrl = urlOverride || draft?.baseUrl || meta?.defaultBaseUrl
-    const targetKey = apiKeyOverride ?? draft?.apiKey
-    if (!targetUrl) {
-      if (resultTargetId) {
-        setCardSpeedResults((prev) => ({
-          ...prev,
-          [resultTargetId]: { status: 'err', msg: '未配置 Base URL' },
-        }))
-      } else {
-        setSpeedResult({ status: 'err', msg: '请先填写 Base URL' })
-      }
-      return
-    }
-
-    if (!resultTargetId) {
-      setSpeedTesting(true)
-      setSpeedResult(null)
-    }
-
+  // 测试连接处理
+  const handleTestConnection = async (targetUrl: string, targetKey?: string) => {
     try {
       const probe = await probeModelEndpoint(targetUrl, targetKey, { now: () => clock.now() })
       if (probe.status >= 200 && probe.status < 300) {
-        const payload = {
-          status: 'ok' as const,
-          latency: probe.latency,
-          msg: `${probe.latency}ms 正常 (HTTP ${probe.status})`,
-        }
-        if (resultTargetId) setCardSpeedResults((prev) => ({ ...prev, [resultTargetId]: payload }))
-        else setSpeedResult(payload)
-      } else if (probe.status === 401 || probe.status === 403) {
-        const payload = {
-          status: 'err' as const,
-          latency: probe.latency,
-          msg: `${probe.latency}ms 端点可达，密钥未通过 (HTTP ${probe.status})`,
-        }
-        if (resultTargetId) setCardSpeedResults((prev) => ({ ...prev, [resultTargetId]: payload }))
-        else setSpeedResult(payload)
-      } else {
-        const payload = {
-          status: 'ok' as const,
-          latency: probe.latency,
-          msg: `${probe.latency}ms 端点可达 (HTTP ${probe.status})`,
-        }
-        if (resultTargetId) setCardSpeedResults((prev) => ({ ...prev, [resultTargetId]: payload }))
-        else setSpeedResult(payload)
+        return { ok: true, msg: `${probe.latency}ms 连接正常 (HTTP ${probe.status})` }
       }
-    } catch (err: any) {
-      const payload = { status: 'err' as const, msg: err?.message || '连接超时或网络不可达' }
-      if (resultTargetId) setCardSpeedResults((prev) => ({ ...prev, [resultTargetId]: payload }))
-      else setSpeedResult(payload)
-    } finally {
-      if (!resultTargetId) setSpeedTesting(false)
-    }
-  }
-
-  // 2. 实时拉取模型列表 (对齐 cc-switch ModelInputWithFetch)
-  const handleFetchModels = async () => {
-    const targetUrl = draft?.baseUrl || meta?.defaultBaseUrl
-    if (!targetUrl) {
-      setSpeedResult({ status: 'err', msg: '获取模型失败：请先填写 Base URL' })
-      return
-    }
-    setFetchingModels(true)
-    try {
-      const found = (await fetchModelIds(targetUrl, draft?.apiKey)).map((id) => ({ id }))
-      if (found.length > 0) {
-        setFetchedModels(found)
-        setShowModelDropdown(true)
-        setSpeedResult({ status: 'ok', msg: `成功获取 ${found.length} 个可用模型，请点击下拉选择` })
-      } else {
-        setSpeedResult({ status: 'err', msg: '未在该端点发现模型列表，请手动输入模型 ID' })
+      if (probe.status === 401 || probe.status === 403) {
+        return { ok: false, msg: `${probe.latency}ms 端点可达，密钥无效 (HTTP ${probe.status})` }
       }
+      return { ok: true, msg: `${probe.latency}ms 端点可达 (HTTP ${probe.status})` }
     } catch (err: any) {
-      setSpeedResult({ status: 'err', msg: err?.message || '获取模型列表超时' })
-    } finally {
-      setFetchingModels(false)
+      return { ok: false, msg: err?.message || '连接超时或网络不可达' }
     }
   }
 
-  // 3. 保存当前表单供应商（更新/新增到 savedList 并持久化）
-  const handleSave = () => {
-    if (!draft || !draft.provider || !draft.id) return
-    const currentList = [...savedList]
-    const existingIndex = currentList.findIndex(
-      (m) =>
-        (m.id === draft.id && m.provider === draft.provider) || (m.name && m.name === draft.name),
-    )
-
-    let updatedList: ModelConfig[]
-    if (existingIndex >= 0) {
-      updatedList = currentList.map((m, idx) => (idx === existingIndex ? draft : m))
-    } else {
-      updatedList = [...currentList, draft]
+  // 快速测速按钮
+  const handleQuickSpeedTest = async (url?: string, key?: string, targetId?: string) => {
+    if (!url) return
+    const res = await handleTestConnection(url, key)
+    if (targetId) {
+      setCardSpeedResults((prev) => ({
+        ...prev,
+        [targetId]: { latency: undefined, status: res.ok ? 'ok' : 'err', msg: res.msg },
+      }))
     }
-
-    update({
-      aiModel: draft,
-      savedAiModels: updatedList,
-    })
-    setIsSaved(true)
-    setTimeout(() => setIsSaved(false), 2500)
-    setIsEditing(false)
   }
 
-  // 4. 一键切换当前激活的供应商 (对齐 cc-switch ProviderCard onSwitch)
+  // 设为默认供应商
   const handleSwitchProvider = (target: ModelConfig) => {
     update({ aiModel: target })
-    setDraft(target)
-    setIsSaved(true)
-    setTimeout(() => setIsSaved(false), 2000)
   }
 
-  // 5. 删除某个已保存供应商
+  // 删除供应商
   const handleDeleteProvider = (target: ModelConfig) => {
     const updatedList = savedList.filter(
       (m) => !(m.id === target.id && m.provider === target.provider && m.name === target.name),
@@ -1107,514 +988,347 @@ const AiTab: FC<{
       savedAiModels: updatedList,
       aiModel: isCurrentActive ? updatedList[0] || null : settings.aiModel,
     })
-    if (draft?.id === target.id) {
-      setDraft(updatedList[0] || null)
-    }
   }
 
-  // 6. 复制克隆供应商
-  const handleDuplicateProvider = (target: ModelConfig) => {
-    const copy: ModelConfig = {
-      ...target,
-      name: `${target.name || target.id} (副本)`,
+  // 启用/停用供应商
+  const handleToggleEnabled = (target: ModelConfig) => {
+    const nowEnabled = target.enabled === false
+    const updatedList = savedList.map((m) =>
+      m.id === target.id && m.provider === target.provider ? { ...m, enabled: nowEnabled } : m,
+    )
+    const isActive =
+      settings.aiModel?.id === target.id && settings.aiModel?.provider === target.provider
+    let nextActive = settings.aiModel
+    if (isActive && !nowEnabled) {
+      nextActive =
+        updatedList.find(
+          (m) => m.enabled !== false && !(m.id === target.id && m.provider === target.provider),
+        ) || null
     }
-    const updatedList = [...savedList, copy]
-    update({ savedAiModels: updatedList })
+    update({ savedAiModels: updatedList, aiModel: nextActive })
   }
 
-  // 过滤模型下拉项
-  const filteredFetchedModels = useMemo(() => {
-    if (!modelSearch.trim()) return fetchedModels
-    const q = modelSearch.toLowerCase()
-    return fetchedModels.filter((m) => m.id.toLowerCase().includes(q))
-  }, [fetchedModels, modelSearch])
+  // 更新模型目录
+  const handleRefreshCatalog = async () => {
+    const targets = savedList.filter(
+      (m) => m.enabled !== false && (m.baseUrl || PROVIDER_META[m.provider]?.defaultBaseUrl),
+    )
+    if (targets.length === 0) {
+      setCatalogMsg('暂无已保存的供应商端点可更新')
+      return
+    }
+    setCatalogBusy(true)
+    setCatalogMsg(null)
+    let okCount = 0
+    let failedCount = 0
+    const nextList = [...savedList]
+    for (let i = 0; i < nextList.length; i++) {
+      const m = nextList[i]
+      const url = m.baseUrl || PROVIDER_META[m.provider]?.defaultBaseUrl
+      if (m.enabled === false || !url) continue
+      try {
+        const ids = await fetchModelIds(url, m.apiKey)
+        nextList[i] = { ...m, availableModelIds: ids }
+        okCount += 1
+      } catch {
+        failedCount += 1
+      }
+    }
+    const meta: CatalogMeta = {
+      fetchedAt: new Date().toISOString(),
+      fetchedCount: okCount,
+      failedCount,
+    }
+    writeCatalogMeta(meta)
+    setCatalogMeta(meta)
+    update({ savedAiModels: nextList })
+    setCatalogMsg(
+      failedCount > 0
+        ? `已更新 ${okCount} 个供应商端点的模型列表，${failedCount} 个暂不可达`
+        : `已更新 ${okCount} 个供应商端点的模型列表`,
+    )
+    setCatalogBusy(false)
+  }
+
+  // 弹窗保存成功回调
+  const handleDialogSave = (saved: ModelConfig) => {
+    const currentList = [...savedList]
+    const existingIndex = currentList.findIndex(
+      (m) =>
+        (editingTarget && m.id === editingTarget.id && m.provider === editingTarget.provider) ||
+        (m.id === saved.id && m.provider === saved.provider) ||
+        (m.name && m.name === saved.name),
+    )
+
+    let updatedList: ModelConfig[]
+    if (existingIndex >= 0) {
+      updatedList = currentList.map((m, idx) => (idx === existingIndex ? saved : m))
+    } else {
+      updatedList = [...currentList, saved]
+    }
+
+    const isCurrentActive =
+      !settings.aiModel ||
+      (editingTarget &&
+        settings.aiModel.id === editingTarget.id &&
+        settings.aiModel.provider === editingTarget.provider)
+
+    update({
+      aiModel: isCurrentActive ? saved : settings.aiModel,
+      savedAiModels: updatedList,
+    })
+    setEditingTarget(undefined)
+  }
+
+  // 如果处于编辑/添加子页面，直接在当前主视口平滑切换渲染 ProviderDetailView（符合 Apple / Notion 风格，不在设置弹窗里套弹窗）
+  if (isDialogOpen) {
+    return (
+      <ProviderDetailView
+        initialConfig={editingTarget}
+        onBack={() => setEditingTarget(undefined)}
+        onSave={handleDialogSave}
+        onTest={handleTestConnection}
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
-      {/* ── 模块 1：当前已配置的供应商卡片列表（多供应商管理与一键热切换）── */}
-      <Section
-        title="已配置供应商列表"
-        desc="多服务商独立配置：可保存多个服务商端点与密钥，随时一键热切换为当前写作模型。"
-      >
-        <div className="p-4 space-y-3">
+      {/* ── 模块 0：默认项卡片（与图一 100% 对齐）── */}
+      <section className="space-y-2.5">
+        <div className="px-1">
+          <h3 className="text-[14px] font-semibold text-[var(--ink-text)]">默认项</h3>
+        </div>
+        <div className="rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shadow-2xs">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-[var(--ink-text-faint)] mb-1">
+                默认模型
+              </div>
+              {settings.aiModel ? (
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[13.5px] font-semibold text-[var(--ink-text)]">
+                    {PROVIDER_META[settings.aiModel.provider]?.label || settings.aiModel.provider}
+                  </span>
+                  <span className="text-[var(--ink-text-faint)]">·</span>
+                  <span className="font-mono text-[13px] text-[var(--ink-text-muted)] truncate">
+                    {settings.aiModel.id}
+                  </span>
+                </div>
+              ) : (
+                <div className="text-[13px] text-[var(--ink-text-muted)]">尚未设置默认模型</div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDefaultPicker((s) => !s)}
+              disabled={savedList.every((m) => m.enabled === false)}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shrink-0"
+            >
+              <span>更改</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${showDefaultPicker ? 'rotate-180' : ''}`}
+              />
+            </button>
+          </div>
+
+          {/* 默认模型切换下拉菜单 */}
+          {showDefaultPicker && (
+            <div
+              data-testid="default-model-picker"
+              className="mt-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] p-2 max-h-56 overflow-y-auto space-y-1"
+            >
+              {savedList
+                .filter((m) => m.enabled !== false)
+                .map((m, idx) => {
+                  const isActive =
+                    settings.aiModel?.id === m.id && settings.aiModel?.provider === m.provider
+                  const pMeta = PROVIDER_META[m.provider]
+                  return (
+                    <button
+                      key={`${m.provider}_${m.id}_${idx}`}
+                      type="button"
+                      onClick={() => {
+                        handleSwitchProvider(m)
+                        setShowDefaultPicker(false)
+                      }}
+                      className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-left transition-colors cursor-pointer ${
+                        isActive ? 'bg-[var(--ink-accent)]/10' : 'hover:bg-[var(--ink-bg-hover)]'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-medium text-[var(--ink-text)] truncate">
+                          {m.name || m.id}
+                        </div>
+                        <div className="font-mono text-[11px] text-[var(--ink-text-faint)] truncate">
+                          {pMeta?.label || m.provider} · {m.id}
+                        </div>
+                      </div>
+                      {isActive ? (
+                        <span className="text-[10.5px] font-medium text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5 shrink-0">
+                          使用中
+                        </span>
+                      ) : (
+                        <span className="text-[10.5px] text-[var(--ink-text-faint)] shrink-0">
+                          设为默认
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── 模块 1：AI 服务列表（与图一 100% 对齐）── */}
+      <section className="space-y-2.5">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[14px] font-semibold text-[var(--ink-text)]">AI 服务</h3>
+            <span className="px-1.5 py-0.2 rounded-full text-[10.5px] bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] font-medium">
+              {savedList.length}
+            </span>
+          </div>
+          <PrimaryButton onClick={() => setEditingTarget(null)}>
+            <Plus className="w-3.5 h-3.5" />
+            <span>添加服务</span>
+          </PrimaryButton>
+        </div>
+
+        <div className="rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] divide-y divide-[var(--ink-border)] overflow-hidden shadow-2xs">
           {savedList.length === 0 ? (
-            <div className="text-center py-8 px-4 rounded-xl border border-dashed border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/40">
+            <div className="text-center py-8 px-4">
               <div className="w-10 h-10 rounded-xl bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] flex items-center justify-center mx-auto mb-2.5">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div className="text-[13px] font-semibold text-[var(--ink-text)]">
-                暂无已保存的 AI 供应商
+                暂无已配置的 AI 服务
               </div>
               <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-1 max-w-sm mx-auto">
-                点击下方表单添加你的首个模型服务商（如 DeepSeek、OpenAI、Ollama
-                本地等），即可开启全书正文辅助创作。
+                点击右上角「添加服务」配置你的端点（支持任意 OpenAI 兼容反代与大模型网关）。
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-2.5">
-              {savedList.map((m, idx) => {
-                const isActive =
-                  settings.aiModel?.id === m.id && settings.aiModel?.provider === m.provider
-                const pMeta = PROVIDER_META[m.provider]
-                const cardKey = `${m.provider}_${m.id}_${idx}`
-                const sp = cardSpeedResults[cardKey]
+            savedList.map((m, idx) => {
+              const isActive =
+                settings.aiModel?.id === m.id && settings.aiModel?.provider === m.provider
+              const isEnabled = m.enabled !== false
+              const pMeta = PROVIDER_META[m.provider]
+              const cardKey = `${m.provider}_${m.id}_${idx}`
+              const sp = cardSpeedResults[cardKey]
+              const host = (m.baseUrl || pMeta?.defaultBaseUrl || '')
+                .replace(/^https?:\/\//, '')
+                .split('/')[0]
+              const modelCount = m.availableModelIds?.length ?? 1
 
-                return (
-                  <div
-                    key={cardKey}
-                    className={`p-3.5 rounded-xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                      isActive
-                        ? 'border-[var(--ink-accent)] bg-[var(--ink-accent)]/5 ring-1 ring-[var(--ink-accent)]/30 shadow-xs'
-                        : 'border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-border-strong)]'
-                    }`}
-                  >
-                    {/* 供应商基本信息 */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-semibold text-[var(--ink-text)] truncate">
-                          {m.name || m.id}
+              return (
+                <div
+                  key={cardKey}
+                  className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                    !isEnabled ? 'opacity-55' : 'hover:bg-[var(--ink-bg-hover)]/30'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13.5px] font-semibold text-[var(--ink-text)] truncate">
+                        {m.name || m.id}
+                      </span>
+                      {isActive && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0">
+                          默认
                         </span>
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]">
-                          {pMeta?.label || m.provider}
+                      )}
+                      {!isEnabled && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--ink-bg-hover)] text-[var(--ink-text-faint)] border border-[var(--ink-border)] shrink-0">
+                          已禁用
                         </span>
-                        {isActive && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            当前使用中
-                          </span>
-                        )}
-                        {sp && (
-                          <span
-                            className={`text-[10.5px] px-1.5 py-0.5 rounded tabular-nums ${
-                              sp.status === 'ok'
-                                ? 'text-emerald-600 bg-emerald-500/10'
-                                : 'text-rose-600 bg-rose-500/10'
-                            }`}
-                          >
-                            {sp.msg}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-[var(--ink-text-faint)] mt-1 truncate">
-                        <span className="font-mono text-[var(--ink-text-muted)] truncate">
-                          模型: {m.id}
-                        </span>
-                        <span className="truncate">
-                          端点: {m.baseUrl || pMeta?.defaultBaseUrl || '默认端点'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 卡片快速动作条（对齐 cc-switch ProviderActions） */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleTestSpeed(m.baseUrl || pMeta?.defaultBaseUrl, m.apiKey, cardKey)
-                        }
-                        className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] transition-colors flex items-center gap-1 cursor-pointer"
-                        title="对该供应商端点快速测速"
-                      >
-                        <Zap className="w-3 h-3 text-amber-500" />
-                        <span>测速</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDraft(m)
-                          setIsEditing(true)
-                          setSpeedResult(null)
-                        }}
-                        className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-                        title="编辑此供应商参数"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDuplicateProvider(m)}
-                        className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-                        title="复制克隆此配置"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteProvider(m)}
-                        className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                        title="删除此供应商"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-
-                      {!isActive && (
-                        <button
-                          type="button"
-                          onClick={() => handleSwitchProvider(m)}
-                          className="px-3 py-1 rounded-md text-[11px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors cursor-pointer ml-1"
+                      )}
+                      {sp && (
+                        <span
+                          className={`text-[10.5px] px-1.5 py-0.5 rounded tabular-nums ${
+                            sp.status === 'ok'
+                              ? 'text-emerald-600 bg-emerald-500/10'
+                              : 'text-rose-600 bg-rose-500/10'
+                          }`}
                         >
-                          启用为当前
-                        </button>
+                          {sp.msg}
+                        </span>
                       )}
                     </div>
+                    <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-1 truncate">
+                      <span className="font-mono">{host || '默认端点'}</span>
+                      <span className="mx-1.5">·</span>
+                      <span>{modelCount} 个模型</span>
+                    </div>
                   </div>
-                )
-              })}
-            </div>
-          )}
 
-          <div className="pt-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                setDraft(emptyModel())
-                setIsEditing(true)
-                setSpeedResult(null)
-                setFetchedModels([])
-              }}
-              className="px-3.5 py-1.5 rounded-lg text-[12px] font-medium bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-              <span>添加新供应商…</span>
-            </button>
-          </div>
-        </div>
-      </Section>
-
-      {/* ── 模块 2：添加 / 编辑供应商详细表单（具备模型一键获取与端点测速能力）── */}
-      {isEditing && (
-        <Section
-          title={
-            draft?.id && savedList.some((s) => s.id === draft.id)
-              ? '编辑供应商'
-              : '添加新供应商配置'
-          }
-          desc="配置模型 API 端点、密钥、模型 ID。可点击端点旁「测速」检验可用性，点击模型旁「获取」自动拉取可用模型。"
-        >
-          <div className="p-5 space-y-4">
-            {/* 测速 / 连通性提示条 */}
-            {speedResult && (
-              <div
-                className={`text-[11.5px] px-3.5 py-2 rounded-xl border flex items-center gap-2 transition-all ${
-                  speedResult.status === 'ok'
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
-                    : 'bg-rose-500/10 border-rose-500/30 text-rose-600'
-                }`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
-                <span className="font-medium">{speedResult.msg}</span>
-              </div>
-            )}
-
-            {/* 快速选择厂商胶囊药丸群 */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className={fieldLabel}>选择服务商 / 协议类型</div>
-                {provider && (
-                  <span className="text-[11px] text-[var(--ink-accent)] font-medium">
-                    当前选择: {PROVIDER_META[provider]?.label || provider}
-                  </span>
-                )}
-              </div>
-
-              {/* 顶尖厂商药丸列表 + 自定义厂商按钮 */}
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  // 1. 全球前沿旗舰厂商
-                  { id: 'deepseek', label: 'DeepSeek' },
-                  { id: 'openai', label: 'OpenAI' },
-                  { id: 'claude', label: 'Anthropic' },
-                  { id: 'gemini', label: 'Google' },
-                  { id: 'xai', label: 'xAI' },
-
-                  // 2. 国内主流前沿文学与长文本厂商（纯厂商名，不绑死具体模型代号）
-                  { id: 'moonshot', label: '月之暗面' },
-                  { id: 'zhipu', label: '智谱 AI' },
-                  { id: 'minimax', label: 'MiniMax' },
-                  { id: 'qwen', label: '通义千问' },
-                  { id: 'doubao', label: '字节豆包' },
-                  { id: 'siliconflow', label: '硅基流动' },
-
-                  // 3. 聚合服务与本地离线
-                  { id: 'ollama', label: 'Ollama (本地)' },
-                  { id: 'openrouter', label: 'OpenRouter' },
-                  { id: 'groq', label: 'Groq' },
-                  { id: 'mistral', label: 'Mistral' },
-                  { id: 'azure', label: 'Azure OpenAI' },
-                  { id: 'bedrock', label: 'AWS Bedrock' },
-
-                  // 4. 自定义厂商（核心功能）
-                  { id: 'custom', label: '+ 自定义厂商 (兼容反代)', isCustom: true },
-                ].map((p) => {
-                  const isSelected = provider === p.id
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => onProviderChange(p.id as ProviderType)}
-                      className={`px-3 py-1 rounded-full text-[11.5px] border transition-all duration-150 cursor-pointer flex items-center gap-1 ${
-                        isSelected
-                          ? 'bg-[var(--ink-accent)] text-white border-transparent shadow-2xs font-medium ring-1 ring-[var(--ink-accent)]'
-                          : p.isCustom
-                            ? 'bg-[var(--ink-accent)]/5 border-[var(--ink-accent)]/30 text-[var(--ink-accent)] hover:bg-[var(--ink-accent)]/10 font-medium'
-                            : 'bg-[var(--ink-bg-elevated)] border-[var(--ink-border)] text-[var(--ink-text-muted)] hover:border-[var(--ink-border-strong)] hover:text-[var(--ink-text)]'
-                      }`}
-                    >
-                      <span>{p.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div>
-              <div className={fieldLabel}>供应商名称 (用于区分管理)</div>
-              <input
-                className={inputCls}
-                value={draft?.name ?? ''}
-                placeholder="界面展示名"
-                onChange={(e) => patchDraft({ name: e.target.value })}
-              />
-            </div>
-
-            {/* API Base URL 与 测速按钮 */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className={fieldLabel}>
-                  API Base URL 端点
-                  {meta?.defaultBaseUrl && (
-                    <span className="text-[var(--ink-text-faint)] font-normal ml-1">
-                      （官方默认: {meta.defaultBaseUrl}）
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  className={`${inputCls} flex-1`}
-                  value={draft?.baseUrl ?? ''}
-                  placeholder={meta?.defaultBaseUrl ?? 'https://...'}
-                  onChange={(e) => patchDraft({ baseUrl: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleTestSpeed()}
-                  disabled={speedTesting}
-                  className="px-3 py-2 rounded-lg text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-border-strong)] text-[var(--ink-text)] hover:text-[var(--ink-accent)] transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  title="测试此端点网络连通性与响应时间"
-                >
-                  {speedTesting ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--ink-accent)]" />
-                  ) : (
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  )}
-                  <span>{speedTesting ? '测速中…' : '端点测速'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* API Key */}
-            <div>
-              <div className={fieldLabel}>
-                API Key 接口密钥
-                {meta?.apiKeyEnv && (
-                  <span className="text-[var(--ink-text-faint)] font-normal ml-1">
-                    （对应系统环境变量 {meta.apiKeyEnv}，留空则自动读取）
-                  </span>
-                )}
-              </div>
-              <div className="relative">
-                <input
-                  className={`${inputCls} pr-10`}
-                  type={showKey ? 'text' : 'password'}
-                  value={draft?.apiKey ?? ''}
-                  placeholder="sk-... / 留空则使用环境变量"
-                  onChange={(e) => patchDraft({ apiKey: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey((s) => !s)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-text-faint)] hover:text-[var(--ink-text)] cursor-pointer"
-                  title={showKey ? '隐藏' : '显示'}
-                >
-                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* 模型 ID 输入 与 一键获取模型列表 (对齐 cc-switch ModelInputWithFetch) */}
-            <div className="relative">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className={fieldLabel}>模型标识 (Model ID)</div>
-                <span className="text-[10.5px] text-[var(--ink-text-faint)]">
-                  支持手动填写或点击右侧一键获取云端可用模型
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  className={`${inputCls} flex-1`}
-                  value={draft?.id ?? ''}
-                  placeholder="输入模型 ID 或点击右侧获取"
-                  onChange={(e) => patchDraft({ id: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={handleFetchModels}
-                  disabled={fetchingModels}
-                  className="px-3 py-2 rounded-lg text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-border-strong)] text-[var(--ink-text)] hover:text-[var(--ink-accent)] transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  title="调用 /models 端点实时拉取该服务商支持的真实模型列表"
-                >
-                  {fetchingModels ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--ink-accent)]" />
-                  ) : (
-                    <Download className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                  )}
-                  <span>{fetchingModels ? '拉取中…' : '获取模型列表'}</span>
-                </button>
-              </div>
-
-              {/* 获取成功的模型列表下拉抽屉 */}
-              {showModelDropdown && fetchedModels.length > 0 && (
-                <div className="mt-2 p-2 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] shadow-lg max-h-60 overflow-y-auto space-y-1 z-30">
-                  <div className="relative mb-1">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--ink-text-faint)]" />
-                    <input
-                      type="text"
-                      value={modelSearch}
-                      onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder="在拉取的模型中搜索筛选…"
-                      className="w-full pl-7 pr-3 py-1 text-[11.5px] rounded-md bg-[var(--ink-bg)] border border-[var(--ink-border)] focus:outline-none"
-                    />
-                  </div>
-                  <div className="text-[10px] text-[var(--ink-text-faint)] px-1">
-                    共发现 {fetchedModels.length} 个模型（点击直接载入）：
-                  </div>
-                  <div className="grid grid-cols-1 gap-0.5">
-                    {filteredFetchedModels.slice(0, 50).map((m) => (
+                  {/* 图标操作组（对齐图一：设为默认/铅笔编辑/测速/删除/开关） */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!isActive && isEnabled && (
                       <button
-                        key={m.id}
                         type="button"
-                        onClick={() => {
-                          patchDraft({ id: m.id, name: m.id })
-                          setShowModelDropdown(false)
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[12px] font-mono transition-colors flex items-center justify-between cursor-pointer ${
-                          draft?.id === m.id
-                            ? 'bg-[var(--ink-accent)] text-white font-medium'
-                            : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)]'
-                        }`}
+                        onClick={() => handleSwitchProvider(m)}
+                        className="px-2.5 py-1 rounded-md text-[11px] font-medium text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
                       >
-                        <span className="truncate">{m.id}</span>
-                        {draft?.id === m.id && <Check className="w-3 h-3 shrink-0" />}
+                        设为默认
                       </button>
-                    ))}
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setEditingTarget(m)}
+                      className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
+                      title="编辑此服务"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleQuickSpeedTest(m.baseUrl || pMeta?.defaultBaseUrl, m.apiKey, cardKey)
+                      }
+                      className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
+                      title="测试连通性"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProvider(m)}
+                      className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-rose-500 hover:bg-rose-500/10 active:scale-95 transition-all duration-150 cursor-pointer"
+                      title="删除此服务"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <Switch checked={isEnabled} onChange={() => handleToggleEnabled(m)} />
                   </div>
                 </div>
-              )}
-            </div>
+              )
+            })
+          )}
+        </div>
+      </section>
 
-            {/* 高级模型参数 */}
-            <details className="group border-t border-[var(--ink-border)] pt-3">
-              <summary className="cursor-pointer text-[12.5px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] select-none font-medium">
-                高级模型参数（生成上限 / 温度 / 惩罚项 / 思维预算）
-              </summary>
-              <div className="pt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <NumField
-                  label="单次最大输出 (maxTokens)"
-                  value={draft?.maxTokens}
-                  min={1}
-                  max={128000}
-                  step={256}
-                  placeholder="留空即由模型全权自适应"
-                  hint="各模型差异极大（如 Claude 为 8k、DeepSeek 为 16k、o3-mini 为 100k）。若未配置或不熟悉上限，留空让底层自适应最稳妥。"
-                  onChange={(v) => patchDraft({ maxTokens: v })}
-                />
-                <NumField
-                  label="发散温度 (temperature)"
-                  step={0.05}
-                  min={0}
-                  max={2.0}
-                  value={draft?.temperature}
-                  placeholder="默认 (通常 0.7)"
-                  hint="0.1~0.3 严谨逻辑定稿；0.7 均衡写作；1.0+ 发散脑洞创作。"
-                  onChange={(v) => patchDraft({ temperature: v })}
-                />
-                <NumField
-                  label="核采样 (topP)"
-                  step={0.05}
-                  min={0}
-                  max={1.0}
-                  value={draft?.topP}
-                  hint="通常保持默认或 0.95。"
-                  onChange={(v) => patchDraft({ topP: v })}
-                />
-                <NumField
-                  label="存在惩罚 (presencePenalty)"
-                  step={0.1}
-                  min={-2.0}
-                  max={2.0}
-                  value={draft?.presencePenalty}
-                  hint="高于 0 鼓励模型引入新话题与新角色词汇。"
-                  onChange={(v) => patchDraft({ presencePenalty: v })}
-                />
-                <NumField
-                  label="频率惩罚 (frequencyPenalty)"
-                  step={0.1}
-                  min={-2.0}
-                  max={2.0}
-                  value={draft?.frequencyPenalty}
-                  hint="高于 0 抑制词汇重复与口癖。"
-                  onChange={(v) => patchDraft({ frequencyPenalty: v })}
-                />
-                <NumField
-                  label="思考预算 (thinkingBudget)"
-                  step={1024}
-                  min={0}
-                  max={64000}
-                  value={draft?.thinkingBudget}
-                  placeholder="默认思考深度"
-                  hint="用于 R1 / Claude 思考模型设定专属推理预算。"
-                  onChange={(v) => patchDraft({ thinkingBudget: v })}
-                />
-              </div>
-              <div className="pt-3 flex gap-4">
-                <Toggle
-                  label="supportsThinking"
-                  checked={!!draft?.supportsThinking}
-                  onChange={(v) => patchDraft({ supportsThinking: v })}
-                />
-                <Toggle
-                  label="supportsPromptCache"
-                  checked={!!draft?.supportsPromptCache}
-                  onChange={(v) => patchDraft({ supportsPromptCache: v })}
-                />
-              </div>
-            </details>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-[var(--ink-border)]">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!provider || !draft?.id}
-                className="px-4 py-2 rounded-lg text-[12.5px] bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] disabled:opacity-40 transition-colors duration-150 cursor-pointer shadow-2xs font-medium"
-              >
-                保存配置
-              </button>
-              {savedList.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-3.5 py-2 rounded-lg text-[12.5px] border border-[var(--ink-border)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-                >
-                  收起表单
-                </button>
-              )}
-            </div>
-          </div>
-        </Section>
+      {/* ── 模块 3：模型目录状态条（对齐图一底栏）── */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex-wrap">
+        <div className="text-[11.5px] text-[var(--ink-text-muted)]">
+          目录：内置快照 ·{' '}
+          <span className="font-medium text-[var(--ink-text)]">{MODEL_CATALOG.length}</span> 个模型
+          · 更新于{' '}
+          <span className="text-[var(--ink-text)]">{catalogUpdatedAtLabel(catalogMeta)}</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleRefreshCatalog}
+          disabled={catalogBusy || savedList.length === 0}
+          className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+        >
+          <RotateCcw className={`w-3.5 h-3.5 ${catalogBusy ? 'animate-spin' : ''}`} />
+          <span>{catalogBusy ? '更新中…' : '更新模型目录'}</span>
+        </button>
+      </div>
+      {catalogMsg && (
+        <div className="text-[11px] text-[var(--ink-text-faint)] px-1">{catalogMsg}</div>
       )}
     </div>
   )
