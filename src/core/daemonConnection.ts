@@ -3,6 +3,12 @@ import { createDaemonAiAssistant } from '../adapters/daemonAiAssistant'
 import { createDaemonSkillRuntime } from '../adapters/daemonSkillRuntime'
 import { CONNECT_TIMEOUT_MS, WEB_CONNECT_TIMEOUT_MS } from '../config'
 
+export type ConnectionStateListener = (connected: boolean) => void
+
+export interface ConnectionAwareAiAssistant extends AiAssistant {
+  subscribeToConnectionState?: (listener: ConnectionStateListener) => () => void
+}
+
 export interface ConnectOptions {
   isTauri: boolean
   maxAttempts?: number
@@ -12,7 +18,7 @@ export interface ConnectOptions {
 }
 
 export interface ConnectResult {
-  client: AiAssistant | null
+  client: ConnectionAwareAiAssistant | null
   connected: boolean
 }
 
@@ -56,7 +62,7 @@ export async function connectToDaemon(
           await assistant.close().catch(() => {})
           return { client: null, connected: false }
         }
-        return { client: assistant, connected: true }
+        return { client: addConnectionStateSubscription(assistant, raw), connected: true }
       } catch (error) {
         await raw.close().catch(() => {})
         throw error
@@ -68,4 +74,43 @@ export async function connectToDaemon(
     }
   }
   return { client: null, connected: false }
+}
+
+function addConnectionStateSubscription(
+  assistant: AiAssistant,
+  raw: unknown,
+): ConnectionAwareAiAssistant {
+  const source = raw as {
+    onConnectionStateChange?: (listener: ConnectionStateListener) => () => void
+    transport?: { transport?: { ws?: ConnectionEventSource } }
+  }
+
+  if (source.onConnectionStateChange) {
+    return Object.assign(assistant, {
+      subscribeToConnectionState: source.onConnectionStateChange.bind(source),
+    })
+  }
+
+  const socket = source.transport?.transport?.ws
+  return Object.assign(assistant, {
+    subscribeToConnectionState: (listener: ConnectionStateListener) => {
+      if (!socket?.addEventListener) return () => {}
+      let active = true
+      const onDisconnected = () => {
+        if (active) listener(false)
+      }
+      socket.addEventListener('close', onDisconnected)
+      socket.addEventListener('error', onDisconnected)
+      return () => {
+        active = false
+        socket.removeEventListener?.('close', onDisconnected)
+        socket.removeEventListener?.('error', onDisconnected)
+      }
+    },
+  })
+}
+
+interface ConnectionEventSource {
+  addEventListener(type: 'close' | 'error', listener: () => void): void
+  removeEventListener?(type: 'close' | 'error', listener: () => void): void
 }

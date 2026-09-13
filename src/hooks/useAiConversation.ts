@@ -161,6 +161,7 @@ export function useAiConversation(
   const [isReconnecting, setIsReconnecting] = useState(false)
   const [connectionEpoch, setConnectionEpoch] = useState(0)
   const clientRef = useRef<AiAssistant | null>(null)
+  const connectionSubscriptionRef = useRef<(() => void) | null>(null)
   const mountedRef = useRef(false)
   const workspaceIdRef = useRef(workspaceId)
   const activeTasksRef = useRef(new Map<string, { projectId?: string; controller: AbortController; task: AiTask }>())
@@ -254,12 +255,26 @@ export function useAiConversation(
       return
     }
     const previousClient = clientRef.current
+    connectionSubscriptionRef.current?.()
+    connectionSubscriptionRef.current = null
     clientRef.current = result.client
     if (previousClient && previousClient !== result.client) {
       void previousClient.close().catch(() => {})
     }
     setIsConnected(result.connected)
     setIsReconnecting(false)
+    const subscribeToConnectionState = result.client?.subscribeToConnectionState
+    if (subscribeToConnectionState) {
+      const client = result.client
+      connectionSubscriptionRef.current = subscribeToConnectionState((connected) => {
+        if (!mountedRef.current || clientRef.current !== client || connected) return
+        connectionSubscriptionRef.current?.()
+        connectionSubscriptionRef.current = null
+        clientRef.current = null
+        setIsConnected(false)
+        setIsReconnecting(false)
+      })
+    }
     if (result.connected) setConnectionEpoch((epoch) => epoch + 1)
     if (!result.connected) {
       console.warn('[InkPi Desktop] Daemon 连接失败，进入离线沙盒模式')
@@ -271,6 +286,8 @@ export function useAiConversation(
     initConnection(wsUrl)
     return () => {
       mountedRef.current = false
+      connectionSubscriptionRef.current?.()
+      connectionSubscriptionRef.current = null
       if (clientRef.current) clientRef.current.close().catch(() => {})
     }
     // 仅在挂载时连接；wsUrl 变化由 reconnect 显式触发（与原 App 行为一致）

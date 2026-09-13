@@ -168,6 +168,50 @@ describe('useAiConversation task recovery', () => {
     expect(second.close).toHaveBeenCalledOnce()
   })
 
+  it('updates connection state after an async disconnect, restores it on reconnect, and cleans up listeners', async () => {
+    const first = makeAssistant(vi.fn(async () => null))
+    const second = makeAssistant(vi.fn(async () => null))
+    const firstListeners = new Set<(connected: boolean) => void>()
+    const secondListeners = new Set<(connected: boolean) => void>()
+    const firstUnsubscribe = vi.fn(() => firstListeners.clear())
+    const secondUnsubscribe = vi.fn(() => secondListeners.clear())
+    Object.assign(first, {
+      subscribeToConnectionState: (listener: (connected: boolean) => void) => {
+        firstListeners.add(listener)
+        return firstUnsubscribe
+      },
+    })
+    Object.assign(second, {
+      subscribeToConnectionState: (listener: (connected: boolean) => void) => {
+        secondListeners.add(listener)
+        return secondUnsubscribe
+      },
+    })
+    connectToDaemon
+      .mockResolvedValueOnce({ client: first, connected: true })
+      .mockResolvedValueOnce({ client: second, connected: true })
+
+    const hook = renderHook(() => useAiConversation('ws://daemon', null))
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    expect(firstListeners.size).toBe(1)
+
+    act(() => {
+      for (const listener of firstListeners) listener(false)
+    })
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(false))
+    expect(firstUnsubscribe).toHaveBeenCalledOnce()
+
+    act(() => {
+      hook.result.current.reconnect()
+    })
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    expect(secondListeners.size).toBe(1)
+
+    hook.unmount()
+    expect(secondUnsubscribe).toHaveBeenCalledOnce()
+    expect(second.close).toHaveBeenCalledOnce()
+  })
+
   it('persists a failed snapshot when the daemon task fails', async () => {
     const task = makeTask('failed-task')
     const store = makeStore()
