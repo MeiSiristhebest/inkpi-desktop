@@ -37,15 +37,20 @@ function findSemanticSegment(
   )
   if (matching.length === 0) return undefined
 
-  if (preference === 'start') {
-    return matching.find(
-      (segment) => segment.semanticFrom === position && segment.semanticTo > segment.semanticFrom,
-    ) ?? matching[0]
-  }
-
-  return [...matching].reverse().find(
-    (segment) => segment.semanticTo === position && segment.semanticTo > segment.semanticFrom,
-  ) ?? matching[matching.length - 1]
+  const nonEmpty = matching.filter((segment) => segment.semanticTo > segment.semanticFrom)
+  if (nonEmpty.length === 0) return matching[0]
+  const narrowestSpan = Math.min(
+    ...nonEmpty.map((segment) => segment.semanticTo - segment.semanticFrom),
+  )
+  const narrowest = nonEmpty.filter(
+    (segment) => segment.semanticTo - segment.semanticFrom === narrowestSpan,
+  )
+  return narrowest.reduce((best, segment) => {
+    if (preference === 'start') {
+      return segment.semanticFrom > best.semanticFrom ? segment : best
+    }
+    return segment.semanticTo < best.semanticTo ? segment : best
+  })
 }
 
 function findEditorSegment(
@@ -58,15 +63,20 @@ function findEditorSegment(
   )
   if (matching.length === 0) return undefined
 
-  if (preference === 'start') {
-    return matching.find(
-      (segment) => segment.editorFrom === position && segment.editorTo > segment.editorFrom,
-    ) ?? matching[0]
-  }
-
-  return [...matching].reverse().find(
-    (segment) => segment.editorTo === position && segment.editorTo > segment.editorFrom,
-  ) ?? matching[matching.length - 1]
+  const nonEmpty = matching.filter((segment) => segment.editorTo > segment.editorFrom)
+  if (nonEmpty.length === 0) return matching[0]
+  const narrowestSpan = Math.min(
+    ...nonEmpty.map((segment) => segment.editorTo - segment.editorFrom),
+  )
+  const narrowest = nonEmpty.filter(
+    (segment) => segment.editorTo - segment.editorFrom === narrowestSpan,
+  )
+  return narrowest.reduce((best, segment) => {
+    if (preference === 'start') {
+      return segment.editorFrom > best.editorFrom ? segment : best
+    }
+    return segment.editorTo < best.editorTo ? segment : best
+  })
 }
 
 function findNearestSemanticSegment(
@@ -150,6 +160,14 @@ export function createTextSourceMap(
     semanticRangeToEditor(from, to) {
       const startPosition = clamp(Math.min(from, to), 0, safeSemanticLength)
       const endPosition = clamp(Math.max(from, to), 0, safeSemanticLength)
+      if (startPosition < endPosition) {
+        const exact = orderedSegments.find(
+          (segment) => segment.semanticFrom === startPosition && segment.semanticTo === endPosition,
+        )
+        if (exact) {
+          return { from: exact.editorFrom, to: exact.editorTo, blockId: exact.blockId }
+        }
+      }
       const start = mapSemanticPosition(startPosition, 'start')
       if (startPosition === endPosition) {
         return { from: start.from, to: start.from, blockId: start.blockId }
@@ -164,6 +182,12 @@ export function createTextSourceMap(
     editorRangeToSemantic(position) {
       const startPosition = clamp(Math.min(position.from, position.to), 0, maxEditorPosition)
       const endPosition = clamp(Math.max(position.from, position.to), 0, maxEditorPosition)
+      if (startPosition < endPosition) {
+        const exact = orderedSegments.find(
+          (segment) => segment.editorFrom === startPosition && segment.editorTo === endPosition,
+        )
+        if (exact) return { from: exact.semanticFrom, to: exact.semanticTo }
+      }
       const fromValue = mapEditorPosition(startPosition, 'start')
       if (startPosition === endPosition) return { from: fromValue, to: fromValue }
       const toValue = mapEditorPosition(endPosition, 'end')

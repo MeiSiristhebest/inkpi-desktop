@@ -77,4 +77,20 @@ describe('Creative Story Domain', () => {
     }
     expect(() => assertStoryState(invalid)).toThrow(/does not match/)
   })
+
+  it('rejects incomplete collections and invalid provenance at the persistence boundary', () => {
+    const incomplete = { ...createStoryState(), promises: undefined }
+    expect(() => assertStoryState(incomplete as never)).toThrow(/collection/)
+
+    const invalidProvenance = {
+      ...createStoryState(),
+      entities: {
+        hero: {
+          id: 'hero',
+          provenance: { sourceType: 'unknown', factLevel: 'canonical-fact' },
+        },
+      },
+    }
+    expect(() => assertStoryState(invalidProvenance as never)).toThrow(/invalid provenance/)
+  })
 })

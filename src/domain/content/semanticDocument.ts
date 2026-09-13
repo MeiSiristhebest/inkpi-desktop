@@ -59,19 +59,48 @@ const BLOCK_TYPES = new Set([
   'horizontalRule',
 ])
 
-function nodeSize(node: ProseMirrorNodeLike): number {
-  if (typeof node.text === 'string') return normalizeText(node.text).length
-  if (!node.content?.length) return 1
-  return 2 + node.content.reduce((sum, child) => sum + nodeSize(child), 0)
+function assertDocumentCoordinates(documentId: string, revision: number): void {
+  if (typeof documentId !== 'string' || documentId.trim() === '') {
+    throw new TypeError('Semantic document id must not be empty')
+  }
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new RangeError('Semantic document revision must be a non-negative integer')
+  }
 }
 
-function nodeText(node: ProseMirrorNodeLike): string {
-  if (typeof node.text === 'string') return normalizeText(node.text)
-  if (node.type === 'hardBreak') return '\n'
-  if (!node.content?.length) return ''
+function assertProseMirrorNode(node: unknown, path: string): asserts node is ProseMirrorNodeLike {
+  if (!isPlainRecord(node)) {
+    throw new TypeError(`ProseMirror node must be an object: ${path}`)
+  }
+  const candidate = node as ProseMirrorNodeLike
+  if (typeof candidate.type !== 'string' || candidate.type.trim() === '') {
+    throw new TypeError(`ProseMirror node type is required: ${path}`)
+  }
+  if (candidate.text !== undefined && typeof candidate.text !== 'string') {
+    throw new TypeError(`ProseMirror node text must be a string: ${path}`)
+  }
+  if (candidate.content !== undefined && !Array.isArray(candidate.content)) {
+    throw new TypeError(`ProseMirror node content must be an array: ${path}`)
+  }
+  if (candidate.text !== undefined && candidate.content !== undefined) {
+    throw new TypeError(`ProseMirror text nodes cannot have content: ${path}`)
+  }
+  if (candidate.attrs !== undefined && !isPlainRecord(candidate.attrs)) {
+    throw new TypeError(`ProseMirror node attrs must be an object: ${path}`)
+  }
+  candidate.content?.forEach((child, index) => assertProseMirrorNode(child, `${path}.content[${index}]`))
+}
 
-  const separator = node.content.some((child) => BLOCK_TYPES.has(child.type || '')) ? '\n' : ''
-  return node.content.map((child) => nodeText(child)).join(separator)
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function nodeSize(node: ProseMirrorNodeLike): number {
+  if (typeof node.text === 'string') return node.text.length
+  if (!node.content?.length) return 1
+  return 2 + node.content.reduce((sum, child) => sum + nodeSize(child), 0)
 }
 
 function collectProseMirrorBlocks(
@@ -86,14 +115,19 @@ function collectProseMirrorBlocks(
     const childStart = nodeStart + 1 + offset
     const type = child.type || 'unknown'
     if (BLOCK_TYPES.has(type)) {
-      const text = nodeText(child)
-      blocks.push({
+      const block: MutableBlock = {
         type,
-        text,
+        text: '',
         editorFrom: childStart + 1,
         editorTo: Math.max(childStart + 1, childStart + nodeSize(child) - 1),
         existingId: child.attrs?.id,
         metadata: child.attrs,
+        sourceSegments: [],
+      }
+      collectNodeTextWithSourceMap(child, childStart, block)
+      blocks.push({
+        ...block,
+        sourceSegments: block.sourceSegments?.length ? block.sourceSegments : undefined,
       })
     } else {
       collectProseMirrorBlocks(child, childStart, blocks)
@@ -102,14 +136,63 @@ function collectProseMirrorBlocks(
   }
 }
 
+function collectNodeTextWithSourceMap(
+  node: ProseMirrorNodeLike,
+  nodeStart: number,
+  block: MutableBlock,
+): void {
+  if (typeof node.text === 'string') {
+    appendMappedText(block, normalizeText(node.text), nodeStart, nodeStart + node.text.length)
+    return
+  }
+
+  if (node.type === 'hardBreak') {
+    appendMappedText(block, '\n', nodeStart, nodeStart + nodeSize(node))
+    return
+  }
+
+  if (!node.content?.length) return
+
+  const separator = node.content.some((child) => BLOCK_TYPES.has(child.type || '')) ? '\n' : ''
+  let offset = 0
+  node.content.forEach((child, index) => {
+    const childStart = nodeStart + 1 + offset
+    if (index > 0 && separator) {
+      appendMappedText(block, separator, childStart - 1, childStart)
+    }
+    collectNodeTextWithSourceMap(child, childStart, block)
+    offset += nodeSize(child)
+  })
+}
+
+function appendMappedText(
+  block: MutableBlock,
+  value: string,
+  editorFrom: number,
+  editorTo: number,
+): void {
+  if (!value) return
+  const semanticFrom = block.text.length
+  block.text += value
+  block.sourceSegments ??= []
+  block.sourceSegments.push({
+    semanticFrom,
+    semanticTo: block.text.length,
+    editorFrom,
+    editorTo,
+  })
+}
+
 function createDocument(
   documentId: string,
   revision: number,
   representation: SemanticDocument['representation'],
   mutableBlocks: MutableBlock[],
 ): SemanticDocument {
+  assertDocumentCoordinates(documentId, revision)
   const blocks: SemanticBlock[] = []
   const segments: SourceMapSegment[] = []
+  const blockIds = new Set<string>()
   let text = ''
 
   mutableBlocks.forEach((block, ordinal) => {
@@ -118,6 +201,10 @@ function createDocument(
     text += block.text
     const to = text.length
     const id = createBlockId(documentId, ordinal, block.type, block.existingId)
+    if (blockIds.has(id)) {
+      throw new Error(`Semantic document contains duplicate block id: ${id}`)
+    }
+    blockIds.add(id)
     const editorPosition = { from: block.editorFrom, to: block.editorTo, blockId: id }
     blocks.push({
       id,
@@ -126,8 +213,17 @@ function createDocument(
       from,
       to,
       editorPosition,
-      metadata: block.metadata,
+      metadata: block.metadata === undefined ? undefined : structuredClone(block.metadata),
     })
+    if (representation === 'prosemirror-json' || !block.sourceSegments?.length) {
+      segments.push({
+        blockId: id,
+        semanticFrom: from,
+        semanticTo: to,
+        editorFrom: block.editorFrom,
+        editorTo: block.editorTo,
+      })
+    }
     if (block.sourceSegments?.length) {
       segments.push(
         ...block.sourceSegments.map((segment) => ({
@@ -138,14 +234,6 @@ function createDocument(
           editorTo: segment.editorTo,
         })),
       )
-    } else {
-      segments.push({
-        blockId: id,
-        semanticFrom: from,
-        semanticTo: to,
-        editorFrom: block.editorFrom,
-        editorTo: block.editorTo,
-      })
     }
   })
 
@@ -164,6 +252,8 @@ export function semanticDocumentFromProseMirror(
   json: ProseMirrorNodeLike,
   revision = 0,
 ): SemanticDocument {
+  assertDocumentCoordinates(documentId, revision)
+  assertProseMirrorNode(json, 'doc')
   const blocks: MutableBlock[] = []
   collectProseMirrorBlocks(json, -1, blocks)
   return createDocument(documentId, revision, 'prosemirror-json', blocks)
@@ -186,6 +276,8 @@ export function semanticDocumentFromHtml(
   html: string,
   revision = 0,
 ): SemanticDocument {
+  assertDocumentCoordinates(documentId, revision)
+  if (typeof html !== 'string') throw new TypeError('HTML content must be a string')
   const mutableBlocks: MutableBlock[] = []
   let current: MutableBlock | null = null
   let token: RegExpExecArray | null
@@ -284,6 +376,8 @@ export function semanticDocumentFromText(
   value: string,
   revision = 0,
 ): SemanticDocument {
+  assertDocumentCoordinates(documentId, revision)
+  if (typeof value !== 'string') throw new TypeError('Text content must be a string')
   const normalized = normalizeText(value)
   let offset = 0
   const blocks = normalized.split('\n').map((line) => {

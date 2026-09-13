@@ -77,6 +77,63 @@ describe('Canonical Semantic Content Representation', () => {
     expect(document.sourceMap.semanticRangeToEditor(0, 2)).toMatchObject({ from: 1, to: 3 })
   })
 
+  it('maps nested inline containers and hard breaks to exact ProseMirror ranges', () => {
+    const document = semanticDocumentFromProseMirror('doc-nested-inline', {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { id: 'paragraph-1', metadata: { source: 'editor' } },
+          content: [
+            { type: 'text', text: '甲' },
+            {
+              type: 'link',
+              attrs: { href: '/chapter-2' },
+              content: [
+                { type: 'text', text: '乙' },
+                { type: 'hardBreak' },
+                { type: 'text', text: '丙' },
+              ],
+            },
+            { type: 'text', text: '丁' },
+          ],
+        },
+      ],
+    })
+
+    expect(document.text).toBe('甲乙\n丙丁')
+    expect(document.sourceMap.semanticRangeToEditor(1, 2)).toMatchObject({ from: 3, to: 4 })
+    expect(document.sourceMap.semanticRangeToEditor(2, 3)).toMatchObject({ from: 4, to: 5 })
+    expect(document.sourceMap.semanticRangeToEditor(3, 4)).toMatchObject({ from: 5, to: 6 })
+    expect(document.sourceMap.editorRangeToSemantic({ from: 5, to: 6 })).toEqual({
+      from: 3,
+      to: 4,
+    })
+    expect(document.blocks[0].metadata).toEqual({
+      id: 'paragraph-1',
+      metadata: { source: 'editor' },
+    })
+  })
+
+  it('rejects malformed ProseMirror input and duplicate explicit block ids', () => {
+    expect(() =>
+      semanticDocumentFromProseMirror('doc-invalid', {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 1 as never }] }],
+      }),
+    ).toThrow(/text must be a string/)
+
+    expect(() =>
+      semanticDocumentFromProseMirror('doc-duplicate', {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', attrs: { id: 'same' } },
+          { type: 'paragraph', attrs: { id: 'same' } },
+        ],
+      }),
+    ).toThrow(/duplicate block id/)
+  })
+
   it('projects HTML with inline marks, block quotes, lists, breaks, and empty blocks', () => {
     const document = semanticDocumentFromHtml(
       'doc-3',

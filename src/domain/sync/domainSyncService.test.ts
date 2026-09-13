@@ -427,6 +427,28 @@ describe('DomainSyncService recovery', () => {
     expect(store.restoreCalls).toHaveLength(0)
     expect((await store.list(workspaceId)).map((record) => record.id)).toEqual(['remote-1'])
   })
+
+  it('reports a divergent remote history even when both sides have the same cursor', async () => {
+    const store = new MemoryDomainChangeStore()
+    const local = changeSetWithAggregate('local-divergent', 0, 'chapter-1')
+    await store.append(local)
+    const remote = remoteWith({ snapshots: [snapshot([changeSet('remote-divergent', 0)])] })
+
+    await expect(new DomainSyncService(store, remote).sync(workspaceId)).resolves.toMatchObject({
+      workspaceId,
+      revision: 1,
+      conflict: {
+        reason: 'aggregate-conflict',
+        localRevision: 1,
+        remoteRevision: 1,
+        pendingChangeSets: [local],
+        conflictingAggregates: [{ aggregateType: 'document', aggregateId: 'chapter-1' }],
+      },
+    })
+    expect(store.restoreCalls).toHaveLength(0)
+    expect(remote.pushDomainChangeSet).not.toHaveBeenCalled()
+    expect(remote.pullDomainChangeSets).not.toHaveBeenCalled()
+  })
 })
 
 function cloneChangeSet(changeSet: DomainChangeSet): DomainChangeSet {

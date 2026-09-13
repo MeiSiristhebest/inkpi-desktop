@@ -75,6 +75,24 @@ export class DomainSyncService {
     let pulled = 0
     let recovered = recoveredBeforeAttempt
 
+    const divergent = findDivergentChangeSets(localChangeSets, remoteSnapshot.changeSets)
+    if (divergent.length > 0) {
+      return {
+        workspaceId,
+        pushed: 0,
+        pulled: 0,
+        revision: localRevision,
+        recovered,
+        conflict: createPendingConflict(
+          workspaceId,
+          localRevision,
+          remoteSnapshot,
+          localChangeSets,
+          divergent,
+        ),
+      }
+    }
+
     if (remoteSnapshot.revision > localRevision) {
       const pending = findPendingChangeSets(localChangeSets, remoteSnapshot.changeSets)
       if (pending.length > 0) {
@@ -182,6 +200,21 @@ function findPendingChangeSets(
   const remoteKeys = new Set(remoteChangeSets.map(changeSetKey))
   return localChangeSets
     .filter((changeSet) => !remoteKeys.has(changeSetKey(changeSet)))
+    .map(cloneChangeSet)
+}
+
+function findDivergentChangeSets(
+  localChangeSets: DomainChangeSet[],
+  remoteChangeSets: DomainChangeSet[],
+): DomainChangeSet[] {
+  const remoteByRevision = new Map(
+    remoteChangeSets.map((changeSet) => [changeSet.revision, changeSet]),
+  )
+  return localChangeSets
+    .filter((changeSet) => {
+      const remote = remoteByRevision.get(changeSet.revision)
+      return remote !== undefined && changeSetKey(remote) !== changeSetKey(changeSet)
+    })
     .map(cloneChangeSet)
 }
 

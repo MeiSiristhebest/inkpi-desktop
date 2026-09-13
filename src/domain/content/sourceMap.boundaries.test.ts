@@ -6,6 +6,36 @@ import {
 } from './index'
 
 describe('Phase 1 source-map boundary evidence', () => {
+  it('maps nested ProseMirror text leaves precisely while retaining outer block ranges', () => {
+    const document = semanticDocumentFromProseMirror('nested-pm-leaves', {
+      type: 'doc',
+      content: [
+        {
+          type: 'blockquote',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: '甲乙' }] },
+            { type: 'paragraph', content: [{ type: 'text', text: '丙' }] },
+          ],
+        },
+      ],
+    })
+
+    const block = document.blocks[0]
+    expect(document.sourceMap.semanticRangeToEditor(3, 4)).toMatchObject({ from: 6, to: 7 })
+    expect(document.sourceMap.editorRangeToSemantic({ from: 6, to: 7 })).toEqual({
+      from: 3,
+      to: 4,
+    })
+    expect(document.sourceMap.semanticRangeToEditor(block.from, block.to)).toMatchObject({
+      from: 1,
+      to: 8,
+    })
+    expect(document.sourceMap.editorRangeToSemantic({ from: 1, to: 8 })).toEqual({
+      from: block.from,
+      to: block.to,
+    })
+  })
+
   it('round-trips nested ProseMirror blocks across selections, patches, and empty blocks', () => {
     const document = semanticDocumentFromProseMirror('nested-pm', {
       type: 'doc',

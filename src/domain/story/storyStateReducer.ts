@@ -5,6 +5,7 @@ import {
 } from '@inkpi/protocol'
 import type { StoryState } from './storyState'
 import { assertStoryState, createStoryState, withStoryRevision } from './storyState'
+import { deserializeStoryState, serializeStoryState } from './storyStateSerialization'
 
 export interface StoryStateProjection {
   /** DomainChangeSet cursor; separate from StoryState's semantic revision. */
@@ -35,6 +36,15 @@ export function reduceStoryStateProjection(
 
   for (const change of changeSet.changes) {
     const collection = collectionForAggregate(change.aggregateType)
+    const fullStoryStateChange = isFullStoryStateAggregate(change.aggregateType)
+    if (change.operation !== 'upsert' && change.operation !== 'delete') {
+      throw new Error(`StoryState DomainChange has an invalid operation: ${change.id}`)
+    }
+    if ((collection || fullStoryStateChange) && change.revision < nextSemanticRevision) {
+      throw new Error(
+        `StoryState DomainChange is out of order: current revision ${nextSemanticRevision}, received ${change.revision}`,
+      )
+    }
     if (collection) {
       storyChanged = true
       if (change.operation === 'delete') {
@@ -48,13 +58,18 @@ export function reduceStoryStateProjection(
       continue
     }
 
-    if (isFullStoryStateAggregate(change.aggregateType)) {
+    if (fullStoryStateChange) {
       storyChanged = true
       if (change.operation === 'delete') {
-        nextState = createStoryState(nextState.revision + 1)
-      } else {
-        nextState = fullStoryState(change)
+        nextState = createStoryState(Math.max(nextState.revision + 1, change.revision))
         nextSemanticRevision = nextState.revision
+      } else {
+        const snapshot = fullStoryState(change)
+        if (snapshot.revision !== change.revision) {
+          throw new Error(`StoryState snapshot revision mismatch: ${change.aggregateId}`)
+        }
+        nextState = snapshot
+        nextSemanticRevision = Math.max(nextState.revision, change.revision)
       }
     }
   }
@@ -102,14 +117,11 @@ function fullStoryState(change: DomainChange): StoryState {
   if (!isRecord(change.payload)) {
     throw new Error(`StoryState snapshot payload must be an object: ${change.aggregateId}`)
   }
-  const payload = structuredClone(change.payload) as StoryState
-  for (const collection of STORY_COLLECTIONS) {
-    if (!isRecord(payload[collection])) {
-      throw new Error(`StoryState snapshot is missing ${collection}: ${change.aggregateId}`)
-    }
+  try {
+    return deserializeStoryState(serializeStoryState(change.payload as StoryState))
+  } catch (error) {
+    throw new Error(`StoryState snapshot is invalid: ${change.aggregateId}`, { cause: error })
   }
-  assertStoryState(payload)
-  return payload
 }
 
 function recordPayload(change: DomainChange): Record<string, unknown> {
@@ -130,16 +142,6 @@ function recordPayload(change: DomainChange): Record<string, unknown> {
 }
 
 type StoryCollection = Exclude<keyof StoryState, 'revision'>
-
-const STORY_COLLECTIONS: StoryCollection[] = [
-  'entities',
-  'relations',
-  'events',
-  'scenes',
-  'timelines',
-  'promises',
-  'constraints',
-]
 
 function collectionForAggregate(aggregateType: string): StoryCollection | undefined {
   const normalized = aggregateType.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -202,12 +204,15 @@ function assertProjection(projection: StoryStateProjection): void {
 
 function assertChangeSet(changeSet: DomainChangeSet): void {
   if (
+    typeof changeSet.id !== 'string' ||
+    typeof changeSet.workspaceId !== 'string' ||
+    typeof changeSet.sourceDeviceId !== 'string' ||
     !changeSet.id.trim() ||
     !changeSet.workspaceId.trim() ||
     !changeSet.sourceDeviceId.trim() ||
-    !Number.isInteger(changeSet.baseRevision) ||
+    !Number.isSafeInteger(changeSet.baseRevision) ||
     changeSet.baseRevision < 0 ||
-    !Number.isInteger(changeSet.revision) ||
+    !Number.isSafeInteger(changeSet.revision) ||
     changeSet.revision !== changeSet.baseRevision + 1 ||
     !Array.isArray(changeSet.changes)
   ) {
@@ -222,7 +227,8 @@ function assertChangeSet(changeSet: DomainChangeSet): void {
       !change.id.trim() ||
       !change.aggregateType.trim() ||
       !change.aggregateId.trim() ||
-      !Number.isInteger(change.revision) ||
+      (change.operation !== 'upsert' && change.operation !== 'delete') ||
+      !Number.isSafeInteger(change.revision) ||
       change.revision < 0 ||
       !Number.isFinite(change.occurredAt)
     ) {
