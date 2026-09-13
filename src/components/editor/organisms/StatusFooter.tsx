@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Sparkles, AlignJustify, Type, BarChart3, ChevronUp } from 'lucide-react'
+import { Sparkles, AlignJustify, Type, BarChart3 } from 'lucide-react'
 import { spring, variants, gesture } from '../../../motion'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
@@ -51,28 +51,52 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
     window.addEventListener('click', handleDocClick)
     return () => window.removeEventListener('click', handleDocClick)
   }, [])
+
+  const updatedAtLabel = activeChapter?.updatedAt
+    ? new Date(activeChapter.updatedAt).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    : null
+  const connectionLabel = isConnected ? '已连接' : isReconnecting ? '连接中…' : '离线'
+  const connectionDescription = isConnected
+    ? '已连接 InkPi Daemon，点击重连'
+    : isReconnecting
+      ? '正在连接 InkPi Daemon'
+      : '离线，点击重连 InkPi Daemon'
+
   return (
-    <footer className="h-8 shrink-0 flex items-center justify-between px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)]">
-      <div className="flex items-center gap-4">
-        <span className="tabular-nums">
-          {chapterWords.toLocaleString()} / {wordTarget.toLocaleString()} 字
+    <footer
+      data-testid="editor-status-footer"
+      className="editor-status-footer h-8 shrink-0 flex items-center justify-between gap-3 px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)] whitespace-nowrap overflow-hidden"
+    >
+      <div className="editor-status-primary min-w-0 flex items-center gap-4 shrink-0">
+        <span
+          data-testid="editor-chapter-progress"
+          className="tabular-nums"
+          title="本章字数与每章目标"
+        >
+          本章 {chapterWords.toLocaleString()} / {wordTarget.toLocaleString()} 字
         </span>
-        <span className="tabular-nums">全书 {totalWords.toLocaleString()} 字</span>
+        <span className="tabular-nums" title="当前作品所有章节合计">
+          全书 {totalWords.toLocaleString()} 字
+        </span>
         {sessionWordDelta > 0 && (
           <span className="tabular-nums text-[var(--ink-success)]">本次 +{sessionWordDelta}</span>
         )}
-        <span>编码：UTF-8</span>
-        <span>存储：{storageLabel}</span>
 
-        {/* 连接状态：收拢在底部状态栏，精简文案为「已连接」 */}
+        {/* 连接状态只保留一个可见标签，完整语义放在无障碍名称中。 */}
         <button
           type="button"
           onClick={() => onReconnect?.()}
           disabled={isReconnecting}
+          aria-label={connectionDescription}
           title="重连 InkPi Daemon"
           className="flex items-center gap-1.5 hover:text-[var(--ink-text)] transition-colors cursor-pointer disabled:opacity-60"
         >
           <span
+            aria-hidden="true"
             className={`w-1.5 h-1.5 rounded-full shrink-0 ${
               isConnected
                 ? 'bg-[var(--ink-success)]'
@@ -81,12 +105,7 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
                   : 'bg-[var(--ink-text-faint)]'
             }`}
           />
-          <span className="tabular-nums">
-            {isConnected ? '已连接' : isReconnecting ? '连接中…' : '离线'}
-          </span>
-          {/* 保留无障碍兼测试标记 */}
-          <span className="sr-only">Daemon 已连接</span>
-          <span className="sr-only">离线沙盒</span>
+          <span className="tabular-nums">{connectionLabel}</span>
         </button>
       </div>
 
@@ -102,7 +121,7 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
           </button>
         )}
 
-        {/* 字数详情入口：「本章: N ▲」点击弹出向上菜单 */}
+        {/* 字数详情入口：主指标只显示一次，详情使用单一图标入口。 */}
         <div className="relative" ref={wordMenuRef}>
           <button
             type="button"
@@ -110,15 +129,13 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
               e.stopPropagation()
               setWordMenuOpen((v) => !v)
             }}
+            aria-label="字数详情与稿费预估"
+            aria-expanded={wordMenuOpen}
+            aria-haspopup="menu"
             title="字数详情与稿费预估"
-            className="flex items-center gap-1 hover:text-[var(--ink-text)] transition-colors cursor-pointer select-none"
+            className="editor-status-word-details p-1 rounded-md hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer select-none"
           >
-            <span className="tabular-nums">本章：{chapterWords.toLocaleString()}</span>
-            <ChevronUp
-              className={`w-3 h-3 transition-transform duration-150 ${
-                wordMenuOpen ? 'rotate-180' : ''
-              }`}
-            />
+            <BarChart3 className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
 
           {/* 向上弹出菜单 */}
@@ -188,18 +205,15 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
           <span>打字机</span>
         </IconButton>
 
-        <span className={isSaved ? '' : 'text-[var(--ink-text-muted)]'} title="⌘S 保存">
+        <span
+          className={`editor-status-save-state ${isSaved ? '' : 'text-[var(--ink-text-muted)]'}`}
+          title={
+            updatedAtLabel
+              ? `${isSaved ? '已保存' : '未保存'} · 最后更新 ${updatedAtLabel}`
+              : '⌘S 保存'
+          }
+        >
           {isSaved ? '已保存' : '未保存'}
-        </span>
-        <span>
-          最后更新：
-          {activeChapter?.updatedAt
-            ? new Date(activeChapter.updatedAt).toLocaleTimeString('zh-CN', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              })
-            : '-'}
         </span>
       </div>
     </footer>

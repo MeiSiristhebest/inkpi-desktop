@@ -79,6 +79,12 @@ export const WriterDesk: FC<WriterDeskProps> = ({
   const activeChapterText = activeChapter
     ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
     : ''
+  const totalWords = chapters.reduce(
+    (sum, chapter) =>
+      sum +
+      (chapter.id === activeChapter?.id ? activeChapter?.wordCount || 0 : chapter.wordCount || 0),
+    0,
+  )
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -419,24 +425,18 @@ export const WriterDesk: FC<WriterDeskProps> = ({
           })()}
         </div>
 
-        {/* 底部状态栏：编码 / 存储 / 最后更新 */}
-        <div className="h-8 shrink-0 flex items-center justify-between px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)]">
-          <div className="flex items-center gap-4">
-            <span>字数：{activeChapter?.wordCount || 0} 字</span>
-            <span>编码：UTF-8</span>
-            <span>存储：{storageLabel}</span>
+        {/* 底部状态栏：本章/全书字数；保存状态已在标题栏显示。 */}
+        <footer
+          data-testid="editor-status-footer"
+          className="editor-status-footer h-8 shrink-0 flex items-center gap-3 px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)] whitespace-nowrap overflow-hidden"
+        >
+          <div className="editor-status-primary min-w-0 flex items-center gap-4 shrink-0">
+            <span className="tabular-nums">
+              本章 {(activeChapter?.wordCount || 0).toLocaleString()} 字
+            </span>
+            <span className="tabular-nums">全书 {totalWords.toLocaleString()} 字</span>
           </div>
-          <div>
-            最后更新：
-            {activeChapter?.updatedAt
-              ? new Date(activeChapter.updatedAt).toLocaleTimeString('zh-CN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })
-              : '-'}
-          </div>
-        </div>
+        </footer>
       </div>
     </div>
   )

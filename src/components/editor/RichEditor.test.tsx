@@ -221,9 +221,24 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('shows the daemon connection status', async () => {
     const { rerender } = render(<RichEditor projectId="p-conn" isConnected={true} />)
-    expect(await screen.findByText('Daemon 已连接')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /已连接/ })).toBeInTheDocument()
+    expect(screen.queryByText('Daemon 已连接')).not.toBeInTheDocument()
     rerender(<RichEditor projectId="p-conn" isConnected={false} isReconnecting={false} />)
-    expect(screen.getByText('离线沙盒')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /离线/ })).toBeInTheDocument()
+    expect(screen.queryByText('离线沙盒')).not.toBeInTheDocument()
+  })
+
+  it('shows each footer metric once and keeps diagnostic metadata out of the visible bar', async () => {
+    render(<RichEditor projectId="p-footer" isConnected />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    expect(screen.getByTestId('editor-chapter-progress')).toHaveTextContent(
+      /^本章 \d+ \/ 3,000 字$/,
+    )
+    expect(screen.queryByText('本章：139')).not.toBeInTheDocument()
+    expect(screen.queryByText(/最后更新：/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Daemon 已连接')).not.toBeInTheDocument()
+    expect(screen.queryByText('离线沙盒')).not.toBeInTheDocument()
   })
 
   it('creates a new chapter via the tree and writes it to IndexedDB', async () => {

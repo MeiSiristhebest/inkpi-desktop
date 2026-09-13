@@ -46,7 +46,7 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
         onDoubleClick={resetWidth}
         title="拖拽调整目录宽度（双击恢复默认）"
         className={`absolute top-0 right-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
-          isDragging ? 'bg-[var(--ink-accent)] w-[3px]' : 'hover:bg-[var(--ink-accent)]/50'
+          isDragging ? 'bg-[var(--ink-accent)] w-[2px]' : 'bg-transparent'
         }`}
       />
       <div className="h-11 shrink-0 flex items-center justify-between px-3 border-b border-[var(--ink-border)]/50">

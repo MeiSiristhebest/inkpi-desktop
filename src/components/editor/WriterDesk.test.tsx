@@ -161,7 +161,7 @@ describe('WriterDesk — 空状态与受控守卫', () => {
     expect(screen.getByText(/还没有分卷/)).toBeInTheDocument()
     fireEvent.change(ta(), { target: { value: '测试' } })
     // activeChapter 为 null -> 受控守卫直接返回，字数保持 0
-    expect(screen.getByText('字数：0 字')).toBeInTheDocument()
+    expect(screen.getByText('本章 0 字')).toBeInTheDocument()
   })
 
   it('guards save when no chapter is active (empty state)', async () => {
@@ -202,7 +202,7 @@ describe('WriterDesk — 卷章树导航', () => {
     const btn = (await screen.findAllByText('第001章 未命名'))[0]
     fireEvent.click(btn)
     expect(ta().value).toBe('你好世界')
-    expect(screen.getByText('字数：4 字')).toBeInTheDocument()
+    expect(screen.getByText('本章 4 字')).toBeInTheDocument()
   })
 
   it('creates a volume + chapter when none exist', async () => {
@@ -263,7 +263,7 @@ describe('WriterDesk — 编辑、排版、字号、行距、存盘与随动感�
     fireEvent.change(await screen.findByPlaceholderText(/挥洒你的灵感/), {
       target: { value: '字 字 字' },
     })
-    expect(screen.getByText('字数：3 字')).toBeInTheDocument()
+    expect(screen.getByText('本章 3 字')).toBeInTheDocument()
     expect(screen.getByText('未保存')).toBeInTheDocument()
   })
 

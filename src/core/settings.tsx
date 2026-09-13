@@ -143,7 +143,7 @@ export interface EditorPreferences {
   wordTarget: number // 每章字数目标
   normalizePunctuationOnFormat: boolean // 一键排版时顺带标点中文化
   defaultTypewriter: boolean // 默认打字机视口（光标垂直居中）
-  showStatsBar: boolean // 底部状态栏（字数/编码/存储）
+  showStatsBar: boolean // 底部状态栏（字数/连接状态/保存状态）
 }
 
 /** 对外暴露的完整设置 = 各切片组合；调用方仍可按需只取自己关心的切片 */

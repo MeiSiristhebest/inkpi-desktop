@@ -891,7 +891,7 @@ const EditorTab: FC<{
           onChange={(v) => update({ defaultTypewriter: v })}
         />
       </Row>
-      <Row label="底部状态栏" hint="显示字数、编码、存储位置与最后更新时间。">
+      <Row label="底部状态栏" hint="显示本章与全书字数、连接状态、编辑器控制和保存状态。">
         <Switch checked={settings.showStatsBar} onChange={(v) => update({ showStatsBar: v })} />
       </Row>
       <Row
