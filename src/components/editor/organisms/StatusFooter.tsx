@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { Sparkles, AlignJustify, Type, BarChart3, ChevronUp } from 'lucide-react'
+import { spring, variants, gesture } from '../../../motion'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 
@@ -120,32 +122,42 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
           </button>
 
           {/* 向上弹出菜单 */}
-          {wordMenuOpen && (
-            <div className="absolute bottom-full right-0 mb-1.5 z-50 min-w-[120px] py-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[13px] overflow-hidden">
-              <button
-                type="button"
-                onClick={() => {
-                  actions.setShowWordCountPanelModal(true)
-                  setWordMenuOpen(false)
-                }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+          <AnimatePresence>
+            {wordMenuOpen && (
+              <motion.div
+                {...variants.scaleIn}
+                transition={spring.snappy}
+                className="absolute bottom-full right-0 mb-1.5 z-50 min-w-[120px] py-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[13px] overflow-hidden"
               >
-                <BarChart3 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                <span>字数详情</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // 稿费预估功能占位
-                  setWordMenuOpen(false)
-                }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-              >
-                <span className="text-amber-500 shrink-0 text-[15px] leading-none">¥</span>
-                <span>稿费预估</span>
-              </button>
-            </div>
-          )}
+                <motion.button
+                  type="button"
+                  {...gesture.listRow}
+                  transition={spring.snappy}
+                  onClick={() => {
+                    actions.setShowWordCountPanelModal(true)
+                    setWordMenuOpen(false)
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span>字数详情</span>
+                </motion.button>
+                <motion.button
+                  type="button"
+                  {...gesture.listRow}
+                  transition={spring.snappy}
+                  onClick={() => {
+                    // 稿费预估功能占位
+                    setWordMenuOpen(false)
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                >
+                  <span className="text-amber-500 shrink-0 text-[15px] leading-none">¥</span>
+                  <span>稿费预估</span>
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 画布宽度：限宽 / 铺满 循环切换 */}

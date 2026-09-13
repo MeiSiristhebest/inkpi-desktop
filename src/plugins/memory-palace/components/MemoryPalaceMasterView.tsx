@@ -8,8 +8,11 @@ import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodex
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 
 export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const host = useOptionalPluginHostContext()
   const [entities, setEntities] = useState<any[]>([])
   const [chapters, setChapters] = useState<any[]>([])
   const [query, setQuery] = useState('')
@@ -35,13 +38,44 @@ export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     loadData()
   }, [projectId])
 
-  const searchResults: EntitySearchResult[] = useMemo(() => {
+  const localSearchResults: EntitySearchResult[] = useMemo(() => {
     return MemoryPalaceEngine.searchEntityOccurrences({
       query,
       entities,
       chapters,
     })
   }, [query, entities, chapters])
+  const runtimeChapters = useMemo(
+    () =>
+      chapters.map((chapter) => ({
+        ...chapter,
+        content: semanticTextFromContent(chapter.id, chapter.content || '', chapter.revision),
+      })),
+    [chapters],
+  )
+  const [runtimeSearchResults, setRuntimeSearchResults] = useState<EntitySearchResult[] | null>(null)
+
+  useEffect(() => {
+    const runtimeAssistant = host?.aiAssistant
+    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginTool) {
+      setRuntimeSearchResults(null)
+      return
+    }
+
+    let cancelled = false
+    setRuntimeSearchResults(null)
+    void runtimeAssistant
+      .runPluginTool('memory-palace', { query, entities, chapters: runtimeChapters })
+      .then((result) => {
+        if (!cancelled && isEntitySearchResults(result)) setRuntimeSearchResults(result)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [entities, host?.aiAssistant, query, runtimeChapters])
+
+  const searchResults = runtimeSearchResults ?? localSearchResults
 
   const handleSaveSnapshot = async (res: EntitySearchResult) => {
     await indexedDbMemoryPalaceRepository.save({
@@ -163,5 +197,20 @@ export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         </div>
       )}
     </div>
+  )
+}
+
+function isEntitySearchResults(value: unknown): value is EntitySearchResult[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        typeof item.entityId === 'string' &&
+        typeof item.entityName === 'string' &&
+        typeof item.totalOccurrences === 'number' &&
+        Array.isArray(item.recentSnippets),
+    )
   )
 }

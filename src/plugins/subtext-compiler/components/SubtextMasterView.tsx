@@ -1,12 +1,13 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbSubtextRepository } from "../../../adapters/indexedDbSubtextRepository"
-import { SubtextCompilerEngine } from "../engine/SubtextCompilerEngine"
-import type { SubtextDialogueRecord } from "../types"
-import { MessageSquareQuote, Layers, Send, Bot } from "lucide-react"
-import { useOptionalPluginHostContext } from "../../../core/pluginHostContext"
-import { clock } from "../../../adapters/clock"
-import { idGenerator } from "../../../adapters/idGenerator"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbSubtextRepository } from '../../../adapters/indexedDbSubtextRepository'
+import { SubtextCompilerEngine } from '../engine/SubtextCompilerEngine'
+import type { SubtextDialogueRecord } from '../types'
+import { MessageSquareQuote, Layers, Send, Bot } from 'lucide-react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { clock } from '../../../adapters/clock'
+import { idGenerator } from '../../../adapters/idGenerator'
+import { semanticTextFromContent } from '../../../domain/content'
 
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -18,7 +19,11 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
 
   const handleAiSubtextCompile = () => {
     if (!spoken.trim()) return
-    const analysisInput = { speaker: speakerName, emotion, spoken }
+    const analysisInput = {
+      speaker: semanticTextFromContent('subtext-compiler-speaker', speakerName),
+      emotion,
+      spoken: semanticTextFromContent('subtext-compiler-spoken', spoken),
+    }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
       void hostContext.aiAssistant.runPluginTask('subtext-compiler', analysisInput)

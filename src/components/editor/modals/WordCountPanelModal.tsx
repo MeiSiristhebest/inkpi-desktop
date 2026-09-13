@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
+import { motion } from 'motion/react'
 import { X, Feather, SlidersHorizontal } from 'lucide-react'
+import { spring, gesture } from '../../../motion'
 import type { WritingSessionStats } from '../hooks/useWritingSessionStats'
 import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource } from '../../../adapters/randomSource'
@@ -564,8 +566,10 @@ export const WordCountPanelModal: React.FC<
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
           <div>
             {onPinAsWidget && (
-              <button
+              <motion.button
                 type="button"
+                {...gesture.button}
+                transition={spring.snappy}
                 onClick={() => {
                   onPinAsWidget()
                   onClose()
@@ -573,16 +577,18 @@ export const WordCountPanelModal: React.FC<
                 className="px-4 py-2 rounded-xl text-[13px] font-medium text-[var(--ink-accent)] bg-[var(--ink-accent-soft)] hover:opacity-90 transition-colors cursor-pointer"
               >
                 悬浮在写作窗口
-              </button>
+              </motion.button>
             )}
           </div>
-          <button
+          <motion.button
             type="button"
+            {...gesture.button}
+            transition={spring.snappy}
             onClick={onClose}
             className="px-6 py-2 rounded-xl text-[13px] font-semibold bg-[var(--ink-accent)] hover:bg-[var(--ink-accent-hover)] text-white shadow-xs hover:shadow transition-all cursor-pointer"
           >
             完成
-          </button>
+          </motion.button>
         </div>
       </div>
     </div>

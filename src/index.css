@@ -139,91 +139,154 @@
     --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.36), 0 12px 32px rgba(0, 0, 0, 0.3);
   }
 
-  /* ── 专业写作阅读皮肤主题（基于 Ulysses、Kindle 与眼科护眼色彩科学） ── */
+  /* ── 专业写作阅读全套主题色系（参考 Apple Books、Kindle、Ulysses、Notion 视光学体系） ── */
 
-  /* 护眼茶白 / 白绿书卷风 (Clear Sage)：520nm 波长柔光，减轻眼部睫状肌疲劳，雅致书卷配色 */
-  :root[data-skin='youth'] {
-    --ink-bg: #eef3eb;
-    --ink-bg-sidebar: #e5ece1;
-    --ink-bg-panel: rgba(255, 255, 255, 0.85);
-    --ink-bg-card: rgba(255, 255, 255, 0.9);
+  /* 1. 浅色 · 经典石墨白 (Notion Minimal / Default) — 仅在浅色模式下生效 */
+  :root[data-skin='default']:not([data-theme='dark']) {
+    color-scheme: light;
+    --ink-bg: #ffffff;
+    --ink-bg-card: #ffffff;
+    --ink-bg-sidebar: #f7f7f5;
+    --ink-bg-panel: #fbfbfa;
     --ink-bg-elevated: #ffffff;
-    --ink-bg-hover: #dbe5d6;
-    --ink-bg-active: #cfdec8;
-
-    --ink-text: #2d3748;
-    --ink-text-muted: #4a5568;
-    --ink-text-faint: #5a6a57;
-
-    --ink-border: #cbd5c5;
-    --ink-border-strong: #b2c2ab;
-
-    --ink-accent: #2e7d32;
-    --ink-accent-hover: #226126;
-    --ink-accent-soft: #dceeda;
-
-    --ink-success: #2e7d32;
-    --ink-danger: #c4544a;
-    --ink-warning: #d97706;
-
-    --ink-ghost: #7a8c77;
+    --ink-bg-hover: #efefee;
+    --ink-bg-active: #e9e9e7;
+    --ink-text: #37352f;
+    --ink-text-muted: #787774;
+    --ink-text-faint: #9b9a97;
+    --ink-border: #e9e9e7;
+    --ink-border-strong: #dfdfdd;
+    --ink-accent: #2383e2;
+    --ink-accent-hover: #1a6fc4;
+    --ink-accent-soft: #e8f2fb;
   }
 
-  /* 羊皮暖纸 (Sepia Paper / 水墨)：过滤 85% 蓝光，还原复古纸书温润质感，长篇阅读金牌配色 */
-  :root[data-skin='ink'] {
+  /* 2. 浅色 · 羊皮纸暖纸 (Kindle / Apple Books Sepia) — 滤除刺眼蓝光，柔和护眼 */
+  :root[data-skin='sepia']:not([data-theme='dark']),
+  :root[data-skin='ink']:not([data-theme='dark']) {
+    color-scheme: light;
     --ink-bg: #f9f5eb;
+    --ink-bg-card: #fffdf9;
     --ink-bg-sidebar: #f2ece0;
     --ink-bg-panel: #fcf9f2;
     --ink-bg-elevated: #fffdf9;
     --ink-bg-hover: #eae2d2;
     --ink-bg-active: #dfd5c2;
-
     --ink-text: #342e28;
     --ink-text-muted: #73685c;
     --ink-text-faint: #9c9082;
-
     --ink-border: #ded4c1;
     --ink-border-strong: #ccbfab;
-
     --ink-accent: #b45309;
     --ink-accent-hover: #92400e;
     --ink-accent-soft: #f4e8d3;
-
     --ink-success: #52795d;
     --ink-danger: #b91c1c;
     --ink-warning: #b45309;
-
     --ink-ghost: #b0a596;
   }
 
-  /* 暗夜松柏 (Nightfall Pine / 森夜)：柔和亚光深林绿夜景，消除纯黑眩光 */
+  /* 3. 浅色 · 护眼青苔绿 (Ulysses Sage / Clear Moss) — 520nm 视疲劳缓解柔光 */
+  :root[data-skin='sage']:not([data-theme='dark']),
+  :root[data-skin='youth']:not([data-theme='dark']) {
+    color-scheme: light;
+    --ink-bg: #eef3eb;
+    --ink-bg-card: rgba(255, 255, 255, 0.9);
+    --ink-bg-sidebar: #e5ece1;
+    --ink-bg-panel: rgba(255, 255, 255, 0.85);
+    --ink-bg-elevated: #ffffff;
+    --ink-bg-hover: #dbe5d6;
+    --ink-bg-active: #cfdec8;
+    --ink-text: #2d3748;
+    --ink-text-muted: #4a5568;
+    --ink-text-faint: #5a6a57;
+    --ink-border: #cbd5c5;
+    --ink-border-strong: #b2c2ab;
+    --ink-accent: #2e7d32;
+    --ink-accent-hover: #226126;
+    --ink-accent-soft: #dceeda;
+    --ink-success: #2e7d32;
+    --ink-danger: #c4544a;
+    --ink-warning: #d97706;
+    --ink-ghost: #7a8c77;
+  }
+
+  /* 4. 深色 · 碳素黑曜石 (Notion Dark / Obsidian) - 高级中性深空灰 */
+  :root[data-skin='dark'] {
+    color-scheme: dark;
+    --ink-bg: #191919;
+    --ink-bg-card: #202020;
+    --ink-bg-sidebar: #202020;
+    --ink-bg-panel: #1f1f1f;
+    --ink-bg-elevated: #2a2a2a;
+    --ink-bg-hover: #2f2f2f;
+    --ink-bg-active: #373737;
+    --ink-text: #e9e9e7;
+    --ink-text-muted: #9b9a97;
+    --ink-text-faint: #6b6b6b;
+    --ink-border: #2f2f2f;
+    --ink-border-strong: #3f3f3f;
+    --ink-accent: #529cca;
+    --ink-accent-hover: #6bb0da;
+    --ink-accent-soft: #1e3444;
+    --ink-success: #5dcaa5;
+    --ink-danger: #e07a70;
+    --ink-warning: #d9a441;
+    --ink-ghost: #5a5a58;
+    --ink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --ink-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.24);
+    --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.36), 0 12px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* 5. 深色 · 夜读深渊蓝 (Apple Books Midnight) - 沉稳冷调，深邃不炫光 */
+  :root[data-skin='midnight'] {
+    color-scheme: dark;
+    --ink-bg: #11141a;
+    --ink-bg-card: #181d26;
+    --ink-bg-sidebar: #151922;
+    --ink-bg-panel: #161b24;
+    --ink-bg-elevated: #1e2430;
+    --ink-bg-hover: #262e3d;
+    --ink-bg-active: #303a4d;
+    --ink-text: #e2e8f0;
+    --ink-text-muted: #8c98a8;
+    --ink-text-faint: #5a6677;
+    --ink-border: #242c3b;
+    --ink-border-strong: #333f54;
+    --ink-accent: #3b82f6;
+    --ink-accent-hover: #60a5fa;
+    --ink-accent-soft: #1e293b;
+    --ink-success: #34d399;
+    --ink-danger: #f87171;
+    --ink-warning: #fbbf24;
+    --ink-ghost: #475569;
+    --ink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --ink-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+    --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  /* 6. 深色 · 松柏森夜 (Nightfall Pine / Ulysses Forest) - 哑光深松林绿，长时间夜间写作首选 */
   :root[data-skin='forest'] {
     color-scheme: dark;
-
     --ink-bg: #141a16;
+    --ink-bg-card: #1c241f;
     --ink-bg-sidebar: #1b231e;
     --ink-bg-panel: #18201b;
     --ink-bg-elevated: #222b25;
     --ink-bg-hover: #2a352e;
     --ink-bg-active: #334037;
-
     --ink-text: #e2ede5;
     --ink-text-muted: #8ca393;
     --ink-text-faint: #5e7365;
-
     --ink-border: #28342c;
     --ink-border-strong: #37473d;
-
     --ink-accent: #e5a93b;
     --ink-accent-hover: #f59e0b;
     --ink-accent-soft: #2d261a;
-
     --ink-success: #6dbb8a;
     --ink-danger: #e07a70;
     --ink-warning: #e5a93b;
-
     --ink-ghost: #5a7a64;
-
     --ink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --ink-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.32);
     --ink-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.48), 0 12px 32px rgba(0, 0, 0, 0.4);
@@ -455,7 +518,9 @@
   box-shadow: var(--ink-shadow-lg);
 }
 
-/* ── 转场 ─────────────────────────────────────────────────── */
+/* ── 转场动效 ─────────────────────────────────────────────────── */
+/* 所有动效由 motion (framer-motion) 统一驱动，见 src/motion.ts    */
+/* CSS 层仅保留 prefers-reduced-motion 无障碍覆盖                  */
 
 @media (prefers-reduced-motion: reduce) {
   *,

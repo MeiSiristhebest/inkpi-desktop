@@ -84,7 +84,9 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
       setExtractText(allText.slice(0, 10000))
     } else {
       const chap = chapters.find((c) => c.id === chapId)
-      setExtractText(chap?.content || '')
+      setExtractText(
+        chap ? semanticTextFromContent(chap.id, chap.content || '', chap.revision) : '',
+      )
     }
   }
 
@@ -115,7 +117,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
     const analysisInput = {
       characters: [...characterNames],
       compare: [charA || '角色A', charB || '角色B'],
-      text: extractText.slice(0, 2000),
+      text: semanticTextFromContent('dialogue-distiller-ai-input', extractText).slice(0, 2000),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

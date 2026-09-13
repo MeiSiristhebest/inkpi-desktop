@@ -1,4 +1,6 @@
 import { type FC } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { spring, variants } from './motion'
 import { Engine } from './core/engine'
 import { Bookshelf } from './components/bookshelf/Bookshelf'
 import { AiAssistantPanel } from './components/ai/AiAssistantPanel'
@@ -22,8 +24,22 @@ const ProjectWorkspace: FC<{
   onAiTask: (
     task: import('@inkpi/protocol').AiTask,
   ) => Promise<import('@inkpi/protocol').TaskResult | null>
+  onPluginTool: (pluginId: string, input: Record<string, unknown>) => Promise<unknown | null>
+  onPluginWorkflow: (
+    pluginId: string,
+    input: unknown,
+    metadata?: Record<string, unknown>,
+  ) => Promise<unknown | null>
   children: ReactNode
-}> = ({ projectId, projectName, isConnected, onAiTask, children }) => {
+}> = ({
+  projectId,
+  projectName,
+  isConnected,
+  onAiTask,
+  onPluginTool,
+  onPluginWorkflow,
+  children,
+}) => {
   const { chapters, volumes, reloadChapters } = useProjectData()
   return (
     <DesktopPluginHostProvider
@@ -34,6 +50,8 @@ const ProjectWorkspace: FC<{
       volumes={volumes}
       onRefreshHierarchy={reloadChapters}
       onAiTask={onAiTask}
+      onPluginTool={onPluginTool}
+      onPluginWorkflow={onPluginWorkflow}
       isAiConnected={isConnected}
     >
       {children}
@@ -88,17 +106,26 @@ const ProjectEngine: FC<{
             onDistillationWorkflow={props.runDistillationWorkflow}
             onSteerTask={props.steerTask}
           />
-          {props.aiPanelOpen && (
-            <AiAssistantPanel
-              messages={props.aiMessages}
-              input={props.aiInput}
-              busy={props.aiBusy}
-              connected={props.isConnected}
-              onInputChange={props.setAiInput}
-              onSend={() => props.sendAiPrompt(props.aiInput)}
-              onClose={() => props.setAiPanelOpen(false)}
-            />
-          )}
+          <AnimatePresence>
+            {props.aiPanelOpen && (
+              <motion.div
+                key="ai-assistant-drawer"
+                {...variants.slideInFromRight}
+                transition={spring.gentle}
+                className="h-full flex"
+              >
+                <AiAssistantPanel
+                  messages={props.aiMessages}
+                  input={props.aiInput}
+                  busy={props.aiBusy}
+                  connected={props.isConnected}
+                  onInputChange={props.setAiInput}
+                  onSend={() => props.sendAiPrompt(props.aiInput)}
+                  onClose={() => props.setAiPanelOpen(false)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       }
     />
@@ -111,8 +138,10 @@ const ProjectEngine: FC<{
  */
 export const App: FC = () => (
   <SettingsProvider>
-    <ThemeController />
-    <AppShell />
+    <PluginProvider>
+      <ThemeController />
+      <AppShell />
+    </PluginProvider>
   </SettingsProvider>
 )
 
@@ -171,6 +200,8 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     runContinuityAudit,
     runDeepReasoning,
     runDistillationWorkflow,
+    runPluginTool,
+    runPluginWorkflow,
     steerTask,
     taskRecovery,
     taskRecoveryLoading,
@@ -180,69 +211,90 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     dismissTask,
   } = ai
 
-  const content = !activeProjectId ? (
-    <ErrorBoundary label="书架">
-      <Bookshelf
-        projects={projects}
-        onOpenProject={setActiveProjectId}
-        onCreateProject={createProject}
-        onImportProject={importProject}
-        onCreateDemo={createDemo}
-        onExportProject={exportProject}
-        onUpdateProject={updateProject}
-        onDeleteProject={deleteProject}
-      />
-    </ErrorBoundary>
-  ) : (
-    <ErrorBoundary label="应用主框架">
-      <ProjectDataProvider projectId={activeProjectId}>
-        <ProjectWorkspace
-          projectId={activeProjectId}
-          projectName={projects.find((p) => p.id === activeProjectId)?.name}
-          isConnected={isConnected}
-          onAiTask={runAiTask}
+  const content = (
+    <AnimatePresence mode="wait">
+      {!activeProjectId ? (
+        <motion.div
+          key="view-bookshelf"
+          {...variants.fade}
+          transition={spring.gentle}
+          className="h-full w-full"
         >
-          <ProjectEngine
-            projectId={activeProjectId}
-            projectName={projects.find((p) => p.id === activeProjectId)?.name}
-            isConnected={isConnected}
-            isReconnecting={isReconnecting}
-            onReconnect={reconnect}
-            onRequestGhost={requestGhost}
-            onAiTask={runAiTask}
-            onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
-            onHome={() => setActiveProjectId(null)}
-            aiPanelOpen={aiPanelOpen}
-            setAiPanelOpen={setAiPanelOpen}
-            aiMessages={aiMessages}
-            aiInput={aiInput}
-            setAiInput={setAiInput}
-            aiBusy={aiBusy}
-            sendAiPrompt={sendAiPrompt}
-            runContinuityAudit={runContinuityAudit}
-            runDeepReasoning={runDeepReasoning}
-            runDistillationWorkflow={runDistillationWorkflow}
-            steerTask={steerTask}
-          />
-        </ProjectWorkspace>
-      </ProjectDataProvider>
-    </ErrorBoundary>
+          <ErrorBoundary label="书架">
+            <Bookshelf
+              projects={projects}
+              onOpenProject={setActiveProjectId}
+              onCreateProject={createProject}
+              onImportProject={importProject}
+              onCreateDemo={createDemo}
+              onExportProject={exportProject}
+              onUpdateProject={updateProject}
+              onDeleteProject={deleteProject}
+            />
+          </ErrorBoundary>
+        </motion.div>
+      ) : (
+        <motion.div
+          key={`view-workspace-${activeProjectId}`}
+          {...variants.fade}
+          transition={spring.gentle}
+          className="h-full w-full"
+        >
+          <ErrorBoundary label="应用主框架">
+            <ProjectDataProvider projectId={activeProjectId}>
+              <ProjectWorkspace
+                projectId={activeProjectId}
+                projectName={projects.find((p) => p.id === activeProjectId)?.name}
+                isConnected={isConnected}
+                onAiTask={runAiTask}
+                onPluginTool={runPluginTool}
+                onPluginWorkflow={runPluginWorkflow}
+              >
+                <ProjectEngine
+                  projectId={activeProjectId}
+                  projectName={projects.find((p) => p.id === activeProjectId)?.name}
+                  isConnected={isConnected}
+                  isReconnecting={isReconnecting}
+                  onReconnect={reconnect}
+                  onRequestGhost={requestGhost}
+                  onAiTask={runAiTask}
+                  onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
+                  onHome={() => setActiveProjectId(null)}
+                  aiPanelOpen={aiPanelOpen}
+                  setAiPanelOpen={setAiPanelOpen}
+                  aiMessages={aiMessages}
+                  aiInput={aiInput}
+                  setAiInput={setAiInput}
+                  aiBusy={aiBusy}
+                  sendAiPrompt={sendAiPrompt}
+                  runContinuityAudit={runContinuityAudit}
+                  runDeepReasoning={runDeepReasoning}
+                  runDistillationWorkflow={runDistillationWorkflow}
+                  steerTask={steerTask}
+                />
+              </ProjectWorkspace>
+            </ProjectDataProvider>
+          </ErrorBoundary>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 
   return (
-    <PluginProvider>
+    <>
       {content}
       {activeProjectId && (
         <TaskRecoveryPanel
           records={taskRecovery}
           loading={taskRecoveryLoading}
           error={taskRecoveryError}
+          connected={isConnected}
           onResume={resumeTask}
           onCancel={cancelTask}
           onDismiss={dismissTask}
         />
       )}
-    </PluginProvider>
+    </>
   )
 }
 

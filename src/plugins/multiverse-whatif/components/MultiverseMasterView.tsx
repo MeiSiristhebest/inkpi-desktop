@@ -1,11 +1,13 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbMultiverseRepository } from "../../../adapters/indexedDbMultiverseRepository"
-import { MultiverseEngine } from "../engine/MultiverseEngine"
-import type { MultiverseBranchRecord, MultiverseSimulationResult } from "../types"
-import { GitFork, GitBranch, Send, Trash2, ArrowRight } from "lucide-react"
-import { clock } from "../../../adapters/clock"
-import { idGenerator } from "../../../adapters/idGenerator"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbMultiverseRepository } from '../../../adapters/indexedDbMultiverseRepository'
+import { MultiverseEngine } from '../engine/MultiverseEngine'
+import type { MultiverseBranchRecord, MultiverseSimulationResult } from '../types'
+import { GitFork, GitBranch, Send, Trash2, ArrowRight } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
+import { idGenerator } from '../../../adapters/idGenerator'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 
 const DEFAULT_CANON_CHAPTERS = [
   { index: 12, title: "第12章 太虚秘境", summary: "主角林凡进入宗门禁地太虚秘境争夺造化", entities: ["林凡", "苏清月"] },
@@ -16,6 +18,7 @@ const DEFAULT_CANON_CHAPTERS = [
 ]
 
 export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+  const host = useOptionalPluginHostContext()
   const [forkIndex, setForkIndex] = useState<number>(14)
   const [premise, setPremise] = useState<string>("如果主角在第14章没有现身救下女配苏清月，选择暗中取宝独善其身")
   const [branches, setBranches] = useState<MultiverseBranchRecord[]>([])
@@ -38,11 +41,39 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
     })
   }, [branches, onStats])
 
-  // 执行实时分支因果模拟
+  // 执行实时分支因果模拟；连接 Daemon 时由 Runtime Workflow 负责，离线时保留本地确定性回退。
   useEffect(() => {
-    const sim = MultiverseEngine.simulateFork(DEFAULT_CANON_CHAPTERS, forkIndex, premise)
-    setActiveBranch(sim)
-  }, [forkIndex, premise])
+    const localResult = MultiverseEngine.simulateFork(DEFAULT_CANON_CHAPTERS, forkIndex, premise)
+    setActiveBranch(localResult)
+    const runtimeAssistant = host?.aiAssistant
+    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginWorkflow) return
+
+    let cancelled = false
+    void runtimeAssistant
+      .runPluginWorkflow(
+        'multiverse-whatif',
+        {
+          canonChapters: DEFAULT_CANON_CHAPTERS.map((chapter) => ({
+            ...chapter,
+            title: semanticTextFromContent(`multiverse-title-${chapter.index}`, chapter.title),
+            summary: semanticTextFromContent(`multiverse-summary-${chapter.index}`, chapter.summary),
+            entities: chapter.entities.map((entity, index) =>
+              semanticTextFromContent(`multiverse-entity-${chapter.index}-${index}`, entity),
+            ),
+          })),
+          forkChapterIndex: forkIndex,
+          divergencePremise: semanticTextFromContent('multiverse-divergence-premise', premise),
+        },
+        { projectId },
+      )
+      .then((result) => {
+        if (!cancelled && isMultiverseSimulationResult(result)) setActiveBranch(result)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [forkIndex, host?.aiAssistant, premise, projectId])
 
   const handleSaveBranch = async () => {
     if (!activeBranch) return
@@ -219,3 +250,15 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
   )
 }
 
+function isMultiverseSimulationResult(value: unknown): value is MultiverseSimulationResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const result = value as Partial<MultiverseSimulationResult>
+  return (
+    typeof result.branchId === 'string' &&
+    typeof result.branchName === 'string' &&
+    typeof result.forkChapterIndex === 'number' &&
+    Array.isArray(result.nodes) &&
+    Array.isArray(result.divergenceCurve) &&
+    Array.isArray(result.butterflyEffects)
+  )
+}

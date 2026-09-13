@@ -1,4 +1,6 @@
+import { motion } from 'motion/react'
 import { Edit3, Copy, Check, Hash, FileDown, Trash2, FolderInput } from 'lucide-react'
+import { spring, variants, gesture } from '../../../motion'
 import { STATUS_OPTIONS } from '../editorUi'
 import type { ChapterStatus } from '../../../types'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
@@ -22,7 +24,9 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
           actions.setChapterContextMenu(null)
         }}
       />
-      <div
+      <motion.div
+        {...variants.scaleIn}
+        transition={spring.snappy}
         className="fixed z-50 min-w-[240px] w-auto max-w-[280px] p-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12.5px] select-none backdrop-blur-md"
         style={{ left: chapterContextMenu.x, top: chapterContextMenu.y }}
       >
@@ -30,7 +34,9 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
           {ch.title}
         </div>
 
-        <button
+        <motion.button
+          {...gesture.listRow}
+          transition={spring.snappy}
           onClick={() => {
             actions.setChapterContextMenu(null)
             actions.setRenamingChapter(ch)
@@ -40,9 +46,11 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
         >
           <Edit3 size={13} className="text-[var(--ink-text-muted)] shrink-0" />
           <span className="whitespace-nowrap">重命名 (F2)</span>
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          {...gesture.listRow}
+          transition={spring.snappy}
           onClick={() => {
             actions.setChapterContextMenu(null)
             actions.duplicateChapter(ch)
@@ -51,9 +59,11 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
         >
           <Copy size={13} className="text-[var(--ink-text-muted)] shrink-0" />
           <span className="whitespace-nowrap">复制 / 创建副本</span>
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          {...gesture.listRow}
+          transition={spring.snappy}
           onClick={() => {
             actions.setChapterContextMenu(null)
             actions.copyChapterText(ch)
@@ -68,9 +78,11 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
           <span className="whitespace-nowrap">
             {copiedChapterId === ch.id ? '已复制纯文本' : '复制正文到剪贴板'}
           </span>
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          {...gesture.listRow}
+          transition={spring.snappy}
           onClick={() => {
             actions.setChapterContextMenu(null)
             actions.toggleExcludeNumbering(ch.id)
@@ -81,7 +93,7 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
           <span className="whitespace-nowrap">
             {excludedNumberingIds.has(ch.id) ? '恢复计入正文序号' : '设为不计入序号(序章/番外)'}
           </span>
-        </button>
+        </motion.button>
 
         <div className="border-t border-[var(--ink-border)]/60 my-1" />
 
@@ -90,8 +102,10 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
         </div>
         <div className="px-1.5 py-0.5 flex items-center gap-1">
           {STATUS_OPTIONS.map((st) => (
-            <button
+            <motion.button
               key={st.value}
+              {...gesture.button}
+              transition={spring.snappy}
               onClick={() => {
                 actions.setChapterContextMenu(null)
                 actions.setStatus(st.value as ChapterStatus)
@@ -103,13 +117,15 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
               }`}
             >
               {st.label}
-            </button>
+            </motion.button>
           ))}
         </div>
 
         <div className="border-t border-[var(--ink-border)]/60 my-1" />
 
-        <button
+        <motion.button
+          {...gesture.listRow}
+          transition={spring.snappy}
           onClick={() => {
             actions.setChapterContextMenu(null)
             actions.exportSingleChapter(ch, 'txt')
@@ -118,9 +134,11 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
         >
           <FileDown size={13} className="text-[var(--ink-text-muted)] shrink-0" />
           <span className="whitespace-nowrap">导出为 TXT 纯文本</span>
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          {...gesture.listRow}
+          transition={spring.snappy}
           onClick={() => {
             actions.setChapterContextMenu(null)
             actions.exportSingleChapter(ch, 'md')
@@ -129,7 +147,7 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
         >
           <FileDown size={13} className="text-[var(--ink-text-muted)] shrink-0" />
           <span className="whitespace-nowrap">导出为 Markdown</span>
-        </button>
+        </motion.button>
 
         {volumes && volumes.length > 1 && (
           <>
@@ -140,9 +158,11 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
             {volumes
               .filter((v) => v.id !== ch.volumeId)
               .map((v) => (
-                <button
+                <motion.button
                   key={v.id}
                   type="button"
+                  {...gesture.listRow}
+                  transition={spring.snappy}
                   onClick={() => {
                     actions.setChapterContextMenu(null)
                     actions.moveChapterToVolume(ch, v.id)
@@ -151,14 +171,16 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
                 >
                   <FolderInput size={13} className="text-[var(--ink-accent)] shrink-0" />
                   <span className="truncate">移入「{v.title}」</span>
-                </button>
+                </motion.button>
               ))}
           </>
         )}
 
         <div className="border-t border-[var(--ink-border)]/60 my-1" />
 
-        <button
+        <motion.button
+          {...gesture.dangerButton}
+          transition={spring.snappy}
           onClick={() => {
             actions.setChapterContextMenu(null)
             actions.setDeletingChapter(ch)
@@ -167,8 +189,8 @@ export const ChapterContextMenu: React.FC<ChapterContextMenuProps> = ({ model })
         >
           <Trash2 size={13} className="shrink-0" />
           <span className="whitespace-nowrap">删除本章节</span>
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
     </>
   )
 }

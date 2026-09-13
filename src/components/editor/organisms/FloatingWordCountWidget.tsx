@@ -1,9 +1,38 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { X, Feather, SlidersHorizontal, Settings, Bell } from 'lucide-react'
 import type { WritingSessionStats } from '../hooks/useWritingSessionStats'
 import { formatTime, type WordCountConfig } from '../modals/WordCountPanelModal'
 import { MascotFigure } from './MascotFigure'
 import { BookCover } from '../../../ui/atoms/BookCover'
+import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
+import { spring, variants, gesture } from '../../../motion'
+
+export const STORAGE_KEY_WIDGET_POS = 'inkpi-writer-assistant-widget-pos'
+
+export function getInitialWidgetPosition(): { x: number; y: number } {
+  const fallback = {
+    x: Math.max(20, typeof window !== 'undefined' ? window.innerWidth - 380 : 800),
+    y: Math.max(40, typeof window !== 'undefined' ? window.innerHeight - 380 : 400),
+  }
+  try {
+    const raw = localStorageKeyValueStore.getSync(STORAGE_KEY_WIDGET_POS)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+        const maxX = Math.max(20, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 100)
+        const maxY = Math.max(40, (typeof window !== 'undefined' ? window.innerHeight : 800) - 100)
+        return {
+          x: Math.min(Math.max(10, parsed.x), maxX),
+          y: Math.min(Math.max(10, parsed.y), maxY),
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback
+}
 
 interface FloatingWordCountWidgetProps {
   stats: WritingSessionStats
@@ -157,53 +186,91 @@ export const FloatingWordCountWidget: React.FC<FloatingWordCountWidgetProps> = (
         <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
           {/* 设置图标与气泡菜单 */}
           <div className="relative" ref={menuRef}>
-            <button
+            <motion.button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               title="设置"
+              {...gesture.iconButton}
+              transition={spring.snappy}
               className={`p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer ${
                 menuOpen ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-accent)]' : ''
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-            </button>
+            </motion.button>
 
-            {menuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[136px] py-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow-lg)] text-[12.5px] overflow-hidden flex flex-col backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenSettings()
-                    setMenuOpen(false)
-                  }}
-                  className="px-3.5 py-2 text-left hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)] transition-colors cursor-pointer flex items-center gap-2 font-normal"
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  {...variants.scaleIn}
+                  transition={spring.snappy}
+                  className="absolute right-0 top-full mt-1.5 z-50 min-w-[136px] py-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow-lg)] text-[12.5px] overflow-hidden flex flex-col backdrop-blur-md"
                 >
-                  <Settings className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
-                  <span>设置字数面板</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenGoalModal?.()
-                    setMenuOpen(false)
-                  }}
-                  className="px-3.5 py-2 text-left hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)] transition-colors cursor-pointer flex items-center gap-2 font-normal"
-                >
-                  <Bell className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
-                  <span>设置写作提醒</span>
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenSettings()
+                      setMenuOpen(false)
+                    }}
+                    className="px-3.5 py-2 text-left hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)] transition-colors cursor-pointer flex items-center gap-2 font-normal"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
+                    <span>设置字数面板</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenGoalModal?.()
+                      setMenuOpen(false)
+                    }}
+                    className="px-3.5 py-2 text-left hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)] transition-colors cursor-pointer flex items-center gap-2 font-normal"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
+                    <span>设置写作提醒</span>
+                  </button>
+                  {onConfigChange && (
+                    <div className="px-3.5 py-2 border-t border-[var(--ink-border)] flex flex-col gap-1.5">
+                      <span className="text-[11px] text-[var(--ink-text-muted)] font-medium">
+                        切换排版
+                      </span>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['layout1', 'layout2', 'layout3'] as const).map(
+                          (l: LayoutType, i: number) => (
+                            <button
+                              key={l}
+                              type="button"
+                              onClick={() => {
+                                onConfigChange({ ...config, layout: l })
+                                setMenuOpen(false)
+                              }}
+                              className={`py-1 text-[11px] rounded text-center cursor-pointer transition-colors ${
+                                config.layout === l
+                                  ? 'bg-[var(--ink-accent)] text-white font-medium'
+                                  : 'bg-[var(--ink-bg-card)] text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                              }`}
+                            >
+                              布局{i + 1}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          <button
+          <motion.button
             type="button"
             onClick={onClose}
             title="关闭悬浮"
+            {...gesture.iconButton}
+            transition={spring.snappy}
             className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-danger)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
         </div>
       </div>
 

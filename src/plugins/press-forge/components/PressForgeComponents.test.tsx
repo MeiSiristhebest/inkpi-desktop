@@ -4,6 +4,7 @@ import { PressForgeMasterView } from './PressForgeMasterView'
 import { PressForgeDrawer } from './PressForgeDrawer'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { indexedDbPressConfigRepository } from '../../../adapters/indexedDbPressConfigRepository'
+import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
 
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
@@ -25,7 +26,7 @@ describe('PressForge Components', () => {
       projectId: 'proj-1',
       title: '第一章 启程',
       order: 1,
-      content: '测试段落一\n测试段落二',
+      content: '<p>测试段落一</p><p>测试段落二</p>',
     },
   ]
 
@@ -50,5 +51,31 @@ describe('PressForge Components', () => {
     )
     expect(screen.getByText(/标准排版压制/)).toBeInTheDocument()
     expect(screen.getByText(/一键复制标准段首缩进正文/)).toBeInTheDocument()
+  })
+
+  it('projects stored HTML into semantic text before the Runtime tool boundary', async () => {
+    const onPluginTool = vi.fn(async () => null)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
+    vi.mocked(indexedDbPressConfigRepository.get).mockResolvedValue(undefined)
+
+    render(
+      <DesktopPluginHostProvider
+        projectId="proj-1"
+        activeChapter={null}
+        onPluginTool={onPluginTool}
+        isAiConnected
+      >
+        <PressForgeMasterView projectId="proj-1" />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => {
+      expect(onPluginTool).toHaveBeenCalledWith(
+        'press-forge',
+        expect.objectContaining({ rawContent: '测试段落一\n测试段落二' }),
+      )
+    })
   })
 })

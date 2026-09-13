@@ -8,6 +8,7 @@ import { indexedDbPromiseLedgerRepository } from '../../../adapters/indexedDbPro
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 import { Plus, Search, Sparkles, Edit2, Trash2, Bot } from 'lucide-react'
 
 export const DEMO_PROMISES: Omit<
@@ -99,7 +100,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     const entrySummaries = entries
       .map(
         (e) =>
-          `伏笔【${e.clueName}】(${e.tier})：始于第 ${e.plantChapter} 章，承诺解决限期第 ${e.dueChapterLimit} 章，状态：${e.status}。埋设说明：${e.plantNote}`,
+          `伏笔【${semanticTextFromContent(`promise-ledger-clue-${e.id}`, e.clueName)}】(${e.tier})：始于第 ${e.plantChapter} 章，承诺解决限期第 ${e.dueChapterLimit} 章，状态：${e.status}。埋设说明：${semanticTextFromContent(`promise-ledger-note-${e.id}`, e.plantNote)}`,
       )
       .join('\n')
 

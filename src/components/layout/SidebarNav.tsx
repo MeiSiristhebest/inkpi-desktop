@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { motion } from 'motion/react'
 import {
   ChevronDown,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
   Zap,
   Palette,
 } from 'lucide-react'
+import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
@@ -164,24 +166,26 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         </div>
 
         {/* Quick Nav: Dashboard & Editor */}
-        <div className="p-2 border-b border-[var(--ink-border)]/50 space-y-0.5">
+        <div className="p-2 border-b border-[var(--ink-border)]/50 space-y-1">
           <button
+            type="button"
             onClick={() => onSelectTab('dashboard')}
-            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
+            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer ${
               activeTabId === 'dashboard'
-                ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-                : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                ? 'bg-[var(--ink-accent)] text-white shadow-2xs font-semibold'
+                : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
             }`}
           >
             <LayoutDashboard className="w-3.5 h-3.5" />
             <span>写作面板</span>
           </button>
           <button
+            type="button"
             onClick={() => onSelectTab('editor')}
-            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
+            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer ${
               activeTabId === 'editor'
-                ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-                : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                ? 'bg-[var(--ink-accent)] text-white shadow-2xs font-semibold'
+                : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
@@ -216,16 +220,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
         {/* 插件分类折叠列表 */}
         <div className="flex-1 overflow-y-auto">
-          {activePlugins.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-4 text-center h-full">
-              <p className="text-xs text-[var(--ink-text-faint)] leading-relaxed">
-                当前未启用附加插件
-              </p>
-              <p className="text-xs text-[var(--ink-text-faint)] mt-0.5 opacity-70">
-                纯粹专注正文创作
-              </p>
-            </div>
-          ) : groupedCategories.length === 0 ? (
+          {activePlugins.length === 0 ? null : groupedCategories.length === 0 ? (
             <div className="px-4 py-6 text-center text-xs text-[var(--ink-text-faint)]">
               未找到匹配「{searchQuery}」的插件
             </div>
@@ -288,13 +283,16 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
       {/* Bottom Settings Switcher */}
       <div className="p-2 border-t border-[var(--ink-border)] flex items-center justify-between text-xs text-[var(--ink-text-muted)]">
-        <button
+        <motion.button
+          type="button"
+          {...gesture.listRow}
+          transition={spring.snappy}
           onClick={onOpenSettings}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
         >
           <SettingsIcon className="w-3.5 h-3.5" />
           <span>设置</span>
-        </button>
+        </motion.button>
       </div>
     </aside>
   )

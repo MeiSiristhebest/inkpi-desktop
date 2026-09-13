@@ -1,6 +1,7 @@
 import type { EntitySearchResult } from '../types'
 import type { CodexEntity } from '../../living-codex/types'
 import type { ChapterRecord } from '../../../types'
+import { semanticTextFromContent } from '../../../domain/content'
 
 export class MemoryPalaceEngine {
   /**
@@ -33,7 +34,7 @@ export class MemoryPalaceEngine {
       const occurrences: { chapter: ChapterRecord; snippet: string }[] = []
 
       for (const ch of sortedChapters) {
-        const text = ch.content || ''
+        const text = semanticTextFromContent(ch.id, ch.content || '', ch.revision)
         if (!text) continue
 
         for (const term of searchTerms) {

@@ -4,6 +4,7 @@ import { MemoryPalaceMasterView } from './MemoryPalaceMasterView'
 import { MemoryPalaceDrawer } from './MemoryPalaceDrawer'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
 
 vi.mock('../../../adapters/indexedDbCodexEntityRepository', () => ({
   indexedDbCodexEntityRepository: {
@@ -37,7 +38,7 @@ describe('MemoryPalace Components', () => {
       projectId: 'proj-1',
       title: '古刹听钟',
       order: 1,
-      content: '陆沉手握古钟，感受到了镇魔钟的磅礴灵力。',
+      content: '<p>陆沉手握古钟，感受到了镇魔钟的磅礴灵力。</p>',
     },
   ]
 
@@ -63,6 +64,38 @@ describe('MemoryPalace Components', () => {
     await waitFor(() => {
       expect(screen.getByText(/本章登场实体速查/)).toBeInTheDocument()
       expect(screen.getByText(/镇魔钟/)).toBeInTheDocument()
+    })
+  })
+
+  it('projects stored chapter HTML before the Runtime search tool boundary', async () => {
+    const onPluginTool = vi.fn(async () => null)
+    vi.mocked(indexedDbCodexEntityRepository.getAll).mockResolvedValue(fakeEntities as any)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
+
+    render(
+      <DesktopPluginHostProvider
+        projectId="proj-1"
+        activeChapter={null}
+        onPluginTool={onPluginTool}
+        isAiConnected
+      >
+        <MemoryPalaceMasterView projectId="proj-1" />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => {
+      expect(onPluginTool).toHaveBeenCalledWith(
+        'memory-palace',
+        expect.objectContaining({
+          chapters: [
+            expect.objectContaining({
+              content: '陆沉手握古钟，感受到了镇魔钟的磅礴灵力。',
+            }),
+          ],
+        }),
+      )
     })
   })
 })

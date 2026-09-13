@@ -46,7 +46,9 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       setReport(waterMeterEngine.auditText(full.slice(0, 15000)))
     } else {
       const chap = chapters.find((c) => c.id === chapId)
-      const text = chap?.content || ''
+      const text = chap
+        ? semanticTextFromContent(chap.id, chap.content || '', chap.revision)
+        : ''
       setInputText(text)
       setReport(waterMeterEngine.auditText(text))
     }
@@ -62,7 +64,11 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
       chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: inputText.slice(0, 2500),
+      text: semanticTextFromContent(
+        chap?.id ?? selectedChapterId,
+        inputText,
+        chap?.revision ?? 0,
+      ).slice(0, 2500),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

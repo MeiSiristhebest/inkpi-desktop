@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react'
+import { motion } from 'motion/react'
 import { Activity, Brain, Database, RefreshCw, Square } from 'lucide-react'
+import { spring, gesture } from '../../motion'
 import type { TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ChapterRecord } from '../../types'
 import { projectContent } from '../../domain/content'
@@ -322,14 +324,148 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           {chapters.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
         </select>
       )}
-      <button type="button" disabled={!connected || busy || (tab !== 'distill' && !selectedChapter)} onClick={() => void (tab === 'audit' ? runAudit() : tab === 'reason' ? runReasoning() : runDistillation())} className="flex w-full items-center justify-center gap-1 rounded bg-[var(--ink-accent)] px-2 py-1.5 text-xs text-white disabled:opacity-40">
+      <motion.button
+        type="button"
+        {...gesture.button}
+        transition={spring.snappy}
+        disabled={!connected || busy || (tab !== 'distill' && !selectedChapter)}
+        onClick={() =>
+          void (tab === 'audit'
+            ? runAudit()
+            : tab === 'reason'
+              ? runReasoning()
+              : runDistillation())
+        }
+        className="flex w-full items-center justify-center gap-1 rounded bg-[var(--ink-accent)] px-2 py-1.5 text-xs text-white disabled:opacity-40"
+      >
         {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
-        {busy ? '运行中…' : tab === 'audit' ? '审计当前章节' : tab === 'reason' ? '开始深度推理' : checkpoint ? '继续项目提炼' : '开始项目提炼'}
-      </button>
+        {busy
+          ? '运行中…'
+          : tab === 'audit'
+            ? '审计当前章节'
+            : tab === 'reason'
+              ? '开始深度推理'
+              : checkpoint
+                ? '继续项目提炼'
+                : '开始项目提炼'}
+      </motion.button>
       {tab === 'reason' && progress?.status !== 'completed' && progress?.taskId && (
         <div className="mt-2 flex gap-1">
-          <input aria-label="推理 steering" value={steering} onChange={(event) => setSteering(event.target.value)} placeholder="运行中补充方向…" className="min-w-0 flex-1 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs" />
-          <button type="button" onClick={() => void steer()} disabled={!steering.trim()} className="rounded border border-[var(--ink-border)] px-2 py-1 text-xs disabled:opacity-40">引导</button>
+          <input
+            aria-label="推理 steering"
+            value={steering}
+            onChange={(event) => setSteering(event.target.value)}
+            placeholder="运行中补充方向…"
+            className="min-w-0 flex-1 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs"
+          />
+          <motion.button
+            type="button"
+            {...gesture.button}
+            transition={spring.snappy}
+            onClick={() => void steer()}
+            disabled={!steering.trim()}
+            className="rounded border border-[var(--ink-border)] px-2 py-1 text-xs disabled:opacity-40"
+          >
+            引导
+          </motion.button>
+        </div>
+      )}
+      {busy && (
+        <button
+          type="button"
+          onClick={() => activeController.current?.abort()}
+          className="mt-2 flex items-center gap-1 text-xs text-rose-500"
+        >
+          <Square className="h-3 w-3" />
+          取消{tab === 'audit' ? '审计' : tab === 'reason' ? '深度推理' : '项目提炼'}
+        </button>
+      )}
+      {progress?.status === 'waiting-user' && (
+        <div
+          data-testid="workflow-waiting-user"
+          className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 p-1.5 text-xs text-amber-600"
+        >
+          Runtime 等待人工输入，可继续提供 steering。
+        </div>
+      )}
+      {progress && (
+        <div
+          data-testid="workflow-progress"
+          className="mt-2 text-[11px] text-[var(--ink-text-faint)]"
+        >
+          {Math.round((progress.progress ?? 0) * 100)}% · {progress.status}
+        </div>
+      )}
+      {error && (
+        <div role="alert" className="mt-2 text-xs text-rose-500">
+          {error}
+        </div>
+      )}
+      {tab === 'audit' && auditMarkers.length > 0 && (
+        <div data-testid="continuity-findings" className="mt-2 space-y-1">
+          {auditMarkers.map((marker) => (
+            <div
+              key={marker.findingId}
+              data-testid="continuity-diagnostic"
+              data-finding-id={marker.findingId}
+              data-location-kind={marker.locationStatus}
+              className="rounded border border-[var(--ink-border)] p-1.5 text-xs"
+            >
+              <div>
+                <span className="mr-1 font-medium">{marker.severity}</span>
+                {marker.description}
+              </div>
+              {marker.locations.length > 0 ? (
+                <div className="mt-1 flex flex-wrap gap-1" aria-label="编辑器诊断位置">
+                  {marker.locations.map((location) => (
+                    <span
+                      key={`${marker.findingId}-${location.blockId}`}
+                      data-testid="continuity-diagnostic-location"
+                      data-block-id={location.blockId}
+                      data-semantic-from={location.semanticFrom}
+                      data-semantic-to={location.semanticTo}
+                      data-editor-from={location.editorFrom}
+                      data-editor-to={location.editorTo}
+                      className="rounded bg-[var(--ink-bg-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--ink-text-faint)]"
+                    >
+                      编辑器位置 {location.editorFrom}–{location.editorTo}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span
+                  data-testid="continuity-diagnostic-unlocated"
+                  className="mt-1 inline-block text-[10px] text-[var(--ink-text-faint)]"
+                >
+                  未定位到编辑器位置
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === 'audit' && !busy && auditMarkers.length === 0 && (
+        <p className="mt-2 text-xs text-[var(--ink-text-faint)]">暂无诊断结果。</p>
+      )}
+      {tab === 'reason' && deepResult && (
+        <div data-testid="deep-reasoning-result" className="mt-2 space-y-1 text-xs">
+          <p>{deepResult.answer}</p>
+          {deepResult.risks.length > 0 && (
+            <p className="text-rose-500">风险：{deepResult.risks.join('；')}</p>
+          )}
+        </div>
+      )}
+      {tab === 'distill' && distillation && (
+        <div data-testid="distillation-result" className="mt-2 space-y-1 text-xs">
+          <p>{distillation.facts.summary}</p>
+          <p className="text-[var(--ink-text-faint)]">
+            {distillation.completedChunks}/{distillation.totalChunks} chunks · 实体{' '}
+            {distillation.facts.entities.length} · 事件 {distillation.facts.events.length} · 伏笔{' '}
+            {distillation.facts.promises.length}
+          </p>
+          {distillation.failedChunks.length > 0 && (
+            <p className="text-amber-500">待重试：{distillation.failedChunks.length}</p>
+          )}
         </div>
       )}
       {busy && <button type="button" onClick={() => activeController.current?.abort()} className="mt-2 flex items-center gap-1 text-xs text-rose-500"><Square className="h-3 w-3" />取消{tab === 'audit' ? '审计' : tab === 'reason' ? '深度推理' : '项目提炼'}</button>}
@@ -352,6 +488,18 @@ function documentForChapter(chapter: ChapterRecord): SemanticDocument {
   return projectContent(chapter.id, chapter.content || '', chapter.revision ?? 0)
 }
 
-const TabButton: FC<{ active: boolean; onClick: () => void; children: ReactNode }> = ({ active, onClick, children }) => (
-  <button type="button" onClick={onClick} className={`flex items-center justify-center gap-1 rounded px-1 py-1 text-[11px] ${active ? 'bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]' : 'text-[var(--ink-text-muted)]'}`}>{children}</button>
+const TabButton: FC<{ active: boolean; onClick: () => void; children: ReactNode }> = ({
+  active,
+  onClick,
+  children,
+}) => (
+  <motion.button
+    type="button"
+    {...gesture.button}
+    transition={spring.snappy}
+    onClick={onClick}
+    className={`flex items-center justify-center gap-1 rounded px-1 py-1 text-[11px] ${active ? 'bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]' : 'text-[var(--ink-text-muted)]'}`}
+  >
+    {children}
+  </motion.button>
 )

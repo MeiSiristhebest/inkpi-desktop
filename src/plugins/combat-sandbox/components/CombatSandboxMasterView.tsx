@@ -7,6 +7,7 @@ import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodex
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 import { Swords, ShieldAlert, Flame, Zap, BookmarkCheck, Sparkles, Bot } from 'lucide-react'
 
 export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
@@ -66,10 +67,15 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   // AI 战斗拆招与越级绝杀推演
   const handleAiCombatRecommend = () => {
     const analysisInput = {
-      protagonist: { name: protagonistName, rank: protagonistRank },
-      enemy: { name: enemyName, rank: enemyRank },
-      stakes,
-      compensatingAssets: [...assets],
+      protagonist: {
+        name: semanticTextFromContent('combat-sandbox-protagonist', protagonistName),
+        rank: protagonistRank,
+      },
+      enemy: { name: semanticTextFromContent('combat-sandbox-enemy', enemyName), rank: enemyRank },
+      stakes: semanticTextFromContent('combat-sandbox-stakes', stakes),
+      compensatingAssets: assets.map((asset, index) =>
+        semanticTextFromContent(`combat-sandbox-asset-${index}`, asset),
+      ),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

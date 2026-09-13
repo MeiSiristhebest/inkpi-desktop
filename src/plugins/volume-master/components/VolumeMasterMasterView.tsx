@@ -7,6 +7,7 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 import { Save, CheckCircle2, Layers, BookOpen, Target, Bot } from 'lucide-react'
 
 export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
@@ -53,11 +54,17 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const curVol = volumes.find((v) => v.id === selectedVolId)
     const volChapters = chapters.filter((c) => c.volumeId === selectedVolId)
     const analysisInput = {
-      volume: { id: curVol?.id, order: curVol?.order, title: curVol?.title },
+      volume: {
+        id: curVol?.id,
+        order: curVol?.order,
+        title: curVol?.title
+          ? semanticTextFromContent(`volume-master-title-${curVol.id}`, curVol.title)
+          : curVol?.title,
+      },
       chapterCount: volChapters.length,
       targetWords: editTargetWords,
-      conflict: editConflict,
-      climax: editClimax,
+      conflict: semanticTextFromContent('volume-master-conflict', editConflict),
+      climax: semanticTextFromContent('volume-master-climax', editClimax),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

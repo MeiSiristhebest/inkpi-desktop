@@ -1,6 +1,8 @@
+import { motion } from 'motion/react'
 import { BookOpen, MoreVertical, Upload, FolderOpen } from 'lucide-react'
 import type { ProjectRecord } from '../../../types'
 import type { ProjectStats } from '../../../core/projectService'
+import { spring, gesture, variants } from '../../../motion'
 import { ProjectContextMenu } from './ProjectContextMenu'
 import { ProjectEditForm, type ProjectEditFormValues } from './ProjectEditForm'
 
@@ -55,9 +57,13 @@ export const ProjectCard = ({
   const wordsWan = ((stats?.words ?? 0) / 10000).toFixed(1)
 
   return (
-    <div
+    <motion.div
       onClick={() => onOpen()}
-      className="group relative bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] rounded-2xl p-5 transition-all shadow-[var(--ink-shadow-sm)] hover:shadow-[var(--ink-shadow)] cursor-pointer flex flex-col justify-between"
+      {...variants.fadeUp}
+      whileHover={{ y: -4, scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
+      transition={spring.default}
+      className="group relative bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] rounded-2xl p-5 shadow-[var(--ink-shadow-sm)] hover:shadow-[var(--ink-shadow)] cursor-pointer flex flex-col justify-between select-none"
     >
       <div className="flex items-start gap-4">
         {/* 左侧封面：优雅的真实书本比例 (1:1.4) 质感与微阴影 */}
@@ -142,24 +148,28 @@ export const ProjectCard = ({
         </span>
 
         <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5">
-          <button
+          <motion.button
             type="button"
             onClick={onExport}
             title="导出 JSON 备份"
+            {...gesture.iconButton}
+            transition={spring.snappy}
             className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] border border-transparent hover:border-[var(--ink-border)] flex items-center justify-center transition-colors cursor-pointer"
           >
             <Upload size={13} />
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             type="button"
             onClick={onOpen}
             title="打开项目"
+            {...gesture.button}
+            transition={spring.snappy}
             className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer"
           >
             <FolderOpen size={13} /> 进入写作
-          </button>
+          </motion.button>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

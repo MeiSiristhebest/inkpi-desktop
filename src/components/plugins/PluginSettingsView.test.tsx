@@ -42,21 +42,22 @@ describe('PluginSettingsView UI Component', () => {
       </>,
     )
 
-    expect(screen.getByTestId('consumer').textContent).toBe('enabled')
+    // 默认纯粹模式：未启用任何附加插件
+    expect(screen.getByTestId('consumer').textContent).toBe('disabled')
     expect(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS)).toBeNull()
 
-    // 右侧详情抽屉默认已选中 living-codex，点击「停用此插件」
-    fireEvent.click(screen.getByRole('button', { name: '停用此插件' }))
-
-    expect(screen.getByTestId('consumer').textContent).toBe('disabled')
-    const disabledList = JSON.parse(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS) || '[]')
-    expect(disabledList).not.toContain('living-codex')
-
-    // 重新启用
+    // 右侧详情抽屉默认选中 living-codex，点击「立即启用此插件」
     fireEvent.click(screen.getByRole('button', { name: '立即启用此插件' }))
 
     expect(screen.getByTestId('consumer').textContent).toBe('enabled')
     const enabledList = JSON.parse(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS) || '[]')
     expect(enabledList).toContain('living-codex')
+
+    // 再次点击「停用此插件」
+    fireEvent.click(screen.getByRole('button', { name: '停用此插件' }))
+
+    expect(screen.getByTestId('consumer').textContent).toBe('disabled')
+    const disabledList = JSON.parse(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS) || '[]')
+    expect(disabledList).not.toContain('living-codex')
   })
 })

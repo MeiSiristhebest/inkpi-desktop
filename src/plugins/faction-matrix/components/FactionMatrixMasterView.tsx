@@ -13,6 +13,7 @@ import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodex
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 import { Shield, Zap, CheckCircle2, AlertTriangle, GitBranch, Bot, Plus } from 'lucide-react'
 
 export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
@@ -91,8 +92,17 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const handleAiFactionAnalysis = () => {
     if (factions.length === 0) return
     const analysisInput = {
-      factions: factions.map((faction) => ({ ...faction })),
-      paradoxes: paradoxes.map((paradox) => ({ ...paradox })),
+      factions: factions.map((faction) => ({
+        ...faction,
+        name: semanticTextFromContent(`faction-matrix-name-${faction.id}`, faction.name),
+        powerTier: faction.powerTier
+          ? semanticTextFromContent(`faction-matrix-tier-${faction.id}`, faction.powerTier)
+          : faction.powerTier,
+      })),
+      paradoxes: paradoxes.map((paradox, index) => ({
+        ...paradox,
+        reason: semanticTextFromContent(`faction-matrix-paradox-${index}`, paradox.reason),
+      })),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

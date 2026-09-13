@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { semanticTextFromContent } from '../../../domain/content'
 import type { ExpectationContract, GoldenThreeDiagnostic } from '../types'
 import { expectationEngine } from '../engine/ExpectationEngine'
 import { indexedDbExpectationRepository } from '../../../adapters/indexedDbExpectationRepository'
@@ -41,9 +42,27 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       allChapters.sort((a, b) => a.order - b.order)
       setChapters(allChapters)
       if (allChapters.length >= 3 && !ch1Input) {
-        setCh1Input(allChapters[0].content || '')
-        setCh2Input(allChapters[1].content || '')
-        setCh3Input(allChapters[2].content || '')
+        setCh1Input(
+          semanticTextFromContent(
+            allChapters[0].id,
+            allChapters[0].content || '',
+            allChapters[0].revision,
+          ),
+        )
+        setCh2Input(
+          semanticTextFromContent(
+            allChapters[1].id,
+            allChapters[1].content || '',
+            allChapters[1].revision,
+          ),
+        )
+        setCh3Input(
+          semanticTextFromContent(
+            allChapters[2].id,
+            allChapters[2].content || '',
+            allChapters[2].revision,
+          ),
+        )
       }
     } catch (e) {
       console.error('Failed to load expectation contracts:', e)
@@ -55,7 +74,12 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   // AI 爽点节奏与契约长线排查
   const handleAiExpectationAudit = () => {
     if (contracts.length === 0) return
-    const analysisInput = { contracts: contracts.map((contract) => ({ ...contract })) }
+    const analysisInput = {
+      contracts: contracts.map((contract) => ({
+        ...contract,
+        title: semanticTextFromContent(`expectation-contract-${contract.id}`, contract.title),
+      })),
+    }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
       void hostContext.aiAssistant.runPluginTask('expectation-engine', analysisInput)

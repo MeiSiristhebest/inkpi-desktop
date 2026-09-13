@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from 'motion/react'
 import {
   Search,
   Plus,
@@ -9,6 +10,7 @@ import {
   MoreHorizontal,
   X,
 } from 'lucide-react'
+import { spring, variants, gesture } from '../../../motion'
 import { STATUS_OPTIONS } from '../editorUi'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import { useResizableWidth } from '../../../hooks/useResizableWidth'
@@ -55,30 +57,36 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
           <span className="text-[13px] font-medium truncate">章节目录</span>
         </div>
         <div className="flex items-center gap-0.5">
-          <button
+          <motion.button
             type="button"
+            {...gesture.iconButton}
+            transition={spring.snappy}
             onClick={() => actions.newVolume?.()}
             title="新建分卷"
             className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
           >
             <FolderPlus className="w-3.5 h-3.5" />
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             type="button"
+            {...gesture.iconButton}
+            transition={spring.snappy}
             onClick={() => actions.newChapter()}
             title="在当前卷新建章节 (⌘N)"
             className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
           >
             <FilePlus className="w-3.5 h-3.5" />
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             type="button"
+            {...gesture.iconButton}
+            transition={spring.snappy}
             onClick={() => actions.setSidebar(false)}
             title="折叠目录 (⌘B)"
             className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
           >
             <PanelLeftClose className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
         </div>
       </div>
 
@@ -146,61 +154,33 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
                   </button>
                 </div>
               </div>
-              {isOpen && (
-                <div className="space-y-px mt-0.5 pl-1">
-                  {chs.map((ch) => {
-                    const isSelected = ch.id === activeChapterId
-                    const num = chapterNumberMap.get(ch.id)
-                    return (
-                      <div
-                        key={ch.id}
-                        className={`group w-full flex items-center justify-between gap-1.5 px-2 py-[5px] rounded-md text-[13px] text-left transition-colors duration-150 cursor-pointer ${
-                          isSelected
-                            ? 'bg-[var(--ink-bg-active)] font-medium text-[var(--ink-text)]'
-                            : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-                        }`}
-                        onClick={() => actions.selectChapter(ch)}
-                        onDoubleClick={() => {
-                          actions.setRenamingChapter(ch)
-                          actions.setRenamingTitle(ch.title)
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          actions.setChapterContextMenu({
-                            x: Math.min(e.clientX, window.innerWidth - 200),
-                            y: Math.min(e.clientY, window.innerHeight - 280),
-                            chapter: ch,
-                          })
-                        }}
-                        title="单击选择，双击重命名，右键更多操作"
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{
-                            backgroundColor:
-                              STATUS_OPTIONS.find((s) => s.value === ch.status)?.color ||
-                              'var(--ink-text-faint)',
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    {...variants.fadeDown}
+                    transition={spring.gentle}
+                    className="space-y-px mt-0.5 pl-1"
+                  >
+                    {chs.map((ch) => {
+                      const isSelected = ch.id === activeChapterId
+                      const num = chapterNumberMap.get(ch.id)
+                      return (
+                        <motion.div
+                          key={ch.id}
+                          {...gesture.listRow}
+                          transition={spring.snappy}
+                          className={`group w-full flex items-center justify-between gap-1.5 px-2 py-[5px] rounded-md text-[13px] text-left transition-colors duration-150 cursor-pointer ${
+                            isSelected
+                              ? 'bg-[var(--ink-bg-active)] font-medium text-[var(--ink-text)]'
+                              : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+                          }`}
+                          onClick={() => actions.selectChapter(ch)}
+                          onDoubleClick={() => {
+                            actions.setRenamingChapter(ch)
+                            actions.setRenamingTitle(ch.title)
                           }}
-                          title={`章节状态：${ch.status || 'draft'}`}
-                        />
-                        {num ? (
-                          <span
-                            className="text-[10px] text-[var(--ink-text-faint)] tabular-nums shrink-0 font-mono w-4 text-right"
-                            title="正文序号"
-                          >
-                            {num}
-                          </span>
-                        ) : null}
-                        <span className="truncate flex-1">{ch.title}</span>
-
-                        {/* 字数统计与更多菜单触发器 */}
-                        <span className="text-[10.5px] text-[var(--ink-text-faint)] shrink-0 tabular-nums group-hover:hidden">
-                          {ch.wordCount}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
+                          onContextMenu={(e) => {
+                            e.preventDefault()
                             e.stopPropagation()
                             actions.setChapterContextMenu({
                               x: Math.min(e.clientX, window.innerWidth - 200),
@@ -208,27 +188,65 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
                               chapter: ch,
                             })
                           }}
-                          className="hidden group-hover:flex items-center justify-center p-0.5 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-                          title="更多操作（重命名 / 删除 / 复制）"
+                          title="单击选择，双击重命名，右键更多操作"
                         >
-                          <MoreHorizontal className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )
-                  })}
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{
+                              backgroundColor:
+                                STATUS_OPTIONS.find((s) => s.value === ch.status)?.color ||
+                                'var(--ink-text-faint)',
+                            }}
+                            title={`章节状态：${ch.status || 'draft'}`}
+                          />
+                          {num ? (
+                            <span
+                              className="text-[10px] text-[var(--ink-text-faint)] tabular-nums shrink-0 font-mono w-4 text-right"
+                              title="正文序号"
+                            >
+                              {num}
+                            </span>
+                          ) : null}
+                          <span className="truncate flex-1">{ch.title}</span>
 
-                  {/* 卷末轻量添加新章节项 */}
-                  <button
-                    type="button"
-                    onClick={() => actions.newChapter(vol.id)}
-                    className="w-full flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer text-left mt-0.5"
-                    title={`在「${vol.title}」末尾新建章节`}
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>新建章节</span>
-                  </button>
-                </div>
-              )}
+                          {/* 字数统计与更多菜单触发器 */}
+                          <span className="text-[10.5px] text-[var(--ink-text-faint)] shrink-0 tabular-nums group-hover:hidden">
+                            {ch.wordCount}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              actions.setChapterContextMenu({
+                                x: Math.min(e.clientX, window.innerWidth - 200),
+                                y: Math.min(e.clientY, window.innerHeight - 280),
+                                chapter: ch,
+                              })
+                            }}
+                            className="hidden group-hover:flex items-center justify-center p-0.5 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                            title="更多操作（重命名 / 删除 / 复制）"
+                          >
+                            <MoreHorizontal className="w-3.5 h-3.5" />
+                          </button>
+                        </motion.div>
+                      )
+                    })}
+
+                    {/* 卷末轻量添加新章节项 */}
+                    <motion.button
+                      type="button"
+                      {...gesture.listRow}
+                      transition={spring.snappy}
+                      onClick={() => actions.newChapter(vol.id)}
+                      className="w-full flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11.5px] text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer text-left mt-0.5"
+                      title={`在「${vol.title}」末尾新建章节`}
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>新建章节</span>
+                    </motion.button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )
         })}

@@ -93,7 +93,10 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     const analysisInput = {
       powerTiers: [...system.tiers],
       chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: auditText.slice(0, 2500),
+      text: semanticTextFromContent(`consistency-sentinel-${selectedChapterId}`, auditText).slice(
+        0,
+        2500,
+      ),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

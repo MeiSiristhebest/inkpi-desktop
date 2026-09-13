@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { Bold, Italic, Wand2, Anchor, CheckCircle2 } from 'lucide-react'
+import { spring, variants, gesture } from '../../motion'
 import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createRewriteTask } from '../../ai'
@@ -316,7 +318,9 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   }
 
   return (
-    <div
+    <motion.div
+      {...variants.fadeDown}
+      transition={spring.gentle}
       className="absolute z-20 -translate-x-1/2 flex items-center gap-0.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-1 py-1 shadow-[var(--ink-shadow-lg)]"
       style={{ top: state.show ? state.top : 20, left: state.show ? state.left : 20 }}
       // 阻止 mousedown 抢占选区，确保点击工具条时选区不丢失
@@ -353,53 +357,139 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       {/* 划词直接触发断章张力分析抽屉 */}
       {host && state.show && (
         <>
-          <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
-          <button
+          <motion.button
             type="button"
-            onClick={() => {
-              host.openDrawer('reader-hook')
-            }}
-            className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-amber-500 hover:bg-amber-500/10 transition-colors duration-150 cursor-pointer"
-            title="查看所选文本追读与断章张力"
+            {...gesture.iconButton}
+            transition={spring.snappy}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('bold') ? 'text-[var(--ink-accent)]' : ''}`}
+            title="加粗"
           >
-            <Anchor className="w-3 h-3" />
-            <span>断章感知</span>
-          </button>
+            <Bold className="w-3.5 h-3.5" />
+          </motion.button>
+          <motion.button
+            type="button"
+            {...gesture.iconButton}
+            transition={spring.snappy}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('italic') ? 'text-[var(--ink-accent)]' : ''}`}
+            title="斜体"
+          >
+            <Italic className="w-3.5 h-3.5" />
+          </motion.button>
+          <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
+          <motion.button
+            type="button"
+            {...gesture.button}
+            transition={spring.snappy}
+            onClick={() => void aiPolish()}
+            className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors duration-150 cursor-pointer"
+            title="调用 InkPi AI 划词润色"
+          >
+            <Wand2 className="w-3 h-3" />
+            <span>{rewriteBusy ? '处理中…' : 'AI 润色'}</span>
+          </motion.button>
+
+          {/* 划词直接触发断章张力分析抽屉 */}
+          {host && state.show && (
+            <>
+              <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
+              <motion.button
+                type="button"
+                {...gesture.button}
+                transition={spring.snappy}
+                onClick={() => {
+                  host.openDrawer('reader-hook')
+                }}
+                className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-amber-500 hover:bg-amber-500/10 transition-colors duration-150 cursor-pointer"
+                title="查看所选文本追读与断章张力"
+              >
+                <Anchor className="w-3 h-3" />
+                <span>断章感知</span>
+              </motion.button>
+            </>
+          )}
+
+          {/* 划词直接触发文学质量门禁体检 */}
+          {host && state.show && (
+            <motion.button
+              type="button"
+              {...gesture.button}
+              transition={spring.snappy}
+              onClick={() => {
+                host.openDrawer('narrative-linter')
+              }}
+              className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-emerald-500 hover:bg-emerald-500/10 transition-colors duration-150 cursor-pointer"
+              title="排查所选文字是否存在副词堆叠、长句或热梗"
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              <span>文字体检</span>
+            </motion.button>
+          )}
         </>
       )}
-
-      {/* 划词直接触发文学质量门禁体检 */}
-      {host && state.show && (
-        <button
-          type="button"
-          onClick={() => {
-            host.openDrawer('narrative-linter')
-          }}
-          className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-emerald-500 hover:bg-emerald-500/10 transition-colors duration-150 cursor-pointer"
-          title="排查所选文字是否存在副词堆叠、长句或热梗"
-        >
-          <CheckCircle2 className="w-3 h-3" />
-          <span>文字体检</span>
-        </button>
-      )}
-      </>}
-      {rewriteProposal && (
-        <div data-testid="rewrite-proposal-preview" className="mt-2 max-w-sm rounded-md border border-[var(--ink-accent)]/40 bg-[var(--ink-bg-panel)] p-2 text-xs">
-          <div className="mb-1 font-medium">润色提案 · {rewriteProposal.status}</div>
-          <div className="space-y-1">
-            <div className="rounded bg-rose-500/10 p-1 line-through">{rewriteProposal.originalText || '（空）'}</div>
-            <div className="rounded bg-emerald-500/10 p-1">{rewriteProposal.proposedText || '（空）'}</div>
-          </div>
-          {rewriteProposal.error && <div className="mt-1 text-rose-500">{rewriteProposal.error}</div>}
-          {rewriteProposal.status === 'stale' && <div data-testid="rewrite-proposal-conflict" className="mt-1 text-amber-500">其他窗口的修改使此提案产生冲突，请重新审阅。</div>}
-          {rewriteProposal.status === 'pending' && <div className="mt-2 flex gap-1">
-            <button type="button" onClick={() => void commitRewrite()} className="rounded bg-emerald-600 px-2 py-1 text-white">接受</button>
-            <button type="button" onClick={rejectRewrite} className="rounded border border-[var(--ink-border)] px-2 py-1">拒绝</button>
-          </div>}
-          {rewriteProposal.status === 'committed' && <button type="button" onClick={() => void undoRewrite()} className="mt-2 rounded border border-[var(--ink-border)] px-2 py-1">撤销</button>}
-        </div>
-      )}
-    </div>
+      <AnimatePresence>
+        {rewriteProposal && (
+          <motion.div
+            {...variants.fadeUp}
+            transition={spring.gentle}
+            data-testid="rewrite-proposal-preview"
+            className="mt-2 max-w-sm rounded-md border border-[var(--ink-accent)]/40 bg-[var(--ink-bg-panel)] p-2 text-xs"
+          >
+            <div className="mb-1 font-medium">润色提案 · {rewriteProposal.status}</div>
+            <div className="space-y-1">
+              <div className="rounded bg-rose-500/10 p-1 line-through">
+                {rewriteProposal.originalText || '（空）'}
+              </div>
+              <div className="rounded bg-emerald-500/10 p-1">
+                {rewriteProposal.proposedText || '（空）'}
+              </div>
+            </div>
+            {rewriteProposal.error && (
+              <div className="mt-1 text-rose-500">{rewriteProposal.error}</div>
+            )}
+            {rewriteProposal.status === 'stale' && (
+              <div data-testid="rewrite-proposal-conflict" className="mt-1 text-amber-500">
+                其他窗口的修改使此提案产生冲突，请重新审阅。
+              </div>
+            )}
+            {rewriteProposal.status === 'pending' && (
+              <div className="mt-2 flex gap-1">
+                <motion.button
+                  type="button"
+                  {...gesture.button}
+                  transition={spring.snappy}
+                  onClick={() => void commitRewrite()}
+                  className="rounded bg-emerald-600 px-2 py-1 text-white"
+                >
+                  接受
+                </motion.button>
+                <motion.button
+                  type="button"
+                  {...gesture.button}
+                  transition={spring.snappy}
+                  onClick={rejectRewrite}
+                  className="rounded border border-[var(--ink-border)] px-2 py-1"
+                >
+                  拒绝
+                </motion.button>
+              </div>
+            )}
+            {rewriteProposal.status === 'committed' && (
+              <motion.button
+                type="button"
+                {...gesture.button}
+                transition={spring.snappy}
+                onClick={() => void undoRewrite()}
+                className="mt-2 rounded border border-[var(--ink-border)] px-2 py-1"
+              >
+                撤销
+              </motion.button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }
 

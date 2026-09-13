@@ -116,7 +116,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     const analysisInput = {
       clues: clues.map((clue) => ({ title: clue.title, category: clue.category })),
       characters: characters.map((character) => character.name),
-      text: scanText.slice(0, 2500),
+      text: semanticTextFromContent(`clue-weaver-${selectedChapterId}`, scanText).slice(0, 2500),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

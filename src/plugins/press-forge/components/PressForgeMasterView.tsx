@@ -1,15 +1,18 @@
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { PressForgeEngine } from '../engine/PressForgeEngine'
-import type { PressFormatOptions } from '../types'
+import type { PressFormatOptions, TypesetResult } from '../types'
 import { Printer, Download, Settings, Copy, Check } from 'lucide-react'
 import { indexedDbPressConfigRepository } from '../../../adapters/indexedDbPressConfigRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { blobFileDownloader } from '../../../adapters/blobFileDownloader'
 import { clock } from '../../../adapters/clock'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 
 export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const host = useOptionalPluginHostContext()
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [options, setOptions] = useState<PressFormatOptions>(
@@ -50,11 +53,37 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }, [projectId])
 
   const currentChapter = chapters.find((c) => c.id === selectedChapterId)
+  const currentChapterText = currentChapter
+    ? semanticTextFromContent(currentChapter.id, currentChapter.content || '', currentChapter.revision)
+    : ''
 
-  const formattedResult = PressForgeEngine.formatText(
-    currentChapter?.content || '',
-    options
-  )
+  const localFormattedResult = PressForgeEngine.formatText(currentChapterText, options)
+  const [runtimeFormattedResult, setRuntimeFormattedResult] = useState<TypesetResult | null>(null)
+
+  useEffect(() => {
+    const runtimeAssistant = host?.aiAssistant
+    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginTool) {
+      setRuntimeFormattedResult(null)
+      return
+    }
+
+    let cancelled = false
+    setRuntimeFormattedResult(null)
+    void runtimeAssistant
+      .runPluginTool('press-forge', {
+        rawContent: currentChapterText,
+        options,
+      })
+      .then((result) => {
+        if (!cancelled && isTypesetResult(result)) setRuntimeFormattedResult(result)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [currentChapterText, host?.aiAssistant, options])
+
+  const formattedResult = runtimeFormattedResult ?? localFormattedResult
 
   const handleApplyPreset = (presetId: keyof typeof PressForgeEngine.PRESETS) => {
     const preset = PressForgeEngine.PRESETS[presetId]
@@ -257,5 +286,18 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         </div>
       )}
     </div>
+  )
+}
+
+function isTypesetResult(value: unknown): value is TypesetResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const result = value as Partial<TypesetResult>
+  return (
+    typeof result.formattedText === 'string' &&
+    typeof result.lineCount === 'number' &&
+    typeof result.characterCount === 'number' &&
+    typeof result.fixedPunctuationCount === 'number' &&
+    Array.isArray(result.warnings) &&
+    result.warnings.every((warning) => typeof warning === 'string')
   )
 }

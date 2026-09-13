@@ -7,6 +7,7 @@ import { indexedDbProjectRepository } from '../../adapters/indexedDbProjectRepos
 import { idGenerator } from '../../adapters/idGenerator'
 import { clock } from '../../adapters/clock'
 import { composeChapterTitle } from '../../domain/chapter/chapterNaming'
+import { semanticTextFromContent } from '../../domain/content'
 import {
   ChevronDown,
   ChevronRight,
@@ -75,6 +76,9 @@ export const WriterDesk: FC<WriterDeskProps> = ({
   const activePlugins = pluginCtx?.activePlugins ?? ALL_AVAILABLE_PLUGINS
   const pluginsWithDrawer = activePlugins.filter((p) => p.drawerSnippetView)
   const [activeDrawerId, setActiveDrawerId] = useState<string | null>('living-codex')
+  const activeChapterText = activeChapter
+    ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
+    : ''
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -409,10 +413,7 @@ export const WriterDesk: FC<WriterDeskProps> = ({
             if (!DrawerComponent) return null
             return (
               <div className="shrink-0 h-full overflow-hidden">
-                <DrawerComponent
-                  projectId={projectId}
-                  currentText={activeChapter?.content || ''}
-                />
+                <DrawerComponent projectId={projectId} currentText={activeChapterText} />
               </div>
             )
           })()}

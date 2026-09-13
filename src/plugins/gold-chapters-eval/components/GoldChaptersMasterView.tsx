@@ -53,7 +53,9 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
   // AI 主编级黄金三章签约评测
   const handleAiGoldAudit = () => {
     if (!chaptersText.trim()) return
-    const analysisInput = { openingText: chaptersText.slice(0, 4000) }
+    const analysisInput = {
+      openingText: semanticTextFromContent('gold-chapters-eval-ai-input', chaptersText).slice(0, 4000),
+    }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
       void hostContext.aiAssistant.runPluginTask('gold-chapters-eval', analysisInput)

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
+import { motion } from 'motion/react'
 import { X } from 'lucide-react'
+import { spring, variants, gesture } from '../../motion'
 
 interface DrawerProps {
   /** 锚定宽度类，默认 w-[380px] */
@@ -9,15 +11,17 @@ interface DrawerProps {
 
 /**
  * 停靠式侧边面板外壳（原子设计 · molecules）。
- * 仅负责「右侧固定栏 + 边框/阴影/背景」的布局外壳；分屏对照台、行旁备忘等具体面板
- * 在内部自行组合（§10/§11）。区别于 Modal/Drawer 浮层：本侧栏常驻于编辑区右侧、不遮罩。
+ * 基于 motion 提供全局丝滑右侧滑入 (Slide-in-Right) 与弹性阻尼。
+ * 一处升级，分屏对照台、备忘录及全局右侧面板统一享受物理级平滑抽屉展开。
  */
 export const Drawer = ({ widthClass = 'w-[380px]', children }: DrawerProps) => (
-  <aside
+  <motion.aside
+    {...variants.slideInFromRight}
+    transition={spring.gentle}
     className={`${widthClass} shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] flex flex-col h-full z-20 shadow-[-4px_0_12px_rgba(0,0,0,0.03)] select-none`}
   >
     {children}
-  </aside>
+  </motion.aside>
 )
 
 interface DrawerHeaderProps {
@@ -34,12 +38,14 @@ export const DrawerHeader = ({ icon, title, onClose, closeTitle }: DrawerHeaderP
       {icon}
       <span>{title}</span>
     </div>
-    <button
+    <motion.button
       onClick={onClose}
       title={closeTitle}
-      className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors"
+      {...gesture.iconButton}
+      transition={spring.snappy}
+      className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
     >
       <X className="w-4 h-4" />
-    </button>
+    </motion.button>
   </div>
 )

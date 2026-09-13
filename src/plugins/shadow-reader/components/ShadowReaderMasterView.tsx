@@ -3,6 +3,7 @@ import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbShadowReaderRepository } from '../../../adapters/indexedDbShadowReaderRepository'
 import { ShadowReaderEngine } from '../engine/ShadowReaderEngine'
 import type { ShadowDanmakuRecord, ShadowSimulationResult } from '../types'
+import { semanticTextFromContent } from '../../../domain/content'
 import {
   MessageSquare,
   Flame,
@@ -16,14 +17,31 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 
+const FALLBACK_CHAPTER_TEXT =
+  '长夜漫漫，寒风掠过废弃的大殿。\n主角按捺住胸中翻腾的杀意，选择暂避锋芒。\n然而黑暗深处的冷笑声骤然撕破死寂，致命的杀招毫无征兆地贴面袭来！'
+
 export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
+  const activeChapter = host?.activeChapter
   const initialText =
-    host?.activeChapter?.content ||
-    '长夜漫漫，寒风掠过废弃的大殿。\n主角按捺住胸中翻腾的杀意，选择暂避锋芒。\n然而黑暗深处的冷笑声骤然撕破死寂，致命的杀招毫无征兆地贴面袭来！'
+    (activeChapter
+      ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
+      : '') ||
+    FALLBACK_CHAPTER_TEXT
   const [chapterText, setChapterText] = useState(initialText)
-  const [activeChapterId, setActiveChapterId] = useState(host?.activeChapter?.id || 'ch_01')
+  const [activeChapterId, setActiveChapterId] = useState(activeChapter?.id || 'ch_01')
   const [historyDanmakus, setHistoryDanmakus] = useState<ShadowDanmakuRecord[]>([])
+
+  useEffect(() => {
+    if (!activeChapter) return
+    const nextText = semanticTextFromContent(
+      activeChapter.id,
+      activeChapter.content || '',
+      activeChapter.revision,
+    )
+    setChapterText(nextText || FALLBACK_CHAPTER_TEXT)
+    setActiveChapterId(activeChapter.id)
+  }, [activeChapter?.id, activeChapter?.content, activeChapter?.revision])
 
   const loadHistory = async () => {
     const list = await indexedDbShadowReaderRepository.getAll(projectId)

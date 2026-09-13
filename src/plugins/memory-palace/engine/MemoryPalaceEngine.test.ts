@@ -87,4 +87,21 @@ describe('MemoryPalaceEngine', () => {
     expect(detected.length).toBe(1)
     expect(detected[0].name).toBe('柳清霜')
   })
+
+  it('searches semantic text when chapters are stored as editor HTML', () => {
+    const results = MemoryPalaceEngine.searchEntityOccurrences({
+      query: '神雷剑',
+      entities: fakeEntities,
+      chapters: [
+        {
+          ...fakeChapters[0],
+          content: '<h2>秘境</h2><p>正是九霄神雷剑的残片。</p>',
+        },
+      ],
+    })
+
+    expect(results.find((result) => result.entityId === 'e1')?.recentSnippets).toEqual([
+      '[第1章 踏入秘境] 秘境 正是九霄神雷剑的残片。',
+    ])
+  })
 })

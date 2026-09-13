@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, type FC } from 'react'
+import { motion } from 'motion/react'
 import {
   TrendingUp,
   Scroll,
@@ -9,6 +10,7 @@ import {
   Flame,
   ArrowRight,
 } from 'lucide-react'
+import { spring, gesture } from '../../motion'
 import { useDashboardModel } from '../../hooks/useDashboardModel'
 import { indexedDbSettingsKVRepository } from '../../adapters/indexedDbSettingsKVRepository'
 import { clock } from '../../adapters/clock'
@@ -469,15 +471,17 @@ export const DashboardView: FC<DashboardViewProps> = ({
                 {quickJumps.map((q) => {
                   const Icon = q.icon
                   return (
-                    <button
+                    <motion.button
                       key={q.label}
                       type="button"
+                      {...gesture.button}
+                      transition={spring.snappy}
                       onClick={() => onOpenView(q.view)}
                       className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] transition-colors cursor-pointer"
                     >
                       <Icon className="w-4 h-4 text-[var(--ink-text-muted)]" />
                       <span className="text-[11.5px] font-medium">{q.label}</span>
-                    </button>
+                    </motion.button>
                   )
                 })}
               </div>

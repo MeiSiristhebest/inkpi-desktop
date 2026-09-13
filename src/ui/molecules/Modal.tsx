@@ -1,4 +1,6 @@
 import React, { type ReactNode } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { spring, variants, tween } from '../../motion'
 
 interface ModalProps {
   onClose: () => void
@@ -15,9 +17,8 @@ interface ModalProps {
 
 /**
  * 通用模态外壳（原子设计 · molecules）。
- * 只负责遮罩层 + 居中卡片外壳 + 点击遮罩关闭；卡片内部的具体结构
- * （标题栏 / 操作条 / 主体 / 页脚）由各模态自行组合，保留其既有布局差异。
- * 抽离后消除 SensitiveModal / OveruseWordsModal / HistoryModal / LockModal 重复的遮罩与卡片外壳（§10/§11）。
+ * 基于 motion 提供全局 Apple 级弹簧缩放入场与平滑遮罩淡入淡出。
+ * 一处升级，全局所有消费此组件的模态弹窗（字数、敏感词、锁定、历史等）同步具备高级物理动效。
  */
 export const Modal: React.FC<ModalProps> = ({
   onClose,
@@ -27,12 +28,23 @@ export const Modal: React.FC<ModalProps> = ({
   panelClassName = 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden text-[var(--ink-text)]',
   closeOnBackdrop = true,
 }) => (
-  <div
-    className={`fixed inset-0 z-50 flex items-center justify-center ${overlayClassName} p-4 select-none`}
-    onClick={(e) => {
-      if (closeOnBackdrop && e.target === e.currentTarget) onClose()
-    }}
-  >
-    <div className={`w-full ${widthClass} ${panelClassName}`}>{children}</div>
-  </div>
+  <AnimatePresence>
+    <motion.div
+      {...variants.fade}
+      transition={tween.fade}
+      className={`fixed inset-0 z-50 flex items-center justify-center ${overlayClassName} p-4 select-none`}
+      onClick={(e) => {
+        if (closeOnBackdrop && e.target === e.currentTarget) onClose()
+      }}
+    >
+      <motion.div
+        {...variants.scaleIn}
+        transition={spring.gentle}
+        className={`w-full ${widthClass} ${panelClassName}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </motion.div>
+    </motion.div>
+  </AnimatePresence>
 )

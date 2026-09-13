@@ -83,7 +83,9 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       setScanResult(engine.scan(allText.slice(0, 20000), genre))
     } else {
       const chap = chapters.find((c) => c.id === chapId)
-      const chapContent = chap?.content || ''
+      const chapContent = chap
+        ? semanticTextFromContent(chap.id, chap.content || '', chap.revision)
+        : ''
       setText(chapContent)
       setScanResult(engine.scan(chapContent, genre))
     }
@@ -99,7 +101,10 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
       chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: text.slice(0, 2500),
+      text: semanticTextFromContent(`safe-gate-${selectedChapterId}`, text, chap?.revision).slice(
+        0,
+        2500,
+      ),
       genre,
     }
 
@@ -268,7 +273,14 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
         <button
           onClick={() => {
-            const defaultText = chapters.length > 0 ? chapters[0].content || '' : ''
+            const defaultText =
+              chapters.length > 0
+                ? semanticTextFromContent(
+                    chapters[0].id,
+                    chapters[0].content || '',
+                    chapters[0].revision,
+                  )
+                : ''
             setText(defaultText)
           }}
           className="text-[11px] text-[var(--ink-accent)] hover:underline flex items-center gap-1 cursor-pointer"

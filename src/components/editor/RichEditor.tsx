@@ -46,6 +46,7 @@ import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
 import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../domain/content'
 import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 
 export interface RichEditorProps {
@@ -135,6 +136,10 @@ export const RichEditor: FC<RichEditorProps> = ({
     volumeContextMenu,
     defaultTypewriter,
   } = model
+
+  const activeChapterText = activeChapter
+    ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
+    : ''
 
   const effectiveZen = focusMode
   const effectiveTypewriter = isTypewriter || defaultTypewriter
@@ -602,7 +607,7 @@ export const RichEditor: FC<RichEditorProps> = ({
             <ChapterReferencesSidebar
               isOpen={showReferencesSidebar && !effectiveZen}
               entities={entities}
-              currentText={activeChapter?.content || ''}
+              currentText={activeChapterText}
               onClose={() => setShowReferencesSidebar(false)}
               onSelectEntity={(ent) => {
                 // 点击词条后，在正文中高亮并直接聚焦查找，亦可通过事件总线打开设定详情
@@ -611,7 +616,7 @@ export const RichEditor: FC<RichEditorProps> = ({
               }}
             />
 
-            <DrawerDock projectId={projectId} currentText={activeChapter?.content || ''} />
+            <DrawerDock projectId={projectId} currentText={activeChapterText} />
           </div>
 
           {!effectiveZen && model.showStatsBar && (

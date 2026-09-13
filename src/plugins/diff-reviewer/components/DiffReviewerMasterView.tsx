@@ -1,22 +1,52 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { DiffReviewerEngine } from '../engine/DiffReviewerEngine'
-import type { ReviewHunkView, HunkResolution } from '../types'
+import type { DiffComputeResult, ReviewHunkView, HunkResolution } from '../types'
 import { GitCompare, Check, X, Layers, Save } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import {
+  hashText,
+  IndexedDbProposalStore,
+  ProposalConflictError,
+  ProposalLedger,
+  type AiProposal,
+} from '../../../ai/proposals'
+import { semanticTextFromContent } from '../../../domain/content'
+import { formatByPreset } from '../../../domain/text'
 
 export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const host = useOptionalPluginHostContext()
   const initialSource =
-    host?.activeChapter?.content ||
-    '风雨如晦，夜幕笼罩着古老残破的城池。\n远处传来急促而沉重的脚步声。'
+    host?.activeChapter
+      ? semanticTextFromContent(
+          host.activeChapter.id,
+          host.activeChapter.content || '',
+          host.activeChapter.revision,
+        )
+      : '风雨如晦，夜幕笼罩着古老残破的城池。\n远处传来急促而沉重的脚步声。'
   const [sourceText, setSourceText] = useState(initialSource)
   const [proposedText, setProposedText] = useState(
     '骤雨如瀑，阴冷夜幕笼罩着风雨飘摇的废弃古城。\n寂静长街深处传来急促而沉重的破空脚步声。',
   )
   const [hunks, setHunks] = useState<ReviewHunkView[]>([])
   const [mergedResult, setMergedResult] = useState('')
+  const [proposalLedger] = useState(
+    () => new ProposalLedger({ store: new IndexedDbProposalStore() }),
+  )
+  const [writebackProposal, setWritebackProposal] = useState<AiProposal | null>(null)
+  const [writebackBusy, setWritebackBusy] = useState(false)
+  const [writebackError, setWritebackError] = useState<string | null>(null)
+  const proposalSequence = useRef(0)
+  const semanticSourceText = semanticTextFromContent(
+    host?.activeChapter?.id || 'diff-reviewer-source',
+    sourceText,
+    host?.activeChapter?.revision,
+  )
+  const semanticProposedText = semanticTextFromContent(
+    'diff-reviewer-proposed',
+    proposedText,
+  )
 
   useEffect(() => {
     onStats?.({
@@ -26,29 +56,151 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
     })
   }, [mergedResult, sourceText, onStats])
 
-  const handleCompute = () => {
-    const diff = DiffReviewerEngine.computeDiff(sourceText, proposedText)
+  const handleCompute = async () => {
+    let diff = DiffReviewerEngine.computeDiff(semanticSourceText, semanticProposedText)
+    const runtimeAssistant = host?.aiAssistant
+    if (runtimeAssistant?.isAvailable && runtimeAssistant.runPluginTool) {
+      try {
+        const runtimeResult = await runtimeAssistant.runPluginTool('diff-reviewer', {
+          oldText: semanticSourceText,
+          newText: semanticProposedText,
+        })
+        if (isDiffComputeResult(runtimeResult)) diff = runtimeResult
+      } catch {
+        // Keep the local engine as an offline fallback when the daemon is unavailable.
+      }
+    }
     setHunks(diff.hunks)
-    setMergedResult(sourceText)
+    setMergedResult(semanticSourceText)
   }
 
   const setHunkResolution = (hunkId: string, resolution: HunkResolution) => {
     const nextHunks = hunks.map((h) => (h.id === hunkId ? { ...h, resolution } : h))
     setHunks(nextHunks)
-    const merged = DiffReviewerEngine.applyHunks(sourceText, nextHunks)
+    const merged = DiffReviewerEngine.applyHunks(semanticSourceText, nextHunks)
     setMergedResult(merged)
   }
 
   const applyAll = () => {
     const nextHunks = hunks.map((h) => ({ ...h, resolution: 'applied' as HunkResolution }))
     setHunks(nextHunks)
-    setMergedResult(DiffReviewerEngine.applyHunks(sourceText, nextHunks))
+    setMergedResult(DiffReviewerEngine.applyHunks(semanticSourceText, nextHunks))
   }
 
   const rejectAll = () => {
     const nextHunks = hunks.map((h) => ({ ...h, resolution: 'rejected' as HunkResolution }))
     setHunks(nextHunks)
-    setMergedResult(DiffReviewerEngine.applyHunks(sourceText, nextHunks))
+    setMergedResult(DiffReviewerEngine.applyHunks(semanticSourceText, nextHunks))
+  }
+
+  const handleWriteback = async () => {
+    if (!host?.activeChapter || writebackBusy) return
+
+    const chapter = host.activeChapter
+    const storedBaseline = chapter.content || ''
+    const baseline = semanticTextFromContent(chapter.id, storedBaseline, chapter.revision)
+    if (baseline !== semanticSourceText) {
+      setWritebackError('当前章节已变化，请重新计算差异后再写回。')
+      return
+    }
+
+    const targetText = mergedResult || semanticSourceText
+    const createdAt = clock.now()
+    proposalSequence.current += 1
+    const proposal: AiProposal = {
+      id: `proposal-diff-reviewer-${chapter.id}-${createdAt}-${proposalSequence.current}`,
+      taskId: `diff-reviewer-${chapter.id}-${createdAt}`,
+      documentId: chapter.id,
+      baseRevision: host.revision,
+      patches: [
+        {
+          documentId: chapter.id,
+          from: 0,
+          to: baseline.length,
+          text: targetText,
+        },
+      ],
+      status: 'pending',
+      createdAt,
+      sourceHash: hashText(baseline),
+    }
+
+    setWritebackBusy(true)
+    setWritebackError(null)
+    try {
+      proposalLedger.create(proposal)
+      proposalLedger.accept(proposal.id)
+      const receipt = await proposalLedger.commit(
+        proposal.id,
+        host.revision,
+        async (patches) => {
+          const patch = patches[0]
+          const result = await host.mutateActiveChapter({
+            chapterId: chapter.id,
+            expectedRevision: host.revision,
+            type: 'full_replace',
+            content: toStoredChapterContent(patch.text, storedBaseline),
+          })
+          if (!result.success) {
+            throw new Error(result.error || '章节写回失败')
+          }
+          return {
+            inversePatches: [
+              {
+                documentId: chapter.id,
+                from: 0,
+                to: patch.text.length,
+                text: baseline,
+              },
+            ],
+          }
+        },
+        hashText(baseline),
+      )
+      setWritebackProposal(proposalLedger.get(receipt.proposalId) || null)
+    } catch (error) {
+      setWritebackProposal(proposalLedger.get(proposal.id) || null)
+      setWritebackError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setWritebackBusy(false)
+    }
+  }
+
+  const handleUndo = async () => {
+    if (!host?.activeChapter || !writebackProposal || writebackProposal.status !== 'committed') return
+
+    setWritebackBusy(true)
+    setWritebackError(null)
+    try {
+      await proposalLedger.undo(
+        writebackProposal.id,
+        host.revision,
+        async (patches) => {
+          const patch = patches[0]
+          const result = await host.mutateActiveChapter({
+            chapterId: host.activeChapter!.id,
+            expectedRevision: host.revision,
+            type: 'full_replace',
+            content: toStoredChapterContent(patch.text, host.activeChapter?.content || ''),
+          })
+          if (!result.success) {
+            throw new Error(result.error || '撤销章节写回失败')
+          }
+        },
+      )
+      setWritebackProposal(proposalLedger.get(writebackProposal.id) || null)
+    } catch (error) {
+      setWritebackError(
+        error instanceof ProposalConflictError
+          ? '章节已被其他修改变更，无法安全撤销。'
+          : error instanceof Error
+            ? error.message
+            : String(error),
+      )
+      setWritebackProposal(proposalLedger.get(writebackProposal.id) || writebackProposal)
+    } finally {
+      setWritebackBusy(false)
+    }
   }
 
   return (
@@ -66,21 +218,23 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
         <div className="flex items-center gap-2">
           {host?.activeChapter && (
             <button
-              onClick={async () => {
-                const targetText = mergedResult || sourceText
-                if (host.activeChapter) {
-                  await host.mutateActiveChapter({
-                    chapterId: host.activeChapter.id,
-                    expectedRevision: host.revision,
-                    type: 'full_replace',
-                    content: targetText,
-                  })
-                }
-              }}
+              onClick={() => void handleWriteback()}
+              disabled={writebackBusy || writebackProposal?.status === 'committed'}
               className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
-              title="将合稿结果通过 CAS 乐观锁直接写回当前正文章节"
+              title="将审阅后的合稿结果记录为 Proposal，并通过 CAS 写回当前正文章节"
             >
-              <Save className="w-3.5 h-3.5" /> 写回正文章节 (CAS)
+              <Save className="w-3.5 h-3.5" />
+              {writebackBusy ? '处理中…' : '写回正文章节 (Proposal/CAS)'}
+            </button>
+          )}
+          {writebackProposal?.status === 'committed' && (
+            <button
+              onClick={() => void handleUndo()}
+              disabled={writebackBusy}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              title="通过 Proposal Ledger 撤销上一次写回"
+            >
+              撤销写回
             </button>
           )}
           <button
@@ -129,6 +283,8 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
           <Layers className="w-4 h-4" /> 计算差异分块 (Compute Diff Hunks)
         </button>
       </div>
+
+      {writebackError && <p className="text-xs text-rose-600 dark:text-rose-400">{writebackError}</p>}
 
       {hunks.length > 0 && (
         <div className="space-y-4">
@@ -221,5 +377,26 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
         </div>
       )}
     </div>
+  )
+}
+
+function toStoredChapterContent(text: string, previousContent: string): string {
+  return /<\s*[a-z][^>]*>/i.test(previousContent) ? formatByPreset(text, 'web-novel') : text
+}
+
+function isDiffComputeResult(value: unknown): value is DiffComputeResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const result = value as Partial<DiffComputeResult>
+  return (
+    Array.isArray(result.hunks) &&
+    result.hunks.every(
+      (hunk) =>
+        hunk &&
+        Array.isArray(hunk.lines) &&
+        Array.isArray(hunk.lineChanges) &&
+        typeof hunk.id === 'string',
+    ) &&
+    !!result.stats &&
+    typeof result.stats === 'object'
   )
 }

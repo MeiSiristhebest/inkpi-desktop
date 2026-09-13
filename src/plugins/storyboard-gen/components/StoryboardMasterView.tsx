@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbStoryboardRepository } from "../../../adapters/indexedDbStoryboardRepository"
-import { StoryboardEngine } from "../engine/StoryboardEngine"
-import type { StoryboardSceneRecord, ClimaxStoryboardExtraction } from "../types"
-import { Film, Image, Sparkles, Send, Copy, Camera, Check } from "lucide-react"
-import { clock } from "../../../adapters/clock"
-import { idGenerator } from "../../../adapters/idGenerator"
-import { clipboardWriter } from "../../../adapters/clipboardWriter"
+import { useState, useEffect, useRef, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbStoryboardRepository } from '../../../adapters/indexedDbStoryboardRepository'
+import { StoryboardEngine } from '../engine/StoryboardEngine'
+import type { StoryboardSceneRecord, ClimaxStoryboardExtraction } from '../types'
+import { Film, Image, Sparkles, Send, Copy, Camera, Check } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
+import { idGenerator } from '../../../adapters/idGenerator'
+import { clipboardWriter } from '../../../adapters/clipboardWriter'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 
 const DEFAULT_CHAPTER_CLIMAX = `乌云翻滚，整座演武场狂风大作。
 赵家长老狞笑一声，赤焰战刀化作漫天火海朝林凡当头劈落！
@@ -15,17 +17,49 @@ const DEFAULT_CHAPTER_CLIMAX = `乌云翻滚，整座演武场狂风大作。
 惊天动地的剑气撕裂了火海，千丈演武石台在一瞬间化作两半！全场陷入死一般的寂静！`
 
 export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
-  const [chapterId, setChapterId] = useState("ch_01")
+  const host = useOptionalPluginHostContext()
+  const [chapterId, setChapterId] = useState('ch_01')
   const [sceneText, setSceneText] = useState(DEFAULT_CHAPTER_CLIMAX)
   const [scenes, setScenes] = useState<StoryboardSceneRecord[]>([])
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
-  const extracted: ClimaxStoryboardExtraction = StoryboardEngine.extractStoryboard(
+  const localExtracted: ClimaxStoryboardExtraction = StoryboardEngine.extractStoryboard(
     chapterId,
     "第一章 演武反杀",
     sceneText
   )
+  const [runtimeExtracted, setRuntimeExtracted] = useState<ClimaxStoryboardExtraction | null>(null)
+
+  useEffect(() => {
+    const runtimeAssistant = host?.aiAssistant
+    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginWorkflow) {
+      setRuntimeExtracted(null)
+      return
+    }
+
+    let cancelled = false
+    setRuntimeExtracted(null)
+    void runtimeAssistant
+      .runPluginWorkflow(
+        'storyboard-gen',
+        {
+          chapterId,
+          chapterTitle: '第一章 演武反杀',
+          chapterText: semanticTextFromContent(`storyboard-gen-${chapterId}`, sceneText),
+        },
+        { projectId },
+      )
+      .then((result) => {
+        if (!cancelled && isClimaxStoryboardExtraction(result)) setRuntimeExtracted(result)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [chapterId, host?.aiAssistant, projectId, sceneText])
+
+  const extracted = runtimeExtracted ?? localExtracted
 
   const loadScenes = async () => {
     const list = await indexedDbStoryboardRepository.getAll(projectId)
@@ -279,3 +313,13 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
   )
 }
 
+function isClimaxStoryboardExtraction(value: unknown): value is ClimaxStoryboardExtraction {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const result = value as Partial<ClimaxStoryboardExtraction>
+  return (
+    typeof result.sceneTitle === 'string' &&
+    typeof result.coreConflict === 'string' &&
+    Array.isArray(result.frames) &&
+    Array.isArray(result.suggestedCharacters)
+  )
+}

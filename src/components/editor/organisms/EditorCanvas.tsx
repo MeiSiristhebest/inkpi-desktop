@@ -7,6 +7,7 @@ import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { ChapterRecord, VolumeRecord } from '../../../types'
 import type { EditorBackgroundConfig } from '../modals/BackgroundModal'
 import { PRESET_SKINS } from '../modals/BackgroundModal'
+import { useSettings } from '../../../core/settings'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import type { ProposalSyncRemote } from '../../../adapters/daemonDomainSyncRemote'
 
@@ -50,16 +51,35 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
     actions,
   } = model
 
-  // 计算当前背景颜色
+  const [settings] = useSettings()
+
+  // 计算当前背景颜色：优先跟随全局设置的主题模式；若设置了局部背景皮肤，则在深色下自动映射到对应 darkBg
   const currentSkin = PRESET_SKINS.find((s) => s.id === bgConfig?.skinId)
-  const isDark = bgConfig?.themeMode === 'dark'
+
+  // 判断当前是否处于深色外观（全局 settings.themeMode 优先响应）
+  const isDark = (() => {
+    if (settings.themeMode === 'dark') return true
+    if (settings.themeMode === 'light') return false
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches
+    }
+    return bgConfig?.themeMode === 'dark'
+  })()
+
+  // 严格绑定全局系统色彩令牌：当处于纯净默认模式下直接使用全局令牌；有局部皮肤时精准匹配暗黑/浅色对应色
   const bgColor = bgConfig?.customBgImage
     ? 'transparent'
     : currentSkin
       ? isDark
         ? currentSkin.darkBg
         : currentSkin.bg
-      : undefined
+      : 'var(--ink-bg)'
+
+  const textColor = currentSkin
+    ? isDark
+      ? currentSkin.darkTextCol || 'var(--ink-text)'
+      : currentSkin.textCol || 'var(--ink-text)'
+    : 'var(--ink-text)'
 
   // 网格线科学对齐系统：每行文字基线严格端坐在网格线上
   const gridType = bgConfig?.gridType || 'none'
@@ -81,6 +101,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
 
   const canvasBackgroundStyle: React.CSSProperties = {
     backgroundColor: bgColor,
+    color: textColor,
     backgroundImage: bgConfig?.customBgImage ? `url(${bgConfig.customBgImage})` : undefined,
     backgroundSize: bgConfig?.customBgImage ? 'cover' : undefined,
     backgroundPosition: bgConfig?.customBgImage ? 'center' : undefined,

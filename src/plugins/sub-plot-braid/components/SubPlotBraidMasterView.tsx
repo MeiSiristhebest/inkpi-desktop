@@ -7,6 +7,7 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 import { GitMerge, Plus, AlertCircle, RefreshCw, Bot } from 'lucide-react'
 
 export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
@@ -50,7 +51,7 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const strandSummaries = strands
       .map(
         (s) =>
-          `支线【${s.title}】：涉及人物 [${s.involvedCharacterNames.join(', ')}]，始于第 ${s.startChapterOrder} 章，最近活跃第 ${s.lastActiveChapterOrder} 章，状态：${s.status}。梗概：${s.summary}`,
+          `支线【${semanticTextFromContent(`sub-plot-braid-title-${s.id}`, s.title)}】：涉及人物 [${s.involvedCharacterNames.join(', ')}]，始于第 ${s.startChapterOrder} 章，最近活跃第 ${s.lastActiveChapterOrder} 章，状态：${s.status}。梗概：${semanticTextFromContent(`sub-plot-braid-summary-${s.id}`, s.summary)}`,
       )
       .join('\n')
 

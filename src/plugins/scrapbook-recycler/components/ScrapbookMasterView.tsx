@@ -1,14 +1,18 @@
-import { useState, useEffect, type FC } from "react"
-import type { DesktopPluginViewProps } from "../../../types/plugin"
-import { indexedDbScrapbookRepository } from "../../../adapters/indexedDbScrapbookRepository"
-import type { ScrapbookFragmentRecord } from "../types"
-import { Archive, Trash2, Search, Copy, Check } from "lucide-react"
-import { clock } from "../../../adapters/clock"
+import { useState, useEffect, type FC } from 'react'
+import type { DesktopPluginViewProps } from '../../../types/plugin'
+import { indexedDbScrapbookRepository } from '../../../adapters/indexedDbScrapbookRepository'
+import type { ScrapbookFragmentRecord, ScrapRecommendation } from '../types'
+import { Archive, Trash2, Search, Copy, Check } from 'lucide-react'
+import { clock } from '../../../adapters/clock'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 
 export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+  const host = useOptionalPluginHostContext()
   const [fragments, setFragments] = useState<ScrapbookFragmentRecord[]>([])
   const [filterQuery, setFilterQuery] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [runtimeRankedIds, setRuntimeRankedIds] = useState<string[] | null>(null)
 
   const loadData = async () => {
     const all = await indexedDbScrapbookRepository.getAll(projectId)
@@ -18,6 +22,39 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
   useEffect(() => {
     loadData().catch(console.error)
   }, [projectId])
+
+  useEffect(() => {
+    const runtimeAssistant = host?.aiAssistant
+    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginTool || !filterQuery.trim()) {
+      setRuntimeRankedIds(null)
+      return
+    }
+
+    let cancelled = false
+    setRuntimeRankedIds(null)
+    const fragmentRecords = fragments
+    void runtimeAssistant
+      .runPluginTool('scrapbook-recycler', {
+        contextText: semanticTextFromContent('scrapbook-recycler-query', filterQuery),
+        fragments: fragmentRecords.map((fragment) => ({
+          ...fragment,
+          snippet: semanticTextFromContent(
+            `scrapbook-recycler-fragment-${fragment.id}`,
+            fragment.snippet,
+          ),
+        })),
+        topK: fragments.length || 1,
+      })
+      .then((result) => {
+        if (!cancelled && isScrapRecommendations(result)) {
+          setRuntimeRankedIds(result.map((item) => item.fragment.id))
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [filterQuery, fragments, host?.aiAssistant])
 
   useEffect(() => {
     onStats?.({
@@ -37,13 +74,17 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  const filtered = fragments.filter(
+  const locallyFiltered = fragments.filter(
     (f) =>
       !filterQuery ||
       f.snippet.includes(filterQuery) ||
       f.tags.some((t) => t.includes(filterQuery)) ||
       (f.sourceChapterTitle && f.sourceChapterTitle.includes(filterQuery))
   )
+  const rank = runtimeRankedIds ? new Map(runtimeRankedIds.map((id, index) => [id, index])) : null
+  const filtered = rank
+    ? [...locallyFiltered].sort((left, right) => (rank.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right.id) ?? Number.MAX_SAFE_INTEGER))
+    : locallyFiltered
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto text-slate-800 dark:text-slate-100">
@@ -125,5 +166,21 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
         )}
       </div>
     </div>
+  )
+}
+
+function isScrapRecommendations(value: unknown): value is ScrapRecommendation[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        'fragment' in item &&
+        item.fragment &&
+        typeof item.fragment === 'object' &&
+        'id' in item.fragment &&
+        typeof item.fragment.id === 'string',
+    )
   )
 }

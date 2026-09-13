@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react'
+import { motion } from 'motion/react'
 import { BookPlus, FileDown, Sparkles } from 'lucide-react'
 import type { ProjectRecord } from '../../types'
 import { loadStatsForProjects, type ProjectStats } from '../../core/projectService'
+import { spring, gesture } from '../../motion'
 import { CreateProjectPanel } from './organisms/CreateProjectPanel'
 import { ProjectCard } from './organisms/ProjectCard'
 import { ProjectDeleteDialog } from './organisms/ProjectDeleteDialog'
@@ -105,13 +107,15 @@ export const Bookshelf = ({
           </h2>
 
           <div className="flex gap-2 items-stretch shrink-0">
-            <button
+            <motion.button
               type="button"
               onClick={() => importInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-lg text-[12.5px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text)] border border-[var(--ink-border)] hover:bg-[var(--ink-bg-hover)] transition-colors shadow-2xs cursor-pointer"
+              {...gesture.button}
+              transition={spring.snappy}
+              className="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-lg text-[12.5px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text)] border border-[var(--ink-border)] hover:bg-[var(--ink-bg-hover)] transition-colors shadow-2xs cursor-pointer select-none"
             >
               <FileDown size={13} /> 导入项目
-            </button>
+            </motion.button>
             <input
               ref={importInputRef}
               type="file"
@@ -120,13 +124,15 @@ export const Bookshelf = ({
               onChange={handleImport}
             />
 
-            <button
+            <motion.button
               type="button"
               onClick={() => setCreating(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-lg text-[12.5px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] font-semibold transition-colors shadow-xs cursor-pointer"
+              {...gesture.button}
+              transition={spring.snappy}
+              className="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-lg text-[12.5px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] font-semibold transition-colors shadow-xs cursor-pointer select-none"
             >
               <BookPlus size={14} /> 新建小说项目
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -141,7 +147,15 @@ export const Bookshelf = ({
             <div className="mt-1.5 text-[11.5px] text-[var(--ink-text-muted)]">开启属于你的沉浸式创作旅程</div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <motion.div
+            initial="initial"
+            animate="animate"
+            variants={{
+              initial: {},
+              animate: { transition: { staggerChildren: 0.05 } },
+            }}
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
+          >
             {projects.map((p) => (
               <ProjectCard
                 key={p.id}
@@ -160,7 +174,7 @@ export const Bookshelf = ({
                 onCancelEdit={() => setEditingId(null)}
               />
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
 

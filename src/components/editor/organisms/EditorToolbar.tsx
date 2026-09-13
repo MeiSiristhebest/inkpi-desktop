@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { motion } from 'motion/react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -33,6 +34,7 @@ import {
 } from 'lucide-react'
 import { STATUS_OPTIONS } from '../editorUi'
 import { IconButton } from '../../../ui/atoms/IconButton'
+import { spring, gesture } from '../../../motion'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { ChapterStatus } from '../../../types'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
@@ -252,7 +254,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <div className="w-px h-3.5 bg-[var(--ink-border)] mx-0.5" />
 
           {/* 撤销 (Undo) */}
-          <button
+          <motion.button
             type="button"
             onClick={() => {
               if (editor && !editor.isDestroyed && editor.chain) {
@@ -260,14 +262,16 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               }
             }}
             disabled={!editor || (typeof editor.can === 'function' ? !editor.can().undo() : false)}
+            {...gesture.iconButton}
+            transition={spring.snappy}
             className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             title="撤销 / 返回上一步 (⌘Z)"
           >
             <Undo2 className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
 
           {/* 重做 (Redo) */}
-          <button
+          <motion.button
             type="button"
             onClick={() => {
               if (editor && !editor.isDestroyed && editor.chain) {
@@ -275,22 +279,26 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               }
             }}
             disabled={!editor || (typeof editor.can === 'function' ? !editor.can().redo() : false)}
+            {...gesture.iconButton}
+            transition={spring.snappy}
             className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             title="重做 / 返回下一步 (⇧⌘Z)"
           >
             <Redo2 className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
 
           <div className="w-px h-3.5 bg-[var(--ink-border)] mx-0.5" />
 
           {/* 加粗 (Bold) */}
-          <button
+          <motion.button
             type="button"
             onClick={() => {
               if (editor && !editor.isDestroyed && editor.chain) {
                 editor.chain().focus().toggleBold().run()
               }
             }}
+            {...gesture.iconButton}
+            transition={spring.snappy}
             className={`p-1 rounded transition-colors cursor-pointer ${
               typeof editor?.isActive === 'function' && editor.isActive('bold')
                 ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)] font-bold'
@@ -299,16 +307,18 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="加粗 (⌘B)"
           >
             <Bold className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
 
           {/* 倾斜 (Italic) */}
-          <button
+          <motion.button
             type="button"
             onClick={() => {
               if (editor && !editor.isDestroyed && editor.chain) {
                 editor.chain().focus().toggleItalic().run()
               }
             }}
+            {...gesture.iconButton}
+            transition={spring.snappy}
             className={`p-1 rounded transition-colors cursor-pointer ${
               typeof editor?.isActive === 'function' && editor.isActive('italic')
                 ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)]'
@@ -317,7 +327,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="倾斜 (⌘I)"
           >
             <Italic className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
 
           {/* 隐藏保留用于向后兼容单测的选择器 */}
           <div className="hidden" aria-hidden="true">

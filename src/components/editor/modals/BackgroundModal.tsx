@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Check, Plus } from 'lucide-react'
 import { Modal } from '../../../ui/molecules/Modal'
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
+import { useSettings } from '../../../core/settings'
 
 export type GridLineType = 'none' | 'solid' | 'dashed'
 
@@ -18,24 +19,101 @@ export interface BackgroundModalProps {
   onChange: (cfg: EditorBackgroundConfig) => void
 }
 
-// 预设浅色背景皮肤（新增「绿水青山」等高颜值古风雅致皮肤）
+// 预设专业写作阅读皮肤底色（覆盖 3 款浅色护眼 + 3 款深色夜读）
 export const PRESET_SKINS = [
-  { id: 'green-mountain', name: '绿水青山', bg: '#eef7f2', border: '#b8dfcc', darkBg: '#112219' },
-  { id: 'classic-yellow', name: '古典黄', bg: '#fbf0d9', border: '#eedcb3', darkBg: '#2a2215' },
-  { id: 'eye-green', name: '护眼绿', bg: '#e8f5e9', border: '#c8e6c9', darkBg: '#142918' },
-  { id: 'mist-gray', name: '薄雾灰', bg: '#f7f7f8', border: '#e2e8f0', darkBg: '#18191c' },
-  { id: 'serene-blue', name: '静谧蓝', bg: '#e3f2fd', border: '#bbdefb', darkBg: '#132337' },
-  { id: 'snow-white', name: '白雪飞腊', bg: '#ffffff', border: '#e2e8f0', darkBg: '#1f2023' },
-  { id: 'romantic-pink', name: '浪漫粉', bg: '#fce4ec', border: '#f8bbd0', darkBg: '#2d151e' },
-  { id: 'bamboo-shadow', name: '青竹幽影', bg: '#f1f8e9', border: '#dcedc8', darkBg: '#1c2816' },
+  // 浅色护眼阵营 (Light)
+  {
+    id: 'default',
+    name: '石墨白',
+    bg: '#ffffff',
+    border: '#e9e9e7',
+    darkBg: '#191919',
+    textCol: '#37352f',
+    darkTextCol: '#e9e9e7',
+  },
+  {
+    id: 'classic-yellow',
+    name: '羊皮纸',
+    bg: '#f9f5eb',
+    border: '#ded4c1',
+    darkBg: '#181b22',
+    textCol: '#342e28',
+    darkTextCol: '#e2e8f0',
+  },
+  {
+    id: 'eye-green',
+    name: '春苔绿',
+    bg: '#eef3eb',
+    border: '#cbd5c5',
+    darkBg: '#141a16',
+    textCol: '#2d3748',
+    darkTextCol: '#e2ede5',
+  },
+  {
+    id: 'mist-gray',
+    name: '薄雾灰',
+    bg: '#f7f7f8',
+    border: '#e2e8f0',
+    darkBg: '#191919',
+    textCol: '#37352f',
+    darkTextCol: '#e9e9e7',
+  },
+
+  // 深色沉浸阵营 (Dark)
+  {
+    id: 'dark',
+    name: '黑曜石',
+    bg: '#ffffff',
+    border: '#2f2f2f',
+    darkBg: '#191919',
+    textCol: '#37352f',
+    darkTextCol: '#e9e9e7',
+  },
+  {
+    id: 'midnight',
+    name: '夜读深渊',
+    bg: '#f9f5eb',
+    border: '#242c3b',
+    darkBg: '#11141a',
+    textCol: '#342e28',
+    darkTextCol: '#e2e8f0',
+  },
+  {
+    id: 'forest',
+    name: '松柏森夜',
+    bg: '#eef3eb',
+    border: '#28342c',
+    darkBg: '#141a16',
+    textCol: '#2d3748',
+    darkTextCol: '#e2ede5',
+  },
+  {
+    id: 'green-mountain',
+    name: '绿水青山',
+    bg: '#eef7f2',
+    border: '#b8dfcc',
+    darkBg: '#112219',
+    textCol: '#1a2e22',
+    darkTextCol: '#d1fae5',
+  },
 ]
 
 export const BackgroundModal: React.FC<BackgroundModalProps> = ({ onClose, config, onChange }) => {
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(config.themeMode)
+  const [settings, updateSettings] = useSettings()
+  const isGlobalDark =
+    settings.themeMode === 'dark' ||
+    (settings.themeMode === 'system' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-color-scheme: dark)').matches)
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(isGlobalDark ? 'dark' : 'light')
   const [skinId, setSkinId] = useState(config.skinId || 'mist-gray')
   const [gridType, setGridType] = useState<GridLineType>(config.gridType || 'none')
   const [customBgImage, setCustomBgImage] = useState<string | undefined>(config.customBgImage)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setThemeMode(isGlobalDark ? 'dark' : 'light')
+  }, [isGlobalDark])
 
   const applyChange = (patch: Partial<EditorBackgroundConfig>) => {
     const next: EditorBackgroundConfig = {
@@ -45,7 +123,11 @@ export const BackgroundModal: React.FC<BackgroundModalProps> = ({ onClose, confi
       customBgImage,
       ...patch,
     }
-    if (patch.themeMode !== undefined) setThemeMode(patch.themeMode)
+    if (patch.themeMode !== undefined) {
+      setThemeMode(patch.themeMode)
+      // 联动同步更新全局设置的外观模式，让背景与所有系统面板同频进入深色模式
+      updateSettings({ themeMode: patch.themeMode })
+    }
     if (patch.skinId !== undefined) setSkinId(patch.skinId)
     if (patch.gridType !== undefined) setGridType(patch.gridType)
     if (patch.customBgImage !== undefined) setCustomBgImage(patch.customBgImage)

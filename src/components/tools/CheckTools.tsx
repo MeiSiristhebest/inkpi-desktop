@@ -8,6 +8,7 @@ import { ShieldAlert, Activity, CheckCircle2, AlertTriangle, Play } from 'lucide
 
 import { DEFAULT_SENSITIVE_WORDS } from '../../config/sensitiveWords'
 import { GenericAhoCorasick } from '../../utils/AhoCorasick'
+import { semanticTextFromContent } from '../../domain/content'
 import {
   findDuplicateCodes,
   findMissingDisplayNames,
@@ -83,7 +84,7 @@ export const CheckTools: React.FC<CheckToolsProps> = ({
       const results: { chapterTitle: string; hits: string[] }[] = []
 
       for (const ch of projChapters) {
-        const content = ch.content || ''
+        const content = semanticTextFromContent(ch.id, ch.content || '', ch.revision)
         const matches = ac.scan(content)
         if (matches.length > 0) {
           const uniqueKeywords = Array.from(new Set(matches.map((m) => m.keyword)))
