@@ -83,7 +83,10 @@ export const ChapterReferencesSidebar: React.FC<ChapterReferencesSidebarProps> =
   if (!isOpen) return null
 
   return (
-    <aside className="w-64 h-full shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] flex flex-col font-sans select-none z-20 animate-in slide-in-from-right-4 duration-200">
+    <aside
+      data-testid="editor-references-sidebar"
+      className="editor-references-sidebar w-64 h-full shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] flex flex-col font-sans select-none z-20 animate-in slide-in-from-right-4 duration-200"
+    >
       {/* 顶部标题栏 */}
       <div className="h-11 px-4 border-b border-[var(--ink-border)] flex items-center justify-between">
         <div className="flex items-center gap-2">

@@ -46,7 +46,10 @@ export const SplitViewDrawer: React.FC<SplitViewDrawerProps> = ({
   }, [activeRefChapter?.content])
 
   return (
-    <div className="flex-1 w-1/2 h-full flex flex-col border-l border-[var(--ink-border)] bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+    <div
+      data-testid="editor-split-view"
+      className="editor-split-view flex-1 w-1/2 h-full flex flex-col border-l border-[var(--ink-border)] bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden"
+    >
       {/* 顶栏：高度 h-9，严格与左侧写作区分屏指示条 1:1 对称 */}
       <div className="h-9 shrink-0 flex items-center justify-between px-4 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)]/40 text-[11px]">
         <div className="flex items-center gap-2 min-w-0 flex-1">

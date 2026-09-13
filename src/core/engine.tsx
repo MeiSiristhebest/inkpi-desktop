@@ -229,7 +229,10 @@ export const Engine: FC<EngineProps> = ({
   }
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)]">
+    <div
+      data-testid="project-engine-root"
+      className="project-engine-root h-screen w-screen flex overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)]"
+    >
       {/* 42 模块与全景侧边栏 */}
       {!isFullscreen && !focusMode && leftOpen && (
         <SidebarNav
@@ -243,7 +246,7 @@ export const Engine: FC<EngineProps> = ({
       )}
 
       {/* 主区 */}
-      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <main className="project-engine-main flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* 顶栏：非写作模式下呈现（正文写作已通过 EditorToolbar 实现单层全能合一，避免纵向双顶栏叠罗汉） */}
         {!isEditor && (
           <header className="h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)]">
@@ -294,7 +297,7 @@ export const Engine: FC<EngineProps> = ({
         )}
 
         {/* 内容分发：按视图类型挂载不同容器 */}
-        <div className="flex-1 flex min-h-0">
+        <div className="project-engine-content flex-1 flex min-h-0">
           <div className="flex-1 min-w-0" key={activeTabId}>
             <ErrorBoundary label={viewTitle}>{resolveCurrentView()}</ErrorBoundary>
           </div>
@@ -306,7 +309,8 @@ export const Engine: FC<EngineProps> = ({
             (rightPanel ? (
               <aside
                 style={{ width: `${rightWidth}px` }}
-                className="shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto relative group"
+                data-testid="project-engine-right-panel"
+                className="project-engine-right-panel shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto relative group"
               >
                 {/* 拖拽手柄：左侧边线，向左拉加宽，带悬浮光标与最小宽度保护 */}
                 <div
@@ -322,7 +326,10 @@ export const Engine: FC<EngineProps> = ({
                 <div className="h-full">{rightPanel}</div>
               </aside>
             ) : !onOpenAssistant ? (
-              <aside className="shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto w-[220px]">
+              <aside
+                data-testid="project-engine-right-panel"
+                className="project-engine-right-panel shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto w-[220px]"
+              >
                 <div className="p-3 space-y-3 text-[12px]">
                   <div className="text-[11px] font-medium text-[var(--ink-text-faint)]">
                     文档信息

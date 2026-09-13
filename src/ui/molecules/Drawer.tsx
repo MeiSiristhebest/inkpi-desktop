@@ -18,7 +18,7 @@ export const Drawer = ({ widthClass = 'w-[380px]', children }: DrawerProps) => (
   <motion.aside
     {...variants.slideInFromRight}
     transition={spring.gentle}
-    className={`${widthClass} shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] flex flex-col h-full z-20 shadow-[-4px_0_12px_rgba(0,0,0,0.03)] select-none`}
+    className={`editor-drawer ${widthClass} shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] flex flex-col h-full z-20 shadow-[-4px_0_12px_rgba(0,0,0,0.03)] select-none`}
   >
     {children}
   </motion.aside>

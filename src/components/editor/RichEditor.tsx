@@ -510,7 +510,7 @@ export const RichEditor: FC<RichEditorProps> = ({
         }
       }}
     >
-      <div className="flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+      <div className="creative-editor-root flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
         {visibleTaskProgress && (
           <div
             data-testid="editor-long-task-status"
@@ -550,7 +550,7 @@ export const RichEditor: FC<RichEditorProps> = ({
           />
         )}
 
-        <div className="flex-1 flex flex-col min-w-0 h-full">
+          <div className="creative-editor-column flex-1 flex flex-col min-w-0 h-full">
           <EditorToolbar
             model={model}
             editor={editor}

@@ -38,7 +38,8 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
   return (
     <aside
       style={{ width: `${width}px` }}
-      className="shrink-0 flex flex-col border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] relative group"
+      data-testid="editor-chapter-tree"
+      className="editor-chapter-tree shrink-0 flex flex-col border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] relative group"
     >
       {/* 拖拽调宽手柄（右侧边线） */}
       <div

@@ -113,10 +113,10 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   return (
     <header
       ref={toolbarRef}
-      className="h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] relative select-none"
+      className="editor-toolbar h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] relative select-none"
     >
       {/* 左侧：返回作品库 + 导航展开 + 翻章导航 + 目录展开 + 章节标题输入 + 状态选择器 */}
-      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+      <div className="editor-toolbar-left flex items-center gap-1.5 min-w-0 flex-1">
         {onToggleNav && !isNavOpen && (
           <IconButton onClick={onToggleNav} title="展开导航">
             <PanelLeftOpen className="w-4 h-4" />
@@ -364,7 +364,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       </div>
 
       {/* 右侧：5 个语义清晰的高阶分组下拉按钮，不再散落 14 个杂乱图标 */}
-      <div className="flex items-center gap-1 shrink-0 relative">
+      <div className="editor-toolbar-actions flex items-center gap-1 shrink-0 relative">
         {/* 1. 排版与标点规整 */}
         <div className="relative">
           <button
