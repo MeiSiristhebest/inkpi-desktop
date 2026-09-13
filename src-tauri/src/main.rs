@@ -11,6 +11,10 @@ use std::os::windows::process::CommandExt;
 use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
+mod instance_config;
+
+use instance_config::InstanceConfig;
+
 // 后台管理的 inkpi daemon 子进程（应用退出时回收）
 static DAEMON_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
 
@@ -50,7 +54,28 @@ fn resolve_daemon_bin(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     None
 }
 
-fn spawn_daemon(app: &tauri::AppHandle) {
+fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
+    let requested_config = InstanceConfig::from_process()?;
+    let app_local_data_dir = if requested_config.profile.is_some() {
+        Some(
+            app.path()
+                .app_local_data_dir()
+                .map_err(|error| format!("failed to resolve app data directory: {error}"))?,
+        )
+    } else {
+        None
+    };
+    let instance_config = requested_config.resolve(app_local_data_dir.as_deref())?;
+
+    if let Some(profile_dir) = &instance_config.profile_dir {
+        std::fs::create_dir_all(profile_dir).map_err(|error| {
+            format!(
+                "failed to create profile directory {}: {error}",
+                profile_dir.display()
+            )
+        })?;
+    }
+
     let bin = match resolve_daemon_bin(app) {
         Some(b) => b,
         None => {
@@ -59,15 +84,22 @@ fn spawn_daemon(app: &tauri::AppHandle) {
                  SPA 将无法连接 daemon。请确认 src-tauri/binaries/inkpi-<triple>.exe 已随包分发，\
                  或在 inkpi 仓库运行 pnpm build:binaries 后重新构建。"
             );
-            return;
+            return Ok(());
         }
     };
 
     let mut binding = Command::new(&bin);
     let cmd = binding
-        .args(["daemon", "--port", "8848"])
+        .args(instance_config.daemon_args())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+
+    for (key, value) in instance_config.environment_overrides() {
+        cmd.env(key, value);
+    }
+    if let Some(profile_dir) = &instance_config.profile_dir {
+        cmd.current_dir(profile_dir);
+    }
 
     if let Ok(resource_dir) = app.path().resource_dir() {
         let skills_dir = resource_dir.join("skills");
@@ -82,11 +114,18 @@ fn spawn_daemon(app: &tauri::AppHandle) {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
-    match cmd.spawn()
-    {
+    match cmd.spawn() {
         Ok(child) => {
             DAEMON_CHILD.get_or_init(|| Mutex::new(Some(child)));
-            println!("[inkpi-desktop] InkPi daemon spawned ({:?}) (tcp 8848 / ws 8849)", bin);
+            println!(
+                "[inkpi-desktop] InkPi daemon spawned ({:?}) (profile={:?}, instance={:?}, http={}, ws={}, state_db={:?})",
+                bin,
+                instance_config.profile,
+                instance_config.instance_id,
+                instance_config.http_port,
+                instance_config.ws_port,
+                instance_config.state_db,
+            );
         }
         Err(e) => {
             eprintln!(
@@ -96,6 +135,8 @@ fn spawn_daemon(app: &tauri::AppHandle) {
             );
         }
     }
+
+    Ok(())
 }
 
 fn kill_daemon() {
@@ -112,7 +153,9 @@ fn kill_daemon() {
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            spawn_daemon(app.handle());
+            spawn_daemon(app.handle()).map_err(|message| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
+            })?;
             Ok(())
         })
         .build(tauri::generate_context!())
