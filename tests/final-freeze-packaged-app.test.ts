@@ -164,7 +164,7 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
 
     const mainRust = await readFile(mainRustPath, 'utf8')
     expect(mainRust).toContain('res_dir.join("inkpi.exe")')
-    expect(mainRust).toContain('.args(["daemon", "--port", "8848"])')
+    expect(mainRust).toContain('.args(instance_config.daemon_args())')
     expect(mainRust).toContain('cmd.env("INKPI_SKILLS_DIR", skills_dir)')
     expect(mainRust).toContain('Command::new(&bin)')
   })
