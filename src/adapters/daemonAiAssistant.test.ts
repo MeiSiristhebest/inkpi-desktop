@@ -323,4 +323,64 @@ describe('createDaemonAiAssistant instruction registration', () => {
       },
     ])
   })
+
+  it('routes first-party tools and workflows to their explicit Runtime boundaries', async () => {
+    const calls: Array<{ method: string; params: unknown }> = []
+    const client: RpcClient = {
+      request: async <T>(method: string, params?: unknown): Promise<T> => {
+        calls.push({ method, params })
+        if (method === 'tool.execute') {
+          return {
+            role: 'toolResult',
+            toolCallId: 'desktop-plugin-tool-diff-reviewer-1',
+            toolName: 'plugin.diff-reviewer.compute',
+            content: [{ type: 'text', text: '{"stats":{"additions":1}}' }],
+            details: { stats: { additions: 1 } },
+            isError: false,
+          } as T
+        }
+        if (method === 'instruction.register') return { success: true } as T
+        if (method === 'task.submit') {
+          return { taskId: (params as { task: AiTask }).task.id, status: 'queued' } as T
+        }
+        if (method === 'task.status') {
+          const submitted = calls.findLast((call) => call.method === 'task.submit')
+          const submittedTask = (submitted?.params as { task: AiTask }).task
+          return {
+            taskId: submittedTask.id,
+            kind: submittedTask.kind,
+            status: 'completed',
+            result: {
+              taskId: submittedTask.id,
+              kind: submittedTask.kind,
+              status: 'completed',
+              output: { format: 'structured', data: { nodes: ['runtime'] } },
+            },
+          } as T
+        }
+        throw new Error(`Unexpected RPC method: ${method}`)
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const assistant = createDaemonAiAssistant(client)
+
+    await expect(assistant.runPluginTool?.('diff-reviewer', { oldText: 'a', newText: 'b' })).resolves.toEqual({
+      stats: { additions: 1 },
+    })
+    await expect(
+      assistant.runPluginWorkflow?.('multiverse-whatif', { forkChapterIndex: 2 }),
+    ).resolves.toEqual({ nodes: ['runtime'] })
+
+    expect(calls[0]).toMatchObject({
+      method: 'tool.execute',
+      params: {
+        toolName: 'plugin.diff-reviewer.compute',
+        arguments: { oldText: 'a', newText: 'b' },
+      },
+    })
+    const workflowSubmit = calls.find((call) => call.method === 'task.submit')
+    expect(workflowSubmit).toMatchObject({
+      params: { task: { kind: 'plugin.multiverse-whatif.workflow', outputContract: { format: 'structured' } } },
+    })
+  })
 })

@@ -64,4 +64,25 @@ describe('TaskRecoveryPanel', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('IndexedDB unavailable')
   })
+
+  it('explains that offline tasks need a reconnect and blocks resume', () => {
+    const onResume = vi.fn(async () => true)
+    render(
+      <TaskRecoveryPanel
+        records={[makeRecord('offline-task', 'interrupted')]}
+        connected={false}
+        onResume={onResume}
+        onCancel={vi.fn(async () => true)}
+        onDismiss={vi.fn(async () => true)}
+      />,
+    )
+
+    expect(screen.getByTestId('task-recovery-offline')).toHaveTextContent('重连后才能恢复任务')
+    const resumeButton = screen
+      .getByTestId('task-recovery-offline-task')
+      .querySelector('button') as HTMLButtonElement
+    expect(resumeButton).toBeDisabled()
+    fireEvent.click(resumeButton)
+    expect(onResume).not.toHaveBeenCalled()
+  })
 })

@@ -9,6 +9,7 @@ import {
 } from '../domain/story'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { IndexedDbStoryStateStore } from './indexedDbStoryStateStore'
+import { db } from '../db/indexedDB'
 
 describe('IndexedDbStoryStateStore', () => {
   it('round-trips and isolates the authoritative state', async () => {
@@ -17,6 +18,11 @@ describe('IndexedDbStoryStateStore', () => {
     const state = withEntity(createStoryState(3))
 
     await store.save(workspaceId, state)
+    const persisted = await db.get<{ value: unknown }>(
+      'settingsKV',
+      `storyState::${encodeURIComponent(workspaceId)}`,
+    )
+    expect(typeof persisted?.value).toBe('string')
     const loaded = await store.load(workspaceId)
 
     expect(loaded).toEqual(state)

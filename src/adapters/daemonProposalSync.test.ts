@@ -1,4 +1,9 @@
-import type { ProposalProjectionSnapshot, ProposalSyncPushResult } from '@inkpi/protocol'
+import {
+  calculateProposalProjectionSnapshotHash,
+  calculateProposalProjectionStateHash,
+  type ProposalProjectionSnapshot,
+  type ProposalSyncPushResult,
+} from '@inkpi/protocol'
 import { describe, expect, it, vi } from 'vitest'
 import type { AiProposal } from '../ai/proposals/proposalLedger'
 import type { RpcClient } from '../ports/aiGateway'
@@ -26,7 +31,11 @@ describe('daemon proposal sync adapter', () => {
       workspaceId: 'workspace-1',
       revision: 1,
       proposals: [state],
-      hash: 'snapshot-hash',
+      hash: calculateProposalProjectionSnapshotHash({
+        workspaceId: 'workspace-1',
+        revision: 1,
+        proposals: [state],
+      }),
       updatedAt: 20,
     }
     const request = vi.fn(async <T>(method: string, _params?: unknown): Promise<T> => {
@@ -37,7 +46,7 @@ describe('daemon proposal sync adapter', () => {
           workspaceId: 'workspace-1',
           proposalId: proposal.id,
           revision: 1,
-          stateHash: 'state-hash',
+          stateHash: calculateProposalProjectionStateHash(state),
         } as T
       }
       return response as T
@@ -103,5 +112,21 @@ describe('daemon proposal sync adapter', () => {
     await expect(remote.snapshotProposals('workspace-1')).rejects.toThrow(
       'Domain proposal evidence range at index 0 is inverted',
     )
+  })
+
+  it('rejects a snapshot whose declared hash does not match its proposals', async () => {
+    const state = proposalToProjectionState(proposal)
+    const request = vi.fn(async <T>(): Promise<T> =>
+      ({
+        workspaceId: 'workspace-1',
+        revision: 1,
+        proposals: [state],
+        hash: 'wrong-hash',
+        updatedAt: 20,
+      }) as T,
+    )
+    const remote = createDaemonProposalSyncRemote({ request, close: vi.fn() } as unknown as RpcClient)
+
+    await expect(remote.snapshotProposals('workspace-1')).rejects.toThrow(/hash mismatch/i)
   })
 })

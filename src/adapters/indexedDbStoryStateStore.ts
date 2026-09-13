@@ -1,11 +1,17 @@
-import { assertStoryState, type StoryState } from '../domain/story'
+import {
+  assertStoryState,
+  deserializeStoryState,
+  serializeStoryState,
+  type StoryState,
+} from '../domain/story'
 import { db } from '../db/indexedDB'
 import type { StoryStateStore } from '../ports/storyStateStore'
 import { appendIndexedDbDomainChange } from './indexedDbDomainChangeAppender'
 
 interface StoryStateRecord {
   key: string
-  value: StoryState
+  /** Stored as deterministic JSON; older object records are migrated on read. */
+  value: StoryState | string
 }
 
 const STORY_STATE_KEY_PREFIX = 'storyState::'
@@ -16,8 +22,7 @@ export class IndexedDbStoryStateStore implements StoryStateStore {
   async load(workspaceId: string): Promise<StoryState | undefined> {
     const record = await db.get<StoryStateRecord>('settingsKV', toKey(workspaceId))
     if (!record) return undefined
-    assertStoredState(record.value)
-    return cloneStoryState(record.value)
+    return cloneStoryState(decodeStoredState(record.value))
   }
 
   async save(workspaceId: string, state: StoryState): Promise<void> {
@@ -25,14 +30,14 @@ export class IndexedDbStoryStateStore implements StoryStateStore {
     assertStoryState(state)
     return enqueueStoryStateWrite(async () => {
       const existing = await db.get<StoryStateRecord>('settingsKV', toKey(workspaceId))
+      const serialized = serializeStoryState(state)
       if (existing) {
-        assertStoredState(existing.value)
-        const existingSerialized = JSON.stringify(existing.value)
-        const nextSerialized = JSON.stringify(state)
-        if (existingSerialized === nextSerialized) return
-        if (state.revision <= existing.value.revision) {
+        const existingState = decodeStoredState(existing.value)
+        const existingSerialized = serializeStoryState(existingState)
+        if (existingSerialized === serialized) return
+        if (state.revision <= existingState.revision) {
           throw new Error(
-            `Story state revision conflict: expected a revision after ${existing.value.revision}, received ${state.revision}`,
+            `Story state revision conflict: expected a revision after ${existingState.revision}, received ${state.revision}`,
           )
         }
       }
@@ -42,13 +47,13 @@ export class IndexedDbStoryStateStore implements StoryStateStore {
         aggregateId: workspaceId,
         workspaceId,
         operation: 'upsert',
-        payload: cloneStoryState(state),
+        payload: deserializeStoryState(serialized),
         occurredAt,
         aggregateRevision: state.revision,
       })
       await db.put<StoryStateRecord>('settingsKV', {
         key: toKey(workspaceId),
-        value: cloneStoryState(state),
+        value: serialized,
       })
     })
   }
@@ -58,7 +63,7 @@ export class IndexedDbStoryStateStore implements StoryStateStore {
     return enqueueStoryStateWrite(async () => {
       const existing = await db.get<StoryStateRecord>('settingsKV', toKey(workspaceId))
       if (!existing) return
-      assertStoredState(existing.value)
+      const existingState = decodeStoredState(existing.value)
       const occurredAt = Date.now()
       await appendIndexedDbDomainChange({
         aggregateType: 'story-state',
@@ -67,7 +72,7 @@ export class IndexedDbStoryStateStore implements StoryStateStore {
         operation: 'delete',
         payload: undefined,
         occurredAt,
-        aggregateRevision: existing.value.revision + 1,
+        aggregateRevision: existingState.revision + 1,
       })
       await db.delete('settingsKV', toKey(workspaceId))
     })
@@ -87,12 +92,11 @@ function assertWorkspaceId(workspaceId: string): void {
   }
 }
 
-function assertStoredState(value: unknown): asserts value is StoryState {
-  if (!value || typeof value !== 'object') {
-    throw new Error('Stored StoryState is corrupt')
-  }
+function decodeStoredState(value: unknown): StoryState {
   try {
+    if (typeof value === 'string') return deserializeStoryState(value)
     assertStoryState(value as StoryState)
+    return deserializeStoryState(serializeStoryState(value as StoryState))
   } catch (error) {
     throw new Error('Stored StoryState is corrupt', { cause: error })
   }

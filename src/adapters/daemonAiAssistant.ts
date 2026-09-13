@@ -8,6 +8,7 @@ import type {
   TaskResult,
   TaskStatusSnapshot,
   TaskSubmitResult,
+  ToolResultMessage,
 } from '@inkpi/protocol'
 import type { AiAssistant, RpcClient } from '../ports/aiGateway'
 import {
@@ -31,6 +32,10 @@ import { DomainSyncService } from '../domain/sync/domainSyncService'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { attachProposalSyncRemote } from '../ai/proposals/remoteProposalStore'
 import { DaemonArtifactStore } from './daemonArtifactStore'
+import { getPluginRuntimeEntry } from '../ai/tasks/pluginRuntimeCatalog'
+
+let runtimePluginTaskSequence = 0
+let runtimePluginToolSequence = 0
 
 /**
  * 把底层 RpcClient（字符串方法 JSON-RPC）封装成语义化 AiAssistant。
@@ -55,6 +60,14 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   const continuityScheduler = new ContinuityAuditScheduler(creativeIntelligence)
   const distillationWorkflow = new ProjectDistillationWorkflow(creativeIntelligence)
 
+  const runTask = async (task: AiTask, options = {}): Promise<TaskResult | null> => {
+    await ensurePluginInstructionsRegistered()
+    return attachProposalSyncRemote(
+      await creativeIntelligence.run(task, options),
+      proposalSyncRemote,
+    )
+  }
+
   const ensurePluginInstructionsRegistered = (): Promise<void> => {
     if (!pluginInstructionsReady) {
       pluginInstructionsReady = (async () => {
@@ -75,12 +88,49 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   }
 
   return {
-    runTask: async (task: AiTask, options = {}): Promise<TaskResult | null> => {
-      await ensurePluginInstructionsRegistered()
-      return attachProposalSyncRemote(
-        await creativeIntelligence.run(task, options),
-        proposalSyncRemote,
-      )
+    runTask,
+
+    runPluginTool: async (pluginId: string, input: Record<string, unknown>): Promise<unknown | null> => {
+      const entry = getPluginRuntimeEntry(pluginId)
+      if (!entry?.toolName) return null
+      const result = await client.request<ToolResultMessage>('tool.execute', {
+        toolName: entry.toolName,
+        toolCallId: `desktop-plugin-tool-${pluginId}-${++runtimePluginToolSequence}`,
+        arguments: input,
+      })
+      if (result.isError) {
+        throw new Error(result.content.map((item) => ('text' in item ? item.text : '')).join(' '))
+      }
+      return result.details ?? parseToolResultContent(result)
+    },
+
+    runPluginWorkflow: async (
+      pluginId: string,
+      input: unknown,
+      metadata?: Record<string, unknown>,
+    ): Promise<unknown | null> => {
+      const entry = getPluginRuntimeEntry(pluginId)
+      if (entry?.runtimeClass !== 'workflow' || !entry.taskKind) return null
+      const result = await runTask({
+        id: `plugin-workflow-${pluginId}-${Date.now()}-${++runtimePluginTaskSequence}`,
+        kind: entry.taskKind,
+        input: { payload: input },
+        contextPolicy: {
+          includeSelection: false,
+          includeProjectState: false,
+          metadata: { pluginId, runtimeTarget: entry.runtimeTarget },
+        },
+        executionPolicy: { strategy: 'workflow', mode: 'foreground', cancellable: true },
+        outputContract: { format: 'structured', persistence: 'ephemeral' },
+        effectPolicy: { mode: 'read-only' },
+        requirements: {
+          outputFormats: ['structured'],
+          needsStructuredOutput: true,
+        },
+        metadata: { pluginId, runtimeTarget: entry.runtimeTarget, ...metadata },
+      })
+      if (result?.status !== 'completed' || result.output?.format !== 'structured') return null
+      return result.output.data
     },
 
     proposalSyncRemote,
@@ -124,6 +174,19 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
     status: () => client.request<{ running: boolean }>('daemon.status'),
 
     close: () => client.close(),
+  }
+}
+
+function parseToolResultContent(result: ToolResultMessage): unknown {
+  const text = result.content
+    .filter((item): item is { type: 'text'; text: string } => item.type === 'text')
+    .map((item) => item.text)
+    .join('')
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
   }
 }
 

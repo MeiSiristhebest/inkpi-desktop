@@ -7,6 +7,7 @@ import type {
   ProposalSyncPushResult,
 } from '@inkpi/protocol'
 import {
+  calculateProposalProjectionSnapshotHash,
   calculateProposalProjectionStateHash,
   validateProposalProjectionState,
 } from '@inkpi/protocol'
@@ -68,18 +69,30 @@ export function createDaemonProposalSyncRemote(client: RpcClient): ProposalSyncR
   return {
     pushProposalState: (workspaceId, proposal, expectedRevision) => {
       const state = proposalToProjectionState(proposal)
-      return client.request<ProposalSyncPushResult>('proposal.sync.push', {
-        workspaceId,
-        expectedRevision,
-        proposal: state,
-        stateHash: calculateProposalProjectionStateHash(state),
-      })
+      return client
+        .request<unknown>('proposal.sync.push', {
+          workspaceId,
+          expectedRevision,
+          proposal: state,
+          stateHash: calculateProposalProjectionStateHash(state),
+        })
+        .then((result) => {
+          assertProposalSyncPushResult(result, workspaceId, proposal.id)
+          return result
+        })
     },
     snapshotProposals: async (workspaceId) => {
-      const snapshot = await client.request<ProposalProjectionSnapshot>('proposal.sync.snapshot', { workspaceId })
+      const snapshot = await client.request<unknown>('proposal.sync.snapshot', {
+        workspaceId,
+      })
+      assertProposalProjectionSnapshot(snapshot, workspaceId)
+      const proposals = snapshot.proposals.map(projectionStateToProposal)
+      if (calculateProposalProjectionSnapshotHash(snapshot) !== snapshot.hash) {
+        throw new Error('Daemon proposal snapshot hash mismatch')
+      }
       return {
         ...snapshot,
-        proposals: snapshot.proposals.map(projectionStateToProposal),
+        proposals,
       }
     },
   }
@@ -94,4 +107,64 @@ function projectionStateToProposal(state: ProposalProjectionState): AiProposal {
     ...(state.inversePatch === undefined ? {} : { inversePatch: state.inversePatch }),
     ...(state.committedRevision === undefined ? {} : { committedRevision: state.committedRevision }),
   })
+}
+
+function assertProposalSyncPushResult(
+  value: unknown,
+  workspaceId: string,
+  proposalId: string,
+): asserts value is ProposalSyncPushResult {
+  if (!isRecord(value)) throw new Error('Daemon proposal push returned an invalid result')
+  if (
+    typeof value.accepted !== 'boolean' ||
+    typeof value.duplicate !== 'boolean' ||
+    value.workspaceId !== workspaceId ||
+    value.proposalId !== proposalId ||
+    !isRevision(value.revision) ||
+    typeof value.stateHash !== 'string' ||
+    !value.stateHash
+  ) {
+    throw new Error(`Daemon proposal push returned an invalid result for ${proposalId}`)
+  }
+  if (
+    value.reason !== undefined &&
+    value.reason !== 'revision-conflict' &&
+    value.reason !== 'hash-mismatch' &&
+    value.reason !== 'invalid-proposal'
+  ) {
+    throw new Error(`Daemon proposal push returned an unknown rejection for ${proposalId}`)
+  }
+  if (
+    value.currentHash !== undefined &&
+    (typeof value.currentHash !== 'string' || !value.currentHash)
+  ) {
+    throw new Error(`Daemon proposal push returned an invalid current hash for ${proposalId}`)
+  }
+}
+
+function assertProposalProjectionSnapshot(
+  value: unknown,
+  workspaceId: string,
+): asserts value is ProposalProjectionSnapshot {
+  if (!isRecord(value)) throw new Error('Daemon proposal snapshot is not an object')
+  if (
+    value.workspaceId !== workspaceId ||
+    !isRevision(value.revision) ||
+    !Array.isArray(value.proposals) ||
+    typeof value.hash !== 'string' ||
+    !value.hash ||
+    typeof value.updatedAt !== 'number' ||
+    !Number.isFinite(value.updatedAt)
+  ) {
+    throw new Error('Daemon proposal snapshot has invalid coordinates')
+  }
+  for (const proposal of value.proposals) validateProposalProjectionState(proposal)
+}
+
+function isRevision(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }

@@ -6,6 +6,7 @@ interface TaskRecoveryPanelProps {
   records: TaskRecoveryRecord[]
   loading?: boolean
   error?: string
+  connected?: boolean
   onResume: (taskId: string) => Promise<boolean>
   onCancel: (taskId: string) => Promise<boolean>
   onDismiss: (taskId: string) => Promise<boolean>
@@ -35,6 +36,7 @@ export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
   records,
   loading = false,
   error,
+  connected = true,
   onResume,
   onCancel,
   onDismiss,
@@ -65,10 +67,17 @@ export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
 
       {error && <p role="alert" className="mb-2 text-rose-500">任务状态保存失败：{error}</p>}
 
+      {!connected && records.some((record) => canResume(record.snapshot.status)) && (
+        <p role="status" data-testid="task-recovery-offline" className="mb-2 text-amber-600">
+          当前离线，重连后才能恢复任务
+        </p>
+      )}
+
       <div className="space-y-2">
         {records.map((record) => {
           const status = record.snapshot.status
           const busy = busyTaskId === record.task.id
+          const resumable = canResume(status)
           return (
             <div
               key={record.task.id}
@@ -93,10 +102,11 @@ export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
               </div>
 
               <div className="mt-2 flex items-center gap-2">
-                {canResume(status) && (
+                {resumable && (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || !connected}
+                    title={!connected ? '请先重连 InkPi Daemon' : undefined}
                     onClick={() => void runAction(record.task.id, () => onResume(record.task.id))}
                     className="rounded bg-[var(--ink-accent)] px-2 py-1 text-white disabled:opacity-60"
                   >

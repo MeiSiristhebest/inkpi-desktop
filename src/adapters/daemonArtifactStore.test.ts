@@ -59,6 +59,18 @@ describe('DaemonArtifactStore', () => {
     expect(request).toHaveBeenNthCalledWith(2, 'artifact.list', { type: 'creative.story-plan' })
     expect(request).toHaveBeenNthCalledWith(3, 'artifact.get', { id: runtimeArtifact.id })
   })
+
+  it('rejects malformed save receipts and malformed Runtime artifacts', async () => {
+    const request = vi
+      .fn<RpcClient['request']>()
+      .mockResolvedValue({ saved: false, id: 'artifact-1' })
+    const store = new DaemonArtifactStore({ request, close: vi.fn() })
+
+    await expect(store.save(createArtifact())).rejects.toThrow(/invalid receipt/)
+
+    request.mockResolvedValueOnce({ id: 'artifact-3', type: 'creative.plan' })
+    await expect(store.get('artifact-3')).rejects.toThrow(/artifact .* invalid/i)
+  })
 })
 
 function createArtifact(): AiArtifact {
