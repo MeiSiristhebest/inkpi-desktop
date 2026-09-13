@@ -44,8 +44,9 @@ export function requireStructuredResult<T>(result: TaskResult): T {
 
 export function parseContinuityFindings(result: TaskResult): ContinuityFinding[] {
   const value = requireStructuredResult<unknown>(result)
-  if (!Array.isArray(value)) throw new Error('Continuity audit output must be an array')
-  return value.map((item, index) => {
+  const findings = normalizeContinuityFindings(value)
+  if (!Array.isArray(findings)) throw new Error('Continuity audit output must be an array')
+  return findings.map((item, index) => {
     if (!item || typeof item !== 'object') throw new Error(`Continuity finding ${index} is invalid`)
     const finding = item as Record<string, unknown>
     const severity = finding.severity
@@ -64,6 +65,15 @@ export function parseContinuityFindings(result: TaskResult): ContinuityFinding[]
       evidence: typeof finding.evidence === 'string' ? finding.evidence : undefined,
     }
   })
+}
+
+function normalizeContinuityFindings(value: unknown): unknown {
+  if (Array.isArray(value)) return value
+  if (value && typeof value === 'object') {
+    const findings = (value as Record<string, unknown>).findings
+    if (Array.isArray(findings)) return findings
+  }
+  return value
 }
 
 export function parseDistilledFacts(result: TaskResult): DistilledStoryFacts {

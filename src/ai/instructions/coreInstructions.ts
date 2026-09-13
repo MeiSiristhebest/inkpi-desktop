@@ -22,8 +22,9 @@ const DEFINITIONS: DesktopInstructionDefinition[] = [
   {
     id: 'narrative.continuity.audit',
     taskKind: 'narrative.continuity.audit',
-    version: '3',
-    systemInstruction: 'Audit the supplied narrative context for continuity risks and return structured findings with evidence.',
+    version: '4',
+    systemInstruction:
+      'Audit the supplied narrative context for continuity risks. Return only a top-level JSON array of finding objects, never an object wrapper such as {"findings":[...]}. Each finding must contain severity (info, warning, or error) and description (string); id, entityIds, blockIds, and evidence are optional.',
   },
   {
     id: 'narrative.deep.reason',

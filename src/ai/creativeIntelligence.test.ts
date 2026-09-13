@@ -21,6 +21,7 @@ import {
   requirePatchResult,
   requireTextResult,
 } from './index'
+import { listCoreInstructionDefinitions } from './instructions/coreInstructions'
 
 const document = {
   documentId: 'chapter-1',
@@ -88,6 +89,40 @@ describe('Creative Intelligence Layer', () => {
         },
       }),
     ).toHaveLength(1)
+    expect(
+      parseContinuityFindings({
+        taskId: 't',
+        kind: CREATIVE_TASK_KINDS.continuityAudit,
+        status: 'completed',
+        output: {
+          format: 'structured',
+          data: { findings: [{ severity: 'error', description: '时间线冲突' }] },
+        },
+      }),
+    ).toEqual([
+      {
+        id: 'finding-0',
+        severity: 'error',
+        description: '时间线冲突',
+        entityIds: undefined,
+        blockIds: undefined,
+        evidence: undefined,
+      },
+    ])
+    expect(() =>
+      parseContinuityFindings({
+        taskId: 't',
+        kind: CREATIVE_TASK_KINDS.continuityAudit,
+        status: 'completed',
+        output: { format: 'structured', data: { findings: { value: 'not-an-array' } } },
+      }),
+    ).toThrow('Continuity audit output must be an array')
+    const continuityInstruction = listCoreInstructionDefinitions().find(
+      (definition) => definition.taskKind === CREATIVE_TASK_KINDS.continuityAudit,
+    )
+    expect(continuityInstruction).toMatchObject({ version: '4' })
+    expect(continuityInstruction?.systemInstruction).toContain('top-level JSON array')
+    expect(continuityInstruction?.systemInstruction).toContain('never an object wrapper')
     expect(
       parseDeepReasoning({
         taskId: 't',
