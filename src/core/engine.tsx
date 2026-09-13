@@ -1,11 +1,10 @@
-import { useState, useEffect, Suspense, type FC, type ReactNode } from 'react'
+import { useState, useEffect, useRef, Suspense, type FC, type ReactNode } from 'react'
 import {
   PanelRight,
   Maximize2,
   Minimize2,
   Home,
   PanelLeftOpen,
-  PanelLeftClose,
   Sparkles,
 } from 'lucide-react'
 import { RichEditor, type RichEditorProps } from '../components/editor/RichEditor'
@@ -117,11 +116,24 @@ export const Engine: FC<EngineProps> = ({
   const [activeTabId, setActiveTabId] = useState<string>('editor')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(true)
+  const compactViewportRef = useRef(false)
   const [rightOpen, setRightOpen] = useState(defaultRightOpen)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const [isTypewriter, setIsTypewriter] = useState(false)
   const [stats, setStats] = useState<Stats>({ wordCount: 0 })
+
+  useEffect(() => {
+    const handleViewportResize = () => {
+      const isCompactViewport = window.innerWidth <= 1100
+      if (isCompactViewport === compactViewportRef.current) return
+      compactViewportRef.current = isCompactViewport
+      setLeftOpen(!isCompactViewport)
+    }
+
+    window.addEventListener('resize', handleViewportResize)
+    return () => window.removeEventListener('resize', handleViewportResize)
+  }, [])
 
   // 右侧 AI 助手面板宽度可调：默认 340px，最小 260px，最大 520px，方向 right（向左拖加宽）
   const {
@@ -185,8 +197,6 @@ export const Engine: FC<EngineProps> = ({
     },
     isRightOpen: rightOpen,
     hasAssistant: Boolean(onOpenAssistant),
-    isNavOpen: leftOpen,
-    onToggleNav: () => setLeftOpen((o) => !o),
   }
 
   // 视图渲染分发：以注册表替代 if 链（OCP，§3.1）
@@ -239,6 +249,7 @@ export const Engine: FC<EngineProps> = ({
   return (
     <div
       data-testid="project-engine-root"
+      data-nav-open={leftOpen}
       className="project-engine-root relative h-screen w-screen flex overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)]"
     >
       {/* 42 模块与全景侧边栏 */}
@@ -253,21 +264,17 @@ export const Engine: FC<EngineProps> = ({
         />
       )}
 
-      {/* 窄屏时不保留整条导航栏，只保留一个可展开/收起的按钮。 */}
-      {!isFullscreen && !focusMode && (
+      {/* 侧栏收起后只保留这一个全局展开按钮，避免与编辑器工具栏重复。 */}
+      {!isFullscreen && !focusMode && !leftOpen && (
         <button
           type="button"
           data-testid="sidebar-nav-compact-toggle"
-          aria-label={leftOpen ? '收起导航' : '展开导航'}
-          title={leftOpen ? '收起侧栏' : '展开侧栏'}
-          onClick={() => setLeftOpen((open) => !open)}
+          aria-label="展开导航"
+          title="展开侧栏"
+          onClick={() => setLeftOpen(true)}
           className="sidebar-nav-compact-toggle items-center justify-center w-7 h-7 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
         >
-          {leftOpen ? (
-            <PanelLeftClose className="w-4 h-4" />
-          ) : (
-            <PanelLeftOpen className="w-4 h-4" />
-          )}
+          <PanelLeftOpen className="w-4 h-4" />
         </button>
       )}
 
@@ -277,12 +284,6 @@ export const Engine: FC<EngineProps> = ({
         {!isEditor && (
           <header className="h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)]">
             <div className="flex items-center gap-1 min-w-0">
-              {/* 侧边栏展开图标（收起时紧贴小房子图标旁边，完全不占独立侧栏列宽） */}
-              {!isFullscreen && !focusMode && !leftOpen && (
-                <IconButton onClick={() => setLeftOpen(true)} title="展开导航">
-                  <PanelLeftOpen className="w-4 h-4" />
-                </IconButton>
-              )}
               {onHome && (
                 <IconButton onClick={onHome} title="返回作品库">
                   <Home className="w-4 h-4" />

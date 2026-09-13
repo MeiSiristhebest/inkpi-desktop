@@ -72,21 +72,21 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.getByText('InkPi')).toBeInTheDocument()
     fireEvent.click(screen.getByTitle('收起导航'))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('展开导航'))
+    fireEvent.click(screen.getByTestId('sidebar-nav-compact-toggle'))
     expect(screen.getByText('InkPi')).toBeInTheDocument()
   })
 
   it('keeps one compact navigation toggle when the left panel is collapsed', () => {
     render(<Engine projectId="p1" />)
-    const compactToggle = screen.getByTestId('sidebar-nav-compact-toggle')
-    expect(compactToggle).toHaveAttribute('aria-label', '收起导航')
-
-    fireEvent.click(compactToggle)
+    expect(screen.queryByTestId('sidebar-nav-compact-toggle')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('收起导航'))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
+    const compactToggle = screen.getByTestId('sidebar-nav-compact-toggle')
     expect(compactToggle).toHaveAttribute('aria-label', '展开导航')
 
     fireEvent.click(compactToggle)
     expect(screen.getByText('InkPi')).toBeInTheDocument()
+    expect(screen.queryByTestId('sidebar-nav-compact-toggle')).not.toBeInTheDocument()
   })
 
   it('toggles the right info panel', () => {
@@ -196,7 +196,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
     fireEvent.click(screen.getByTitle('收起导航'))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
     // 窄边栏上的展开按钮可重新唤出
-    fireEvent.click(screen.getByTitle('展开导航'))
+    fireEvent.click(screen.getByTestId('sidebar-nav-compact-toggle'))
     expect(screen.getByText('InkPi')).toBeInTheDocument()
   })
 

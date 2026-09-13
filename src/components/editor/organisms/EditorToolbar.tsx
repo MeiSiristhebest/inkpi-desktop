@@ -51,8 +51,6 @@ interface EditorToolbarProps {
   onToggleRightPanel?: () => void
   isRightOpen?: boolean
   hasAssistant?: boolean
-  isNavOpen?: boolean
-  onToggleNav?: () => void
   showReferencesSidebar?: boolean
   onToggleReferencesSidebar?: () => void
   entityHighlightEnabled?: boolean
@@ -71,8 +69,6 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onToggleRightPanel,
   isRightOpen = false,
   hasAssistant = false,
-  isNavOpen = true,
-  onToggleNav,
   showReferencesSidebar = false,
   onToggleReferencesSidebar,
   entityHighlightEnabled = true,
@@ -115,13 +111,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       ref={toolbarRef}
       className="editor-toolbar h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] relative select-none"
     >
-      {/* 左侧：返回作品库 + 导航展开 + 翻章导航 + 目录展开 + 章节标题输入 + 状态选择器 */}
+      {/* 左侧：返回作品库 + 翻章导航 + 目录展开 + 章节标题输入 + 状态选择器 */}
       <div className="editor-toolbar-left flex items-center gap-1.5 min-w-0 flex-1">
-        {onToggleNav && !isNavOpen && (
-          <IconButton onClick={onToggleNav} title="展开导航" className="editor-toolbar-nav-toggle">
-            <PanelLeftOpen className="w-4 h-4" />
-          </IconButton>
-        )}
         {onHome && (
           <IconButton onClick={onHome} title="返回作品库">
             <Home className="w-4 h-4" />

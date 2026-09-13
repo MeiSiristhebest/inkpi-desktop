@@ -74,8 +74,6 @@ export interface RichEditorProps {
   onToggleRightPanel?: () => void
   isRightOpen?: boolean
   hasAssistant?: boolean
-  isNavOpen?: boolean
-  onToggleNav?: () => void
 }
 
 /**
@@ -103,8 +101,6 @@ export const RichEditor: FC<RichEditorProps> = ({
   onToggleRightPanel,
   isRightOpen = false,
   hasAssistant,
-  isNavOpen = true,
-  onToggleNav,
 }) => {
   const editorRef = useRef<any>(null)
   const canvasRef = useRef<HTMLDivElement | null>(null)
@@ -562,8 +558,6 @@ export const RichEditor: FC<RichEditorProps> = ({
             onToggleRightPanel={onToggleRightPanel}
             isRightOpen={isRightOpen}
             hasAssistant={hasAssistant ?? Boolean(onOpenAssistant)}
-            isNavOpen={isNavOpen}
-            onToggleNav={onToggleNav}
             showReferencesSidebar={showReferencesSidebar}
             onToggleReferencesSidebar={() => setShowReferencesSidebar((v) => !v)}
             entityHighlightEnabled={entityHighlightEnabled}
