@@ -246,6 +246,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(within(footer).getAllByText(/^全书 /)).toHaveLength(1)
     expect(within(footer).getAllByText('已连接', { exact: true })).toHaveLength(1)
     expect(within(footer).getAllByText('已保存', { exact: true })).toHaveLength(1)
+    expect(within(footer).queryByRole('button', { name: '采纳续写建议' })).not.toBeInTheDocument()
     expect(screen.getByTestId('editor-chapter-progress')).toHaveTextContent(
       /^本章 \d+ \/ 3,000 字$/,
     )

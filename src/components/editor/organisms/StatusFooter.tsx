@@ -20,6 +20,7 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
   onReconnect,
 }) => {
   const { chapterWords, wordTarget, totalWords, ghostText, isSaved, actions } = model
+  const hasGhostText = ghostText.trim().length > 0
   const connectionLabel = isConnected ? '已连接' : isReconnecting ? '连接中…' : '离线'
   const connectionDescription = isConnected
     ? '已连接 InkPi Daemon，点击重连'
@@ -73,7 +74,7 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
       </div>
 
       <div className="editor-status-secondary min-w-max flex items-center gap-3 shrink-0">
-        {ghostText && (
+        {hasGhostText && (
           <button
             type="button"
             onClick={() => actions.acceptGhostText()}
