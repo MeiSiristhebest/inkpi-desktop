@@ -35,6 +35,24 @@ import {
 import { inkpiDaemonGateway } from '../src/adapters/inkpiDaemonGateway'
 import { IndexedDbDomainChangeStore } from '../src/adapters/indexedDbDomainChangeStore'
 import { IndexedDbTaskRecoveryStore } from '../src/db/taskRecoveryStore'
+import {
+  semanticDocumentFromHtml,
+  semanticDocumentFromProseMirror,
+  semanticDocumentFromText,
+} from '../src/domain/content'
+import {
+  assertStoryState,
+  createNarrativePromise,
+  createProvenance,
+  createStoryEntity,
+  createStoryEvent,
+  createStoryState,
+  deserializeStoryState,
+  serializeStoryState,
+  upsertEntity,
+  upsertEvent,
+  upsertPromise,
+} from '../src/domain/story'
 import { createDomainChangeSet } from '../src/domain/sync/domainChangeSet'
 import { DomainSyncService } from '../src/domain/sync/domainSyncService'
 import type { RpcClient } from '../src/ports/aiGateway'
@@ -237,6 +255,7 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
         expect(activated.instructions?.map((instruction) => instruction.id).sort()).toEqual(
           [...FIRST_PARTY_SKILL_IDS].map((skillId) => `skill.${skillId}`).sort(),
         )
+        assertPackagedCanonicalBoundaries()
         await assertPackagedRuntimeRegistrations(first.client)
         await assertPackagedStateBoundaries(first.client)
         await assertPackagedProposalCas(first.client)
@@ -779,6 +798,94 @@ async function assertPackagedProposalCas(client: RpcClient): Promise<void> {
       expect.objectContaining({ id: stale.id, status: 'committed', committedRevision: 6 }),
     ]),
   )
+}
+
+function assertPackagedCanonicalBoundaries(): void {
+  const documentId = `packaged-canonical-document-${Date.now()}`
+  const proseMirror = semanticDocumentFromProseMirror(documentId, {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        attrs: { id: 'packaged-paragraph' },
+        content: [
+          { type: 'text', text: '甲' },
+          { type: 'text', text: '乙', marks: [{ type: 'bold' }] },
+          { type: 'hardBreak' },
+          { type: 'text', text: '丙' },
+        ],
+      },
+    ],
+  }, 4)
+  expect(proseMirror).toMatchObject({
+    documentId,
+    revision: 4,
+    representation: 'prosemirror-json',
+    text: '甲乙\n丙',
+  })
+  expect(proseMirror.blocks).toHaveLength(1)
+  const semanticPoint = proseMirror.sourceMap.semanticToEditor(1)
+  expect(
+    proseMirror.sourceMap.editorToSemantic({ from: semanticPoint.from, to: semanticPoint.to }),
+  ).toBe(1)
+
+  const html = semanticDocumentFromHtml(`${documentId}-html`, '<p>甲<strong>乙</strong><br>丙</p>')
+  expect(html).toMatchObject({ representation: 'html', text: '甲乙\n丙' })
+  const htmlTextFrom = '<p>甲<strong>乙</strong><br>丙</p>'.indexOf('甲')
+  expect(
+    html.sourceMap.editorRangeToSemantic({ from: htmlTextFrom, to: htmlTextFrom + 1 }),
+  ).toEqual({ from: 0, to: 1 })
+
+  const plain = semanticDocumentFromText(`${documentId}-text`, '第一段\n\n第三段')
+  expect(plain).toMatchObject({ representation: 'text', text: '第一段\n\n第三段' })
+  expect(plain.blocks).toHaveLength(3)
+
+  const provenance = createProvenance({
+    sourceType: 'author',
+    factLevel: 'canonical-fact',
+    sourceDocumentId: documentId,
+    sourceBlockId: proseMirror.blocks[0].id,
+    sourceRevision: 4,
+    confidence: 1,
+    evidence: [{ documentId, blockId: proseMirror.blocks[0].id, semanticFrom: 0, semanticTo: 4 }],
+  })
+  const entity = createStoryEntity({
+    id: 'packaged-entity-hero',
+    kind: 'character',
+    name: 'Hero',
+    aliases: ['主角'],
+    attributes: { role: 'protagonist' },
+    provenance,
+  })
+  const event = createStoryEvent({
+    id: 'packaged-event-arrival',
+    type: 'arrival',
+    occurredAt: 4,
+    entityIds: [entity.id],
+    provenance,
+  })
+  const promise = createNarrativePromise({
+    id: 'packaged-promise-door',
+    statement: 'The door will open.',
+    status: 'open',
+    introducedAt: 4,
+    evidence: [{ documentId, semanticFrom: 0, semanticTo: 4 }],
+    provenance,
+  })
+  const storyState = upsertPromise(
+    upsertEvent(upsertEntity(createStoryState(4), entity), event),
+    promise,
+  )
+  assertStoryState(storyState)
+  expect(storyState).toMatchObject({
+    revision: 4,
+    entities: { [entity.id]: entity },
+    events: { [event.id]: event },
+    promises: { [promise.id]: promise },
+  })
+  const serialized = serializeStoryState(storyState)
+  expect(deserializeStoryState(serialized)).toEqual(storyState)
+  expect(serializeStoryState(deserializeStoryState(serialized))).toBe(serialized)
 }
 
 async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
