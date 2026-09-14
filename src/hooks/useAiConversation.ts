@@ -168,6 +168,7 @@ export function useAiConversation(
     new Map<string, { projectId?: string; controller: AbortController; task: AiTask }>(),
   )
   const recoveryRecordsRef = useRef<TaskRecoveryRecord[]>([])
+  const recoveryPersistenceQueueRef = useRef(new Map<string, Promise<void>>())
 
   const [aiPanelOpen, setAiPanelOpen] = useState(initialPanelOpen)
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
@@ -201,26 +202,41 @@ export function useAiConversation(
     [replaceRecoveryRecords],
   )
 
-  const persistRecoveryRecord = useCallback(
-    (record: TaskRecoveryRecord) => {
-      void taskStore.save(record).catch((error: unknown) => {
+  const enqueueRecoveryPersistence = useCallback(
+    (record: TaskRecoveryRecord, operation: () => Promise<void>) => {
+      const key = `${record.projectId}:${record.task.id}`
+      const previous = recoveryPersistenceQueueRef.current.get(key) ?? Promise.resolve()
+      let next: Promise<void>
+      next = previous
+        .catch(() => undefined)
+        .then(operation)
+        .finally(() => {
+          if (recoveryPersistenceQueueRef.current.get(key) === next) {
+            recoveryPersistenceQueueRef.current.delete(key)
+          }
+        })
+      recoveryPersistenceQueueRef.current.set(key, next)
+      void next.catch((error: unknown) => {
         if (mountedRef.current && record.projectId === workspaceIdRef.current) {
           setTaskRecoveryError(error instanceof Error ? error.message : String(error))
         }
       })
     },
-    [taskStore],
+    [],
+  )
+
+  const persistRecoveryRecord = useCallback(
+    (record: TaskRecoveryRecord) => {
+      enqueueRecoveryPersistence(record, () => taskStore.save(record))
+    },
+    [enqueueRecoveryPersistence, taskStore],
   )
 
   const removePersistedRecoveryRecord = useCallback(
     (record: TaskRecoveryRecord) => {
-      void taskStore.remove(record.projectId, record.task.id).catch((error: unknown) => {
-        if (mountedRef.current && record.projectId === workspaceIdRef.current) {
-          setTaskRecoveryError(error instanceof Error ? error.message : String(error))
-        }
-      })
+      enqueueRecoveryPersistence(record, () => taskStore.remove(record.projectId, record.task.id))
     },
-    [taskStore],
+    [enqueueRecoveryPersistence, taskStore],
   )
 
   const trackTaskSnapshot = useCallback(

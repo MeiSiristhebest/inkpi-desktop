@@ -155,13 +155,13 @@ describe('Creative Intelligence Layer', () => {
         const status = statuses[Math.min(calls++, statuses.length - 1)]
         return {
           taskId: 't',
-          kind: 'test',
+          kind: CREATIVE_TASK_KINDS.continue,
           status,
           result:
             status === 'completed'
               ? {
                   taskId: 't',
-                  kind: 'test',
+                  kind: CREATIVE_TASK_KINDS.continue,
                   status: 'completed' as const,
                   output: { format: 'text' as const, text: 'ok' },
                 }
@@ -175,6 +175,75 @@ describe('Creative Intelligence Layer', () => {
     )
     expect(result.status).toBe('completed')
     expect(calls).toBe(2)
+  })
+
+  it('rejects mismatched task identities before accepting a Runtime response', async () => {
+    const gateway = {
+      submitTask: async () => ({ taskId: 'other-task', status: 'queued' as const }),
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
+      getTaskStatus: async () => ({
+        taskId: 't',
+        kind: CREATIVE_TASK_KINDS.continue,
+        status: 'completed' as const,
+      }),
+    }
+
+    await expect(
+      new CreativeIntelligence(gateway).run(createContinueTask({ taskId: 't', document }), {
+        pollIntervalMs: 0,
+      }),
+    ).rejects.toThrow('Task submit identity mismatch')
+  })
+
+  it('rejects a status snapshot belonging to another task', async () => {
+    const gateway = {
+      submitTask: async (task: AiTask) => ({ taskId: task.id, status: 'queued' as const }),
+      cancelTask: async (taskId: string) => ({
+        taskId,
+        cancelled: true,
+        status: 'cancelled' as const,
+      }),
+      getTaskStatus: async () => ({
+        taskId: 'other-task',
+        kind: CREATIVE_TASK_KINDS.continue,
+        status: 'completed' as const,
+      }),
+    }
+
+    await expect(
+      new CreativeIntelligence(gateway).run(createContinueTask({ taskId: 't', document }), {
+        pollIntervalMs: 0,
+      }),
+    ).rejects.toThrow('Task status identity mismatch')
+  })
+
+  it('cancels and fails a task that exceeds its polling timeout', async () => {
+    const cancelTask = vi.fn(async (taskId: string) => ({
+      taskId,
+      cancelled: true,
+      status: 'cancelled' as const,
+    }))
+    const gateway = {
+      submitTask: async (task: AiTask) => ({ taskId: task.id, status: 'queued' as const }),
+      cancelTask,
+      getTaskStatus: async (taskId: string) => ({
+        taskId,
+        kind: CREATIVE_TASK_KINDS.continue,
+        status: 'running' as const,
+      }),
+    }
+
+    await expect(
+      new CreativeIntelligence(gateway).run(
+        createContinueTask({ taskId: 'timeout-task', document }),
+        { pollIntervalMs: 0, timeoutMs: 5 },
+      ),
+    ).rejects.toMatchObject({ name: 'TimeoutError' })
+    expect(cancelTask).toHaveBeenCalledWith('timeout-task')
   })
 
   it('routes task execution, reuses cache hits, and invalidates on project revision', async () => {

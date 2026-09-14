@@ -3,6 +3,7 @@ import type {
   TaskCancelResult,
   TaskExecutionSnapshot,
   TaskResult,
+  TaskStatus,
   TaskStatusSnapshot,
   TaskSubmitResult,
 } from '@inkpi/protocol'
@@ -61,6 +62,8 @@ export interface CreativeTaskGateway {
 export interface RunTaskOptions {
   signal?: AbortSignal
   pollIntervalMs?: number
+  /** Maximum time spent waiting for a terminal task result. */
+  timeoutMs?: number
   onProgress?: (snapshot: TaskStatusSnapshot) => void
   artifactId?: string
   artifactType?: string
@@ -163,14 +166,22 @@ export class CreativeIntelligence {
     }
 
     const routedTask = attachRouteMetadata(effectiveTask, decision, cacheKey)
-    await this.gateway.submitTask(routedTask)
+    const timeoutMs = resolveTaskTimeout(task, options.timeoutMs)
+    const deadline = Date.now() + timeoutMs
+    const submitResult = await this.gateway.submitTask(routedTask)
+    assertTaskSubmitResult(submitResult, task)
     const pollIntervalMs = options.pollIntervalMs ?? 100
     while (true) {
       if (options.signal?.aborted) {
         await this.gateway.cancelTask(task.id)
         throw abortError()
       }
+      if (Date.now() >= deadline) {
+        await cancelAfterTimeout(this.gateway, task.id)
+        throw taskTimeoutError(task.id, timeoutMs)
+      }
       const snapshot = await this.gateway.getTaskStatus(task.id)
+      assertTaskStatusSnapshot(snapshot, task)
       options.onProgress?.(snapshot)
       if (isTerminal(snapshot.status)) {
         const terminalResult = snapshot.result ?? fallbackTerminalResult(effectiveTask, snapshot)
@@ -180,7 +191,7 @@ export class CreativeIntelligence {
         if (persisted.status === 'completed') this.writeCached(effectiveTask, cacheKey, persisted)
         return persisted
       }
-      await delay(pollIntervalMs, options.signal)
+      await delay(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())), options.signal)
     }
   }
 
@@ -597,6 +608,86 @@ function isTerminal(status: TaskStatusSnapshot['status']): boolean {
     status === 'failed' ||
     status === 'cancelled'
   )
+}
+
+const TASK_STATUSES: readonly TaskStatus[] = [
+  'created',
+  'queued',
+  'running',
+  'checkpointed',
+  'waiting-user',
+  'interrupted',
+  'completed',
+  'failed',
+  'cancelled',
+]
+
+const DEFAULT_INTERACTIVE_TIMEOUT_MS = 2 * 60 * 1000
+const DEFAULT_BACKGROUND_TIMEOUT_MS = 15 * 60 * 1000
+
+function isTaskStatus(value: unknown): value is TaskStatus {
+  return typeof value === 'string' && TASK_STATUSES.includes(value as TaskStatus)
+}
+
+function assertTaskSubmitResult(result: TaskSubmitResult, task: AiTask): void {
+  if (result?.taskId !== task.id) {
+    throw new Error(
+      `Task submit identity mismatch: expected ${task.id}, received ${result?.taskId}`,
+    )
+  }
+  if (!isTaskStatus(result.status)) {
+    throw new Error(`Task ${task.id} returned an invalid submit status`)
+  }
+}
+
+function assertTaskStatusSnapshot(snapshot: TaskStatusSnapshot, task: AiTask): void {
+  if (snapshot?.taskId !== task.id) {
+    throw new Error(
+      `Task status identity mismatch: expected ${task.id}, received ${snapshot?.taskId}`,
+    )
+  }
+  if (snapshot.kind !== task.kind) {
+    throw new Error(
+      `Task status kind mismatch for ${task.id}: expected ${task.kind}, received ${snapshot.kind}`,
+    )
+  }
+  if (!isTaskStatus(snapshot.status)) {
+    throw new Error(`Task ${task.id} returned an invalid status snapshot`)
+  }
+  if (
+    snapshot.result &&
+    (snapshot.result.taskId !== task.id || snapshot.result.kind !== task.kind)
+  ) {
+    throw new Error(`Task result identity mismatch for ${task.id}`)
+  }
+}
+
+function resolveTaskTimeout(task: AiTask, requestedTimeoutMs?: number): number {
+  const configuredTimeout = requestedTimeoutMs ?? task.executionPolicy?.timeoutMs
+  if (configuredTimeout !== undefined) {
+    if (!Number.isFinite(configuredTimeout) || configuredTimeout <= 0) {
+      throw new Error('Task timeoutMs must be a finite number greater than zero')
+    }
+    return configuredTimeout
+  }
+  const mode = task.executionPolicy?.mode ?? task.executionPolicy?.scheduling
+  return mode === 'background' || mode === 'batch'
+    ? DEFAULT_BACKGROUND_TIMEOUT_MS
+    : DEFAULT_INTERACTIVE_TIMEOUT_MS
+}
+
+async function cancelAfterTimeout(gateway: CreativeTaskGateway, taskId: string): Promise<void> {
+  try {
+    await gateway.cancelTask(taskId)
+  } catch {
+    // The timeout is still the primary failure; cancellation is best effort.
+  }
+}
+
+function taskTimeoutError(taskId: string, timeoutMs: number): Error {
+  const error = new Error(`Task ${taskId} timed out after ${timeoutMs}ms`)
+  error.name = 'TimeoutError'
+  return error
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {

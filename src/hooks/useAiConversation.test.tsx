@@ -240,6 +240,58 @@ describe('useAiConversation task recovery', () => {
     hook.unmount()
   })
 
+  it('serializes recovery writes so a completed task cannot be resurrected by a late save', async () => {
+    const task = makeTask('late-save-task')
+    const records = new Map<string, TaskRecoveryRecord>()
+    const operationOrder: string[] = []
+    let releaseSave!: () => void
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const store: TaskRecoveryStore & { records: Map<string, TaskRecoveryRecord> } = {
+      records,
+      list: vi.fn(async () => []),
+      save: vi.fn(async (record: TaskRecoveryRecord) => {
+        operationOrder.push('save')
+        await saveGate
+        records.set(record.task.id, record)
+      }),
+      remove: vi.fn(async (_projectId: string, taskId: string) => {
+        operationOrder.push('remove')
+        records.delete(taskId)
+      }),
+    }
+    const assistant = makeAssistant(
+      vi.fn(async () => ({
+        taskId: task.id,
+        kind: task.kind,
+        status: 'completed' as const,
+        output: { format: 'text' as const, text: 'done' },
+      })),
+    )
+    connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
+
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    await act(async () => {
+      await expect(hook.result.current.runAiTask(task)).resolves.toMatchObject({
+        status: 'completed',
+      })
+    })
+    await waitFor(() => expect(store.save).toHaveBeenCalledOnce())
+    releaseSave()
+    await waitFor(() => expect(store.remove).toHaveBeenCalledOnce())
+
+    expect(operationOrder).toEqual(['save', 'remove'])
+    expect(store.records.has(task.id)).toBe(false)
+    hook.unmount()
+  })
+
   it('tracks convenience vertical-slice tasks in the same recovery store', async () => {
     const taskId = 'deep-reasoning-recovery-task'
     const store = makeStore()
