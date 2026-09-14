@@ -1,11 +1,8 @@
-import {
-  calculateDomainChangeSetChecksum,
-  type DomainChange,
-  type DomainChangeSet,
-} from '@inkpi/protocol'
+import type { DomainChange, DomainChangeSet } from '@inkpi/protocol'
 import type { StoryState } from './storyState'
 import { assertStoryState, createStoryState, withStoryRevision } from './storyState'
 import { deserializeStoryState, serializeStoryState } from './storyStateSerialization'
+import { assertDomainChangeSet } from '../sync/domainChangeSet'
 
 export interface StoryStateProjection {
   /** DomainChangeSet cursor; separate from StoryState's semantic revision. */
@@ -215,7 +212,7 @@ function isFullStoryStateAggregate(aggregateType: string): boolean {
 function assertProjection(projection: StoryStateProjection): void {
   if (
     !projection ||
-    !Number.isInteger(projection.domainRevision) ||
+    !Number.isSafeInteger(projection.domainRevision) ||
     projection.domainRevision < 0
   ) {
     throw new Error('StoryState projection has an invalid domain revision')
@@ -224,37 +221,15 @@ function assertProjection(projection: StoryStateProjection): void {
 }
 
 function assertChangeSet(changeSet: DomainChangeSet): void {
-  if (
-    typeof changeSet.id !== 'string' ||
-    typeof changeSet.workspaceId !== 'string' ||
-    typeof changeSet.sourceDeviceId !== 'string' ||
-    !changeSet.id.trim() ||
-    !changeSet.workspaceId.trim() ||
-    !changeSet.sourceDeviceId.trim() ||
-    !Number.isSafeInteger(changeSet.baseRevision) ||
-    changeSet.baseRevision < 0 ||
-    !Number.isSafeInteger(changeSet.revision) ||
-    changeSet.revision !== changeSet.baseRevision + 1 ||
-    !Array.isArray(changeSet.changes)
-  ) {
-    throw new Error('StoryState DomainChangeSet has invalid revision or identifiers')
-  }
-  const { checksum: _checksum, ...unsigned } = changeSet
-  if (calculateDomainChangeSetChecksum(unsigned) !== changeSet.checksum) {
-    throw new Error(`StoryState DomainChangeSet checksum mismatch: ${changeSet.id}`)
-  }
-  for (const change of changeSet.changes) {
-    if (
-      !change.id.trim() ||
-      !change.aggregateType.trim() ||
-      !change.aggregateId.trim() ||
-      (change.operation !== 'upsert' && change.operation !== 'delete') ||
-      !Number.isSafeInteger(change.revision) ||
-      change.revision < 0 ||
-      !Number.isFinite(change.occurredAt)
-    ) {
-      throw new Error(`StoryState DomainChange has invalid coordinates: ${changeSet.id}`)
-    }
+  try {
+    assertDomainChangeSet(changeSet)
+  } catch (error) {
+    throw new Error(
+      `StoryState DomainChangeSet is invalid: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error },
+    )
   }
 }
 

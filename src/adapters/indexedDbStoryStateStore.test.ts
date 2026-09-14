@@ -5,6 +5,7 @@ import {
   createStoryState,
   upsertEntity,
   type StoryState,
+  serializeStoryState,
   withStoryRevision,
 } from '../domain/story'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
@@ -69,6 +70,12 @@ describe('IndexedDbStoryStateStore', () => {
       revision: 1,
       payload: next,
     })
+    expect(
+      (await db.get<{ value: unknown }>(
+        'settingsKV',
+        `storyState::${encodeURIComponent(workspaceId)}`,
+      ))?.value,
+    ).toBe(serializeStoryState(next))
   })
 
   it('serializes concurrent saves and rejects a stale StoryState revision', async () => {

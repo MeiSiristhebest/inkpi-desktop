@@ -50,10 +50,13 @@ export class IndexedDbStoryStateStore implements StoryStateStore {
         payload: deserializeStoryState(serialized),
         occurredAt,
         aggregateRevision: state.revision,
-      })
-      await db.put<StoryStateRecord>('settingsKV', {
-        key: toKey(workspaceId),
-        value: serialized,
+        aggregate: {
+          store: 'settingsKV',
+          key: toKey(workspaceId),
+          operation: 'upsert',
+          value: { key: toKey(workspaceId), value: serialized },
+          expected: existing,
+        },
       })
     })
   }
@@ -73,8 +76,13 @@ export class IndexedDbStoryStateStore implements StoryStateStore {
         payload: undefined,
         occurredAt,
         aggregateRevision: existingState.revision + 1,
+        aggregate: {
+          store: 'settingsKV',
+          key: toKey(workspaceId),
+          operation: 'delete',
+          expected: existing,
+        },
       })
-      await db.delete('settingsKV', toKey(workspaceId))
     })
   }
 }

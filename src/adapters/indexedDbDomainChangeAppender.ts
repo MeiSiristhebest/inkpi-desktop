@@ -1,7 +1,10 @@
 import type { DomainChangeSet } from '@inkpi/protocol'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
-import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
+import {
+  IndexedDbDomainChangeStore,
+  type IndexedDbAggregateWrite,
+} from './indexedDbDomainChangeStore'
 
 export interface AppendIndexedDbDomainChangeInput {
   aggregateType: string
@@ -11,6 +14,8 @@ export interface AppendIndexedDbDomainChangeInput {
   payload: unknown
   occurredAt: number
   aggregateRevision?: number
+  /** Optional authoritative aggregate mutation committed with the log entry. */
+  aggregate?: IndexedDbAggregateWrite
 }
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
@@ -44,7 +49,8 @@ export async function appendIndexedDbDomainChange(
       ],
       createdAt: input.occurredAt,
     })
-    await domainChangeStore.append(changeSet)
+    if (input.aggregate) await domainChangeStore.appendWithAggregate(changeSet, input.aggregate)
+    else await domainChangeStore.append(changeSet)
     domainChangeEvents.publish(input.workspaceId)
     return changeSet
   })

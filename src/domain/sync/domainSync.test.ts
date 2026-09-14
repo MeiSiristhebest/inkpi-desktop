@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DomainChange } from '@inkpi/protocol'
 import { db } from '../../db/indexedDB'
 import { IndexedDbDomainChangeStore } from '../../adapters/indexedDbDomainChangeStore'
-import { createDomainChangeSet } from './domainChangeSet'
+import { assertDomainChangeSet, createDomainChangeSet } from './domainChangeSet'
 
 const change: DomainChange = {
   id: 'change-1',
@@ -15,6 +15,30 @@ const change: DomainChange = {
 }
 
 describe('authoritative IndexedDB domain change log', () => {
+  it('validates inner changes and rejects duplicate change ids', () => {
+    const changeSet = createDomainChangeSet({
+      id: 'validated-set',
+      workspaceId: 'validated-workspace',
+      sourceDeviceId: 'desktop-a',
+      baseRevision: 0,
+      changes: [change],
+      createdAt: 1,
+    })
+
+    expect(() =>
+      assertDomainChangeSet({
+        ...changeSet,
+        changes: [changeSet.changes[0], { ...changeSet.changes[0] }],
+      }),
+    ).toThrow(/duplicate change id/i)
+    expect(() =>
+      assertDomainChangeSet({
+        ...changeSet,
+        changes: [{ ...changeSet.changes[0], occurredAt: Number.NaN }],
+      }),
+    ).toThrow(/occurredAt/i)
+  })
+
   it('appends ordered change sets and rejects stale writers', async () => {
     const store = new IndexedDbDomainChangeStore()
     const workspaceId = 'sync-workspace'

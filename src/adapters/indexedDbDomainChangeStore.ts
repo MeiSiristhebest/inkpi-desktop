@@ -1,15 +1,18 @@
 import {
-  calculateDomainChangeSetChecksum,
   type DomainProjectionSnapshot,
   type DomainChangeSet,
 } from '@inkpi/protocol'
 import { db } from '../db/indexedDB'
+import {
+  assertDomainChangeSet,
+  cloneDomainChangeSet,
+} from '../domain/sync/domainChangeSet'
 import type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'
 
 export type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'
 
 export interface IndexedDbAggregateWrite {
-  store: 'projects' | 'volumes' | 'chapters'
+  store: 'projects' | 'volumes' | 'chapters' | 'settingsKV'
   key: string
   operation: 'upsert' | 'delete'
   value?: unknown
@@ -22,21 +25,53 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
   async append(changeSet: DomainChangeSet): Promise<void> {
     const operation = this.appendQueue.then(async () => {
       assertValidChangeSet(changeSet)
-      const existing = await db.get<DomainChangeSet>('domainChangeSets', changeSet.id)
-      if (existing) {
-        assertValidChangeSet(existing)
-        if (existing.checksum === changeSet.checksum) return
-        throw new Error(`Domain change set id collision: ${changeSet.id}`)
-      }
-      const current = await this.latestRevision(changeSet.workspaceId)
-      if (changeSet.baseRevision !== current || changeSet.revision !== current + 1) {
-        throw new Error(
-          `Domain change revision conflict: expected base ${current}, received ${changeSet.baseRevision}`,
-        )
-      }
-      await db.put('domainChangeSets', {
-        ...changeSet,
-        changes: changeSet.changes.map((change) => ({ ...change })),
+      await db.runTransaction(['domainChangeSets'], (transaction, fail) => {
+        const store = transaction.objectStore('domainChangeSets')
+        const existingRequest = store.get(changeSet.id)
+        const allChangesRequest = store.getAll()
+        let existing: DomainChangeSet | undefined
+        let allChanges: DomainChangeSet[] | undefined
+        let existingLoaded = false
+        let allChangesLoaded = false
+        let finished = false
+
+        const finish = () => {
+          if (finished || !existingLoaded || !allChangesLoaded) return
+          finished = true
+          try {
+            if (existing) {
+              assertValidChangeSet(existing)
+              if (existing.checksum === changeSet.checksum) return
+              throw new Error(`Domain change set id collision: ${changeSet.id}`)
+            }
+            const workspaceChanges = allChanges!
+              .filter((record) => record.workspaceId === changeSet.workspaceId)
+              .sort((left, right) => left.revision - right.revision)
+            validateOrderedChangeSets(workspaceChanges, changeSet.workspaceId)
+            const current = workspaceChanges.at(-1)?.revision ?? 0
+            if (changeSet.baseRevision !== current || changeSet.revision !== current + 1) {
+              throw new Error(
+                `Domain change revision conflict: expected base ${current}, received ${changeSet.baseRevision}`,
+              )
+            }
+            store.put(cloneDomainChangeSet(changeSet))
+          } catch (error) {
+            fail(error)
+          }
+        }
+
+        existingRequest.onerror = () => fail(existingRequest.error)
+        existingRequest.onsuccess = () => {
+          existing = existingRequest.result as DomainChangeSet | undefined
+          existingLoaded = true
+          finish()
+        }
+        allChangesRequest.onerror = () => fail(allChangesRequest.error)
+        allChangesRequest.onsuccess = () => {
+          allChanges = (allChangesRequest.result as DomainChangeSet[]) ?? []
+          allChangesLoaded = true
+          finish()
+        }
       })
     })
     this.appendQueue = operation.catch(() => undefined)
@@ -131,8 +166,9 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
   }
 
   async list(workspaceId: string, afterRevision = 0): Promise<DomainChangeSet[]> {
-    if (!workspaceId.trim()) throw new Error('Domain change workspace id must not be empty')
-    if (!Number.isInteger(afterRevision) || afterRevision < 0)
+    if (typeof workspaceId !== 'string' || !workspaceId.trim())
+      throw new Error('Domain change workspace id must not be empty')
+    if (!Number.isSafeInteger(afterRevision) || afterRevision < 0)
       throw new Error('Invalid domain change cursor')
     const records = await db.getAll<DomainChangeSet>('domainChangeSets')
     const workspaceRecords = records.filter((record) => record.workspaceId === workspaceId)
@@ -157,7 +193,7 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
   }
 
   async restore(snapshot: DomainProjectionSnapshot): Promise<void> {
-    if (!snapshot.workspaceId.trim())
+    if (typeof snapshot.workspaceId !== 'string' || !snapshot.workspaceId.trim())
       throw new Error('Domain projection snapshot workspace id must not be empty')
     if (!Number.isInteger(snapshot.revision) || snapshot.revision < 0)
       throw new Error('Invalid domain projection revision')
@@ -199,26 +235,17 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
 }
 
 function assertValidChangeSet(changeSet: DomainChangeSet): void {
-  if (!changeSet.id.trim() || !changeSet.workspaceId.trim() || !changeSet.sourceDeviceId.trim()) {
-    throw new Error('Domain change set identifiers must not be empty')
-  }
-  if (
-    !Number.isInteger(changeSet.baseRevision) ||
-    changeSet.baseRevision < 0 ||
-    !Number.isInteger(changeSet.revision) ||
-    changeSet.revision !== changeSet.baseRevision + 1
-  ) {
-    throw new Error('Domain change set revisions are invalid')
-  }
-  const { checksum: _checksum, ...unsigned } = changeSet
-  if (calculateDomainChangeSetChecksum(unsigned) !== changeSet.checksum) {
-    throw new Error(`Corrupt domain change set checksum: ${changeSet.id}`)
-  }
+  assertDomainChangeSet(changeSet)
 }
 
 function validateOrderedChangeSets(changeSets: DomainChangeSet[], workspaceId: string): void {
+  const changeSetIds = new Set<string>()
   for (const [index, changeSet] of changeSets.entries()) {
     assertValidChangeSet(changeSet)
+    if (changeSetIds.has(changeSet.id)) {
+      throw new Error(`Domain projection contains duplicate change set id: ${changeSet.id}`)
+    }
+    changeSetIds.add(changeSet.id)
     if (
       changeSet.workspaceId !== workspaceId ||
       changeSet.revision !== index + 1 ||
@@ -230,19 +257,48 @@ function validateOrderedChangeSets(changeSets: DomainChangeSet[], workspaceId: s
 }
 
 function cloneChangeSet(changeSet: DomainChangeSet): DomainChangeSet {
-  return {
-    ...changeSet,
-    changes: changeSet.changes.map((change) => ({ ...change })),
-  }
+  return cloneDomainChangeSet(changeSet)
 }
 
 function assertAggregateWrite(aggregate: IndexedDbAggregateWrite): void {
-  if (!aggregate.key.trim()) throw new Error('IndexedDB aggregate key must not be empty')
+  if (
+    aggregate.store !== 'projects' &&
+    aggregate.store !== 'volumes' &&
+    aggregate.store !== 'chapters' &&
+    aggregate.store !== 'settingsKV'
+  ) {
+    throw new Error('IndexedDB aggregate store is invalid')
+  }
+  if (typeof aggregate.key !== 'string' || !aggregate.key.trim())
+    throw new Error('IndexedDB aggregate key must not be empty')
+  if (aggregate.operation !== 'upsert' && aggregate.operation !== 'delete') {
+    throw new Error('IndexedDB aggregate operation is invalid')
+  }
   if (aggregate.operation === 'upsert' && aggregate.value === undefined) {
     throw new Error('IndexedDB aggregate upsert requires a value')
+  }
+  if (aggregate.store === 'settingsKV' && aggregate.operation === 'upsert') {
+    if (!isRecord(aggregate.value) || aggregate.value.key !== aggregate.key) {
+      throw new Error('IndexedDB settingsKV aggregate value must use the aggregate key')
+    }
   }
 }
 
 function valuesEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
+  return stableSerialize(left) === stableSerialize(right)
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === undefined) return 'undefined'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? String(value)
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`
+  const record = value as Record<string, unknown>
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`)
+    .join(',')}}`
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

@@ -3,7 +3,7 @@ import type {
   DomainChangeSet,
   DomainProjectionApplyResult,
 } from '@inkpi/protocol'
-import { calculateDomainChangeSetChecksum } from '@inkpi/protocol'
+import { assertDomainChangeSet, cloneDomainChangeSet } from './domainChangeSet'
 import type { AuthoritativeDomainChangeStore } from './domainChangeStore'
 
 export interface DomainSyncRemote {
@@ -276,10 +276,7 @@ function aggregateKey(aggregateType: string, aggregateId: string): string {
 }
 
 function cloneChangeSet(changeSet: DomainChangeSet): DomainChangeSet {
-  return {
-    ...changeSet,
-    changes: changeSet.changes.map((change) => ({ ...change })),
-  }
+  return cloneDomainChangeSet(changeSet)
 }
 
 function assertValidSnapshot(
@@ -294,11 +291,12 @@ function assertValidSnapshot(
   }
   if (
     typeof value.revision !== 'number' ||
-    !Number.isInteger(value.revision) ||
+    !Number.isSafeInteger(value.revision) ||
     value.revision < 0 ||
     !Array.isArray(value.changeSets) ||
     typeof value.createdAt !== 'number' ||
-    !Number.isFinite(value.createdAt)
+    !Number.isSafeInteger(value.createdAt) ||
+    value.createdAt < 0
   ) {
     throw new Error('Remote domain snapshot has invalid revision or change sets')
   }
@@ -348,61 +346,20 @@ function assertValidChangeSet(
   workspaceId: string,
   source: string,
 ): asserts value is DomainChangeSet {
-  if (!isRecord(value)) throw new Error(`${source} is not an object`)
-  if (
-    typeof value.id !== 'string' ||
-    typeof value.workspaceId !== 'string' ||
-    typeof value.sourceDeviceId !== 'string' ||
-    !value.id.trim() ||
-    !value.workspaceId.trim() ||
-    !value.sourceDeviceId.trim()
-  ) {
-    throw new Error(`${source} has invalid identifiers`)
+  try {
+    assertDomainChangeSet(value)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    const category = detail.toLowerCase().includes('checksum') ? 'checksum mismatch' : 'invalid'
+    throw new Error(
+      `${source} ${category}: ${detail}`,
+      { cause: error },
+    )
   }
   if (value.workspaceId !== workspaceId) {
     throw new Error(
       `${source} workspace mismatch: expected ${workspaceId}, received ${value.workspaceId}`,
     )
-  }
-  if (
-    typeof value.baseRevision !== 'number' ||
-    typeof value.revision !== 'number' ||
-    !Number.isInteger(value.baseRevision) ||
-    value.baseRevision < 0 ||
-    !Number.isInteger(value.revision) ||
-    value.revision !== value.baseRevision + 1 ||
-    !Array.isArray(value.changes) ||
-    typeof value.checksum !== 'string' ||
-    !value.checksum ||
-    typeof value.createdAt !== 'number' ||
-    !Number.isFinite(value.createdAt)
-  ) {
-    throw new Error(`${source} has invalid revision, changes, or timestamp`)
-  }
-  for (const change of value.changes) {
-    if (
-      !isRecord(change) ||
-      typeof change.id !== 'string' ||
-      typeof change.aggregateType !== 'string' ||
-      typeof change.aggregateId !== 'string' ||
-      !change.id.trim() ||
-      !change.aggregateType.trim() ||
-      !change.aggregateId.trim() ||
-      (change.operation !== 'upsert' && change.operation !== 'delete') ||
-      typeof change.revision !== 'number' ||
-      !Number.isInteger(change.revision) ||
-      change.revision < 0 ||
-      typeof change.occurredAt !== 'number' ||
-      !Number.isFinite(change.occurredAt)
-    ) {
-      throw new Error(`${source} contains an invalid domain change`)
-    }
-  }
-
-  const changeSet = value as unknown as DomainChangeSet
-  const { checksum: _checksum, ...unsigned } = changeSet
-  if (calculateDomainChangeSetChecksum(unsigned) !== changeSet.checksum) {
-    throw new Error(`${source} checksum mismatch: ${changeSet.id}`)
   }
 }
 
