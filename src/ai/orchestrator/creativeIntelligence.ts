@@ -96,6 +96,11 @@ export interface CreativeIntelligenceOptions extends TaskCacheKeyDefaults {
   artifactIdGenerator?: ArtifactIdGenerator
 }
 
+interface InFlightTask {
+  identityKey: string
+  promise: Promise<TaskResult>
+}
+
 export class CreativeIntelligence {
   private readonly gateway: CreativeTaskGateway
   private readonly cache: ContextCache<TaskResult>
@@ -106,6 +111,7 @@ export class CreativeIntelligence {
   private readonly cacheKeyDefaults: TaskCacheKeyDefaults
   private readonly artifactRuntime: ArtifactRuntime
   private readonly artifactIdGenerator?: ArtifactIdGenerator
+  private readonly inFlightTasks = new Map<string, InFlightTask>()
 
   constructor(gateway: CreativeTaskGateway, options: CreativeIntelligenceOptions = {}) {
     const compatibilityLayeredCache = isLayeredContextCache(options.cache)
@@ -143,7 +149,32 @@ export class CreativeIntelligence {
     this.artifactIdGenerator = options.artifactIdGenerator ?? options.idGenerator
   }
 
-  async run(task: AiTask, options: RunTaskOptions = {}): Promise<TaskResult> {
+  run(task: AiTask, options: RunTaskOptions = {}): Promise<TaskResult> {
+    const identityKey = serializeTaskIdentity(task)
+    const existing = this.inFlightTasks.get(task.id)
+    if (existing) {
+      if (existing.identityKey !== identityKey) {
+        return Promise.reject(new Error(`Task ${task.id} is already running with a different identity`))
+      }
+      return awaitWithAbort(existing.promise, options.signal)
+    }
+
+    const promise = this.execute(task, options)
+    const entry = { identityKey, promise }
+    this.inFlightTasks.set(task.id, entry)
+    void promise.then(
+      () => {
+        if (this.inFlightTasks.get(task.id) === entry) this.inFlightTasks.delete(task.id)
+      },
+      () => {
+        if (this.inFlightTasks.get(task.id) === entry) this.inFlightTasks.delete(task.id)
+      },
+    )
+    return promise
+  }
+
+  private async execute(task: AiTask, options: RunTaskOptions): Promise<TaskResult> {
+    if (options.signal?.aborted) throw abortError()
     const decision = this.capabilityRouter.select(task)
     const cacheKey = createDeterministicTaskCacheKey(task, decision.route, this.cacheKeyDefaults)
     this.invalidateLayeredRevisions(cacheKey.projectRevision)
@@ -168,30 +199,44 @@ export class CreativeIntelligence {
     const routedTask = attachRouteMetadata(effectiveTask, decision, cacheKey)
     const timeoutMs = resolveTaskTimeout(task, options.timeoutMs)
     const deadline = Date.now() + timeoutMs
-    const submitResult = await this.gateway.submitTask(routedTask)
-    assertTaskSubmitResult(submitResult, task)
-    const pollIntervalMs = options.pollIntervalMs ?? 100
-    while (true) {
-      if (options.signal?.aborted) {
-        await this.gateway.cancelTask(task.id)
-        throw abortError()
+
+    let submissionStarted = false
+    try {
+      submissionStarted = true
+      const submitResult = await callWithDeadline(
+        () => this.gateway.submitTask(routedTask),
+        deadline,
+        taskTimeoutError(task.id, timeoutMs),
+        options.signal,
+      )
+      assertTaskSubmitResult(submitResult, task)
+      const pollIntervalMs = options.pollIntervalMs ?? 100
+      while (true) {
+        if (options.signal?.aborted) throw abortError()
+        if (Date.now() >= deadline) throw taskTimeoutError(task.id, timeoutMs)
+        const snapshot = await callWithDeadline(
+          () => this.gateway.getTaskStatus(task.id),
+          deadline,
+          taskTimeoutError(task.id, timeoutMs),
+          options.signal,
+        )
+        assertTaskStatusSnapshot(snapshot, task)
+        options.onProgress?.(snapshot)
+        if (isTerminal(snapshot.status)) {
+          const terminalResult = snapshot.result ?? fallbackTerminalResult(effectiveTask, snapshot)
+          if (!terminalResult) throw new Error(`Task ${task.id} ended without a result`)
+          const result = decorateResult(effectiveTask, terminalResult, decision, cacheKey, false)
+          const persisted = await this.persistArtifact(effectiveTask, result, snapshot, options)
+          if (persisted.status === 'completed') this.writeCached(effectiveTask, cacheKey, persisted)
+          return persisted
+        }
+        await delay(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())), options.signal)
       }
-      if (Date.now() >= deadline) {
+    } catch (error: unknown) {
+      if (submissionStarted && (isAbortError(error) || isTimeoutError(error))) {
         await cancelAfterTimeout(this.gateway, task.id)
-        throw taskTimeoutError(task.id, timeoutMs)
       }
-      const snapshot = await this.gateway.getTaskStatus(task.id)
-      assertTaskStatusSnapshot(snapshot, task)
-      options.onProgress?.(snapshot)
-      if (isTerminal(snapshot.status)) {
-        const terminalResult = snapshot.result ?? fallbackTerminalResult(effectiveTask, snapshot)
-        if (!terminalResult) throw new Error(`Task ${task.id} ended without a result`)
-        const result = decorateResult(effectiveTask, terminalResult, decision, cacheKey, false)
-        const persisted = await this.persistArtifact(effectiveTask, result, snapshot, options)
-        if (persisted.status === 'completed') this.writeCached(effectiveTask, cacheKey, persisted)
-        return persisted
-      }
-      await delay(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())), options.signal)
+      throw error
     }
   }
 
@@ -231,7 +276,12 @@ export class CreativeIntelligence {
 
   async resume(taskId: string): Promise<TaskSubmitResult> {
     if (!this.gateway.resumeTask) throw new Error('Task gateway does not support resume')
-    return this.gateway.resumeTask(taskId)
+    const result = await this.gateway.resumeTask(taskId)
+    if (result?.taskId !== taskId) {
+      throw new Error(`Task resume identity mismatch: expected ${taskId}, received ${result?.taskId}`)
+    }
+    if (!isTaskStatus(result.status)) throw new Error(`Task ${taskId} returned an invalid resume status`)
+    return result
   }
 
   status(taskId: string): Promise<TaskStatusSnapshot> {
@@ -656,7 +706,10 @@ function assertTaskStatusSnapshot(snapshot: TaskStatusSnapshot, task: AiTask): v
   }
   if (
     snapshot.result &&
-    (snapshot.result.taskId !== task.id || snapshot.result.kind !== task.kind)
+    (snapshot.result.taskId !== task.id ||
+      snapshot.result.kind !== task.kind ||
+      !isTerminal(snapshot.result.status) ||
+      snapshot.result.status !== snapshot.status)
   ) {
     throw new Error(`Task result identity mismatch for ${task.id}`)
   }
@@ -684,6 +737,14 @@ async function cancelAfterTimeout(gateway: CreativeTaskGateway, taskId: string):
   }
 }
 
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'TimeoutError'
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
 function taskTimeoutError(taskId: string, timeoutMs: number): Error {
   const error = new Error(`Task ${taskId} timed out after ${timeoutMs}ms`)
   error.name = 'TimeoutError'
@@ -696,16 +757,103 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
       reject(abortError())
       return
     }
-    const timer = setTimeout(resolve, ms)
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        reject(abortError())
-      },
-      { once: true },
+    let settled = false
+    const onAbort = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      reject(abortError())
+    }
+    const timer = setTimeout(() => {
+      settled = true
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function callWithDeadline<T>(
+  operation: () => Promise<T>,
+  deadline: number,
+  timeoutError: Error,
+  signal?: AbortSignal,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const onAbort = () => finish(reject, abortError())
+    const cleanup = () => {
+      if (timer !== undefined) clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+    }
+    const finish = (settle: (value: never) => void, value: Error | T) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      settle(value as never)
+    }
+
+    if (signal?.aborted) {
+      finish(reject, abortError())
+      return
+    }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      finish(reject, timeoutError)
+      return
+    }
+    timer = setTimeout(() => finish(reject, timeoutError), remaining)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    void Promise.resolve()
+      .then(() => {
+        if (signal?.aborted) throw abortError()
+        return operation()
+      })
+      .then(
+        (value) => finish(resolve, value),
+        (error: unknown) => finish(reject, error instanceof Error ? error : new Error(String(error))),
+      )
+  })
+}
+
+function awaitWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const cleanup = () => signal.removeEventListener('abort', onAbort)
+    const finish = (settle: (value: never) => void, value: Error | T) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      settle(value as never)
+    }
+    const onAbort = () => finish(reject, abortError())
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    void promise.then(
+      (value) => finish(resolve, value),
+      (error: unknown) => finish(reject, error instanceof Error ? error : new Error(String(error))),
     )
   })
+}
+
+function serializeTaskIdentity(task: AiTask): string {
+  return stableSerialize(task)
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? String(value)
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`
+  const record = value as Record<string, unknown>
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`)
+    .join(',')}}`
 }
 
 function abortError(): Error {

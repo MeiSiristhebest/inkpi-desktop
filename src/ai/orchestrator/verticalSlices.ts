@@ -15,12 +15,16 @@ interface PendingAudit {
   options: RunTaskOptions
   controller: AbortController
   timer: ReturnType<typeof setTimeout>
-  resolve: (value: ContinuityFinding[]) => void
-  reject: (error: unknown) => void
-  promiseResolvers: Array<{
+  subscriber: AuditSubscriber
+  subscribers: AuditSubscriber[]
+  abortListener?: () => void
+}
+
+interface AuditSubscriber {
     resolve: (value: ContinuityFinding[]) => void
     reject: (error: unknown) => void
-  }>
+    signal?: AbortSignal
+    abortListener?: () => void
 }
 
 /** Debounced, cancellable and deduplicated VS3 continuity-audit runner. */
@@ -40,10 +44,7 @@ export class ContinuityAuditScheduler {
   ): Promise<ContinuityFinding[]> {
     const key = `${input.document.documentId}:${input.document.revision}:${input.scope ?? 'document'}`
     const existing = this.pending.get(key)
-    if (existing)
-      return new Promise((resolve, reject) => {
-        existing.promiseResolvers.push({ resolve, reject })
-      })
+    if (existing) return this.subscribe(existing, options.signal)
 
     for (const entry of this.pending.values()) {
       if (entry.documentId !== input.document.documentId) continue
@@ -56,6 +57,7 @@ export class ContinuityAuditScheduler {
       resolve = resolvePromise
       reject = rejectPromise
     })
+    const subscriber: AuditSubscriber = { resolve, reject, signal: options.signal }
     const entry = {
       key,
       documentId: input.document.documentId,
@@ -63,24 +65,14 @@ export class ContinuityAuditScheduler {
       options,
       controller: new AbortController(),
       timer: undefined as unknown as ReturnType<typeof setTimeout>,
-      resolve,
-      reject,
-      promiseResolvers: [] as Array<{
-        resolve: (value: ContinuityFinding[]) => void
-        reject: (error: unknown) => void
-      }>,
+      subscriber,
+      subscribers: [subscriber],
     }
     entry.timer = setTimeout(() => {
       void this.execute(entry)
     }, this.debounceMs)
     this.pending.set(key, entry)
-    if (options.signal) {
-      if (options.signal.aborted) this.cancelEntry(entry, new AbortError())
-      else
-        options.signal.addEventListener('abort', () => this.cancelEntry(entry, new AbortError()), {
-          once: true,
-        })
-    }
+    this.bindOwnerCancellation(entry)
     return promise
   }
 
@@ -99,7 +91,7 @@ export class ContinuityAuditScheduler {
   }
 
   private async execute(entry: PendingAudit): Promise<void> {
-    if (!this.pending.has(entry.key)) return
+    if (this.pending.get(entry.key) !== entry) return
     clearTimeout(entry.timer)
     const { signal, cleanup } = linkedSignal(entry.controller.signal, entry.options.signal)
     try {
@@ -112,26 +104,82 @@ export class ContinuityAuditScheduler {
       this.rejectEntry(entry, error)
     } finally {
       cleanup()
-      this.pending.delete(entry.key)
+      if (entry.abortListener && entry.options.signal) {
+        entry.options.signal.removeEventListener('abort', entry.abortListener)
+        entry.abortListener = undefined
+      }
+      if (this.pending.get(entry.key) === entry) this.pending.delete(entry.key)
     }
   }
 
   private cancelEntry(entry: PendingAudit, error: Error): void {
-    if (!this.pending.has(entry.key)) return
+    if (this.pending.get(entry.key) !== entry) return
     clearTimeout(entry.timer)
+    if (entry.abortListener && entry.options.signal) {
+      entry.options.signal.removeEventListener('abort', entry.abortListener)
+      entry.abortListener = undefined
+    }
     entry.controller.abort()
     this.rejectEntry(entry, error)
-    this.pending.delete(entry.key)
+    if (this.pending.get(entry.key) === entry) this.pending.delete(entry.key)
   }
 
   private resolveEntry(entry: PendingAudit, value: ContinuityFinding[]): void {
-    entry.resolve(value)
-    for (const resolver of entry.promiseResolvers) resolver.resolve(value)
+    for (const subscriber of entry.subscribers) {
+      this.cleanupSubscriber(subscriber)
+      subscriber.resolve(value)
+    }
   }
 
   private rejectEntry(entry: PendingAudit, error: unknown): void {
-    entry.reject(error)
-    for (const resolver of entry.promiseResolvers ?? []) resolver.reject(error)
+    for (const subscriber of entry.subscribers) {
+      this.cleanupSubscriber(subscriber)
+      subscriber.reject(error)
+    }
+  }
+
+  private subscribe(entry: PendingAudit, signal?: AbortSignal): Promise<ContinuityFinding[]> {
+    return new Promise((resolve, reject) => {
+      const subscriber: AuditSubscriber = { resolve, reject, signal }
+      if (signal?.aborted) {
+        reject(new AbortError())
+        return
+      }
+      if (signal) {
+        const onAbort = () => {
+          this.removeSubscriber(entry, subscriber)
+          this.cleanupSubscriber(subscriber)
+          reject(new AbortError())
+        }
+        subscriber.abortListener = onAbort
+        signal.addEventListener('abort', onAbort, { once: true })
+      }
+      entry.subscribers.push(subscriber)
+    })
+  }
+
+  private bindOwnerCancellation(entry: PendingAudit): void {
+    const signal = entry.options.signal
+    if (!signal) return
+    if (signal.aborted) {
+      this.cancelEntry(entry, new AbortError())
+      return
+    }
+    const onAbort = () => this.cancelEntry(entry, new AbortError())
+    entry.abortListener = onAbort
+    signal.addEventListener('abort', onAbort, { once: true })
+  }
+
+  private removeSubscriber(entry: PendingAudit, subscriber: AuditSubscriber): void {
+    const index = entry.subscribers.indexOf(subscriber)
+    if (index >= 0) entry.subscribers.splice(index, 1)
+  }
+
+  private cleanupSubscriber(subscriber: AuditSubscriber): void {
+    if (subscriber.abortListener && subscriber.signal) {
+      subscriber.signal.removeEventListener('abort', subscriber.abortListener)
+      subscriber.abortListener = undefined
+    }
   }
 }
 
