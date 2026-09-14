@@ -793,10 +793,13 @@ async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
     retrieval: { hits: expect.any(Number) },
     provider: { hits: expect.any(Number) },
   })
+  const cacheLayerStats = cacheStatus.stats as Record<string, { hits: number; misses: number }>
+  expect(cacheLayerStats.context.hits).toBeGreaterThan(0)
+  expect(cacheLayerStats.retrieval.hits).toBeGreaterThan(0)
+  expect(cacheLayerStats.provider.hits).toBeGreaterThan(0)
   await expect(
     client.request('cache.invalidate', {
-      reason: 'revision',
-      projectRevision: 2,
+      reason: 'manual',
       layers: ['context', 'retrieval', 'provider'],
     }),
   ).resolves.toMatchObject({ accepted: true, status: { version: 1, stats: expect.any(Object) } })
