@@ -726,6 +726,43 @@ async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
     },
   })
 
+  const retrievalHitTask: AiTask = {
+    ...contextTask,
+    id: `${contextTask.id}-retrieval-hit`,
+    intent: 'second cache identity',
+  }
+  await expect(client.request('task.submit', { task: retrievalHitTask })).resolves.toMatchObject({
+    taskId: retrievalHitTask.id,
+    status: 'queued',
+  })
+  const retrievalHitExecution = await waitForTaskExecution(
+    client,
+    retrievalHitTask.id,
+    (execution) => execution.snapshot.status === 'completed',
+  )
+  expect(retrievalHitExecution.snapshot.result).toMatchObject({
+    status: 'completed',
+    provenance: { providerCacheHit: false, contextFingerprint: expect.any(String) },
+  })
+
+  const providerHitTask: AiTask = {
+    ...retrievalHitTask,
+    id: `${contextTask.id}-provider-hit`,
+  }
+  await expect(client.request('task.submit', { task: providerHitTask })).resolves.toMatchObject({
+    taskId: providerHitTask.id,
+    status: 'queued',
+  })
+  const providerHitExecution = await waitForTaskExecution(
+    client,
+    providerHitTask.id,
+    (execution) => execution.snapshot.status === 'completed',
+  )
+  expect(providerHitExecution.snapshot.result).toMatchObject({
+    status: 'completed',
+    provenance: { providerCacheHit: true, contextFingerprint: expect.any(String) },
+  })
+
   const instructionStatus = await client.request<{
     ready: boolean
     count: number
@@ -735,8 +772,23 @@ async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
   expect(instructionStatus.instructionIds.sort()).toEqual(
     [...FIRST_PARTY_SKILL_IDS].map((skillId) => `skill.${skillId}`).sort(),
   )
-  const cacheStatus = await client.request<{ version: number; stats: Record<string, unknown> }>('cache.status')
-  expect(cacheStatus).toMatchObject({ version: 1, stats: expect.any(Object) })
+  const cacheStatus = await client.request<{
+    version: number
+    stats: Record<string, unknown>
+  }>('cache.status')
+  expect(cacheStatus).toMatchObject({
+    version: 1,
+    stats: {
+      context: { hits: expect.any(Number), misses: expect.any(Number) },
+      retrieval: { hits: expect.any(Number), misses: expect.any(Number) },
+      provider: { hits: expect.any(Number), misses: expect.any(Number) },
+    },
+  })
+  expect(cacheStatus.stats).toMatchObject({
+    context: { hits: expect.any(Number) },
+    retrieval: { hits: expect.any(Number) },
+    provider: { hits: expect.any(Number) },
+  })
   await expect(
     client.request('cache.invalidate', {
       reason: 'revision',
