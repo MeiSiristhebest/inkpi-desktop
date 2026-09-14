@@ -12,6 +12,11 @@ import type {
   TaskExecutionSnapshot,
   TaskStatusSnapshot,
 } from '@inkpi/protocol'
+import {
+  RUNTIME_ARTIFACT_TYPES,
+  calculateDomainChangeSetChecksum,
+  calculateProposalProjectionStateHash,
+} from '@inkpi/protocol'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bootstrapDesktopTaskRecovery } from '../src/adapters/desktopTaskRecoveryBootstrap'
 import { createDaemonAiAssistant } from '../src/adapters/daemonAiAssistant'
@@ -215,6 +220,7 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
           [...FIRST_PARTY_SKILL_IDS].map((skillId) => `skill.${skillId}`).sort(),
         )
         await assertPackagedRuntimeRegistrations(first.client)
+        await assertPackagedStateBoundaries(first.client)
 
         const notificationClient = first.client as NotificationClient
         if (!notificationClient.on) {
@@ -585,6 +591,159 @@ async function assertPackagedRuntimeRegistrations(client: RpcClient): Promise<vo
       provenance: { runtimeClass: 'workflow' },
     })
   }
+}
+
+async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
+  const suffix = Date.now()
+  const createdAt = suffix
+  const workspaceId = `packaged-boundary-workspace-${suffix}`
+  const unsignedChangeSet = {
+    id: `packaged-change-set-${suffix}`,
+    workspaceId,
+    sourceDeviceId: 'packaged-acceptance',
+    baseRevision: 0,
+    revision: 1,
+    changes: [
+      {
+        id: `packaged-story-change-${suffix}`,
+        aggregateType: 'story.state',
+        aggregateId: `story-${suffix}`,
+        operation: 'upsert' as const,
+        revision: 1,
+        payload: { revision: 1, entities: [], relations: [], events: [], scenes: [] },
+        occurredAt: createdAt,
+      },
+    ],
+    createdAt,
+  }
+  const changeSet = {
+    ...unsignedChangeSet,
+    checksum: calculateDomainChangeSetChecksum(unsignedChangeSet),
+  }
+  await expect(client.request('domain.sync.push', { changeSet })).resolves.toMatchObject({
+    accepted: true,
+    duplicate: false,
+    workspaceId,
+    revision: 1,
+  })
+  await expect(client.request('domain.sync.push', { changeSet })).resolves.toMatchObject({
+    accepted: true,
+    duplicate: true,
+    revision: 1,
+  })
+  await expect(client.request('domain.sync.pull', { workspaceId })).resolves.toEqual([changeSet])
+  const snapshot = await client.request('domain.sync.snapshot', { workspaceId })
+  expect(snapshot).toMatchObject({ workspaceId, revision: 1, changeSets: [changeSet] })
+  await expect(client.request('domain.sync.restore', { snapshot })).resolves.toMatchObject({
+    workspaceId,
+    revision: 1,
+  })
+
+  const proposal = {
+    id: `packaged-proposal-${suffix}`,
+    taskId: `packaged-proposal-task-${suffix}`,
+    baseRevision: 1,
+    sourceHash: 'packaged-source-hash',
+    target: { type: 'story.document', id: `chapter-${suffix}` },
+    operation: 'update' as const,
+    patch: { text: 'Packaged proposal boundary.' },
+    status: 'pending' as const,
+    createdAt,
+    updatedAt: createdAt,
+  }
+  const stateHash = calculateProposalProjectionStateHash(proposal)
+  await expect(
+    client.request('proposal.sync.push', {
+      workspaceId,
+      expectedRevision: 0,
+      proposal,
+      stateHash,
+    }),
+  ).resolves.toMatchObject({ accepted: true, duplicate: false, revision: 1 })
+  await expect(
+    client.request('proposal.sync.push', {
+      workspaceId,
+      expectedRevision: 0,
+      proposal,
+      stateHash,
+    }),
+  ).resolves.toMatchObject({ accepted: true, duplicate: true, revision: 1 })
+  await expect(client.request('proposal.sync.snapshot', { workspaceId })).resolves.toMatchObject({
+    workspaceId,
+    revision: 1,
+    proposals: [proposal],
+  })
+
+  const artifact = {
+    id: `packaged-artifact-${suffix}`,
+    type: RUNTIME_ARTIFACT_TYPES.chapterSummary,
+    version: 1,
+    content: { summary: 'Packaged artifact boundary.' },
+    provenance: {
+      taskId: `packaged-artifact-task-${suffix}`,
+      executionRunId: `run:packaged-artifact-${suffix}`,
+      parentArtifactId: `packaged-parent-${suffix}`,
+    },
+    createdAt,
+    updatedAt: createdAt,
+  }
+  await expect(client.request('artifact.save', { artifact })).resolves.toEqual({
+    saved: true,
+    id: artifact.id,
+  })
+  await expect(client.request('artifact.get', { id: artifact.id })).resolves.toEqual(artifact)
+  await expect(client.request('artifact.list', { taskId: artifact.provenance.taskId })).resolves.toEqual([artifact])
+
+  const contextTask: AiTask = {
+    id: `packaged-context-task-${suffix}`,
+    kind: 'packaged.context-cache-probe',
+    input: {
+      documentId: `packaged-document-${suffix}`,
+      text: 'Packaged context boundary.',
+      payload: { workspaceId, activeReferences: [] },
+    },
+    contextPolicy: { providerIds: ['retrieval.jit'], maxTokens: 512 },
+    outputContract: { format: 'text' },
+    requirements: { outputFormats: ['text'] },
+  }
+  await expect(client.request('task.submit', { task: contextTask })).resolves.toMatchObject({
+    taskId: contextTask.id,
+    status: 'queued',
+  })
+  const contextExecution = await waitForTaskExecution(
+    client,
+    contextTask.id,
+    (execution) => execution.snapshot.status === 'completed',
+  )
+  expect(contextExecution.snapshot.result).toMatchObject({
+    status: 'completed',
+    output: { format: 'text' },
+    provenance: {
+      selectedProvider: expect.any(String),
+      selectedModel: expect.any(String),
+      contextFingerprint: expect.any(String),
+      outputFormat: 'text',
+    },
+  })
+
+  const instructionStatus = await client.request<{
+    ready: boolean
+    count: number
+    instructionIds: string[]
+  }>('instruction.status')
+  expect(instructionStatus).toMatchObject({ ready: true, count: FIRST_PARTY_SKILL_IDS.length })
+  expect(instructionStatus.instructionIds.sort()).toEqual(
+    [...FIRST_PARTY_SKILL_IDS].map((skillId) => `skill.${skillId}`).sort(),
+  )
+  const cacheStatus = await client.request<{ version: number; stats: Record<string, unknown> }>('cache.status')
+  expect(cacheStatus).toMatchObject({ version: 1, stats: expect.any(Object) })
+  await expect(
+    client.request('cache.invalidate', {
+      reason: 'revision',
+      projectRevision: 2,
+      layers: ['context', 'retrieval', 'provider'],
+    }),
+  ).resolves.toMatchObject({ accepted: true, status: { version: 1, stats: expect.any(Object) } })
 }
 
 async function stopPackagedDaemon(handle: PackagedDaemon, force: boolean): Promise<void> {
