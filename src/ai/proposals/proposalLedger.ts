@@ -513,10 +513,14 @@ export class IndexedDbProposalStore implements ProposalStore {
     const proposals = await db.getAll<AiProposal | ProposalOperationLock>(PROPOSAL_STORE_NAME)
     return proposals
       .filter((proposal): proposal is AiProposal => !isProposalOperationLock(proposal))
-      .map(cloneProposal)
+      .map((proposal) => {
+        validateProposal(proposal)
+        return cloneProposal(proposal)
+      })
   }
 
   save(proposal: AiProposal): Promise<void> {
+    validateProposal(proposal)
     return this.openAtomicDb().then((database) =>
       runProposalTransaction(database, 'readwrite', (store, setResult, fail) => {
         readProposalAndLock(store, proposal.id, fail, (current, lock) => {
@@ -524,6 +528,7 @@ export class IndexedDbProposalStore implements ProposalStore {
             fail(new Error(`Proposal ${proposal.id} has an operation in progress`))
             return
           }
+          if (current) validateProposal(current)
           if (!proposalSaveAllowed(current, proposal)) {
             fail(new Error(`Proposal ${proposal.id} has already reached a terminal state`))
             return
@@ -536,6 +541,8 @@ export class IndexedDbProposalStore implements ProposalStore {
   }
 
   compareAndSwapProposal(expected: AiProposal, next: AiProposal): Promise<boolean> {
+    validateProposal(expected)
+    validateProposal(next)
     return this.openAtomicDb().then((database) =>
       runProposalTransaction(database, 'readwrite', (store, setResult, fail) => {
         readProposalAndLock(store, expected.id, fail, (current, lock) => {
@@ -543,6 +550,7 @@ export class IndexedDbProposalStore implements ProposalStore {
             setResult(false)
             return
           }
+          if (current) validateProposal(current)
           store.put(cloneProposal(next))
           setResult(true)
         })
@@ -554,6 +562,7 @@ export class IndexedDbProposalStore implements ProposalStore {
     expected: AiProposal,
     operation: ProposalOperation,
   ): Promise<ProposalOperationClaim | undefined> {
+    validateProposal(expected)
     return this.openAtomicDb().then((database) =>
       runProposalTransaction(database, 'readwrite', (store, setResult, fail) => {
         readProposalAndLock(store, expected.id, fail, (current, lock) => {
@@ -561,6 +570,7 @@ export class IndexedDbProposalStore implements ProposalStore {
             setResult(undefined)
             return
           }
+          if (current) validateProposal(current)
 
           const claim: ProposalOperationClaim = {
             proposalId: expected.id,
@@ -581,6 +591,7 @@ export class IndexedDbProposalStore implements ProposalStore {
   }
 
   completeProposalOperation(claim: ProposalOperationClaim, next: AiProposal): Promise<boolean> {
+    validateProposal(next)
     return this.openAtomicDb().then((database) =>
       runProposalTransaction(database, 'readwrite', (store, setResult, fail) => {
         readProposalAndLock(store, claim.proposalId, fail, (current, lock) => {
@@ -595,6 +606,7 @@ export class IndexedDbProposalStore implements ProposalStore {
             setResult(false)
             return
           }
+          if (current) validateProposal(current)
 
           store.put(cloneProposal(next))
           store.delete(operationLockKey(claim.proposalId))
@@ -888,23 +900,49 @@ function isTextPatch(value: unknown): value is Omit<TextPatch, 'documentId'> {
   if (!value || typeof value !== 'object') return false
   const patch = value as Record<string, unknown>
   return (
-    Number.isInteger(patch.from) &&
-    Number.isInteger(patch.to) &&
+    Number.isSafeInteger(patch.from) &&
+    Number.isSafeInteger(patch.to) &&
     (patch.from as number) >= 0 &&
     (patch.to as number) >= (patch.from as number) &&
     typeof patch.text === 'string'
   )
 }
 
-function validateProposal(proposal: AiProposal): void {
-  if (!proposal.id.trim() || !proposal.taskId.trim() || !proposal.documentId.trim()) {
+export function validateProposal(proposal: AiProposal): void {
+  if (!isRecord(proposal)) throw new Error('Proposal must be an object')
+  if (
+    typeof proposal.id !== 'string' ||
+    typeof proposal.taskId !== 'string' ||
+    typeof proposal.documentId !== 'string' ||
+    !proposal.id.trim() ||
+    !proposal.taskId.trim() ||
+    !proposal.documentId.trim()
+  ) {
     throw new Error('Proposal identifiers must not be empty')
   }
-  if (!Number.isInteger(proposal.baseRevision) || proposal.baseRevision < 0) {
+  if (!Number.isSafeInteger(proposal.baseRevision) || proposal.baseRevision < 0) {
     throw new Error('Proposal base revision must be a non-negative integer')
   }
-  if (proposal.patches.length === 0) throw new Error('Proposal requires at least one patch')
+  if (!isProposalStatus(proposal.status)) throw new Error('Proposal status is invalid')
+  assertProposalTimestamp(proposal.createdAt, 'Proposal createdAt')
+  if (proposal.updatedAt !== undefined) assertProposalTimestamp(proposal.updatedAt, 'Proposal updatedAt')
+  if (proposal.sourceHash !== undefined && typeof proposal.sourceHash !== 'string') {
+    throw new Error('Proposal source hash must be a string')
+  }
+  if (!Array.isArray(proposal.patches) || proposal.patches.length === 0) {
+    throw new Error('Proposal requires at least one patch')
+  }
   validatePatches(proposal.patches, proposal.documentId)
+  if (proposal.inversePatches !== undefined) {
+    if (!Array.isArray(proposal.inversePatches)) throw new Error('Proposal inverse patches are invalid')
+    validatePatches(proposal.inversePatches, proposal.documentId)
+  }
+  if (proposal.committedRevision !== undefined) {
+    if (!Number.isSafeInteger(proposal.committedRevision) || proposal.committedRevision < 0) {
+      throw new Error('Proposal committed revision must be a non-negative integer')
+    }
+  }
+  validateProposalEvidence(proposal.evidence)
 }
 
 function validatePatches(patches: TextPatch[], documentId: string): void {
@@ -915,6 +953,51 @@ function validatePatches(patches: TextPatch[], documentId: string): void {
     if (patch.from < previousTo)
       throw new Error('Proposal patches must be ordered and non-overlapping')
     previousTo = patch.to
+  }
+}
+
+function validateProposalEvidence(evidence: unknown): void {
+  if (evidence === undefined) return
+  if (!Array.isArray(evidence)) throw new Error('Proposal evidence must be an array')
+  for (const [index, item] of evidence.entries()) {
+    if (!isRecord(item)) throw new Error(`Proposal evidence at index ${index} is invalid`)
+    for (const key of ['documentId', 'blockId', 'excerpt']) {
+      if (item[key] !== undefined && typeof item[key] !== 'string') {
+        throw new Error(`Proposal evidence ${key} at index ${index} is invalid`)
+      }
+    }
+    for (const key of ['semanticFrom', 'semanticTo']) {
+      if (
+        item[key] !== undefined &&
+        (!Number.isSafeInteger(item[key]) || (item[key] as number) < 0)
+      ) {
+        throw new Error(`Proposal evidence ${key} at index ${index} is invalid`)
+      }
+    }
+    if (
+      typeof item.semanticFrom === 'number' &&
+      typeof item.semanticTo === 'number' &&
+      item.semanticTo < item.semanticFrom
+    ) {
+      throw new Error(`Proposal evidence range at index ${index} is inverted`)
+    }
+  }
+}
+
+function isProposalStatus(value: unknown): value is ProposalStatus {
+  return (
+    value === 'pending' ||
+    value === 'accepted' ||
+    value === 'rejected' ||
+    value === 'stale' ||
+    value === 'committed' ||
+    value === 'undone'
+  )
+}
+
+function assertProposalTimestamp(value: unknown, name: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new Error(`${name} must be a non-negative integer`)
   }
 }
 
@@ -934,4 +1017,8 @@ function cloneProposal(proposal: AiProposal): AiProposal {
     evidence: proposal.evidence?.map((evidence) => ({ ...evidence })),
     inversePatches: proposal.inversePatches?.map((patch) => ({ ...patch })),
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

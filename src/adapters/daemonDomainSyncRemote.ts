@@ -15,6 +15,12 @@ import {
   aiProposalToDomainProposal,
   domainProposalToAiProposal,
 } from '../ai/proposals/domainProposal'
+import {
+  type DomainProposalProjectionSnapshot,
+  type DomainProposalRecord,
+  type DomainProposalSyncRemote,
+  validateDomainProposalRecord,
+} from '../ai/proposals/domainProposalLedger'
 import type { AiProposal } from '../ai/proposals/proposalLedger'
 import type { DomainSyncRemote } from '../domain/sync/domainSyncService'
 import type { RpcClient } from '../ports/aiGateway'
@@ -66,6 +72,101 @@ export function proposalToProjectionState(proposal: AiProposal): ProposalProject
   }
   validateProposalProjectionState(state)
   return state
+}
+
+/** Maps the generic Desktop domain-proposal record without applying its patch. */
+export function domainProposalRecordToProjectionState(
+  proposal: DomainProposalRecord,
+): ProposalProjectionState {
+  validateDomainProposalRecord(proposal)
+  const state: ProposalProjectionState = {
+    id: proposal.id,
+    taskId: proposal.taskId,
+    baseRevision: proposal.baseRevision,
+    target: { ...proposal.target },
+    operation: proposal.operation,
+    ...(proposal.sourceHash === undefined ? {} : { sourceHash: proposal.sourceHash }),
+    ...(proposal.patch === undefined ? {} : { patch: cloneJsonValue(proposal.patch) }),
+    ...(proposal.evidence === undefined
+      ? {}
+      : { evidence: proposal.evidence.map((evidence) => ({ ...evidence })) }),
+    ...(proposal.reason === undefined ? {} : { reason: proposal.reason }),
+    status: proposal.status,
+    createdAt: proposal.createdAt,
+    updatedAt: proposal.updatedAt ?? proposal.createdAt,
+    ...(proposal.inversePatch === undefined
+      ? {}
+      : { inversePatch: cloneJsonValue(proposal.inversePatch) }),
+    ...(proposal.committedRevision === undefined
+      ? {}
+      : { committedRevision: proposal.committedRevision }),
+  }
+  validateProposalProjectionState(state)
+  return state
+}
+
+export function projectionStateToDomainProposalRecord(
+  state: ProposalProjectionState,
+): DomainProposalRecord {
+  validateProposalProjectionState(state)
+  const record: DomainProposalRecord = {
+    id: state.id,
+    taskId: state.taskId,
+    baseRevision: state.baseRevision,
+    target: { ...state.target },
+    operation: state.operation,
+    status: state.status,
+    createdAt: state.createdAt,
+    updatedAt: state.updatedAt,
+    ...(state.sourceHash === undefined ? {} : { sourceHash: state.sourceHash }),
+    ...(state.patch === undefined ? {} : { patch: cloneJsonValue(state.patch) }),
+    ...(state.evidence === undefined
+      ? {}
+      : { evidence: state.evidence.map((evidence) => ({ ...evidence })) }),
+    ...(state.reason === undefined ? {} : { reason: state.reason }),
+    ...(state.inversePatch === undefined
+      ? {}
+      : { inversePatch: cloneJsonValue(state.inversePatch) }),
+    ...(state.committedRevision === undefined
+      ? {}
+      : { committedRevision: state.committedRevision }),
+  }
+  validateDomainProposalRecord(record)
+  return record
+}
+
+/** JSON-RPC adapter for generic proposals; the daemon remains projection-only. */
+export function createDaemonDomainProposalSyncRemote(
+  client: RpcClient,
+): DomainProposalSyncRemote {
+  return {
+    pushDomainProposalState: (workspaceId, proposal, expectedRevision) => {
+      const state = domainProposalRecordToProjectionState(proposal)
+      return client
+        .request<unknown>('proposal.sync.push', {
+          workspaceId,
+          expectedRevision,
+          proposal: state,
+          stateHash: calculateProposalProjectionStateHash(state),
+        })
+        .then((result) => {
+          assertProposalSyncPushResult(result, workspaceId, proposal.id)
+          return result
+        })
+    },
+    snapshotDomainProposals: async (workspaceId) => {
+      const snapshot = await client.request<unknown>('proposal.sync.snapshot', { workspaceId })
+      assertProposalProjectionSnapshot(snapshot, workspaceId)
+      if (calculateProposalProjectionSnapshotHash(snapshot) !== snapshot.hash) {
+        throw new Error('Daemon domain proposal snapshot hash mismatch')
+      }
+      const converted: DomainProposalProjectionSnapshot = {
+        ...snapshot,
+        proposals: snapshot.proposals.map(projectionStateToDomainProposalRecord),
+      }
+      return converted
+    },
+  }
 }
 
 /** Creates the JSON-RPC adapter without changing the local ProposalLedger. */
@@ -173,4 +274,15 @@ function isRevision(value: unknown): value is number {
 
 function isRecord(value: unknown): value is Record<string, any> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function cloneJsonValue<T>(value: T): T {
+  if (value === undefined || value === null || typeof value !== 'object') return value
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  if (Array.isArray(value)) return value.map((item) => cloneJsonValue(item)) as T
+  const result: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    result[key] = cloneJsonValue(item)
+  }
+  return result as T
 }
