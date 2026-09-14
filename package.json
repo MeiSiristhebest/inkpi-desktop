@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/verify-frontend-parity.mjs",
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "preview": "vite preview",
@@ -40,6 +40,7 @@
     "tauri": "tauri",
     "tauri:dev": "npm run copy-daemon-sidecar && tauri dev",
     "copy-daemon-sidecar": "node scripts/copy-daemon-sidecar.mjs",
+    "verify:frontend-parity": "node scripts/verify-frontend-parity.mjs",
     "generate:model-catalog": "node scripts/generate-model-catalog.mjs",
     "daemon": "node scripts/run-daemon.mjs",
     "tauri:build": "npm run copy-daemon-sidecar && tauri build --target x86_64-pc-windows-gnu"
