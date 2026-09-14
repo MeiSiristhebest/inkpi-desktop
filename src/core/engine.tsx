@@ -1,12 +1,5 @@
 import { useState, useEffect, useRef, Suspense, type FC, type ReactNode } from 'react'
-import {
-  PanelRight,
-  Maximize2,
-  Minimize2,
-  Home,
-  PanelLeftOpen,
-  Sparkles,
-} from 'lucide-react'
+import { PanelRight, Maximize2, Minimize2, Home, PanelLeftOpen, Sparkles } from 'lucide-react'
 import { RichEditor, type RichEditorProps } from '../components/editor/RichEditor'
 import { SettingsView } from '../components/settings/SettingsView'
 import { DashboardView } from '../components/dashboard/DashboardView'
@@ -54,6 +47,11 @@ interface Stats {
   wordCount: number
   updatedAt?: number
 }
+
+const COMPACT_VIEWPORT_MAX = 1100
+
+const isCompactViewport = () =>
+  typeof window !== 'undefined' && window.innerWidth <= COMPACT_VIEWPORT_MAX
 
 // 视图注册表：以数据驱动替代 if链，新增视图只需登记一条（OCP，§3.1）
 interface ViewDeps {
@@ -115,8 +113,8 @@ export const Engine: FC<EngineProps> = ({
   // 当前激活的页签（默认直达正文写作 editor）
   const [activeTabId, setActiveTabId] = useState<string>('editor')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [leftOpen, setLeftOpen] = useState(true)
-  const compactViewportRef = useRef(false)
+  const [leftOpen, setLeftOpen] = useState(() => !isCompactViewport())
+  const compactViewportRef = useRef(isCompactViewport())
   const [rightOpen, setRightOpen] = useState(defaultRightOpen)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
@@ -125,10 +123,10 @@ export const Engine: FC<EngineProps> = ({
 
   useEffect(() => {
     const handleViewportResize = () => {
-      const isCompactViewport = window.innerWidth <= 1100
-      if (isCompactViewport === compactViewportRef.current) return
-      compactViewportRef.current = isCompactViewport
-      setLeftOpen(!isCompactViewport)
+      const compact = isCompactViewport()
+      if (compact === compactViewportRef.current) return
+      compactViewportRef.current = compact
+      setLeftOpen(!compact)
     }
 
     window.addEventListener('resize', handleViewportResize)
@@ -250,6 +248,7 @@ export const Engine: FC<EngineProps> = ({
     <div
       data-testid="project-engine-root"
       data-nav-open={leftOpen}
+      data-chrome-hidden={isFullscreen || focusMode}
       className="project-engine-root relative h-screen w-screen flex overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)]"
     >
       {/* 42 模块与全景侧边栏 */}
@@ -271,6 +270,7 @@ export const Engine: FC<EngineProps> = ({
           data-testid="sidebar-nav-compact-toggle"
           aria-label="展开导航"
           title="展开侧栏"
+          data-layout="compact-nav-toggle"
           onClick={() => setLeftOpen(true)}
           className="sidebar-nav-compact-toggle items-center justify-center w-7 h-7 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
         >

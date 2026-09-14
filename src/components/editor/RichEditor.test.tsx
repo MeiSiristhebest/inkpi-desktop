@@ -242,6 +242,8 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
     const footer = screen.getByTestId('editor-status-footer')
+    expect(footer).toHaveAttribute('data-layout', 'single-row')
+    expect(footer).toHaveClass('flex-nowrap', 'overflow-hidden', 'h-8')
     expect(within(footer).getAllByText(/^本章 /)).toHaveLength(1)
     expect(within(footer).getAllByText(/^全书 /)).toHaveLength(1)
     expect(within(footer).getAllByText('已连接', { exact: true })).toHaveLength(1)
@@ -256,6 +258,17 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.queryByText(/最后更新：/)).not.toBeInTheDocument()
     expect(screen.queryByText('Daemon 已连接')).not.toBeInTheDocument()
     expect(screen.queryByText('离线沙盒')).not.toBeInTheDocument()
+  })
+
+  it('keeps the editor chrome single-row and exposes one visible format entry', async () => {
+    render(<RichEditor projectId="p-layout-contract" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    const toolbar = screen.getByTestId('editor-toolbar')
+    expect(toolbar).toHaveAttribute('data-layout', 'single-row')
+    expect(toolbar).toHaveClass('flex', 'items-center')
+    expect(screen.getAllByTestId('editor-toolbar-format-trigger')).toHaveLength(1)
+    expect(screen.getAllByText('排版', { exact: true })).toHaveLength(1)
   })
 
   it('creates a new chapter via the tree and writes it to IndexedDB', async () => {

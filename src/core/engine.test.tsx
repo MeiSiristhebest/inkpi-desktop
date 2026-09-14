@@ -1,5 +1,12 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render as baseRender, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import {
+  render as baseRender,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+  act,
+} from '@testing-library/react'
 import { Engine } from './engine'
 import { db } from '../db/indexedDB'
 import { SettingsProvider } from './settings'
@@ -47,7 +54,18 @@ vi.mock('@tiptap/react', async (importOriginal) => {
   return { ...actual, useEditor, EditorContent, BubbleMenu }
 })
 
-afterEach(() => cleanup())
+const defaultViewportWidth = window.innerWidth
+
+const setViewportWidth = (width: number) => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+}
+
+beforeEach(() => setViewportWidth(1440))
+
+afterEach(() => {
+  cleanup()
+  setViewportWidth(defaultViewportWidth)
+})
 
 describe('Engine — 主视口路由与多栏布局', () => {
   it('shows the editor view by default for pure writing focus', () => {
@@ -89,6 +107,34 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.queryByTestId('sidebar-nav-compact-toggle')).not.toBeInTheDocument()
   })
 
+  it('auto-collapses the global navigation to one out-of-flow toggle in a compact viewport', () => {
+    render(<Engine projectId="p1" />)
+    const root = screen.getByTestId('project-engine-root')
+    expect(screen.getByTestId('sidebar-nav')).toBeInTheDocument()
+
+    act(() => {
+      setViewportWidth(1000)
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    expect(root).toHaveAttribute('data-nav-open', 'false')
+    expect(root.querySelector('[data-testid="sidebar-nav"]')).not.toBeInTheDocument()
+    const compactToggle = screen.getByTestId('sidebar-nav-compact-toggle')
+    expect(compactToggle).toHaveAttribute('data-layout', 'compact-nav-toggle')
+    expect(compactToggle.parentElement).toBe(root)
+
+    fireEvent.click(compactToggle)
+    expect(root).toHaveAttribute('data-nav-open', 'true')
+    expect(screen.getByTestId('sidebar-nav')).toBeInTheDocument()
+
+    act(() => {
+      setViewportWidth(1440)
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(root).toHaveAttribute('data-nav-open', 'true')
+    expect(screen.queryByTestId('sidebar-nav-compact-toggle')).not.toBeInTheDocument()
+  })
+
   it('toggles the right info panel', () => {
     render(<Engine projectId="p1" defaultRightOpen={true} />)
     expect(screen.getByText('文档信息')).toBeInTheDocument()
@@ -120,6 +166,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
     fireEvent.click(screen.getByTitle('全屏 / 退出全屏'))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
     expect(screen.queryByText('文档信息')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sidebar-nav-compact-toggle')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTitle('全屏 / 退出全屏'))
     expect(screen.getByText('InkPi')).toBeInTheDocument()
   })

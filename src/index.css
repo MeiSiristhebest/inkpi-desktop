@@ -518,61 +518,227 @@
   box-shadow: var(--ink-shadow-lg);
 }
 
-/* ── 窄窗口布局 ──────────────────────────────────────────── */
-/*
- * 编辑器由多个固定侧栏组成，窄窗口下优先保留正文可用宽度。
- * 只覆盖响应式断点，不改变宽屏默认布局和组件行为。
- */
+/* ── 响应式编辑器布局 ─────────────────────────────────────── */
 
-@media (max-width: 1900px) {
-  /* EditorToolbar：右侧语义按钮在窄宽度下保留图标，避免文字互相挤压。 */
-  main header.h-11.shrink-0.relative.select-none {
-    gap: 0.25rem;
+.project-engine-root,
+.project-engine-main,
+.project-engine-content,
+.creative-editor-root,
+.creative-editor-column {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.project-engine-content {
+  overflow: hidden;
+}
+
+.project-engine-right-panel {
+  min-width: 0;
+  max-width: 100%;
+  width: min(300px, 28vw) !important;
+  flex: 0 1 min(300px, 28vw);
+}
+
+/* 编辑器顶栏和底栏始终保持固定高度、单行和可收缩内容。 */
+.editor-toolbar {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.75rem;
+  max-height: 2.75rem;
+  flex: 0 0 2.75rem;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.editor-toolbar-left {
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.editor-toolbar-left > input {
+  min-width: 4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-toolbar-inline-controls {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.editor-toolbar-actions {
+  min-width: 0;
+  max-width: 58%;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.editor-toolbar-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-toolbar-actions > .relative,
+.editor-toolbar-actions > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.editor-toolbar-menu-trigger,
+.editor-toolbar-action-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* 收起的是整个全局导航，不是 56px 宽的图标栏。 */
+.sidebar-nav-compact-toggle {
+  display: none;
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 50;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink-border);
+  background: var(--ink-bg-panel);
+  box-shadow: var(--ink-shadow-sm);
+}
+
+.project-engine-root[data-nav-open='false'] > .sidebar-nav-compact-toggle {
+  display: flex;
+}
+
+.project-engine-root[data-nav-open='false'] > .sidebar-nav {
+  display: none;
+  width: 0 !important;
+  min-width: 0 !important;
+  border-right-width: 0 !important;
+}
+
+.project-engine-root[data-nav-open='false']:not([data-chrome-hidden='true']) .editor-toolbar,
+.project-engine-root[data-nav-open='false']:not([data-chrome-hidden='true'])
+  > .project-engine-main
+  > header {
+  padding-left: 2.75rem;
+}
+
+.editor-status-footer {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 2rem;
+  min-height: 2rem;
+  max-height: 2rem;
+  flex: 0 0 2rem;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.editor-status-primary,
+.editor-status-secondary {
+  min-width: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.editor-status-primary {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.editor-status-primary > *,
+.editor-status-secondary > * {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  /* 窄窗口中的全局导航使用浮层；收起后不参与 flex 布局。 */
+  .project-engine-root > .sidebar-nav {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 45;
+    width: min(240px, calc(100vw - 1rem)) !important;
+    max-width: calc(100vw - 1rem);
+    border-right-width: 1px;
+    box-shadow: var(--ink-shadow-lg);
+  }
+
+  .project-engine-root[data-nav-open='true'] > .sidebar-nav {
+    display: flex;
+  }
+
+  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-brand {
+    justify-content: space-between;
+    padding-inline: 0.75rem;
+  }
+
+  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-quick,
+  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-settings {
     padding-inline: 0.5rem;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
 
-  main header.h-11.shrink-0.relative.select-none::-webkit-scrollbar {
-    display: none;
+  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-quick button,
+  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-settings button {
+    justify-content: flex-start;
   }
 
-  main header.h-11.shrink-0.relative.select-none > div:first-child {
-    min-width: 0;
-    flex: 1 1 auto;
+  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-categories button {
+    justify-content: space-between;
   }
 
-  main header.h-11.shrink-0.relative.select-none > div:first-child > div[class*='border-l'] {
-    display: none;
-  }
-
-  main header.h-11.shrink-0.relative.select-none > div:last-child {
+  /* 窄窗口保留图标入口，完整名称由 title 提供。 */
+  .editor-toolbar-menu-trigger,
+  .editor-toolbar-action-button {
     gap: 0;
-    flex: 0 0 auto;
-  }
-
-  main header.h-11.shrink-0.relative.select-none > div:last-child > div > button {
-    gap: 0;
+    justify-content: center;
     padding-inline: 0.4rem;
   }
 
-  main header.h-11.shrink-0.relative.select-none > div:last-child > div > button > span,
-  main header.h-11.shrink-0.relative.select-none > div:last-child > div > button > svg:last-child {
+  .editor-toolbar-menu-trigger .editor-toolbar-label,
+  .editor-toolbar-menu-trigger > svg:last-child,
+  .editor-toolbar-find-trigger .editor-toolbar-label,
+  .editor-toolbar-ghost-action .editor-toolbar-label,
+  .editor-toolbar-inline-label {
     display: none;
   }
 
-  /* 固定侧栏让出正文空间；更窄时在后续断点继续收缩。 */
-  #root > div.h-screen.w-screen.flex.overflow-hidden > aside:first-child {
-    width: min(240px, 20vw) !important;
+  .editor-toolbar-actions {
+    max-width: 52%;
+    gap: 0.125rem;
   }
 
-  /* 右侧 AI 面板和正文目录使用较小的安全宽度。 */
-  main > div.flex-1.flex.min-h-0 > aside[style*='width'] {
-    width: min(300px, 28vw) !important;
+  .editor-status-footer {
+    gap: 0.75rem;
+    padding-inline: 0.75rem;
   }
 
-  main .shrink-0.flex.flex-col.border-r.border-\[var\(--ink-border\)\] {
-    width: 220px !important;
+  .editor-status-primary {
+    gap: 0.75rem;
+  }
+
+  .project-engine-right-panel {
+    width: min(280px, 34vw) !important;
+    flex-basis: min(280px, 34vw);
+  }
+
+  .editor-chapter-tree {
+    width: 200px !important;
   }
 
   [data-testid='creative-workflows-panel'] {
@@ -590,319 +756,15 @@
     text-overflow: ellipsis;
   }
 
-  /* 任务状态浮层不应压住整个窄屏。 */
   [data-testid='task-recovery-panel'] {
     right: 0.75rem;
     bottom: 0.75rem;
     width: min(28rem, calc(100vw - 1.5rem));
   }
 
-  /* 作家助手保留完整内容，但限制尺寸并让它落在视口安全边距内。 */
   .fixed.z-40.select-none.rounded-2xl.font-sans {
     width: min(350px, calc(100vw - 1.5rem)) !important;
     max-width: calc(100vw - 1.5rem);
-  }
-}
-
-@media (max-width: 1100px) {
-  /* 左侧全景导航压缩为图标栏，正文和 AI 面板不再被固定导航挤压。 */
-  #root > div.h-screen.w-screen.flex.overflow-hidden > aside:first-child {
-    width: 56px !important;
-  }
-
-  #root
-    > div.h-screen.w-screen.flex.overflow-hidden
-    > aside:first-child
-    > div:first-child
-    > div:first-child {
-    justify-content: center;
-    padding-inline: 0.5rem;
-  }
-
-  #root
-    > div.h-screen.w-screen.flex.overflow-hidden
-    > aside:first-child
-    > div:first-child
-    > div:first-child
-    > div {
-    display: none;
-  }
-
-  #root
-    > div.h-screen.w-screen.flex.overflow-hidden
-    > aside:first-child
-    > div:first-child
-    > div:nth-child(2),
-  #root
-    > div.h-screen.w-screen.flex.overflow-hidden
-    > aside:first-child
-    > div:first-child
-    > div:nth-child(3) {
-    display: none;
-  }
-
-  #root
-    > div.h-screen.w-screen.flex.overflow-hidden
-    > aside:first-child
-    > div:first-child
-    > div:last-child
-    button {
-    justify-content: center;
-    padding-inline: 0.5rem;
-  }
-
-  #root
-    > div.h-screen.w-screen.flex.overflow-hidden
-    > aside:first-child
-    > div:first-child
-    > div:last-child
-    button
-    > span {
-    display: none;
-  }
-
-  main .shrink-0.flex.flex-col.border-r.border-\[var\(--ink-border\)\] {
-    width: 200px !important;
-  }
-
-  main > div.flex-1.flex.min-h-0 > aside[style*='width'] {
-    width: min(280px, 34vw) !important;
-  }
-
-  /* 工作流标签在极窄面板中改为纵向，保证中文标签完整可读。 */
-  [data-testid='creative-workflows-panel'] .grid.grid-cols-3 {
-    grid-template-columns: 1fr;
-  }
-
-  [data-testid='creative-workflows-panel'] .grid.grid-cols-3 button {
-    justify-content: flex-start;
-    padding-inline: 0.5rem;
-  }
-}
-
-@media (max-width: 900px) {
-  /* 编辑器目录改由工具栏按钮按需打开，避免正文被固定列压成窄条。 */
-  main .shrink-0.flex.flex-col.border-r.border-\[var\(--ink-border\)\] {
-    display: none;
-  }
-
-  /* 右侧 AI 区改为编辑器内容上的可关闭覆盖层，不再压缩正文宽度。 */
-  main > div.flex-1.flex.min-h-0 {
-    position: relative;
-  }
-
-  main > div.flex-1.flex.min-h-0 > aside[style*='width'] {
-    position: absolute;
-    inset-block: 0;
-    right: 0;
-    z-index: 40;
-    width: min(320px, calc(100vw - 1rem)) !important;
-    max-width: 100%;
-  }
-
-  /* 正文画布减少内边距，避免标题和正文被窄屏再次挤压。 */
-  .ink-editor {
-    overflow-wrap: anywhere;
-  }
-
-  .ink-editor .ProseMirror {
-    min-height: 280px;
-  }
-
-  /* 浮窗固定到视口右下角，并置于 AI 覆盖面板之下。 */
-  .fixed.z-40.select-none.rounded-2xl.font-sans {
-    left: auto !important;
-    top: auto !important;
-    right: 0.75rem !important;
-    bottom: 0.75rem !important;
-    transform: none !important;
-    z-index: 30 !important;
-  }
-}
-
-@media (max-width: 560px) {
-  main header.h-11.shrink-0.relative.select-none {
-    min-height: 2.75rem;
-  }
-
-  main header.h-11.shrink-0.relative.select-none > div:first-child {
-    flex: 1 1 8rem;
-  }
-
-  main header.h-11.shrink-0.relative.select-none > div:first-child > input {
-    max-width: 7rem;
-  }
-
-  [data-testid='creative-workflows-panel'] {
-    padding: 0.5rem;
-  }
-
-  [data-testid='creative-workflows-panel'] .grid.grid-cols-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  [data-testid='creative-workflows-panel'] .grid.grid-cols-3 button {
-    justify-content: center;
-    font-size: 0.625rem;
-  }
-
-  .fixed.z-40.select-none.rounded-2xl.font-sans {
-    right: 0.5rem !important;
-    bottom: 0.5rem !important;
-    width: calc(100vw - 1rem) !important;
-  }
-}
-
-/* ── 语义化窄窗口覆盖 ─────────────────────────────────────── */
-/*
- * 上面的兼容选择器覆盖历史布局；这些规则绑定到布局组件自己的语义类，
- * 避免根节点包裹层或无关 SVG 变化导致侧栏规则失效。
- */
-
-.project-engine-root,
-.project-engine-main,
-.project-engine-content,
-.creative-editor-root,
-.creative-editor-column {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.project-engine-right-panel {
-  min-width: 0;
-  width: min(300px, 28vw) !important;
-  flex: 0 1 min(300px, 28vw);
-}
-
-.editor-toolbar {
-  min-width: 0;
-  max-width: 100%;
-  gap: 0.25rem;
-  overflow: hidden;
-}
-
-.editor-toolbar-left {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.editor-toolbar-actions {
-  min-width: 0;
-  max-width: 55%;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.editor-toolbar-actions::-webkit-scrollbar {
-  display: none;
-}
-
-.editor-toolbar-actions > .relative,
-.editor-toolbar-actions > button {
-  flex: 0 0 auto;
-}
-
-.sidebar-nav-compact-toggle {
-  display: none;
-  position: absolute;
-  top: 0.4rem;
-  left: 0.5rem;
-  z-index: 50;
-}
-
-.project-engine-root[data-nav-open='false'] > .sidebar-nav-compact-toggle {
-  display: flex;
-}
-
-.editor-status-primary,
-.editor-status-secondary {
-  white-space: nowrap;
-}
-
-@media (max-width: 1100px) {
-  .project-engine-root > .sidebar-nav {
-    display: none;
-    width: 0 !important;
-    border-right-width: 0 !important;
-  }
-
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav {
-    display: flex;
-    position: absolute;
-    inset-block: 0;
-    left: 0;
-    z-index: 45;
-    width: min(240px, calc(100vw - 1rem)) !important;
-    border-right-width: 1px !important;
-    box-shadow: var(--ink-shadow-lg);
-  }
-
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-brand {
-    justify-content: space-between;
-    padding-inline: 0.75rem;
-  }
-
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-brand-copy,
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-project,
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-search,
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-button-label,
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-category-copy,
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-plugin-label {
-    display: revert;
-  }
-
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-quick,
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-settings {
-    padding-inline: 0.5rem;
-  }
-
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-quick button,
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-settings button {
-    justify-content: flex-start;
-  }
-
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-categories button {
-    justify-content: space-between;
-  }
-
-  .project-engine-root[data-nav-open='false'] .editor-toolbar,
-  .project-engine-root[data-nav-open='false'] > .project-engine-main > header {
-    padding-left: 2.75rem;
-  }
-
-  .sidebar-nav-brand {
-    justify-content: center;
-    padding-inline: 0.5rem;
-  }
-
-  .sidebar-nav-brand-copy,
-  .sidebar-nav-project,
-  .sidebar-nav-search,
-  .sidebar-nav-button-label,
-  .sidebar-nav-category-copy,
-  .sidebar-nav-plugin-label {
-    display: none;
-  }
-
-  .sidebar-nav-quick,
-  .sidebar-nav-settings {
-    padding-inline: 0.5rem;
-  }
-
-  .sidebar-nav-quick button,
-  .sidebar-nav-settings button,
-  .sidebar-nav-categories button {
-    justify-content: center;
-    padding-inline: 0.5rem;
-  }
-
-  .project-engine-right-panel {
-    width: min(280px, 34vw) !important;
-    flex-basis: min(280px, 34vw);
-  }
-
-  .editor-chapter-tree {
-    width: 200px !important;
   }
 }
 
@@ -921,8 +783,15 @@
     flex: none;
   }
 
+  /* 目录保持可通过工具栏收起/展开，但不再挤压正文。 */
   .editor-chapter-tree {
-    display: none;
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 40;
+    width: min(240px, calc(100% - 1rem)) !important;
+    max-width: 100%;
+    box-shadow: var(--ink-shadow-lg);
   }
 
   .editor-references-sidebar,
@@ -944,28 +813,29 @@
     flex: none;
   }
 
-  .editor-toolbar {
-    overflow-x: auto;
-  }
-
-  .editor-status-footer {
-    gap: 0.5rem;
-    padding-inline: 0.75rem;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .editor-status-footer::-webkit-scrollbar {
-    display: none;
-  }
-
   .editor-toolbar-left {
-    flex: 1 1 8rem;
+    flex-basis: 8rem;
   }
 
   .editor-toolbar-actions {
-    max-width: 52%;
-    flex: 0 1 auto;
+    max-width: 55%;
+  }
+
+  .ink-editor {
+    overflow-wrap: anywhere;
+  }
+
+  .ink-editor .ProseMirror {
+    min-height: 280px;
+  }
+
+  .fixed.z-40.select-none.rounded-2xl.font-sans {
+    left: auto !important;
+    top: auto !important;
+    right: 0.75rem !important;
+    bottom: 0.75rem !important;
+    transform: none !important;
+    z-index: 30 !important;
   }
 }
 
@@ -979,7 +849,41 @@
   }
 
   .editor-toolbar-actions {
-    max-width: 48%;
+    max-width: 50%;
+  }
+
+  .editor-status-footer {
+    gap: 0.5rem;
+    padding-inline: 0.625rem;
+    font-size: 10px;
+  }
+
+  .editor-status-primary {
+    gap: 0.625rem;
+  }
+
+  /* 极窄窗口优先保留当前章节进度、连接和保存状态。 */
+  .editor-total-words {
+    display: none;
+  }
+
+  [data-testid='creative-workflows-panel'] {
+    padding: 0.5rem;
+  }
+
+  [data-testid='creative-workflows-panel'] .grid.grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  [data-testid='creative-workflows-panel'] .grid.grid-cols-3 button {
+    justify-content: center;
+    font-size: 0.625rem;
+  }
+
+  .fixed.z-40.select-none.rounded-2xl.font-sans {
+    right: 0.5rem !important;
+    bottom: 0.5rem !important;
+    width: calc(100vw - 1rem) !important;
   }
 }
 

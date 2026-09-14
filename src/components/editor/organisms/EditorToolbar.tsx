@@ -84,6 +84,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
     showSplitView,
     showScratchpad,
     showFindReplace,
+    ghostText,
   } = model
 
   const [activeMenu, setActiveMenu] = useState<'format' | 'proof' | 'tools' | 'export' | null>(null)
@@ -106,9 +107,14 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
     setActiveMenu((curr) => (curr === menu ? null : menu))
   }
 
+  const hasGhostText = ghostText.trim().length > 0
+
   return (
     <header
       ref={toolbarRef}
+      data-testid="editor-toolbar"
+      data-layout="single-row"
+      aria-label="编辑工具栏"
       className="editor-toolbar h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] relative select-none"
     >
       {/* 左侧：返回作品库 + 翻章导航 + 目录展开 + 章节标题输入 + 状态选择器 */}
@@ -185,7 +191,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         </div>
 
         {/* 常用文字样式与排版胶囊群（Apple 式收拢） */}
-        <div className="hidden sm:flex items-center gap-1 border-l border-[var(--ink-border)] pl-2 ml-1">
+        <div className="editor-toolbar-inline-controls hidden sm:flex items-center gap-1 border-l border-[var(--ink-border)] pl-2 ml-1">
           {/* 写作背景与网格线（使用正规 Lucide 图标，绝不使用任何 Emoji） */}
           <button
             type="button"
@@ -194,7 +200,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="写作背景底色与稿纸网格线"
           >
             <Palette className="w-3.5 h-3.5 text-amber-500" />
-            <span>背景</span>
+            <span className="editor-toolbar-inline-label">背景</span>
           </button>
 
           {/* 引用名内联高亮开关 */}
@@ -210,7 +216,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               title={entityHighlightEnabled ? '点击关闭正文实体高亮' : '点击开启正文实体高亮'}
             >
               <PencilLine className="w-3.5 h-3.5" />
-              <span>高亮</span>
+              <span className="editor-toolbar-inline-label">高亮</span>
             </button>
           )}
 
@@ -227,7 +233,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               title="展开/收起本章引用侧栏（角色与设定条目）"
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>引用</span>
+              <span className="editor-toolbar-inline-label">引用</span>
             </button>
           )}
 
@@ -343,14 +349,34 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         </div>
       </div>
 
-      {/* 右侧：5 个语义清晰的高阶分组下拉按钮，不再散落 14 个杂乱图标 */}
-      <div className="editor-toolbar-actions flex items-center gap-1 shrink-0 relative">
+      {/* 右侧：语义分组入口；续写建议是唯一的上下文动作，不放入底部状态栏。 */}
+      <div
+        data-testid="editor-toolbar-actions"
+        className="editor-toolbar-actions flex items-center gap-1 shrink-0 relative"
+      >
+        {hasGhostText && (
+          <button
+            type="button"
+            data-testid="editor-toolbar-ghost-action"
+            onClick={() => actions.acceptGhostText()}
+            aria-label="采纳续写建议"
+            title="采纳续写建议（Tab）"
+            className="editor-toolbar-action-button flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+            <span className="editor-toolbar-label">Tab 采纳续写</span>
+          </button>
+        )}
+
         {/* 1. 排版与标点规整 */}
         <div className="relative">
           <button
             type="button"
+            data-testid="editor-toolbar-format-trigger"
+            aria-haspopup="menu"
+            aria-expanded={activeMenu === 'format'}
             onClick={() => toggleMenu('format')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
               activeMenu === 'format'
                 ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
                 : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
@@ -358,7 +384,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="排版与标点规范"
           >
             <AlignLeft className="w-3.5 h-3.5" />
-            <span>排版</span>
+            <span className="editor-toolbar-label">排版</span>
             <ChevronDown className="w-3 h-3 opacity-60" />
           </button>
 
@@ -470,8 +496,10 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <div className="relative">
           <button
             type="button"
+            aria-haspopup="menu"
+            aria-expanded={activeMenu === 'proof'}
             onClick={() => toggleMenu('proof')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
               activeMenu === 'proof'
                 ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
                 : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
@@ -479,7 +507,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="审校与内容体检"
           >
             <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
-            <span>审校</span>
+            <span className="editor-toolbar-label">审校</span>
             <ChevronDown className="w-3 h-3 opacity-60" />
           </button>
 
@@ -521,8 +549,10 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <div className="relative">
           <button
             type="button"
+            aria-haspopup="menu"
+            aria-expanded={activeMenu === 'tools'}
             onClick={() => toggleMenu('tools')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
               activeMenu === 'tools' || showSplitView || showScratchpad
                 ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
                 : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
@@ -530,7 +560,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="创作辅助与沉浸工具"
           >
             <Columns2 className="w-3.5 h-3.5 text-blue-500" />
-            <span>辅助</span>
+            <span className="editor-toolbar-label">辅助</span>
             <ChevronDown className="w-3 h-3 opacity-60" />
           </button>
 
@@ -614,16 +644,16 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         {/* 4. 统一查找替换入口 */}
         <button
           type="button"
-          onClick={() => actions.setShowFindReplace(!showFindReplace)}
-          title="查找替换 / 全文检索 (⌘F)"
-          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+          className={`editor-toolbar-action-button editor-toolbar-find-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
             showFindReplace
               ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
               : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
           }`}
+          onClick={() => actions.setShowFindReplace(!showFindReplace)}
+          title="查找替换 / 全文检索 (⌘F)"
         >
           <Search className="w-3.5 h-3.5" />
-          <span>查找</span>
+          <span className="editor-toolbar-label">查找</span>
         </button>
 
         {/* 隐藏保留全书检索触发器（保证测试与全局快捷键兼容） */}
@@ -641,8 +671,10 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <div className="relative">
           <button
             type="button"
+            aria-haspopup="menu"
+            aria-expanded={activeMenu === 'export'}
             onClick={() => toggleMenu('export')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
               activeMenu === 'export'
                 ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
                 : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
@@ -650,7 +682,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="导出与分享"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>导出</span>
+            <span className="editor-toolbar-label">导出</span>
             <ChevronDown className="w-3 h-3 opacity-60" />
           </button>
 
