@@ -722,9 +722,13 @@ async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
       selectedProvider: expect.any(String),
       selectedModel: expect.any(String),
       contextFingerprint: expect.any(String),
+      contextTokenCount: expect.any(Number),
       outputFormat: 'text',
     },
   })
+  const contextTokenCount = (contextExecution.snapshot.result?.provenance as Record<string, unknown> | undefined)
+    ?.contextTokenCount
+  expect(contextTokenCount).toBeLessThanOrEqual(512)
 
   const retrievalHitTask: AiTask = {
     ...contextTask,
