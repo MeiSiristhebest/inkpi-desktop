@@ -9,14 +9,15 @@ This document establishes the engineering standards, architectural invariants, a
 1. **Standalone Sidecar Daemon Isolation**:
    - The desktop wrapper packages `inkpi.exe` as an `externalBin` sidecar compiled via Bun.
    - The desktop runtime operates without a Node.js prerequisite on end-user machines.
-   - IPC communication strictly uses JSON-RPC 2.0 over WebSocket (`ws://127.0.0.1:8849`).
+   - IPC communication strictly uses JSON-RPC 2.0 over WebSocket. The default endpoint is `ws://127.0.0.1:8849`; isolated instances may override the HTTP and WebSocket ports through the instance configuration.
 2. **Offline-First Storage Resilience**:
    - Local state, draft saves, and graph entities persist into IndexedDB (`inkpi-desktop-db`) with automatic debounce write-back.
    - Editor states remain recoverable across application restarts even without active daemon connection.
 3. **Single-Defect Atomic Focus (RFC-100)**:
    - PRs and commits must remain small, focused, and atomic. Packaged commits with unrelated multi-bug fixes are strictly prohibited.
 4. **Quality Gate Thresholds**:
-   - Component and core engine test coverage must strictly satisfy: Lines $\ge 85\%$, Branches $\ge 80\%$.
+   - The aggregate gate enforced by `vitest.config.ts` is: Lines $\ge 80\%$, Branches $\ge 70\%$, Statements/Functions $\ge 75\%$.
+   - A per-file coverage floor is not currently enabled.
    - Every bug fix or feature must include dedicated Vitest unit/integration tests with `@testing-library/react`.
 5. **Frontend Ports & Adapters Isolation**:
    - `components/`, `domain/`, `core/`, `hooks/`, and `plugins/**/components/` depend only on abstract ports in `src/ports/` and concrete adapters in `src/adapters/`.
@@ -55,13 +56,13 @@ npm run format
 npm run format:check
 ```
 
-### 4. Desktop Development Harness
+### 5. Desktop Development Harness
 ```bash
 # Syncs daemon sidecar and launches Tauri 2 dev runner
 npm run tauri:dev
 ```
 
-### 5. Desktop NSIS Release Package Build
+### 6. Desktop NSIS Release Package Build
 ```bash
 npm run tauri:build
 ```

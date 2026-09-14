@@ -128,7 +128,7 @@ describe('Tier 1: F1 - DesktopPluginHostContext & CAS Writeback', () => {
       // Diagnostic escalation assertion for M1 implementers
       expect(
         hostContextExists,
-        'M1 Deliverable Notice: DesktopPluginHostContext will be provided by src/core/pluginHostContext.tsx per PROJECT.md § M1',
+        'M1 Deliverable Notice: DesktopPluginHostContext is defined by src/core/pluginHostContext.tsx per the Runtime v1 specification',
       ).toBe(false)
     } else {
       expect(hostContextExists).toBe(true)

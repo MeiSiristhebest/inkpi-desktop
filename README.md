@@ -80,7 +80,7 @@ InkPi Desktop is the native desktop workstation client for **InkPi**. It package
 │   │  • IndexedDB Local Persistence   │                                    │
 │   └─────────────────┬────────────────┘                                    │
 │                     │                                                     │
-│                     │ WebSocket JSON-RPC 2.0 (ws://127.0.0.1:8849)        │
+│                     │ WebSocket JSON-RPC 2.0 (default ws://127.0.0.1:8849) │
 │                     ▼                                                     │
 │   ┌──────────────────────────────────┐                                    │
 │   │     Tauri Rust Runtime Host      │                                    │
@@ -90,7 +90,7 @@ InkPi Desktop is the native desktop workstation client for **InkPi**. It package
 │   │  • Native Window & System Menu   │                                    │
 │   └─────────────────┬────────────────┘                                    │
 │                     │                                                     │
-│                     │ Child Process Spawn (inkpi.exe daemon --port 8848)  │
+│                     │ Child Process Spawn (default: inkpi.exe --port 8848) │
 │                     ▼                                                     │
 │   ┌──────────────────────────────────┐                                    │
 │   │   InkPi Standalone Daemon        │                                    │
@@ -102,6 +102,10 @@ InkPi Desktop is the native desktop workstation client for **InkPi**. It package
 │   └──────────────────────────────────┘                                    │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
+
+The diagram shows the single-instance defaults. `--profile`, `--state-db`,
+`--http-port`, `--ws-port`, and `--instance-id` can be used for isolated
+instances; see `src-tauri/src/instance_config.rs`.
 
 > [!NOTE]
 > **Frontend layering (Ports & Adapters)**: The React SPA follows a hexagonal architecture — `components/`, `domain/`, `core/`, `hooks/`, `plugins/**/components/` depend only on abstract ports in `src/ports/` and concrete adapters in `src/adapters/`; they never import `db`, call `window.confirm`, `navigator.clipboard`, or `URL.createObjectURL` directly. This dependency direction is enforced at build time by `src/architecture.test.ts`. `RichEditor` is refactored into a passive view (`useChapterEditorModel` + `useChapterAutosave`), and seed IDs are no longer hardcoded. See [ARCHITECTURE.md](./ARCHITECTURE.md).
@@ -189,9 +193,9 @@ Installer outputs are generated into `src-tauri/target/x86_64-pc-windows-gnu/rel
 
 1. **Zero Client Runtime Prerequisites**: The standalone executable packages everything required; end users need zero developer tooling.
 2. **Offline-First Storage Integrity**: All drafts, entities, and settings persist into IndexedDB with transactional consistency.
-3. **Strict Quality Gate ($\ge 85\%$ Lines, $\ge 80\%$ Branches)**: All code commits must satisfy rigorous branch and line test coverage.
+3. **Automated aggregate quality gate ($\ge 80\%$ Lines, $\ge 70\%$ Branches, $\ge 75\%$ Statements/Functions)**: `npm run test:coverage` enforces the thresholds in `vitest.config.ts`. The latest run passed 213 test files (925 passed, 2 skipped) with 87.07% lines, 76.82% branches, 84.52% statements, and 76.47% functions.
 4. **Clean Process Decoupling**: Tauri Rust container communicates exclusively over typed JSON-RPC 2.0 WebSocket frames.
-5. **Exact Supply-Chain Pinning**: Dependencies are strictly versioned for deterministic reproducibility.
+5. **Reproducible dependency resolution**: `package-lock.json` and `pnpm-lock.yaml` are committed install sources for the dependency ranges declared in `package.json`.
 
 ---
 

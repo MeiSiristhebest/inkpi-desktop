@@ -5,8 +5,8 @@ Thank you for your interest in contributing to InkPi Desktop!
 ## 🛡️ Core Contribution Principles
 
 1. **Strict Single-Defect / Atomic Focus (RFC-100)**: PRs must be hyper-focused and minimal ($\le 30\text{--}50$ lines of core change).
-2. **Test Coverage Gate ($\ge 85\%$ Lines, $\ge 80\%$ Branches)**: All PRs touching logic must include unit or component tests satisfying the coverage gate.
-3. **Exact Dependency Pinning**: Dependencies must be strictly pinned to exact versions.
+2. **Test Coverage Gate (aggregate: $\ge 80\%$ Lines, $\ge 70\%$ Branches, $\ge 75\%$ Statements/Functions)**: All PRs touching logic must include unit or component tests and pass the thresholds enforced by `vitest.config.ts`.
+3. **Reproducible Dependency Resolution**: Keep the committed `package-lock.json` and `pnpm-lock.yaml` synchronized with `package.json`; the manifest currently uses semver ranges for npm dependencies.
 4. **Clean Architecture & Separation of Concerns**: Maintain decoupling between Tauri Rust host, externalBin daemon sidecar, and Vite/React editor SPA.
 5. **Frontend Ports & Adapters**: Never import `db/indexedDB` or call `window.confirm` / `navigator.clipboard` / `URL.createObjectURL` / `Date.now()` / `Math.random()` from `components/`, `domain/`, `core/`, `hooks/`, `plugins/**/components/`. Depend on `src/ports/` interfaces and consume `src/adapters/` implementations. Inject non-determinism via the `Clock` / `IdGenerator` / `RandomSource` ports. The `src/architecture.test.ts` guard fails the build on any violation.
    - Repositories expose **per-project** queries (`getVolumesByProject` / `getChaptersByProject`); do not fetch the global store and filter by `projectId` in memory.

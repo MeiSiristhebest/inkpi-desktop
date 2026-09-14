@@ -1,6 +1,6 @@
 /**
  * Authoritative Mathematical Oracles for InkPi Desktop
- * Strictly derived from mathematical theory and PROJECT.md § Feature Inventory (F11 - F15)
+ * Strictly derived from mathematical theory and the Runtime v1 feature inventory (F11 - F15)
  */
 
 // --- 1. Poset DAG & Topological Sort Oracle (F11) ---

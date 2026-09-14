@@ -1,6 +1,6 @@
 # InkPi Desktop 技术架构
 
-状态：正式基线（冻结候选，Final Freeze pending）。AI Runtime v1 的本地 Phase 0–22 实现与自动化验收矩阵已完成；Phase 23 仍缺真实 Provider、人工标注、跨设备、安装后 GUI 和生产可靠性证据。
+状态：实现基线（冻结候选，Final Freeze pending）。关联 Runtime 本地 Phase 23 gate 已通过 20/20 原子条件和 13/13 可靠性场景；工作区 external/replay 记录 `inkpi-evidence/phase18/phase18-23-packaged-human-reviewed-final-20260914.json` 也记录 16/16 聚合组通过，其中包含 100/300 章真实 Provider、6 个 Gold、3 个 pairwise 和 packaged/GUI 记录。Runtime 本地 gate 明确不把 external/replay 记录自动升级为 formal freeze；生产长期运行与最终发布决策仍单独保留。
 
 本文记录 InkPi Desktop 与 InkPi Daemon 的进程边界、数据所有权、AI 任务入口和当前实现状态。规范性契约见 inkpi/docs/specs/AI_RUNTIME_SPEC_v1.md。
 
@@ -77,7 +77,7 @@ interface AiAssistant {
 
 实现是 src/adapters/daemonAiAssistant.ts。它调用 task.submit，轮询 task.status，在 AbortSignal 触发时调用 task.cancel，并把状态快照交给进度回调。
 
-openSession、suggestContinuation 和 prompt 已不再是 Desktop AiAssistant 端口的方法。Daemon 仍保留 session._、agent._ 等旧会话/Agent RPC 供现有会话基础设施使用；这些 RPC 不是 Creative Task API，新的创作请求不得以它们作为入口。仓库中的其他开发说明文件仍有旧名称，未在本次文档范围内修改。
+openSession、suggestContinuation 和 prompt 已不再是 Desktop AiAssistant 端口的方法。Daemon 仍保留 session._、agent._ 等旧会话/Agent RPC 供现有会话基础设施使用；这些 RPC 不是 Creative Task API，新的创作请求不得以它们作为入口。README、贡献规范、开发 SOP 和测试基础设施说明已按当前代码与配置同步；跨仓库的正式验收条件仍以 Runtime 的 `AI_RUNTIME_SPEC_v1.md` 为准。
 
 ## 4. Canonical Content Representation
 
@@ -307,6 +307,6 @@ Daemon 的 session/agent 旧 RPC 仍被旧会话基础设施使用。本支线�
 2. DomainChangeSet 到 SQLite 文档/故事读模型的明确 reducer，及重启、离线、乱序、损坏快照测试。
 3. 三层 Cache、InstructionRegistry、ArtifactStore 在完整生产任务路径的接入证明；Daemon 本地 retryable fallback 已测，真实 provider matrix、跨进程配置和生产 fallback 仍需证明。
 4. 四个第一批 creative skill 的逐个实际 manifest、lazy load、ExtensionHost/ToolRegistry 注册和跨进程测试（Runtime 的逐个激活及真实 Daemon 子进程/RPC 测试已有证据；Desktop 生产注册和 CI 验收仍待完成）。
-5. 44 个插件的分类、迁移或 UI-only 决策；清理剩余旧 session/Agent AI 入口和过期文档。
+5. 44 个插件的分类、迁移或 UI-only 决策已完成本地代码门禁；仍需完成生产插件运行、旧 session/Agent 兼容基础设施的完整 interface 审计和最终移除/保留决策。本文档及本仓库配套开发文档已完成当前代码同步。
 6. Evals 进入 CI，并补充 source-map、entity contradiction、invalid state transition、mutation、canonical subjective fixture 和 100/300 chapter benchmark；再以真实 provider 和人类标注 gold 复核。
 7. crash/restart、App restart、模型不可用、能力不匹配、结构化输出非法、context overflow、cache invalidation、stale proposal 和生产级 fault injection 的可靠性报告。

@@ -1,9 +1,13 @@
-# InkPi Desktop E2E Test Infrastructure Specification
+# InkPi Desktop E2E and Contract Test Infrastructure
 
-**Document Version**: 1.0.0  
+**Document Version**: 1.1.0  
 **Author**: Test Writer Agent (`teamwork_preview_test_writer_e2e`)  
 **Status**: ACTIVE / TEST_READY  
-**Scope**: Opaque-box, requirement-driven End-to-End integration testing for InkPi Desktop Plugin Ecosystem (44 plugins, host context, storage layer, and mathematical engines).
+**Scope**: In-process, requirement-driven integration testing for the InkPi Desktop plugin ecosystem (44 plugins, host context, storage layer, and mathematical engines), plus a separate Tauri packaging/startup smoke path.
+
+**Source of truth**: The [Runtime v1 specification](https://github.com/MeiSiristhebest/inkpi/blob/master/docs/specs/AI_RUNTIME_SPEC_v1.md), this repository's `ARCHITECTURE.md`, and the executable contracts under `src/` and `tests/`. Historical external drafts are not test inputs.
+
+**Audit snapshot (2026-09-14)**: The Desktop suite contains 213 test files and 927 tests; the latest full run passed 925 tests and skipped 2. V8 coverage was 87.07% lines, 76.82% branches, 84.52% statements, and 76.47% functions against the configured thresholds of 80% / 70% / 75% / 75%.
 
 ---
 
@@ -12,12 +16,12 @@
 The InkPi Desktop E2E test suite adheres to strict engineering principles:
 
 1. **Opaque-Box Verification (Black-Box / Grey-Box by Contract)**:
-   - Tests interact exclusively with public API boundaries, interface contracts defined in `PROJECT.md`, component mount boundaries, and IndexedDB storage persistence.
+   - Tests exercise public host APIs, component mount boundaries, real domain engines, and IndexedDB persistence boundaries. They do not assert private component state or arbitrary implementation details.
    - Tests do NOT assert on internal private variables, component implementation details, or arbitrary React state hooks.
    - Every assertion verifies observable system side-effects: database records altered, events delivered, CAS revision tokens incremented, active chapter content mutated, or mathematically computed values verified against theoretical ground truth.
 
 2. **Authoritative Oracle & Expected Output Derivation**:
-   - Every test case has an explicit authoritative source of truth derived from `ORIGINAL_REQUEST.md` and `PROJECT.md`:
+   - Every test case has an explicit authoritative source of truth derived from the Runtime v1 specification and `ARCHITECTURE.md`:
      - **Power Tier Poset DAG**: Kahn's topological sorting algorithm ($O(V+E)$) and Warshall's transitive closure algorithm ($O(V^3)$). Expected order and cycle detection derive from strict poset mathematics.
      - **Token Budget Optimization**: Dynamic Programming 0-1 Knapsack recurrence:
        $$DP[i][w] = \max(DP[i-1][w], DP[i-1][w - w_i] + v_i)$$
@@ -34,7 +38,7 @@ The InkPi Desktop E2E test suite adheres to strict engineering principles:
    - Tests that trivially pass with `expect(true).toBe(true)` or `expect(screen.getByText(...)).toBeDefined()` without mutation checks are prohibited.
 
 4. **Self-Containment & Multi-Tenant Isolation**:
-   - Every test generates isolated project IDs (`test-proj-${crypto.randomUUID()}`).
+   - Persistence tests that need cross-project isolation generate scoped IDs such as `test-proj-${crypto.randomUUID()}`; other deterministic fixtures use fixed IDs and clean up their stores.
    - Database tables are seeded and cleaned up using isolated scopes.
 
 ---
@@ -81,7 +85,7 @@ tests/
 ```
 
 ### Test Runner Environment
-- **Test Runner**: Vitest (`vitest run tests/e2e`)
+- **Test Runner**: Vitest (`npm run test -- tests/e2e`)
 - **Execution Environment**: `jsdom` with `fake-indexeddb` and in-memory mock storage
 - **Setup Script**: `src/test/setup.ts` (auto-loaded)
 - **Reporter**: Standard text reporter with test case execution timings and failure stack traces
@@ -89,13 +93,13 @@ tests/
 ### Execution Commands
 ```bash
 # Run complete E2E test suite
-npx vitest run tests/e2e
+npm run test -- tests/e2e
 
 # Run individual tiers
-npx vitest run tests/e2e/tier1-features
-npx vitest run tests/e2e/tier2-boundaries
-npx vitest run tests/e2e/tier3-combinations
-npx vitest run tests/e2e/tier4-scenarios
+npm run test -- tests/e2e/tier1-features
+npm run test -- tests/e2e/tier2-boundaries
+npm run test -- tests/e2e/tier3-combinations
+npm run test -- tests/e2e/tier4-scenarios
 ```
 
 ### Tauri release smoke
@@ -103,15 +107,15 @@ npx vitest run tests/e2e/tier4-scenarios
 The Windows GNU release path is also covered locally:
 
 ```bash
-pnpm run tauri:build
+npm run tauri:build
 ```
 
-The current verification produced the NSIS installer at
+A recorded Windows GNU verification produced the NSIS installer at
 `src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/InkPi Desktop_0.1.0_x64-setup.exe`,
 verified that the package contains the `inkpi.exe` sidecar, four skill manifests,
 WebView2Loader, and MinGW runtime DLLs, and started the release application twice.
-Both starts spawned the sidecar and exposed TCP ports 8848 and 8849; the test
-processes were closed after each run. This is a startup/restart smoke test, not
+Both starts spawned the sidecar and exposed the default TCP ports 8848 and 8849;
+the test processes were closed after each run. This is a startup/restart smoke test, not
 the full App task-recovery or production-provider gate.
 
 The `Architecture Gates` workflow accepts an optional `runtime_ref` input when

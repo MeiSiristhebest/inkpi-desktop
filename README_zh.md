@@ -80,7 +80,7 @@ InkPi Desktop 是 **InkPi** 的官方桌面工作台客户端。它将高性能�
 │   │  • IndexedDB Local Persistence   │                                    │
 │   └─────────────────┬────────────────┘                                    │
 │                     │                                                     │
-│                     │ WebSocket JSON-RPC 2.0 (ws://127.0.0.1:8849)        │
+│                     │ WebSocket JSON-RPC 2.0（默认 ws://127.0.0.1:8849）   │
 │                     ▼                                                     │
 │   ┌──────────────────────────────────┐                                    │
 │   │     Tauri Rust Runtime Host      │                                    │
@@ -90,7 +90,7 @@ InkPi Desktop 是 **InkPi** 的官方桌面工作台客户端。它将高性能�
 │   │  • Native Window & System Menu   │                                    │
 │   └─────────────────┬────────────────┘                                    │
 │                     │                                                     │
-│                     │ Child Process Spawn (inkpi.exe daemon --port 8848)  │
+│                     │ Child Process Spawn（默认：inkpi.exe --port 8848）   │
 │                     ▼                                                     │
 │   ┌──────────────────────────────────┐                                    │
 │   │   InkPi Standalone Daemon        │                                    │
@@ -102,6 +102,9 @@ InkPi Desktop 是 **InkPi** 的官方桌面工作台客户端。它将高性能�
 │   └──────────────────────────────────┘                                    │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
+
+上图使用单实例默认配置。`--profile`、`--state-db`、`--http-port`、`--ws-port`
+和 `--instance-id` 可用于隔离多个实例；详见 `src-tauri/src/instance_config.rs`。
 
 > [!NOTE]
 > **前端分层（端口与适配器）**：React SPA 采用六边形架构——`components/`、`domain/`、`core/`、`hooks/`、`plugins/**/components/` 仅依赖 `src/ports/` 抽象端口与 `src/adapters/` 适配器，绝不直接 `import` `db`、`window.confirm`、`navigator.clipboard` 或 `URL.createObjectURL`；该依赖方向由 `src/architecture.test.ts` 在构建期强制守卫。`RichEditor` 已重构为被动视图（`useChapterEditorModel` + `useChapterAutosave`），种子数据 ID 不再硬编码。详见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
@@ -189,9 +192,9 @@ npm run tauri:build
 
 1. **终端用户零环境前置要求**：独立打包完整可执行文件，无需安装任何开发工具；
 2. **离线优先数据完整性**：所有草稿、实体与配置均通过事务写入 IndexedDB，数据资产安全可靠；
-3. **严格质量门禁（$\ge 85\%$ 行，$\ge 80\%$ 分支）**：所有代码提交均需通过严格的单测覆盖率校验；
+3. **自动化聚合质量门禁（行 $\ge 80\%$、分支 $\ge 70\%$、语句/函数 $\ge 75\%$）**：`npm run test:coverage` 按 `vitest.config.ts` 执行门禁。最近一次运行通过 213 个测试文件（925 个通过、2 个跳过），行覆盖率 87.07%、分支 76.82%、语句 84.52%、函数 76.47%；
 4. **纯净进程与通信解耦**：Tauri Rust 容器与后台进程完全通过类型化 JSON-RPC 2.0 WebSocket 帧通信；
-5. **供应链依赖精确锁定**：所有依赖项均严格锁定确定版本，确保可复现构建。
+5. **可复现的依赖解析**：`package-lock.json` 和 `pnpm-lock.yaml` 是 `package.json` 依赖范围对应的已提交安装锁文件。
 
 ---
 

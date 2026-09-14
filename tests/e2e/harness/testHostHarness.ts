@@ -90,7 +90,7 @@ export function createScopedEventBus(projectId: string): ScopedPluginEventBus {
 
 /**
  * In-Memory Opaque-Box Test Host Context Harness
- * Implements the full contract from PROJECT.md § Interface Contracts
+ * Implements the public host contract exercised by the Runtime v1 specification
  */
 export class TestHostHarness {
   public projectId: string

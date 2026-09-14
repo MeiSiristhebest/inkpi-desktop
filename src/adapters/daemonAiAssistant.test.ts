@@ -181,7 +181,9 @@ describe('createDaemonAiAssistant instruction registration', () => {
       pollIntervalMs: 50,
       signal: controller.signal,
     })
-    await Promise.resolve()
+    await vi.waitFor(() =>
+      expect(calls.map((call) => call.method)).toContain('task.submit'),
+    )
     controller.abort()
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
