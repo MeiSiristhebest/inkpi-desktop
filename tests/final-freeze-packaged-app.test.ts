@@ -20,8 +20,18 @@ import {
 import { afterEach, describe, expect, it } from 'vitest'
 import { bootstrapDesktopTaskRecovery } from '../src/adapters/desktopTaskRecoveryBootstrap'
 import { createDaemonAiAssistant } from '../src/adapters/daemonAiAssistant'
-import { createDaemonDomainSyncRemote } from '../src/adapters/daemonDomainSyncRemote'
+import {
+  createDaemonDomainSyncRemote,
+  createDaemonProposalSyncRemote,
+} from '../src/adapters/daemonDomainSyncRemote'
 import { createDaemonSkillRuntime, FIRST_PARTY_SKILL_IDS } from '../src/adapters/daemonSkillRuntime'
+import {
+  ProposalConflictError,
+  ProposalLedger,
+  RemoteProposalStore,
+  type AiProposal,
+  type ProposalStore,
+} from '../src/ai/proposals'
 import { inkpiDaemonGateway } from '../src/adapters/inkpiDaemonGateway'
 import { IndexedDbDomainChangeStore } from '../src/adapters/indexedDbDomainChangeStore'
 import { IndexedDbTaskRecoveryStore } from '../src/db/taskRecoveryStore'
@@ -229,6 +239,7 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
         )
         await assertPackagedRuntimeRegistrations(first.client)
         await assertPackagedStateBoundaries(first.client)
+        await assertPackagedProposalCas(first.client)
         await assertPackagedProjectionSync(first.client, peer.client)
 
         const notificationClient = first.client as NotificationClient
@@ -690,6 +701,84 @@ async function assertPackagedProjectionSync(
     revision: 1,
     reason: 'revision-conflict',
   })
+}
+
+async function assertPackagedProposalCas(client: RpcClient): Promise<void> {
+  const suffix = Date.now()
+  const workspaceId = `packaged-proposal-cas-workspace-${suffix}`
+  const documentId = `packaged-proposal-document-${suffix}`
+  const createdAt = suffix
+  const localProposals = new Map<string, AiProposal>()
+  const localStore: ProposalStore = {
+    list: async () => [...localProposals.values()],
+    save: async (proposal) => {
+      localProposals.set(proposal.id, proposal)
+    },
+  }
+  const ledger = new ProposalLedger({
+    store: new RemoteProposalStore({
+      workspaceId,
+      remote: createDaemonProposalSyncRemote(client),
+      local: localStore,
+    }),
+  })
+  await ledger.ready
+
+  const makeProposal = (id: string, baseRevision = 0): AiProposal => ({
+    id,
+    taskId: `packaged-proposal-task-${id}`,
+    documentId,
+    baseRevision,
+    patches: [{ documentId, from: 0, to: 1, text: '新' }],
+    status: 'pending',
+    createdAt,
+    updatedAt: createdAt,
+  })
+
+  const undoable = makeProposal(`packaged-undoable-${suffix}`)
+  expect(ledger.create(undoable)).toMatchObject({ status: 'pending' })
+  expect(ledger.modify(undoable.id, {
+    patches: [{ documentId, from: 0, to: 1, text: '改' }],
+    explanation: 'packaged acceptance modification',
+  })).toMatchObject({ status: 'pending', explanation: 'packaged acceptance modification' })
+  expect(ledger.accept(undoable.id)).toMatchObject({ status: 'accepted' })
+  const commitReceipt = await ledger.commit(undoable.id, 0, () => ({
+    inversePatches: [{ documentId, from: 0, to: 1, text: '原' }],
+  }))
+  expect(commitReceipt).toMatchObject({ proposalId: undoable.id, revision: 1 })
+  const undoReceipt = await ledger.undo(undoable.id, 1, () => undefined)
+  expect(undoReceipt).toMatchObject({ proposalId: undoable.id, revision: 2 })
+  expect(ledger.get(undoable.id)).toMatchObject({ status: 'undone' })
+
+  const rejected = makeProposal(`packaged-rejected-${suffix}`)
+  ledger.create(rejected)
+  expect(ledger.reject(rejected.id)).toMatchObject({ status: 'rejected' })
+
+  const stale = makeProposal(`packaged-stale-${suffix}`, 4)
+  ledger.create(stale)
+  ledger.accept(stale.id)
+  await expect(ledger.commit(stale.id, 5, () => undefined)).rejects.toBeInstanceOf(
+    ProposalConflictError,
+  )
+  expect(ledger.get(stale.id)).toMatchObject({ status: 'stale' })
+  expect(ledger.rebase(stale.id, 5)).toMatchObject({
+    status: 'pending',
+    baseRevision: 5,
+  })
+  ledger.accept(stale.id)
+  await expect(ledger.commit(stale.id, 5, () => ({
+    inversePatches: [{ documentId, from: 0, to: 1, text: '原' }],
+  }))).resolves.toMatchObject({ proposalId: stale.id, revision: 6 })
+
+  await ledger.flush()
+  const snapshot = await createDaemonProposalSyncRemote(client).snapshotProposals(workspaceId)
+  expect(snapshot.proposals).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: undoable.id, status: 'undone' }),
+      expect.objectContaining({ id: rejected.id, status: 'rejected' }),
+      expect.objectContaining({ id: stale.id, status: 'committed', committedRevision: 6 }),
+    ]),
+  )
 }
 
 async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
