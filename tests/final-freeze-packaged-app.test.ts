@@ -32,6 +32,13 @@ import {
   type AiProposal,
   type ProposalStore,
 } from '../src/ai/proposals'
+import {
+  createContinueTask,
+  createContinuityAuditTask,
+  createDeepReasoningTask,
+  createDistillationTask,
+  createRewriteTask,
+} from '../src/ai/tasks/taskFactories'
 import { inkpiDaemonGateway } from '../src/adapters/inkpiDaemonGateway'
 import { IndexedDbDomainChangeStore } from '../src/adapters/indexedDbDomainChangeStore'
 import { IndexedDbTaskRecoveryStore } from '../src/db/taskRecoveryStore'
@@ -256,10 +263,12 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
           [...FIRST_PARTY_SKILL_IDS].map((skillId) => `skill.${skillId}`).sort(),
         )
         assertPackagedCanonicalBoundaries()
+        await assertPackagedCapabilityRouting(first.client)
         await assertPackagedRuntimeRegistrations(first.client)
         await assertPackagedStateBoundaries(first.client)
         await assertPackagedProposalCas(first.client)
         await assertPackagedProjectionSync(first.client, peer.client)
+        await assertPackagedVerticalSlices(first.client)
 
         const notificationClient = first.client as NotificationClient
         if (!notificationClient.on) {
@@ -886,6 +895,169 @@ function assertPackagedCanonicalBoundaries(): void {
   const serialized = serializeStoryState(storyState)
   expect(deserializeStoryState(serialized)).toEqual(storyState)
   expect(serializeStoryState(deserializeStoryState(serialized))).toBe(serialized)
+}
+
+async function assertPackagedCapabilityRouting(client: RpcClient): Promise<void> {
+  const suffix = Date.now()
+  const compatibleTask: AiTask = {
+    id: `packaged-capability-compatible-${suffix}`,
+    kind: 'packaged.capability-routing',
+    input: { payload: { prompt: 'capability routing acceptance' } },
+    outputContract: { format: 'text' },
+    requirements: {
+      capabilities: ['creative-reasoning'],
+      modalities: ['text'],
+      outputFormats: ['text'],
+      needsReasoning: true,
+      needsStructuredOutput: true,
+      network: 'required',
+    },
+  }
+  await expect(client.request('task.submit', { task: compatibleTask })).resolves.toMatchObject({
+    taskId: compatibleTask.id,
+    status: 'queued',
+  })
+  const completed = await waitForTaskExecution(
+    client,
+    compatibleTask.id,
+    (execution) => execution.snapshot.status === 'completed',
+  )
+  expect(completed.snapshot.result).toMatchObject({
+    status: 'completed',
+    output: { format: 'text' },
+    provenance: {
+      selectedRoute: 'default-model',
+      selectedProvider: 'faux',
+      selectedModel: 'mock-model-v1',
+    },
+  })
+
+  const mismatchTask: AiTask = {
+    ...compatibleTask,
+    id: `packaged-capability-mismatch-${suffix}`,
+    requirements: {
+      outputFormats: ['text'],
+      network: 'offline',
+    },
+  }
+  await expect(client.request('task.submit', { task: mismatchTask })).rejects.toMatchObject({
+    code: 'CAPABILITY_MISMATCH',
+  })
+}
+
+async function assertPackagedVerticalSlices(client: RpcClient): Promise<void> {
+  const suffix = Date.now()
+  const document = semanticDocumentFromText(
+    `packaged-vertical-slices-document-${suffix}`,
+    '雨停后，门外只剩一盏冷灯。她没有回头。',
+    13,
+  )
+  const assistant = createDaemonAiAssistant(client)
+
+  const continueTask = createContinueTask({
+    taskId: `packaged-vs1-continue-${suffix}`,
+    document,
+    selection: { from: document.text.length, to: document.text.length },
+    instruction: '返回续写文本。',
+  })
+  const continueResult = await assistant.runTask(continueTask, { pollIntervalMs: 10 })
+  expect(continueResult).toMatchObject({
+    taskId: continueTask.id,
+    kind: 'creative.continue',
+    status: 'completed',
+    output: { format: 'text', text: 'packaged vertical slice continuation' },
+  })
+
+  const rewriteTask = createRewriteTask({
+    taskId: `packaged-vs2-rewrite-${suffix}`,
+    document,
+    selection: { from: 0, to: 6 },
+    goal: '收紧句子。',
+    instruction: '返回可应用的文本 patch。',
+  })
+  const rewriteResult = await assistant.runTask(rewriteTask, { pollIntervalMs: 10 })
+  expect(rewriteResult).toMatchObject({
+    taskId: rewriteTask.id,
+    kind: 'creative.rewrite',
+    status: 'completed',
+    output: { format: 'patch', patch: { from: 0, to: 6, text: '雨停后只剩冷灯。' } },
+    artifactIds: [expect.any(String)],
+  })
+  const rewriteArtifactId = rewriteResult?.artifactIds?.[0]
+  expect(rewriteArtifactId).toEqual(expect.any(String))
+  await expect(client.request('artifact.get', { id: rewriteArtifactId })).resolves.toMatchObject({
+    id: rewriteArtifactId,
+    content: { from: 0, to: 6, text: '雨停后只剩冷灯。' },
+    provenance: expect.objectContaining({ taskId: rewriteTask.id }),
+  })
+
+  const continuityFindings = await assistant.runContinuityAudit(
+    {
+      taskId: `packaged-vs3-continuity-${suffix}`,
+      document,
+      scope: 'document',
+      instruction: '检查当前章节的连续性。',
+    },
+    { pollIntervalMs: 10 },
+  )
+  expect(continuityFindings).toEqual([
+    {
+      id: 'packaged-continuity-finding',
+      severity: 'warning',
+      description: 'Packaged continuity finding.',
+      entityIds: undefined,
+      blockIds: undefined,
+      evidence: undefined,
+    },
+  ])
+
+  const reasoning = await assistant.runDeepReasoning(
+    {
+      taskId: `packaged-vs4-reasoning-${suffix}`,
+      document,
+      question: '下一场应该保留哪些叙事约束？',
+      depth: 'focused',
+      instruction: '给出结构化结论。',
+    },
+    { pollIntervalMs: 10 },
+  )
+  expect(reasoning).toMatchObject({
+    answer: 'Keep the cold-light motif.',
+    assumptions: ['The scene remains after the rain.'],
+    alternatives: ['Change the motif to warm light.'],
+    risks: ['A tonal shift may weaken continuity.'],
+  })
+
+  const secondDocument = semanticDocumentFromText(
+    `packaged-vertical-slices-document-${suffix}-second`,
+    '她走过桥，远处传来钟声。',
+    14,
+  )
+  const progress: Array<{ completedChunks: number; totalChunks: number; failedChunks: string[] }> = []
+  const distillation = await assistant.runDistillationWorkflow(
+    {
+      taskId: `packaged-vs5-distillation-${suffix}`,
+      documents: [document, secondDocument],
+      target: 'project',
+      fields: ['entities', 'events', 'promises'],
+    },
+    {
+      chunkSize: 1,
+      pollIntervalMs: 10,
+      onProgress: (value) => progress.push(value),
+    },
+  )
+  expect(distillation).toMatchObject({
+    complete: true,
+    completedChunks: 2,
+    totalChunks: 2,
+    failedChunks: [],
+    facts: {
+      summary: 'A character pauses after the rain.\n\nA character pauses after the rain.',
+    },
+  })
+  expect(distillation.chunkTaskIds).toHaveLength(2)
+  expect(progress.at(-1)).toMatchObject({ completedChunks: 2, totalChunks: 2, failedChunks: [] })
 }
 
 async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
