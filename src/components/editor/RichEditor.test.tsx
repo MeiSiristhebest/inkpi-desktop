@@ -270,6 +270,17 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　独行</p>')
   })
 
+  it('keeps one top-level 排版 entry and nests font settings inside it', async () => {
+    render(<RichEditor projectId="p-format-menu" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    expect(screen.getAllByText('排版', { exact: true })).toHaveLength(1)
+    expect(screen.queryByTestId('editor-font-format-menu-item')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTitle('排版与标点规范'))
+    expect(screen.getByTestId('editor-font-format-menu-item')).toBeVisible()
+  })
+
   it('toggles the find/replace bar open and closed', async () => {
     render(<RichEditor projectId="p-find2" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })

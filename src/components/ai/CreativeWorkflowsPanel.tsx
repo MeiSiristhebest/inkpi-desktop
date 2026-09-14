@@ -83,6 +83,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [checkpoint, setCheckpoint] = useState<DistillationCheckpoint | undefined>()
   const activeController = useRef<AbortController | null>(null)
+  const busyRef = useRef(false)
   const runToken = useRef(0)
   const autoAuditTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastAutoAuditRevision = useRef<string | null>(null)
@@ -151,6 +152,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     const controller = new AbortController()
     activeController.current = controller
     const token = ++runToken.current
+    busyRef.current = true
     setBusy(true)
     setError(null)
     setProgress(null)
@@ -176,6 +178,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       }
     } finally {
       if (token === runToken.current) {
+        busyRef.current = false
         setBusy(false)
         if (activeController.current === controller) activeController.current = null
       }
@@ -191,11 +194,18 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       const revisionKey = `${chapter.id}:${chapter.revision ?? 0}`
       if (lastAutoAuditRevision.current === revisionKey) return
       if (autoAuditTimer.current) clearTimeout(autoAuditTimer.current)
-      autoAuditTimer.current = setTimeout(() => {
-        autoAuditTimer.current = null
-        lastAutoAuditRevision.current = revisionKey
-        void runAuditRef.current(chapter)
-      }, 500)
+      const runWhenIdle = () => {
+        autoAuditTimer.current = setTimeout(() => {
+          autoAuditTimer.current = null
+          if (busyRef.current) {
+            runWhenIdle()
+            return
+          }
+          lastAutoAuditRevision.current = revisionKey
+          void runAuditRef.current(chapter)
+        }, 500)
+      }
+      runWhenIdle()
     })
     return () => {
       unsubscribe()
@@ -212,6 +222,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     const controller = new AbortController()
     activeController.current = controller
     const token = ++runToken.current
+    busyRef.current = true
     setBusy(true)
     setError(null)
     setDeepResult(null)
@@ -235,6 +246,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       }
     } finally {
       if (token === runToken.current) {
+        busyRef.current = false
         setBusy(false)
         if (activeController.current === controller) activeController.current = null
       }
@@ -247,6 +259,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     const controller = new AbortController()
     activeController.current = controller
     const token = ++runToken.current
+    busyRef.current = true
     setBusy(true)
     setError(null)
     setProgress(null)
@@ -276,16 +289,19 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           continueOnError: true,
           signal: controller.signal,
           saveCheckpoint,
-          onProgress: ({ completedChunks, totalChunks, failedChunks }) =>
+          onProgress: ({ completedChunks, totalChunks, failedChunks }) => {
+            const finishedChunks = completedChunks + failedChunks.length
+            const isFinished = totalChunks > 0 && finishedChunks >= totalChunks
             setProgress({
               taskId: DISTILLATION_TASK_ID,
               kind: 'narrative.project.distill',
-              status: completedChunks === totalChunks ? 'completed' : 'running',
-              progress: totalChunks ? completedChunks / totalChunks : 0,
+              status: isFinished ? (failedChunks.length ? 'failed' : 'completed') : 'running',
+              progress: totalChunks ? Math.min(1, finishedChunks / totalChunks) : 0,
               checkpoint: failedChunks.length
                 ? { step: 'retry-failed-chunks', updatedAt: clock.now() }
                 : undefined,
-            }),
+            })
+          },
         },
       )
       if (token === runToken.current && result) {
@@ -305,6 +321,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       }
     } finally {
       if (token === runToken.current) {
+        busyRef.current = false
         setBusy(false)
         if (activeController.current === controller) activeController.current = null
       }

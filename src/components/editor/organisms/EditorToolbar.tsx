@@ -186,17 +186,6 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         {/* 常用文字样式与排版胶囊群（Apple 式收拢） */}
         <div className="hidden sm:flex items-center gap-1 border-l border-[var(--ink-border)] pl-2 ml-1">
-          {/* 字体格式综合浮层主入口 */}
-          <button
-            type="button"
-            onClick={() => actions.setShowFontFormatModal(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] text-[var(--ink-text)] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] transition-colors cursor-pointer font-medium shadow-2xs"
-            title="正文字体、字号、行距与排版规范"
-          >
-            <span className="font-serif font-bold text-[12px]">T</span>
-            <span>排版</span>
-          </button>
-
           {/* 写作背景与网格线（使用正规 Lucide 图标，绝不使用任何 Emoji） */}
           <button
             type="button"
@@ -384,6 +373,19 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <div className="px-2 py-1 text-[10px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
               正文排版方案
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                actions.setShowFontFormatModal(true)
+                setActiveMenu(null)
+              }}
+              title="正文字体、字号、行距与排版规范"
+              data-testid="editor-font-format-menu-item"
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+            >
+              <span className="w-3.5 text-center font-serif font-bold text-[12px]">T</span>
+              <span>字体、字号与行距</span>
+            </button>
             <button
               type="button"
               onClick={() => {

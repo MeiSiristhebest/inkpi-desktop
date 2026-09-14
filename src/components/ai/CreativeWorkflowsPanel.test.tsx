@@ -305,6 +305,57 @@ describe('CreativeWorkflowsPanel', () => {
     )
   })
 
+  it('reports failed chunks as terminal progress instead of leaving the workflow running', async () => {
+    const distill = vi.fn(
+      async (
+        _input: unknown,
+        options: {
+          onProgress?: (progress: {
+            completedChunks: number
+            totalChunks: number
+            failedChunks: string[]
+          }) => void
+        },
+      ) => {
+        options.onProgress?.({ completedChunks: 0, totalChunks: 1, failedChunks: ['chunk-0'] })
+        return {
+          facts: { summary: '部分完成', entities: [], events: [], promises: [] },
+          complete: false,
+          failedChunks: ['chunk-0'],
+          completedChunks: 0,
+          totalChunks: 1,
+          checkpoint: {
+            nextChunk: 1,
+            completedChunkIndexes: [],
+            failedChunkIndexes: [0],
+            failedChunks: ['chunk-0'],
+            facts: { summary: '部分完成', entities: [], events: [], promises: [] },
+          },
+          chunkTaskIds: ['project-distillation:chunk:0'],
+        }
+      },
+    )
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={distill}
+        onSteerTask={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '项目提炼' }))
+    fireEvent.click(screen.getByRole('button', { name: '开始项目提炼' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('workflow-progress')).toHaveTextContent('100% · failed'),
+    )
+    expect(screen.getByTestId('distillation-result')).toHaveTextContent('待重试：1')
+  })
+
   it('rehydrates a matching checkpoint before running and persists workflow checkpoints', async () => {
     const stored = {
       nextChunk: 1,

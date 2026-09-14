@@ -66,9 +66,9 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
   return (
     <footer
       data-testid="editor-status-footer"
-      className="editor-status-footer h-8 shrink-0 flex items-center justify-between gap-3 px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)] whitespace-nowrap overflow-hidden"
+      className="editor-status-footer h-8 shrink-0 flex flex-nowrap items-center justify-between gap-3 px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)] whitespace-nowrap overflow-x-auto overflow-y-hidden"
     >
-      <div className="editor-status-primary min-w-0 flex items-center gap-4 shrink-0">
+      <div className="editor-status-primary min-w-max flex items-center gap-4 shrink-0">
         <span
           data-testid="editor-chapter-progress"
           className="tabular-nums"
@@ -106,7 +106,7 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
         </button>
       </div>
 
-      <div className="editor-status-secondary min-w-0 flex items-center gap-3 shrink-0">
+      <div className="editor-status-secondary min-w-max flex items-center gap-3 shrink-0">
         {ghostText && (
           <button
             onClick={() => actions.acceptGhostText()}
