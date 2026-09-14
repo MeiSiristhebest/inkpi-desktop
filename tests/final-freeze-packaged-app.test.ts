@@ -20,9 +20,13 @@ import {
 import { afterEach, describe, expect, it } from 'vitest'
 import { bootstrapDesktopTaskRecovery } from '../src/adapters/desktopTaskRecoveryBootstrap'
 import { createDaemonAiAssistant } from '../src/adapters/daemonAiAssistant'
+import { createDaemonDomainSyncRemote } from '../src/adapters/daemonDomainSyncRemote'
 import { createDaemonSkillRuntime, FIRST_PARTY_SKILL_IDS } from '../src/adapters/daemonSkillRuntime'
 import { inkpiDaemonGateway } from '../src/adapters/inkpiDaemonGateway'
+import { IndexedDbDomainChangeStore } from '../src/adapters/indexedDbDomainChangeStore'
 import { IndexedDbTaskRecoveryStore } from '../src/db/taskRecoveryStore'
+import { createDomainChangeSet } from '../src/domain/sync/domainChangeSet'
+import { DomainSyncService } from '../src/domain/sync/domainSyncService'
 import type { RpcClient } from '../src/ports/aiGateway'
 
 const execFileAsync = promisify(execFile)
@@ -196,13 +200,17 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
 
       const stateRoot = await ownTempDirectory('inkpi-final-freeze-state-')
       const stateDbPath = join(stateRoot, 'state.sqlite')
+      const peerStateRoot = await ownTempDirectory('inkpi-final-freeze-peer-state-')
+      const peerStateDbPath = join(peerStateRoot, 'state.sqlite')
       const task = makePackagedRecoveryTask()
       let first: PackagedDaemon | undefined
+      let peer: PackagedDaemon | undefined
       let second: PackagedDaemon | undefined
       let unsubscribeTaskEvents: (() => void) | undefined
 
       try {
         first = await launchPackagedDaemon(sevenZip, installer, stateDbPath, 5_000)
+        peer = await launchPackagedDaemon(sevenZip, installer, peerStateDbPath)
         const firstSkillRuntime = createDaemonSkillRuntime(first.client)
         const discovered = await firstSkillRuntime.discover()
         expect(discovered.map((skill) => skill.id).sort()).toEqual(
@@ -221,6 +229,7 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
         )
         await assertPackagedRuntimeRegistrations(first.client)
         await assertPackagedStateBoundaries(first.client)
+        await assertPackagedProjectionSync(first.client, peer.client)
 
         const notificationClient = first.client as NotificationClient
         if (!notificationClient.on) {
@@ -301,6 +310,10 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
         if (first) {
           await first.client.close().catch(() => undefined)
           await stopPackagedDaemon(first, true)
+        }
+        if (peer) {
+          await peer.client.close().catch(() => undefined)
+          await stopPackagedDaemon(peer, false)
         }
         if (second) {
           await second.client.close().catch(() => undefined)
@@ -591,6 +604,92 @@ async function assertPackagedRuntimeRegistrations(client: RpcClient): Promise<vo
       provenance: { runtimeClass: 'workflow' },
     })
   }
+}
+
+async function assertPackagedProjectionSync(
+  sourceClient: RpcClient,
+  targetClient: RpcClient,
+): Promise<void> {
+  const suffix = Date.now()
+  const workspaceId = `packaged-cross-instance-workspace-${suffix}`
+  const changeSet = createDomainChangeSet({
+    id: `packaged-cross-instance-change-${suffix}`,
+    workspaceId,
+    sourceDeviceId: 'packaged-authoritative-desktop',
+    baseRevision: 0,
+    changes: [
+      {
+        id: `packaged-cross-instance-story-${suffix}`,
+        aggregateType: 'story.state',
+        aggregateId: `story-${suffix}`,
+        operation: 'upsert',
+        revision: 1,
+        payload: { revision: 1, entities: [], relations: [], events: [], scenes: [] },
+        occurredAt: suffix,
+      },
+    ],
+    createdAt: suffix,
+  })
+  const authoritativeStore = new IndexedDbDomainChangeStore()
+  await authoritativeStore.append(changeSet)
+
+  await expect(
+    new DomainSyncService(authoritativeStore, createDaemonDomainSyncRemote(sourceClient)).sync(workspaceId),
+  ).resolves.toMatchObject({
+    workspaceId,
+    pushed: 1,
+    pulled: 0,
+    revision: 1,
+    recovered: false,
+  })
+  await expect(
+    new DomainSyncService(authoritativeStore, createDaemonDomainSyncRemote(targetClient)).sync(workspaceId),
+  ).resolves.toMatchObject({
+    workspaceId,
+    pushed: 1,
+    pulled: 0,
+    revision: 1,
+    recovered: false,
+  })
+
+  const [sourceSnapshot, targetSnapshot] = await Promise.all([
+    sourceClient.request('domain.sync.snapshot', { workspaceId }),
+    targetClient.request('domain.sync.snapshot', { workspaceId }),
+  ])
+  expect(sourceSnapshot).toMatchObject({ workspaceId, revision: 1, changeSets: [changeSet] })
+  expect(targetSnapshot).toMatchObject({ workspaceId, revision: 1, changeSets: [changeSet] })
+  await expect(targetClient.request('domain.sync.push', { changeSet })).resolves.toMatchObject({
+    accepted: true,
+    duplicate: true,
+    workspaceId,
+    revision: 1,
+  })
+
+  const outOfOrder = createDomainChangeSet({
+    id: `packaged-cross-instance-out-of-order-${suffix}`,
+    workspaceId,
+    sourceDeviceId: 'packaged-authoritative-desktop',
+    baseRevision: 2,
+    changes: [
+      {
+        id: `packaged-cross-instance-later-story-${suffix}`,
+        aggregateType: 'story.state',
+        aggregateId: `story-${suffix}`,
+        operation: 'upsert',
+        revision: 3,
+        payload: { revision: 3, entities: [], relations: [], events: [], scenes: [] },
+        occurredAt: suffix + 1,
+      },
+    ],
+    createdAt: suffix + 1,
+  })
+  await expect(targetClient.request('domain.sync.push', { changeSet: outOfOrder })).resolves.toMatchObject({
+    accepted: false,
+    duplicate: false,
+    workspaceId,
+    revision: 1,
+    reason: 'revision-conflict',
+  })
 }
 
 async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
