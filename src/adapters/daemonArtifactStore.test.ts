@@ -24,6 +24,7 @@ describe('DaemonArtifactStore', () => {
               taskId: artifact.taskId,
               kind: artifact.kind,
               lineage: artifact.lineage,
+              ownership: { owner: 'desktop', authoritative: true },
             }),
           }),
         }),
@@ -57,7 +58,11 @@ describe('DaemonArtifactStore', () => {
       expect.objectContaining({ kind: 'narrative.plan' }),
     ])
     await expect(store.get(runtimeArtifact.id)).resolves.toEqual(
-      expect.objectContaining({ id: runtimeArtifact.id, provenance: {} }),
+      expect.objectContaining({
+        id: runtimeArtifact.id,
+        provenance: {},
+        ownership: { owner: 'daemon', authoritative: false },
+      }),
     )
     expect(request).toHaveBeenNthCalledWith(1, 'artifact.list', { taskId: 'task-2' })
     expect(request).toHaveBeenNthCalledWith(2, 'artifact.list', { type: 'creative.story-plan' })

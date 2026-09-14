@@ -112,8 +112,15 @@ describe('AI artifact runtime', () => {
     const incompatible = makeArtifact('artifact-conflict', { value: 2 }, 3)
 
     await store.save(first)
+    expect((await store.get(first.id))?.ownership).toEqual({
+      owner: 'desktop',
+      authoritative: true,
+    })
     await expect(store.save(sameContent)).resolves.toBeUndefined()
     await expect(store.save(incompatible)).rejects.toBeInstanceOf(ArtifactConflictError)
+    await expect(
+      store.save({ ...first, ownership: { owner: 'daemon', authoritative: false } }),
+    ).rejects.toThrow(/desktop-authoritative/i)
 
     await expect(store.get(first.id)).resolves.toMatchObject({
       id: first.id,

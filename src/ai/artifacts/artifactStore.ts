@@ -12,6 +12,23 @@ export interface ArtifactProvenance {
   [key: string]: unknown
 }
 
+export type ArtifactOwner = 'desktop' | 'daemon'
+
+/** Desktop owns the authoritative copy; daemon copies are derived projections. */
+export interface ArtifactOwnership {
+  owner: ArtifactOwner
+  authoritative: boolean
+  workspaceId?: string
+}
+
+export interface ArtifactLineage {
+  parentArtifactId?: string
+  taskId?: string
+  sourceTaskId: string
+  sourceRevision?: number
+  executionRunId?: string
+}
+
 /** Runtime semantic object. File formats are export concerns, not storage types. */
 export interface Artifact {
   id: string
@@ -32,13 +49,9 @@ export interface AiArtifact extends Artifact {
   content: unknown
   contextFingerprint?: string
   provenance: ArtifactProvenance
-  lineage?: {
-    parentArtifactId?: string
-    taskId?: string
-    sourceTaskId: string
-    sourceRevision?: number
-    executionRunId?: string
-  }
+  lineage?: ArtifactLineage
+  /** Local authority metadata; omitted from the Runtime wire object. */
+  ownership?: ArtifactOwnership
   metadata?: Record<string, unknown>
 }
 
@@ -88,11 +101,64 @@ export interface ArtifactStore {
   listByType?(type: string): Promise<AiArtifact[]>
 }
 
+/** Normalizes and validates an artifact entering the Desktop-authoritative store. */
+export function normalizeDesktopArtifact(artifact: AiArtifact): AiArtifact {
+  const normalized = normalizeArtifactForPersistence(artifact)
+  const ownership = normalized.ownership ?? {
+    owner: 'desktop' as const,
+    authoritative: true,
+  }
+  assertArtifactOwnership(ownership)
+  if (ownership.owner !== 'desktop' || ownership.authoritative !== true) {
+    throw new Error('Desktop artifact store accepts only desktop-authoritative artifacts')
+  }
+  assertAiArtifact(normalized)
+  return { ...normalized, ownership }
+}
+
+/** Validates a normalized artifact before it crosses a local or RPC boundary. */
+export function assertAiArtifact(value: unknown): asserts value is AiArtifact {
+  if (!isRecord(value)) throw new Error('Artifact must be an object')
+  assertNonEmptyString(value.id, 'Artifact id')
+  assertNonEmptyString(value.taskId, 'Artifact task id')
+  assertNonEmptyString(value.kind, 'Artifact kind')
+  assertNonEmptyString(value.type, 'Artifact type')
+  if (typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1) {
+    throw new Error('Artifact version must be a positive safe integer')
+  }
+  assertTimestamp(value.createdAt, 'Artifact createdAt')
+  assertTimestamp(value.updatedAt, 'Artifact updatedAt')
+  assertArtifactProvenance(value.provenance)
+  if (value.lineage !== undefined) assertArtifactLineage(value.lineage)
+  if (value.ownership !== undefined) assertArtifactOwnership(value.ownership)
+  if (value.metadata !== undefined && !isRecord(value.metadata)) {
+    throw new Error('Artifact metadata must be an object')
+  }
+  if (
+    value.lineage?.parentArtifactId !== undefined &&
+    value.provenance.parentArtifactId !== undefined &&
+    value.lineage.parentArtifactId !== value.provenance.parentArtifactId
+  ) {
+    throw new Error('Artifact lineage parent does not match artifact provenance')
+  }
+}
+
+export function assertArtifactOwnership(value: unknown): asserts value is ArtifactOwnership {
+  if (!isRecord(value)) throw new Error('Artifact ownership must be an object')
+  if (value.owner !== 'desktop' && value.owner !== 'daemon') {
+    throw new Error('Artifact ownership owner is invalid')
+  }
+  if (typeof value.authoritative !== 'boolean') {
+    throw new Error('Artifact ownership authoritative flag is invalid')
+  }
+  if (value.workspaceId !== undefined) assertNonEmptyString(value.workspaceId, 'Artifact workspace id')
+}
+
 export class IndexedDbArtifactStore implements ArtifactStore {
   private static readonly saveLocks = new Map<string, Promise<void>>()
 
   async save(artifact: AiArtifact): Promise<void> {
-    const serializableArtifact = normalizeArtifactForPersistence(artifact)
+    const serializableArtifact = normalizeDesktopArtifact(artifact)
     const previous =
       IndexedDbArtifactStore.saveLocks.get(serializableArtifact.id) ?? Promise.resolve()
     const current = previous
@@ -116,12 +182,15 @@ export class IndexedDbArtifactStore implements ArtifactStore {
   }
 
   get(id: string): Promise<AiArtifact | undefined> {
-    return db.get<AiArtifact>('aiArtifacts', id)
+    return db.get<AiArtifact>('aiArtifacts', id).then((artifact) =>
+      artifact ? normalizeDesktopArtifact(artifact) : undefined,
+    )
   }
 
   async list(taskId?: string): Promise<AiArtifact[]> {
     const artifacts = await db.getAll<AiArtifact>('aiArtifacts')
     return artifacts
+      .map(normalizeDesktopArtifact)
       .filter((artifact) => !taskId || artifact.taskId === taskId)
       .sort((left, right) => left.createdAt - right.createdAt)
   }
@@ -129,6 +198,7 @@ export class IndexedDbArtifactStore implements ArtifactStore {
   async listByType(type: string): Promise<AiArtifact[]> {
     const artifacts = await db.getAll<AiArtifact>('aiArtifacts')
     return artifacts
+      .map(normalizeDesktopArtifact)
       .filter((artifact) => artifact.type === type)
       .sort((left, right) => left.createdAt - right.createdAt)
   }
@@ -188,7 +258,7 @@ export class ArtifactRuntime {
       readLineageString(task, 'executionRunId') ??
       readString(result.provenance, 'executionRunId')
     const createdAt = this.now()
-    const artifact = normalizeArtifactForPersistence({
+    const artifact = normalizeDesktopArtifact({
       id: resolvedArtifactId,
       taskId: task.id,
       kind: task.kind,
@@ -397,4 +467,51 @@ function stableSerialize(value: unknown): string {
     .sort()
     .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`)
     .join(',')}}`
+}
+
+function assertArtifactLineage(value: unknown): asserts value is ArtifactLineage {
+  if (!isRecord(value)) throw new Error('Artifact lineage must be an object')
+  assertNonEmptyString(value.sourceTaskId, 'Artifact lineage source task id')
+  for (const key of ['parentArtifactId', 'taskId', 'executionRunId']) {
+    if (value[key] !== undefined) assertNonEmptyString(value[key], `Artifact lineage ${key}`)
+  }
+  if (value.sourceRevision !== undefined) {
+    if (
+      typeof value.sourceRevision !== 'number' ||
+      !Number.isSafeInteger(value.sourceRevision) ||
+      value.sourceRevision < 0
+    ) {
+      throw new Error('Artifact lineage source revision must be a non-negative safe integer')
+    }
+  }
+}
+
+function assertArtifactProvenance(value: unknown): asserts value is ArtifactProvenance {
+  if (!isRecord(value)) throw new Error('Artifact provenance must be an object')
+  for (const key of ['taskId', 'executionRunId', 'sessionId', 'parentArtifactId']) {
+    if (value[key] !== undefined) assertNonEmptyString(value[key], `Artifact provenance ${key}`)
+  }
+  if (value.sourceRevision !== undefined) {
+    if (
+      typeof value.sourceRevision !== 'number' ||
+      !Number.isSafeInteger(value.sourceRevision) ||
+      value.sourceRevision < 0
+    ) {
+      throw new Error('Artifact provenance source revision must be a non-negative safe integer')
+    }
+  }
+}
+
+function assertNonEmptyString(value: unknown, name: string): asserts value is string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} must not be empty`)
+}
+
+function assertTimestamp(value: unknown, name: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new Error(`${name} must be a non-negative safe integer`)
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

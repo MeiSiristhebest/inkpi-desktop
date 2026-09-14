@@ -1,7 +1,12 @@
 import type { Artifact as RuntimeArtifact } from '@inkpi/protocol'
 import type { RpcClient } from '../ports/aiGateway'
-import { normalizeArtifactForPersistence } from '../ai/artifacts'
-import type { AiArtifact, ArtifactStore } from '../ai/artifacts'
+import {
+  assertAiArtifact,
+  assertArtifactOwnership,
+  normalizeArtifactForPersistence,
+  normalizeDesktopArtifact,
+} from '../ai/artifacts'
+import type { AiArtifact, ArtifactOwnership, ArtifactStore } from '../ai/artifacts'
 
 const DESKTOP_ARTIFACT_METADATA = '__inkpiDesktopArtifact'
 
@@ -14,7 +19,7 @@ export class DaemonArtifactStore implements ArtifactStore {
   }
 
   async save(artifact: AiArtifact): Promise<void> {
-    const normalized = normalizeArtifactForPersistence(artifact)
+    const normalized = normalizeDesktopArtifact(artifact)
     const result = await this.client.request<unknown>('artifact.save', {
       artifact: toRuntimeArtifact(normalized),
     })
@@ -55,6 +60,7 @@ function toRuntimeArtifact(artifact: AiArtifact): RuntimeArtifact {
         ...(artifact.documentId ? { documentId: artifact.documentId } : {}),
         ...(artifact.contextFingerprint ? { contextFingerprint: artifact.contextFingerprint } : {}),
         ...(artifact.lineage ? { lineage: artifact.lineage } : {}),
+        ...(artifact.ownership ? { ownership: artifact.ownership } : {}),
         ...(artifact.metadata ? { metadata: artifact.metadata } : {}),
       },
     },
@@ -67,7 +73,7 @@ function fromRuntimeArtifact(artifact: unknown): AiArtifact {
   assertRuntimeArtifact(artifact)
   const metadata = asRecord(artifact.provenance[DESKTOP_ARTIFACT_METADATA])
   const { [DESKTOP_ARTIFACT_METADATA]: _desktopMetadata, ...provenance } = artifact.provenance
-  return normalizeArtifactForPersistence({
+  const normalized = normalizeArtifactForPersistence({
     ...artifact,
     taskId:
       readString(metadata?.taskId) ??
@@ -84,8 +90,11 @@ function fromRuntimeArtifact(artifact: unknown): AiArtifact {
     ...(metadata?.metadata && typeof metadata.metadata === 'object'
       ? { metadata: metadata.metadata as Record<string, unknown> }
       : {}),
+    ownership: daemonOwnership(metadata?.ownership),
     provenance,
   })
+  assertAiArtifact(normalized)
+  return normalized
 }
 
 function assertRuntimeArtifact(value: unknown): asserts value is RuntimeArtifact {
@@ -96,7 +105,7 @@ function assertRuntimeArtifact(value: unknown): asserts value is RuntimeArtifact
     typeof value.type !== 'string' ||
     !value.type.trim() ||
     !Number.isSafeInteger(value.version) ||
-    value.version < 0 ||
+    value.version < 1 ||
     !isRecord(value.provenance) ||
     typeof value.createdAt !== 'number' ||
     !Number.isFinite(value.createdAt) ||
@@ -106,6 +115,16 @@ function assertRuntimeArtifact(value: unknown): asserts value is RuntimeArtifact
     throw new Error(
       `Daemon artifact ${typeof value.id === 'string' ? value.id : '<unknown>'} is invalid`,
     )
+  }
+}
+
+function daemonOwnership(value: unknown): ArtifactOwnership {
+  if (value !== undefined) assertArtifactOwnership(value)
+  const workspaceId = asRecord(value)?.workspaceId
+  return {
+    owner: 'daemon',
+    authoritative: false,
+    ...(typeof workspaceId === 'string' && workspaceId.trim() ? { workspaceId } : {}),
   }
 }
 
