@@ -6,6 +6,7 @@ import {
   cleanup,
   waitFor,
   act,
+  within,
 } from '@testing-library/react'
 import { RichEditor } from './RichEditor'
 import { db } from '../../db/indexedDB'
@@ -240,10 +241,17 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-footer" isConnected />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
+    const footer = screen.getByTestId('editor-status-footer')
+    expect(within(footer).getAllByText(/^本章 /)).toHaveLength(1)
+    expect(within(footer).getAllByText(/^全书 /)).toHaveLength(1)
+    expect(within(footer).getAllByText('已连接', { exact: true })).toHaveLength(1)
+    expect(within(footer).getAllByText('已保存', { exact: true })).toHaveLength(1)
     expect(screen.getByTestId('editor-chapter-progress')).toHaveTextContent(
       /^本章 \d+ \/ 3,000 字$/,
     )
     expect(screen.queryByText('本章：139')).not.toBeInTheDocument()
+    expect(footer).not.toHaveTextContent(/最后更新|本次 \+/)
+    expect(footer).not.toHaveTextContent(/限宽|较宽|铺满|打字机|字数详情|稿费预估/)
     expect(screen.queryByText(/最后更新：/)).not.toBeInTheDocument()
     expect(screen.queryByText('Daemon 已连接')).not.toBeInTheDocument()
     expect(screen.queryByText('离线沙盒')).not.toBeInTheDocument()
@@ -411,17 +419,13 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
   })
 
-  it('toggles canvas width between narrow/wide/full from the status bar', async () => {
+  it('does not duplicate canvas controls in the status bar', async () => {
     render(<RichEditor projectId="p-width" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
-    expect(screen.getByText('限宽')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('限宽（点击切换）'))
-    expect(screen.getByText('较宽')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('较宽'))
-    expect(screen.getByText('铺满')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('铺满'))
-    expect(screen.getByText('限宽')).toBeInTheDocument()
+    const footer = screen.getByTestId('editor-status-footer')
+    expect(footer).not.toHaveTextContent(/限宽|较宽|铺满/)
+    expect(footer.querySelector('[title*="限宽"]')).not.toBeInTheDocument()
   })
 
   it('renders a word-target progress bar based on chapter word count', async () => {
@@ -529,7 +533,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     }
   })
 
-  it('toggles typewriter mode via the status bar and notifies the parent', async () => {
+  it('does not duplicate typewriter control in the status bar', async () => {
     const onTypewriterChange = vi.fn()
     render(
       <RichEditor
@@ -540,8 +544,10 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     )
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
-    fireEvent.click(screen.getByTitle('打字机视口（光标垂直居中）'))
-    expect(onTypewriterChange).toHaveBeenCalledWith(true)
+    const footer = screen.getByTestId('editor-status-footer')
+    expect(footer).not.toHaveTextContent('打字机')
+    expect(footer.querySelector('[title*="打字机"]')).not.toBeInTheDocument()
+    expect(onTypewriterChange).not.toHaveBeenCalled()
   })
 
   it('navigates to next and previous chapter via toolbar navigation buttons', async () => {
