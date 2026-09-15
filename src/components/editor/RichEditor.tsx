@@ -47,6 +47,7 @@ import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
 import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
+import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
 import { semanticTextFromContent } from '../../domain/content'
 import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 
@@ -146,6 +147,14 @@ export const RichEditor: FC<RichEditorProps> = ({
     volumeContextMenu,
     defaultTypewriter,
   } = model
+
+  // 始终同步最新正文状态至外层 ActiveWritingContext (P1.1)
+  const activeWritingCtx = useOptionalActiveWritingContext()
+  useEffect(() => {
+    if (activeWritingCtx && activeChapter) {
+      activeWritingCtx.setActiveChapter(activeChapter)
+    }
+  }, [activeWritingCtx, activeChapter])
 
   const activeChapterText = activeChapter
     ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)

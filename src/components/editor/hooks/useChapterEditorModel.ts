@@ -26,6 +26,8 @@ import { blankChapterContent } from '../../../domain/chapter/blankContent'
 import { useSettings, type AppSettings } from '../../../core/settings'
 import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 import { useChapterAutosave } from './useChapterAutosave'
+import { applyContentMutation } from '../editorContentBridge'
+import { draftJournal } from '../../../services/draftJournal'
 
 export interface GlobalSearchResult {
   chapterId: string
@@ -429,13 +431,25 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     const init: Record<string, boolean> = {}
     projVols.forEach((v) => (init[v.id] = true))
 
-    // P1.3: 优先恢复上次阅读/写作的章节 (Resume Last Chapter)
+    // P0.3 & P1.3: 优先恢复上次阅读/写作的章节，并检测是否存在未经存盘的草稿日记 (Draft WAL Crash Recovery)
     const lastChapterKey = `inkpi_last_active_chapter:${projectId}`
     let initialChapter = projChs[0] ?? null
     const savedChapterId = await kvStoreRef.current.get(lastChapterKey)
     if (savedChapterId) {
       const found = projChs.find((c) => c.id === savedChapterId)
       if (found) initialChapter = found
+    }
+
+    if (initialChapter) {
+      const draft = draftJournal.get(projectId, initialChapter.id)
+      if (draft && draft.updatedAt > (initialChapter.updatedAt || 0) && draft.editorContent) {
+        initialChapter = {
+          ...initialChapter,
+          content: draft.editorContent,
+          wordCount: countWords(draft.editorContent),
+          updatedAt: draft.updatedAt,
+        }
+      }
     }
 
     patch({
@@ -449,7 +463,22 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   useEffect(() => {
     void loadData().catch(reportSaveError)
+
+    const handleBeforeUnload = () => {
+      // 窗口关闭或刷新时执行强制落盘，杜绝丢稿 (INV-01)
+      if (autosave.hasPending()) {
+        void autosave.flush().catch(() => {})
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // 组件卸载时强制原子 flush 而非仅仅 cancel
+      if (autosave.hasPending()) {
+        void autosave.flush().catch(() => {})
+      }
       autosave.cancel()
       if (ghostTimer.current) clearTimeout(ghostTimer.current)
     }
@@ -744,39 +773,97 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const autoFormat = useCallback(() => {
     const ed = editorRef.current
-    if (!ed || ed.isDestroyed) return
+    const cur = activeChapterRef.current
+    if (!ed || ed.isDestroyed || !cur) return
     const text = ed.getText()
     const { normalizePunctuationOnFormat: norm, paragraphIndent: indent } = settingsRef.current
     const formatted = norm ? fixPunctuation(text, indent) : formatChineseParagraphs(text, indent)
-    ed.commands.setContent(formatted)
-    patch({ isSaved: false })
-  }, [editorRef, patch])
+    void applyContentMutation(ed, formatted, {
+      workspaceId: projectId,
+      chapterId: cur.id,
+      expectedRevision: cur.revision,
+      origin: 'format',
+    }).then((updated) => {
+      if (updated) {
+        activeChapterRef.current = updated
+        patch({
+          activeChapter: updated,
+          chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+          isSaved: true,
+        })
+      }
+    })
+  }, [editorRef, patch, projectId])
 
   const formatWithPreset = useCallback(
     (preset: TypographyPreset) => {
       const ed = editorRef.current
-      if (!ed || ed.isDestroyed) return
+      const cur = activeChapterRef.current
+      if (!ed || ed.isDestroyed || !cur) return
       const formatted = formatByPreset(ed.getHTML() || ed.getText(), preset)
-      ed.commands.setContent(formatted)
-      patch({ isSaved: false })
+      void applyContentMutation(ed, formatted, {
+        workspaceId: projectId,
+        chapterId: cur.id,
+        expectedRevision: cur.revision,
+        origin: 'format',
+      }).then((updated) => {
+        if (updated) {
+          activeChapterRef.current = updated
+          patch({
+            activeChapter: updated,
+            chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+            isSaved: true,
+          })
+        }
+      })
     },
-    [editorRef, patch],
+    [editorRef, patch, projectId],
   )
 
   const punctuationFix = useCallback(() => {
     const ed = editorRef.current
-    if (!ed || ed.isDestroyed) return
-    ed.commands.setContent(fixPunctuation(ed.getText()))
-    patch({ isSaved: false })
-  }, [editorRef, patch])
+    const cur = activeChapterRef.current
+    if (!ed || ed.isDestroyed || !cur) return
+    const fixed = fixPunctuation(ed.getText())
+    void applyContentMutation(ed, fixed, {
+      workspaceId: projectId,
+      chapterId: cur.id,
+      expectedRevision: cur.revision,
+      origin: 'format',
+    }).then((updated) => {
+      if (updated) {
+        activeChapterRef.current = updated
+        patch({
+          activeChapter: updated,
+          chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+          isSaved: true,
+        })
+      }
+    })
+  }, [editorRef, patch, projectId])
 
   const executeReplace = useCallback(() => {
     const ed = editorRef.current
+    const cur = activeChapterRef.current
     const find = stateRef.current.findText
-    if (!ed || ed.isDestroyed || !find) return
-    ed.commands.setContent(applyFindReplace(ed.getHTML(), find, stateRef.current.replaceText))
-    patch({ isSaved: false })
-  }, [editorRef, patch])
+    if (!ed || ed.isDestroyed || !find || !cur) return
+    const replaced = applyFindReplace(ed.getHTML(), find, stateRef.current.replaceText)
+    void applyContentMutation(ed, replaced, {
+      workspaceId: projectId,
+      chapterId: cur.id,
+      expectedRevision: cur.revision,
+      origin: 'format',
+    }).then((updated) => {
+      if (updated) {
+        activeChapterRef.current = updated
+        patch({
+          activeChapter: updated,
+          chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+          isSaved: true,
+        })
+      }
+    })
+  }, [editorRef, patch, projectId])
 
   const setGhostText = useCallback(
     (v: string) => {
@@ -914,6 +1001,15 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
           .catch(() => {})
       }, 600)
     }
+
+    // P0.3: 用户打字时写入轻量本地草稿日记 (Draft WAL)，防范系统闪退 (INV-01)
+    draftJournal.record({
+      workspaceId: projectId,
+      chapterId: cur.id,
+      baseRevision: cur.revision ?? 1,
+      editorContent: html,
+      updatedAt: clock.now(),
+    })
 
     // 防抖自动存盘到 IndexedDB（受「自动保存」设置控制）
     if (settingsRef.current.autoSave) {

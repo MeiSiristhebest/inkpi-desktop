@@ -1,5 +1,17 @@
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 
+export interface SaveChapterCasOptions {
+  chapter: ChapterRecord
+  expectedRevision: number
+}
+
+export interface SaveChapterCasResult {
+  success: boolean
+  conflict: boolean
+  currentRevision?: number
+  error?: string
+}
+
 /**
  * 项目仓储「写」端口（ISP）。
  *
@@ -14,5 +26,7 @@ export interface ProjectCommandPort {
   deleteVolume(id: string): Promise<void>
 
   saveChapter(chapter: ChapterRecord): Promise<void>
+  /** 原子比较并交换写入章节，底层同一事务保证修订版本 CAS 校验通过才写入 */
+  saveChapterCAS?(options: SaveChapterCasOptions): Promise<SaveChapterCasResult>
   deleteChapter(id: string): Promise<void>
 }

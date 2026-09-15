@@ -30,6 +30,7 @@ export interface ImportWorkspaceResult {
 
 // Stores strictly scoped to a project that must be backed up, remapped upon import, or wiped upon purge.
 export const PROJECT_DOMAIN_STORES: string[] = [
+  'settingsKV',
   'codexEntities',
   'formData',
   'tableRows',
@@ -153,9 +154,27 @@ export class WorkspaceLifecycleService {
       if (typeof db.getAll === 'function') {
         try {
           const records = await db.getAll<Record<string, unknown>>(storeName as any)
-          const filtered = records.filter(
-            (r) => r.projectId === workspaceId || r.workspaceId === workspaceId,
-          )
+          const filtered = records.filter((r) => {
+            if (storeName === 'settingsKV') {
+              const key = String((r as any).key || '')
+              return (
+                key.includes(workspaceId) ||
+                key.startsWith(`storyState::${workspaceId}`) ||
+                key.startsWith(`inkpi-excluded-nums-${workspaceId}`) ||
+                key.startsWith(`inkpi-daily-goal-${workspaceId}`)
+              )
+            }
+            if (storeName === 'aiArtifacts') {
+              const ownership = (r as any).ownership
+              return (
+                r.projectId === workspaceId ||
+                r.workspaceId === workspaceId ||
+                ownership?.workspaceId === workspaceId ||
+                ownership?.projectId === workspaceId
+              )
+            }
+            return r.projectId === workspaceId || r.workspaceId === workspaceId
+          })
           if (filtered.length > 0) {
             domainData[storeName] = filtered
             domainStoresIncluded.push(storeName)
@@ -272,6 +291,16 @@ export class WorkspaceLifecycleService {
         if ('workspaceId' in item && item.workspaceId === oldWorkspaceId) {
           item.workspaceId = newWorkspaceId
         }
+        if (storeName === 'settingsKV' && 'key' in item && typeof item.key === 'string') {
+          item.key = item.key.replaceAll(oldWorkspaceId, newWorkspaceId)
+        }
+        if (
+          storeName === 'aiArtifacts' &&
+          'ownership' in item &&
+          typeof item.ownership === 'object'
+        ) {
+          item.ownership = { ...(item.ownership as any), workspaceId: newWorkspaceId }
+        }
 
         // Remap volume foreign key
         if (
@@ -323,7 +352,7 @@ export class WorkspaceLifecycleService {
       for (const [storeName, records] of Object.entries(remappedDomainData)) {
         if (typeof db.put === 'function') {
           for (const item of records) {
-            await db.put(storeName as any, item).catch(() => {})
+            await db.put(storeName as any, item)
           }
         }
       }

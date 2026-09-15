@@ -33,6 +33,8 @@ import {
 } from '../db/taskRecoveryStore'
 import { bootstrapDesktopTaskRecovery } from '../adapters/desktopTaskRecoveryBootstrap'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
+import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
+import type { ChapterRecord } from '../types'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -538,7 +540,8 @@ export function useAiConversation(
           }
           return result
         } catch (error: unknown) {
-          const cancelled = active.cancelRequested || controller.signal.aborted || isAbortError(error)
+          const cancelled =
+            active.cancelRequested || controller.signal.aborted || isAbortError(error)
           trackTaskSnapshot(
             task,
             {
@@ -613,13 +616,37 @@ export function useAiConversation(
       try {
         const client = clientRef.current
         if (!client?.runTask) throw new Error('Task runtime is unavailable')
-        const document = semanticDocumentFromText(chapterId || 'assistant', '')
+
+        // 尝试从 IndexedDB 加载当前章节的真实正文与修订号，拒绝以空正文糊弄 AI (INV-06)
+        let activeDocText = ''
+        let activeDocRevision = 1
+        let targetChapterId = chapterId || 'assistant'
+        if (projectId && chapterId) {
+          try {
+            const chs = await indexedDbProjectRepository.getAllChapters()
+            const ch = chs.find((c: ChapterRecord) => c.id === chapterId)
+            if (ch) {
+              activeDocText = ch.content || ''
+              activeDocRevision = ch.revision ?? 1
+              targetChapterId = ch.id
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        const document = semanticDocumentFromText(targetChapterId, activeDocText, activeDocRevision)
         const task = createAssistantTask({
           taskId: idGenerator.generate('assistant'),
           document,
           question: trimmed,
           storyState,
-          metadata: { modelId: aiModel?.id },
+          metadata: {
+            modelId: aiModel?.id,
+            projectId,
+            workspaceId: projectId,
+            documentRevision: activeDocRevision,
+          },
         })
         const result = await runTrackedTask(task)
         if (
@@ -786,10 +813,7 @@ export function useAiConversation(
     <T>(
       task: AiTask,
       externalSignal: AbortSignal | undefined,
-      run: (
-        signal: AbortSignal,
-        onProgress: (snapshot: TaskStatusSnapshot) => void,
-      ) => Promise<T>,
+      run: (signal: AbortSignal, onProgress: (snapshot: TaskStatusSnapshot) => void) => Promise<T>,
       isSuccessful: (result: T) => boolean = () => true,
     ): Promise<T | null> => {
       const identityKey = serializeTaskIdentity(task)

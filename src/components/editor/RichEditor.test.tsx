@@ -148,9 +148,12 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     h.getText = () => '第一行\n第二行'
     fireEvent.click(screen.getByTitle('一键首行缩进排版'))
-    expect(editorInstance.commands.setContent).toHaveBeenCalledWith(
-      '<p>　　第一行</p><p>　　第二行</p>',
-    )
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith(
+        '<p>　　第一行</p><p>　　第二行</p>',
+        false,
+      )
+    })
   })
 
   it('punctuation fix converts ASCII punctuation', async () => {
@@ -158,7 +161,12 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     h.getText = () => 'hi, there?'
     fireEvent.click(screen.getByTitle('标点规整'))
-    expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　hi， there？</p>')
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith(
+        '<p>　　hi， there？</p>',
+        false,
+      )
+    })
   })
 
   it('find & replace rewrites the editor content', async () => {
@@ -170,7 +178,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     fireEvent.change(screen.getByPlaceholderText('检索（文档内全文）'), { target: { value: 'a' } })
     fireEvent.change(screen.getByPlaceholderText('替换为（可选）'), { target: { value: 'X' } })
     fireEvent.click(screen.getByText('全部替换'))
-    expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>Xbc</p>')
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>Xbc</p>', false)
+    })
   })
 
   it('exports the current chapter as a downloadable file', async () => {
@@ -289,7 +299,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     // 首行缩进走与工具栏相同的格式化逻辑
     h.getText = () => '独行'
     fireEvent.click(screen.getByTitle('一键首行缩进排版'))
-    expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　独行</p>')
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　独行</p>', false)
+    })
   })
 
   it('keeps one top-level 排版 entry and nests font settings inside it', async () => {

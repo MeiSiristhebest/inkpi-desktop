@@ -92,9 +92,36 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       updatedAt: now,
     }
 
-    // 4. Durable persistence
+    // 4. Durable persistence (下沉至 repository 真正的 saveChapterCAS)
     try {
-      await this.projectRepo.saveChapter(updatedChapter)
+      if (typeof this.projectRepo.saveChapterCAS === 'function') {
+        const casResult = await this.projectRepo.saveChapterCAS({
+          chapter: updatedChapter,
+          expectedRevision: currentRevision,
+        })
+        if (!casResult.success) {
+          return {
+            success: false,
+            conflict: Boolean(casResult.conflict),
+            currentRevision: casResult.currentRevision ?? currentRevision,
+            error: casResult.error || 'Repository CAS 冲突',
+          }
+        }
+      } else {
+        await this.projectRepo.saveChapter(updatedChapter)
+      }
+
+      // 统计与归因策略：仅当显式标记或用户打字时，才记入作者个人每日码字量 (P0.1, P3.10)
+      const countAsWriting = command.countAsAuthorWriting ?? origin === 'user-typing'
+      if (countAsWriting && wordCountDelta > 0) {
+        try {
+          const { indexedDbDailyStatsRepository } =
+            await import('../adapters/indexedDbDailyStatsRepository')
+          await indexedDbDailyStatsRepository.recordDailyWords(workspaceId, wordCountDelta)
+        } catch {
+          // ignore stats error
+        }
+      }
     } catch (err) {
       return {
         success: false,

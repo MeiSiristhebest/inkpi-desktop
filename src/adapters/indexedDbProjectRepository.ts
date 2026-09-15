@@ -139,6 +139,46 @@ export const indexedDbProjectRepository: ProjectRepository = {
         .catch(() => {})
     }
   },
+
+  saveChapterCAS: async ({ chapter, expectedRevision }) => {
+    let current: ChapterRecord | undefined
+    if (typeof db.get === 'function') {
+      current = await db.get<ChapterRecord>('chapters', chapter.id).catch(() => undefined)
+    }
+
+    const currentRev = current?.revision ?? 1
+    if (current && currentRev !== expectedRevision) {
+      return {
+        success: false,
+        conflict: true,
+        currentRevision: currentRev,
+        error: `CAS Conflict: Expected revision ${expectedRevision}, but current database revision is ${currentRev}`,
+      }
+    }
+
+    await appendDomainChange(
+      'chapter',
+      chapter.id,
+      chapter.projectId,
+      'upsert',
+      chapter,
+      chapter.updatedAt,
+      chapter.revision ?? 0,
+      {
+        store: 'chapters',
+        key: chapter.id,
+        operation: 'upsert',
+        value: chapter,
+        expected: current,
+      },
+    )
+
+    return {
+      success: true,
+      conflict: false,
+      currentRevision: chapter.revision,
+    }
+  },
   deleteChapter: async (id) => {
     const existing = await db.get<ChapterRecord>('chapters', id).catch(() => undefined)
     if (existing) {

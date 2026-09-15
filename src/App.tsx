@@ -13,6 +13,10 @@ import { PluginProvider } from './core/pluginRegistry'
 import { ProjectDataProvider, useProjectData } from './core/projectDataContext'
 import { StoryStateProvider, useStoryState } from './core/storyStateContext'
 import { DesktopPluginHostProvider } from './core/pluginHostContext'
+import {
+  ActiveWritingContextProvider,
+  useOptionalActiveWritingContext,
+} from './core/activeWritingContext'
 import type { ReactNode } from 'react'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
@@ -41,11 +45,17 @@ const ProjectWorkspace: FC<{
   children,
 }) => {
   const { chapters, volumes, reloadChapters } = useProjectData()
+  const activeWritingCtx = useOptionalActiveWritingContext()
+  const authoritativeActiveChapter =
+    (activeWritingCtx?.chapter && chapters.find((c) => c.id === activeWritingCtx.chapter?.id)) ||
+    chapters[0] ||
+    null
+
   return (
     <DesktopPluginHostProvider
       projectId={projectId}
       projectName={projectName}
-      activeChapter={chapters[0] || null}
+      activeChapter={authoritativeActiveChapter}
       chapters={chapters}
       volumes={volumes}
       onRefreshHierarchy={reloadChapters}
@@ -243,39 +253,41 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
           className="h-full w-full"
         >
           <ErrorBoundary label="应用主框架">
-            <ProjectDataProvider projectId={activeProjectId}>
-              <ProjectWorkspace
-                projectId={activeProjectId}
-                projectName={projects.find((p) => p.id === activeProjectId)?.name}
-                isConnected={isConnected}
-                onAiTask={runAiTask}
-                onPluginTool={runPluginTool}
-                onPluginWorkflow={runPluginWorkflow}
-              >
-                <ProjectEngine
+            <ActiveWritingContextProvider workspaceId={activeProjectId}>
+              <ProjectDataProvider projectId={activeProjectId}>
+                <ProjectWorkspace
                   projectId={activeProjectId}
                   projectName={projects.find((p) => p.id === activeProjectId)?.name}
                   isConnected={isConnected}
-                  isReconnecting={isReconnecting}
-                  onReconnect={reconnect}
-                  onRequestGhost={requestGhost}
                   onAiTask={runAiTask}
-                  onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
-                  onHome={() => setActiveProjectId(null)}
-                  aiPanelOpen={aiPanelOpen}
-                  setAiPanelOpen={setAiPanelOpen}
-                  aiMessages={aiMessages}
-                  aiInput={aiInput}
-                  setAiInput={setAiInput}
-                  aiBusy={aiBusy}
-                  sendAiPrompt={sendAiPrompt}
-                  runContinuityAudit={runContinuityAudit}
-                  runDeepReasoning={runDeepReasoning}
-                  runDistillationWorkflow={runDistillationWorkflow}
-                  steerTask={steerTask}
-                />
-              </ProjectWorkspace>
-            </ProjectDataProvider>
+                  onPluginTool={runPluginTool}
+                  onPluginWorkflow={runPluginWorkflow}
+                >
+                  <ProjectEngine
+                    projectId={activeProjectId}
+                    projectName={projects.find((p) => p.id === activeProjectId)?.name}
+                    isConnected={isConnected}
+                    isReconnecting={isReconnecting}
+                    onReconnect={reconnect}
+                    onRequestGhost={requestGhost}
+                    onAiTask={runAiTask}
+                    onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
+                    onHome={() => setActiveProjectId(null)}
+                    aiPanelOpen={aiPanelOpen}
+                    setAiPanelOpen={setAiPanelOpen}
+                    aiMessages={aiMessages}
+                    aiInput={aiInput}
+                    setAiInput={setAiInput}
+                    aiBusy={aiBusy}
+                    sendAiPrompt={sendAiPrompt}
+                    runContinuityAudit={runContinuityAudit}
+                    runDeepReasoning={runDeepReasoning}
+                    runDistillationWorkflow={runDistillationWorkflow}
+                    steerTask={steerTask}
+                  />
+                </ProjectWorkspace>
+              </ProjectDataProvider>
+            </ActiveWritingContextProvider>
           </ErrorBoundary>
         </motion.div>
       )}
