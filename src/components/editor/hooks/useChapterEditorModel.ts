@@ -24,10 +24,10 @@ import { buildSeedVolumes, buildSeedChapters } from '../../../domain/seed'
 import { composeChapterTitle } from '../../../domain/chapter/chapterNaming'
 import { blankChapterContent } from '../../../domain/chapter/blankContent'
 import { useSettings, type AppSettings } from '../../../core/settings'
-import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 import { useChapterAutosave } from './useChapterAutosave'
 import { applyContentMutation } from '../editorContentBridge'
 import { draftJournal } from '../../../services/draftJournal'
+import { chapterMutationService } from '../../../services/defaultChapterMutationService'
 
 export interface GlobalSearchResult {
   chapterId: string
@@ -352,25 +352,46 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     })
   }
 
-  const flushSave = useCallback(
-    async (ch?: ChapterRecord) => {
-      const target = ch ?? activeChapterRef.current
-      if (!target) return
-      await indexedDbProjectRepository.saveChapter(target)
-      chapterSaveEvents.publish(target)
-      saveSnapshot(target)
-      patch({ isSaved: true })
-      onStats?.({ title: target.title, wordCount: target.wordCount, updatedAt: target.updatedAt })
-    },
-    [onStats, patch],
-  )
-
   const reportSaveError = useCallback(
     (error: unknown) => {
       console.warn('[InkPi Desktop] Chapter save failed:', error)
       patch({ isSaved: false })
     },
     [patch],
+  )
+
+  const flushSave = useCallback(
+    async (ch?: ChapterRecord) => {
+      const target = ch ?? activeChapterRef.current
+      if (!target) return
+
+      // P0-1: 用户输入存盘统一走 ChapterMutationService (INV-02)
+      // 使用权威的 durable revision 模型，存盘成功后才递增版本
+      const result = await chapterMutationService.mutate({
+        workspaceId: projectId,
+        chapterId: target.id,
+        expectedRevision: target.revision,
+        mutation: { type: 'replace-content', content: target.content || '' },
+        origin: 'user-typing',
+        countAsAuthorWriting: true,
+      })
+
+      if (!result.success) {
+        reportSaveError(result.error)
+        return
+      }
+
+      const updated = result.chapter
+      activeChapterRef.current = updated
+      saveSnapshot(updated)
+      patch({
+        activeChapter: updated,
+        chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+        isSaved: true,
+      })
+      onStats?.({ title: updated.title, wordCount: updated.wordCount, updatedAt: updated.updatedAt })
+    },
+    [onStats, patch, projectId, reportSaveError],
   )
 
   const runPersistence = useCallback(
@@ -442,7 +463,13 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
     if (initialChapter) {
       const draft = draftJournal.get(projectId, initialChapter.id)
-      if (draft && draft.updatedAt > (initialChapter.updatedAt || 0) && draft.editorContent) {
+      // P0-5: 仅当 WAL 基础版本等于或高于持久化版本时才安全自动恢复，防止旧设备草稿覆盖新同步版本
+      if (
+        draft &&
+        draft.baseRevision >= (initialChapter.revision ?? 1) &&
+        draft.updatedAt > (initialChapter.updatedAt || 0) &&
+        draft.editorContent
+      ) {
         initialChapter = {
           ...initialChapter,
           content: draft.editorContent,
@@ -970,11 +997,12 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     const wc = countWords(text)
     const diff = wc - cur.wordCount
 
+    // P0-1: 键盘输入仅更新 transient 内容，不任意 revision++，保持与 durable revision 对齐
     const updated: ChapterRecord = {
       ...cur,
       content: html,
       wordCount: wc,
-      revision: html === cur.content ? (cur.revision ?? 0) : (cur.revision ?? 0) + 1,
+      revision: cur.revision ?? 1,
       updatedAt: clock.now(),
     }
     activeChapterRef.current = updated

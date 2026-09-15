@@ -35,6 +35,7 @@ import { bootstrapDesktopTaskRecovery } from '../adapters/desktopTaskRecoveryBoo
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
 import type { ChapterRecord } from '../types'
+import type { ActiveWritingContext } from '../core/activeWritingContext'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -171,6 +172,7 @@ export function useAiConversation(
   aiModel: ModelConfig | null,
   workspaceId?: string | null,
   options: UseAiConversationOptions = {},
+  activeWritingContext?: ActiveWritingContext | null,
 ): AiConversation {
   const { initialPanelOpen = false, storyState } = options
   const taskStore = options.taskRecoveryStore ?? indexedDbTaskRecoveryStore
@@ -617,14 +619,15 @@ export function useAiConversation(
         const client = clientRef.current
         if (!client?.runTask) throw new Error('Task runtime is unavailable')
 
-        // 尝试从 IndexedDB 加载当前章节的真实正文与修订号，拒绝以空正文糊弄 AI (INV-06)
-        let activeDocText = ''
-        let activeDocRevision = 1
-        let targetChapterId = chapterId || 'assistant'
-        if (projectId && chapterId) {
+        // P0-3: 优先从 ActiveWritingContext 提取权威的章节内容、选区与 revision (INV-06)
+        let activeDocText = activeWritingContext?.chapter?.content || ''
+        let activeDocRevision = activeWritingContext?.chapter?.revision ?? 1
+        let targetChapterId = activeWritingContext?.chapter?.id || chapterId || 'assistant'
+
+        if (!activeDocText && projectId && targetChapterId !== 'assistant') {
           try {
             const chs = await indexedDbProjectRepository.getAllChapters()
-            const ch = chs.find((c: ChapterRecord) => c.id === chapterId)
+            const ch = chs.find((c: ChapterRecord) => c.id === targetChapterId)
             if (ch) {
               activeDocText = ch.content || ''
               activeDocRevision = ch.revision ?? 1
@@ -640,6 +643,9 @@ export function useAiConversation(
           taskId: idGenerator.generate('assistant'),
           document,
           question: trimmed,
+          selection: activeWritingContext?.selection
+            ? { from: activeWritingContext.selection.from, to: activeWritingContext.selection.to }
+            : undefined,
           storyState,
           metadata: {
             modelId: aiModel?.id,

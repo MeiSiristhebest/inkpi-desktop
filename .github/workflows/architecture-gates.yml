@@ -234,19 +234,19 @@ jobs:
       - name: Build Runtime sidecar
         run: pnpm --dir inkpi run build:binaries
 
-      - name: Install GNU Rust target
+      - name: Setup MSVC Rust target
         shell: pwsh
-        run: rustup target add x86_64-pc-windows-gnu
+        run: rustup target add x86_64-pc-windows-msvc
 
       - name: Install Desktop dependencies
         run: pnpm --dir inkpi-desktop install --frozen-lockfile --ignore-scripts
 
       - name: Build Tauri NSIS installer
-        run: pnpm --dir inkpi-desktop run tauri:build
+        run: pnpm --dir inkpi-desktop run tauri:build -- --target x86_64-pc-windows-msvc
 
       - name: Upload Tauri installer
         uses: actions/upload-artifact@v4
         with:
           name: inkpi-desktop-windows-nsis
-          path: inkpi-desktop/src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/*-setup.exe
+          path: inkpi-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
           if-no-files-found: error

@@ -339,7 +339,7 @@ export class WorkspaceLifecycleService {
       totalRemappedDomainRecords += remappedList.length
     }
 
-    // 5. Atomic-style persistence
+    // 5. Atomic-style persistence with automatic rollback on failure (P0-6, INV-08)
     try {
       await this.projectRepo.saveProject(newProject)
       for (const vol of newVolumes) {
@@ -357,9 +357,15 @@ export class WorkspaceLifecycleService {
         }
       }
     } catch (err) {
+      // 导入失败时立刻彻底回滚已写入的半拉子工作区数据，实现 0% 破损残留 (INV-08)
+      try {
+        await this.purgeWorkspace(newWorkspaceId)
+      } catch {
+        // ignore rollback errors
+      }
       return {
         ok: false,
-        error: `导入失败，数据写入异常: ${err instanceof Error ? err.message : String(err)}`,
+        error: `导入失败，数据写入异常 (已安全回滚): ${err instanceof Error ? err.message : String(err)}`,
       }
     }
 

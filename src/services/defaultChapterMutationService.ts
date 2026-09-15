@@ -25,7 +25,7 @@ export class DefaultChapterMutationService implements ChapterMutationService {
   }
 
   async mutate(command: ChapterMutationCommand): Promise<ChapterMutationExecutionResult> {
-    const { workspaceId, chapterId, expectedRevision, mutation } = command
+    const { workspaceId, chapterId, expectedRevision, mutation, origin } = command
 
     // 1. Fetch current authoritative chapter record
     let existing: ChapterRecord | undefined
@@ -112,7 +112,7 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       }
 
       // 统计与归因策略：仅当显式标记或用户打字时，才记入作者个人每日码字量 (P0.1, P3.10)
-      const countAsWriting = command.countAsAuthorWriting ?? origin === 'user-typing'
+      const countAsWriting = command.countAsAuthorWriting ?? (origin === 'user-typing')
       if (countAsWriting && wordCountDelta > 0) {
         try {
           const { indexedDbDailyStatsRepository } =

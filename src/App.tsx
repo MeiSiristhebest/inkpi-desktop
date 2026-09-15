@@ -18,6 +18,7 @@ import {
   useOptionalActiveWritingContext,
 } from './core/activeWritingContext'
 import type { ReactNode } from 'react'
+import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
 
@@ -46,10 +47,18 @@ const ProjectWorkspace: FC<{
 }) => {
   const { chapters, volumes, reloadChapters } = useProjectData()
   const activeWritingCtx = useOptionalActiveWritingContext()
-  const authoritativeActiveChapter =
-    (activeWritingCtx?.chapter && chapters.find((c) => c.id === activeWritingCtx.chapter?.id)) ||
-    chapters[0] ||
-    null
+  const matchingChapter =
+    activeWritingCtx?.chapter && chapters.find((c) => c.id === activeWritingCtx.chapter?.id)
+
+  // P0-4: 将 ActiveWritingContext 中最新的 content/revision 注入，确保 PluginHost 拿到最新权威正文
+  const authoritativeActiveChapter: ChapterRecord | null = matchingChapter
+    ? {
+        ...matchingChapter,
+        content: activeWritingCtx.chapter?.content ?? matchingChapter.content,
+        wordCount: activeWritingCtx.chapter?.wordCount ?? matchingChapter.wordCount,
+        revision: activeWritingCtx.chapter?.revision ?? matchingChapter.revision,
+      }
+    : chapters[0] || null
 
   return (
     <DesktopPluginHostProvider
@@ -178,7 +187,19 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
   settings,
   library,
 }) => {
+  return (
+    <ActiveWritingContextProvider workspaceId={library.activeProjectId || ''}>
+      <AppShellInner settings={settings} library={library} />
+    </ActiveWritingContextProvider>
+  )
+}
+
+const AppShellInner: FC<{ settings: AppSettings; library: ProjectLibrary }> = ({
+  settings,
+  library,
+}) => {
   const { storyState } = useStoryState()
+  const activeWritingCtx = useOptionalActiveWritingContext()
 
   const {
     projects,
@@ -192,9 +213,13 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     deleteProject,
   } = library
 
-  const ai = useAiConversation(settings.daemonWsUrl, settings.aiModel, activeProjectId, {
-    storyState,
-  })
+  const ai = useAiConversation(
+    settings.daemonWsUrl,
+    settings.aiModel,
+    activeProjectId,
+    { storyState },
+    activeWritingCtx,
+  )
 
   const {
     isConnected,
