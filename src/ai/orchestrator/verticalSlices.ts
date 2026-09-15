@@ -21,10 +21,10 @@ interface PendingAudit {
 }
 
 interface AuditSubscriber {
-    resolve: (value: ContinuityFinding[]) => void
-    reject: (error: unknown) => void
-    signal?: AbortSignal
-    abortListener?: () => void
+  resolve: (value: ContinuityFinding[]) => void
+  reject: (error: unknown) => void
+  signal?: AbortSignal
+  abortListener?: () => void
 }
 
 /** Debounced, cancellable and deduplicated VS3 continuity-audit runner. */
@@ -64,6 +64,8 @@ export class ContinuityAuditScheduler {
       input,
       options,
       controller: new AbortController(),
+      // SAFETY: timer is assigned immediately after object creation via setTimeout;
+      // the intermediate undefined satisfies the PendingAudit interface.
       timer: undefined as unknown as ReturnType<typeof setTimeout>,
       subscriber,
       subscribers: [subscriber],
@@ -193,6 +195,7 @@ export interface DistillationCheckpoint {
 
 export interface ProjectDistillationInput {
   taskId: string
+  workspaceId: string
   documents: SemanticDocument[]
   target?: DistillationTaskInput['target']
   fields?: string[]
@@ -267,6 +270,7 @@ export class ProjectDistillationWorkflow {
         const result = await this.intelligence.runDistillation(
           {
             taskId,
+            workspaceId: input.workspaceId,
             document: documents[0],
             neighboringDocuments: documents.slice(1),
             target: input.target ?? 'project',

@@ -148,7 +148,7 @@ describe('vertical slice orchestration', () => {
     })
 
     await expect(
-      intelligence.runContinue({ taskId: 'vs1', document: documents[0] }, { pollIntervalMs: 0 }),
+      intelligence.runContinue({ taskId: 'vs1', workspaceId: 'test-ws', document: documents[0] }, { pollIntervalMs: 0 }),
     ).resolves.toBe('续写结果')
     expect(gateway.submitted[0]).toMatchObject({
       kind: 'creative.continue',
@@ -166,7 +166,7 @@ describe('vertical slice orchestration', () => {
 
     await expect(
       intelligence.runRewrite(
-        { taskId: 'vs2', document: documents[0], selection: { from: 1, to: 3 }, goal: '更紧凑' },
+        { taskId: 'vs2', workspaceId: 'test-ws', document: documents[0], selection: { from: 1, to: 3 }, goal: '更紧凑' },
         { pollIntervalMs: 0 },
       ),
     ).resolves.toEqual({ from: 1, to: 3, text: '改写结果' })
@@ -186,7 +186,7 @@ describe('vertical slice orchestration', () => {
       new CreativeIntelligence(gateway, { artifactStore: createMemoryArtifactStore() }),
       { debounceMs: 0 },
     )
-    const input = { taskId: 'audit-1', document: documents[0], scope: 'document' as const }
+    const input = { taskId: 'audit-1', workspaceId: 'test-ws', document: documents[0], scope: 'document' as const }
     const first = scheduler.schedule(input, { pollIntervalMs: 0 })
     const duplicate = scheduler.schedule(input, { pollIntervalMs: 0 })
     await expect(first).resolves.toHaveLength(1)
@@ -210,11 +210,11 @@ describe('vertical slice orchestration', () => {
       { debounceMs: 0 },
     )
     const first = scheduler.schedule(
-      { taskId: 'audit-rev-1', document: documents[0], scope: 'document' },
+      { taskId: 'audit-rev-1', workspaceId: 'test-ws', document: documents[0], scope: 'document' },
       { pollIntervalMs: 0 },
     )
     const second = scheduler.schedule(
-      { taskId: 'audit-rev-2', document: { ...documents[0], revision: 2 }, scope: 'document' },
+      { taskId: 'audit-rev-2', workspaceId: 'test-ws', document: { ...documents[0], revision: 2 }, scope: 'document' },
       { pollIntervalMs: 0 },
     )
 
@@ -233,7 +233,7 @@ describe('vertical slice orchestration', () => {
 
     await expect(
       intelligence.runDeepReasoning(
-        { taskId: 'vs4', document: documents[0], question: '如何保留悬念？' },
+        { taskId: 'vs4', workspaceId: 'test-ws', document: documents[0], question: '如何保留悬念？' },
         { pollIntervalMs: 0 },
       ),
     ).resolves.toMatchObject({ answer: '保留悬念' })
@@ -252,7 +252,7 @@ describe('vertical slice orchestration', () => {
     const workflow = new ProjectDistillationWorkflow(
       new CreativeIntelligence(gateway, { artifactStore: createMemoryArtifactStore() }),
     )
-    const input: ProjectDistillationInput = { taskId: 'distill', documents }
+    const input: ProjectDistillationInput = { taskId: 'distill', workspaceId: 'test-ws', documents }
     const checkpoints: Array<{ nextChunk: number; failedChunks: string[] }> = []
     const first = await workflow.run(input, {
       chunkSize: 2,
@@ -298,7 +298,7 @@ describe('vertical slice orchestration', () => {
     )
 
     await expect(
-      workflow.run({ taskId: 'invalid', documents }, { chunkSize: Number.NaN }),
+      workflow.run({ taskId: 'invalid', workspaceId: 'test-ws', documents }, { chunkSize: Number.NaN }),
     ).rejects.toThrow(/chunk size/i)
     expect(gateway.submitted.size).toBe(0)
   })

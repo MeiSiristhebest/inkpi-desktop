@@ -56,9 +56,9 @@ function gatewayFor(result: (task: AiTask) => TaskResult) {
 
 describe('Phase 21/22 local reliability boundaries', () => {
   it('deduplicates equivalent repeated tasks by excluding task id but preserving intent', () => {
-    const first = createContinueTask({ taskId: 'repeat-1', document })
+    const first = createContinueTask({ taskId: 'repeat-1', workspaceId: 'test-ws', document })
     const second = { ...first, id: 'repeat-2' }
-    const changedIntent = createRewriteTask({ taskId: 'repeat-3', document, goal: '改写' })
+    const changedIntent = createRewriteTask({ taskId: 'repeat-3', workspaceId: 'test-ws', document, goal: '改写' })
 
     expect(createDeterministicTaskCacheKey(first)).toEqual(createDeterministicTaskCacheKey(second))
     expect(createDeterministicTaskCacheKey(first).intentFingerprint).not.toBe(
@@ -122,7 +122,7 @@ describe('Phase 21/22 local reliability boundaries', () => {
         },
       },
     ])
-    const task = createDeepReasoningTask({ taskId: 'capability-boundary', document })
+    const task = createDeepReasoningTask({ taskId: 'capability-boundary', workspaceId: 'test-ws', document })
     task.outputContract = { ...task.outputContract, schemaId: 'deep-reasoning-v1' }
     task.requirements = { ...task.requirements, minContextTokens: 2048 }
 
@@ -150,7 +150,7 @@ describe('Phase 21/22 local reliability boundaries', () => {
         },
       ],
     })
-    const task = createContinueTask({ taskId: 'offline-unavailable', document })
+    const task = createContinueTask({ taskId: 'offline-unavailable', workspaceId: 'test-ws', document })
     task.requirements = { ...task.requirements, network: 'offline' }
 
     await expect(intelligence.run(task, { pollIntervalMs: 0 })).rejects.toBeInstanceOf(
@@ -198,6 +198,7 @@ describe('Phase 21/22 local reliability boundaries', () => {
     })
     const base = createDistillationTask({
       taskId: 'revision-1',
+      workspaceId: 'test-ws',
       document,
       metadata: { projectRevision: 4 },
     })

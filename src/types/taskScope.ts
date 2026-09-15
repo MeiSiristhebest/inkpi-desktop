@@ -1,3 +1,12 @@
+/**
+ * Desktop TaskScope facade (INV-03, INV-06):
+ * Re-exports the single authoritative TaskScope from @inkpi/protocol.
+ * Keeps Desktop factory/helper utilities (createTaskScope, resolveTaskScope)
+ * without duplicating the type definition.
+ */
+export type { TaskScope } from '@inkpi/protocol'
+import type { TaskScope } from '@inkpi/protocol'
+
 export interface TaskDocumentScope {
   id: string
   revision: number
@@ -7,19 +16,6 @@ export interface TaskSelectionScope {
   from: number
   to: number
   sourceHash?: string
-}
-
-/**
- * TaskScope (P0.9):
- * 跨 Desktop ↔ Runtime 核心协议作用域契约。
- * 显式标识 AI 任务绑定的 workspace、版本轴 (workspaceRevision)、目标章节与选区 (INV-03, INV-06)。
- */
-export interface TaskScope {
-  workspaceId: string
-  workspaceRevision: number
-  document?: TaskDocumentScope
-  selection?: TaskSelectionScope
-  sessionId?: string
 }
 
 export interface ScopedTaskContext {

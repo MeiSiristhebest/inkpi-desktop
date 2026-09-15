@@ -37,7 +37,7 @@ const document = {
 
 describe('Creative Intelligence Layer', () => {
   it('builds all five vertical slices from canonical content and separates effects', () => {
-    const common = { taskId: 'creative-task', document }
+    const common = { taskId: 'creative-task', workspaceId: 'test-ws', document }
     const tasks = [
       createContinueTask(common),
       createRewriteTask({ ...common, goal: '更紧凑' }),
@@ -170,7 +170,7 @@ describe('Creative Intelligence Layer', () => {
       },
     }
     const result = await new CreativeIntelligence(gateway).run(
-      createContinueTask({ taskId: 't', document }),
+      createContinueTask({ taskId: 't', workspaceId: 'test-ws', document }),
       { pollIntervalMs: 0 },
     )
     expect(result.status).toBe('completed')
@@ -193,7 +193,7 @@ describe('Creative Intelligence Layer', () => {
     }
 
     await expect(
-      new CreativeIntelligence(gateway).run(createContinueTask({ taskId: 't', document }), {
+      new CreativeIntelligence(gateway).run(createContinueTask({ taskId: 't', workspaceId: 'test-ws', document }), {
         pollIntervalMs: 0,
       }),
     ).rejects.toThrow('Task submit identity mismatch')
@@ -215,7 +215,7 @@ describe('Creative Intelligence Layer', () => {
     }
 
     await expect(
-      new CreativeIntelligence(gateway).run(createContinueTask({ taskId: 't', document }), {
+      new CreativeIntelligence(gateway).run(createContinueTask({ taskId: 't', workspaceId: 'test-ws', document }), {
         pollIntervalMs: 0,
       }),
     ).rejects.toThrow('Task status identity mismatch')
@@ -239,7 +239,7 @@ describe('Creative Intelligence Layer', () => {
 
     await expect(
       new CreativeIntelligence(gateway).run(
-        createContinueTask({ taskId: 'timeout-task', document }),
+        createContinueTask({ taskId: 'timeout-task', workspaceId: 'test-ws', document }),
         { pollIntervalMs: 0, timeoutMs: 5 },
       ),
     ).rejects.toMatchObject({ name: 'TimeoutError' })
@@ -295,7 +295,7 @@ describe('Creative Intelligence Layer', () => {
       ]),
       cache,
     })
-    const baseTask = createContinueTask({ taskId: 'cache-1', document })
+    const baseTask = createContinueTask({ taskId: 'cache-1', workspaceId: 'test-ws', document })
     const task = {
       ...baseTask,
       metadata: {
@@ -355,7 +355,7 @@ describe('Creative Intelligence Layer', () => {
 
     await expect(
       new CreativeIntelligence(gateway, { routes: [] }).run(
-        createContinueTask({ taskId: 'no-route', document }),
+        createContinueTask({ taskId: 'no-route', workspaceId: 'test-ws', document }),
       ),
     ).rejects.toThrow(NoCapableRouteError)
     await expect(
@@ -377,7 +377,7 @@ describe('Creative Intelligence Layer', () => {
             },
           },
         ]),
-      }).run(createContinueTask({ taskId: 'capability-mismatch', document })),
+      }).run(createContinueTask({ taskId: 'capability-mismatch', workspaceId: 'test-ws', document })),
     ).rejects.toThrow(NoCapableRouteError)
     expect(submitted).toHaveLength(0)
   })
@@ -420,7 +420,7 @@ describe('Creative Intelligence Layer', () => {
       artifactRuntime,
       artifactIdGenerator: { generate: () => 'artifact-deterministic' },
     })
-    const baseTask = createDistillationTask({ taskId: 'artifact-task', document })
+    const baseTask = createDistillationTask({ taskId: 'artifact-task', workspaceId: 'test-ws', document })
     const task: AiTask = {
       ...baseTask,
       metadata: {
@@ -506,14 +506,14 @@ describe('Creative Intelligence Layer', () => {
     })
 
     const waiting = await intelligence.run(
-      createDistillationTask({ taskId: 'waiting-user', document }),
+      createDistillationTask({ taskId: 'waiting-user', workspaceId: 'test-ws', document }),
       { pollIntervalMs: 0 },
     )
-    const failed = await intelligence.run(createDistillationTask({ taskId: 'failed', document }), {
+    const failed = await intelligence.run(createDistillationTask({ taskId: 'failed', workspaceId: 'test-ws', document }), {
       pollIntervalMs: 0,
     })
     const ephemeral = await intelligence.run(
-      createContinueTask({ taskId: 'ephemeral', document }),
+      createContinueTask({ taskId: 'ephemeral', workspaceId: 'test-ws', document }),
       { pollIntervalMs: 0 },
     )
 
@@ -567,11 +567,11 @@ describe('Creative Intelligence Layer', () => {
     })
 
     const first = await intelligence.run(
-      createDistillationTask({ taskId: 'cache-artifact-1', document }),
+      createDistillationTask({ taskId: 'cache-artifact-1', workspaceId: 'test-ws', document }),
       { pollIntervalMs: 0 },
     )
     const second = await intelligence.run(
-      createDistillationTask({ taskId: 'cache-artifact-2', document }),
+      createDistillationTask({ taskId: 'cache-artifact-2', workspaceId: 'test-ws', document }),
       { pollIntervalMs: 0 },
     )
 
@@ -619,9 +619,10 @@ describe('Creative Intelligence Layer', () => {
       artifactStore: store,
       artifactIdGenerator: () => 'artifact-same-id',
     })
-    const firstTask = createDistillationTask({ taskId: 'conflict-1', document })
+    const firstTask = createDistillationTask({ taskId: 'conflict-1', workspaceId: 'test-ws', document })
     const secondTask = createDistillationTask({
       taskId: 'conflict-2',
+      workspaceId: 'test-ws',
       document: { ...document, documentId: 'chapter-2', revision: 5 },
     })
 

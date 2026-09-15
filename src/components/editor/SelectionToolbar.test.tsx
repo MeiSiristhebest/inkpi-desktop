@@ -88,6 +88,7 @@ describe('SelectionToolbar', () => {
         onOpenAssistant={vi.fn()}
         activeChapterId="chapter-1"
         activeChapterRevision={4}
+        workspaceId="test-workspace"
       />,
     )
     act(() => {
@@ -111,6 +112,7 @@ describe('SelectionToolbar', () => {
         onAiTask={onAiTask}
         activeChapterId="chapter-1"
         activeChapterRevision={5}
+        workspaceId="test-workspace"
       />,
     )
     fireEvent.click(screen.getByText('撤销'))
@@ -133,6 +135,7 @@ describe('SelectionToolbar', () => {
           output: { format: 'patch' as const, patch: { from: 1, to: 3, text: '拒绝' } },
         })}
         activeChapterId="chapter-1"
+        workspaceId="test-workspace"
       />,
     )
     act(() => {

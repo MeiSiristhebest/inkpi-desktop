@@ -129,6 +129,7 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
       {
         task: createContinueTask({
           taskId: 'desktop-five-slice-gate-continue',
+          workspaceId: 'test-ws',
           document,
           selection: { from: document.text.length, to: document.text.length },
           instruction: '返回续写文本。',
@@ -138,6 +139,7 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
       {
         task: createRewriteTask({
           taskId: 'desktop-five-slice-gate-rewrite',
+          workspaceId: 'test-ws',
           document,
           selection: { from: 0, to: 6 },
           goal: '收紧句子。',
@@ -151,6 +153,7 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
       {
         task: createContinuityAuditTask({
           taskId: 'desktop-five-slice-gate-continuity',
+          workspaceId: 'test-ws',
           document,
           scope: 'document',
           instruction: '检查连续性。',
@@ -169,6 +172,7 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
       {
         task: createDeepReasoningTask({
           taskId: 'desktop-five-slice-gate-reasoning',
+          workspaceId: 'test-ws',
           document,
           question: '保留什么约束？',
           depth: 'focused',
@@ -187,6 +191,7 @@ describe('Desktop ↔ InkPi daemon five-slice gate', () => {
       {
         task: createDistillationTask({
           taskId: 'desktop-five-slice-gate-distillation',
+          workspaceId: 'test-ws',
           document,
           target: 'project',
           fields: ['entities', 'events', 'promises'],

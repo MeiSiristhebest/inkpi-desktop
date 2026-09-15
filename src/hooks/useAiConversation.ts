@@ -578,6 +578,8 @@ export function useAiConversation(
         const document = semanticDocumentFromText(chapterId, text)
         const task = createContinueTask({
           taskId: idGenerator.generate(`ghost-${chapterId}`),
+          workspaceId: workspaceIdRef.current || '',
+          workspaceRevision: activeWritingContext?.workspaceRevision ?? 1,
           document,
           selection: { from: document.text.length, to: document.text.length },
           storyState,
@@ -641,6 +643,8 @@ export function useAiConversation(
         const document = semanticDocumentFromText(targetChapterId, activeDocText, activeDocRevision)
         const task = createAssistantTask({
           taskId: idGenerator.generate('assistant'),
+          workspaceId: projectId || '',
+          workspaceRevision: activeWritingContext?.workspaceRevision ?? 1,
           document,
           question: trimmed,
           selection: activeWritingContext?.selection
@@ -1009,6 +1013,7 @@ export function useAiConversation(
       }
       const task = createDistillationTask({
         taskId: taskInput.taskId,
+        workspaceId: workspaceIdRef.current || '',
         document: taskInput.documents[0],
         neighboringDocuments: taskInput.documents.slice(1),
         target: taskInput.target ?? 'project',

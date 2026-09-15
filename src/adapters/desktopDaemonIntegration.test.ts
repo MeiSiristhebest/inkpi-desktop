@@ -46,6 +46,7 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
 
       const task = createAssistantTask({
         taskId: 'desktop-daemon-completed',
+        workspaceId: 'test-ws',
         document: semanticDocumentFromText(
           'desktop-integration-doc',
           '雨停后，门外只剩一盏冷灯。',
@@ -115,6 +116,7 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
     try {
       const task = createContinueTask({
         taskId: 'desktop-daemon-waiting-user',
+        workspaceId: 'test-ws',
         document: semanticDocumentFromText('desktop-waiting-doc', '她把笔停在最后一个字上。'),
         targetCharacters: 40,
         instruction: '提交前等待作者确认。',
@@ -164,6 +166,7 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
     try {
       const task = createContinueTask({
         taskId: 'desktop-daemon-story-context',
+        workspaceId: 'test-ws',
         document: semanticDocumentFromText('desktop-story-context-doc', '她把笔停在最后一个字上。'),
         storyState: createStoryState(12),
         targetCharacters: 40,

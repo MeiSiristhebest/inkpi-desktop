@@ -239,6 +239,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       const result = await onAiTask(
         createRewriteTask({
           taskId: idGenerator.generate(`rewrite-${activeChapterId || 'selection'}`),
+          workspaceId: initialProjectId || '',
           document: semanticDocument,
           selection,
           goal: '保持事实和原意，改进选中文本',

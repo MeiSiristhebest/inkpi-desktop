@@ -41,6 +41,8 @@ describe('useChapterAutosave durability contract', () => {
       vi.advanceTimersByTime(500)
     })
 
+    await Promise.resolve()
+
     expect(flush).toHaveBeenCalledWith(fakeChapter)
     expect(result.current.hasPending()).toBe(false)
   })

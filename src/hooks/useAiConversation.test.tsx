@@ -326,6 +326,7 @@ describe('useAiConversation task recovery', () => {
       await expect(
         hook.result.current.runDeepReasoning({
           taskId,
+          workspaceId: 'project-1',
           document: semanticDocumentFromText('chapter-1', '正文', 1),
           question: '为什么？',
         }),

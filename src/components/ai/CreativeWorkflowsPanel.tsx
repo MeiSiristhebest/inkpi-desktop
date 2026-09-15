@@ -163,6 +163,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       const result = await onContinuityAudit(
         {
           taskId: idGenerator.generate(`continuity-${chapter.id}`),
+          workspaceId: projectId,
           document,
           scope: 'document',
         },
@@ -234,6 +235,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       const result = await onDeepReasoning(
         {
           taskId,
+          workspaceId: projectId,
           document,
           question: '分析当前章节的关键约束、角色动机和下一步剧情风险。',
         },
@@ -279,6 +281,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       const result = await onDistillationWorkflow(
         {
           taskId: DISTILLATION_TASK_ID,
+          workspaceId: projectId,
           documents,
           target: 'project',
           fields: ['summary', 'entities', 'events', 'promises'],

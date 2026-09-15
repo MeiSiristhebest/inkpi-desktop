@@ -177,24 +177,15 @@ const AppShell: FC = () => {
   const library = useProjectLibrary()
 
   return (
-    <StoryStateProvider workspaceId={library.activeProjectId}>
-      <AppShellContent settings={settings} library={library} />
-    </StoryStateProvider>
-  )
-}
-
-const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = ({
-  settings,
-  library,
-}) => {
-  return (
     <ActiveWritingContextProvider workspaceId={library.activeProjectId || ''}>
-      <AppShellInner settings={settings} library={library} />
+      <StoryStateProvider workspaceId={library.activeProjectId}>
+        <AppShellContent settings={settings} library={library} />
+      </StoryStateProvider>
     </ActiveWritingContextProvider>
   )
 }
 
-const AppShellInner: FC<{ settings: AppSettings; library: ProjectLibrary }> = ({
+const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = ({
   settings,
   library,
 }) => {
@@ -278,41 +269,39 @@ const AppShellInner: FC<{ settings: AppSettings; library: ProjectLibrary }> = ({
           className="h-full w-full"
         >
           <ErrorBoundary label="应用主框架">
-            <ActiveWritingContextProvider workspaceId={activeProjectId}>
-              <ProjectDataProvider projectId={activeProjectId}>
-                <ProjectWorkspace
+            <ProjectDataProvider projectId={activeProjectId}>
+              <ProjectWorkspace
+                projectId={activeProjectId}
+                projectName={projects.find((p) => p.id === activeProjectId)?.name}
+                isConnected={isConnected}
+                onAiTask={runAiTask}
+                onPluginTool={runPluginTool}
+                onPluginWorkflow={runPluginWorkflow}
+              >
+                <ProjectEngine
                   projectId={activeProjectId}
                   projectName={projects.find((p) => p.id === activeProjectId)?.name}
                   isConnected={isConnected}
+                  isReconnecting={isReconnecting}
+                  onReconnect={reconnect}
+                  onRequestGhost={requestGhost}
                   onAiTask={runAiTask}
-                  onPluginTool={runPluginTool}
-                  onPluginWorkflow={runPluginWorkflow}
-                >
-                  <ProjectEngine
-                    projectId={activeProjectId}
-                    projectName={projects.find((p) => p.id === activeProjectId)?.name}
-                    isConnected={isConnected}
-                    isReconnecting={isReconnecting}
-                    onReconnect={reconnect}
-                    onRequestGhost={requestGhost}
-                    onAiTask={runAiTask}
-                    onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
-                    onHome={() => setActiveProjectId(null)}
-                    aiPanelOpen={aiPanelOpen}
-                    setAiPanelOpen={setAiPanelOpen}
-                    aiMessages={aiMessages}
-                    aiInput={aiInput}
-                    setAiInput={setAiInput}
-                    aiBusy={aiBusy}
-                    sendAiPrompt={sendAiPrompt}
-                    runContinuityAudit={runContinuityAudit}
-                    runDeepReasoning={runDeepReasoning}
-                    runDistillationWorkflow={runDistillationWorkflow}
-                    steerTask={steerTask}
-                  />
-                </ProjectWorkspace>
-              </ProjectDataProvider>
-            </ActiveWritingContextProvider>
+                  onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
+                  onHome={() => setActiveProjectId(null)}
+                  aiPanelOpen={aiPanelOpen}
+                  setAiPanelOpen={setAiPanelOpen}
+                  aiMessages={aiMessages}
+                  aiInput={aiInput}
+                  setAiInput={setAiInput}
+                  aiBusy={aiBusy}
+                  sendAiPrompt={sendAiPrompt}
+                  runContinuityAudit={runContinuityAudit}
+                  runDeepReasoning={runDeepReasoning}
+                  runDistillationWorkflow={runDistillationWorkflow}
+                  steerTask={steerTask}
+                />
+              </ProjectWorkspace>
+            </ProjectDataProvider>
           </ErrorBoundary>
         </motion.div>
       )}

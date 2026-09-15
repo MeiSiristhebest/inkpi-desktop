@@ -51,6 +51,7 @@ describe('Desktop ↔ InkPi daemon vertical slice integration', () => {
       const tasks = [
         createRewriteTask({
           taskId: 'desktop-daemon-rewrite',
+          workspaceId: 'test-ws',
           document,
           selection: { from: 0, to: 6 },
           goal: '保留事实并收紧句子。',
@@ -58,12 +59,14 @@ describe('Desktop ↔ InkPi daemon vertical slice integration', () => {
         }),
         createContinuityAuditTask({
           taskId: 'desktop-daemon-continuity',
+          workspaceId: 'test-ws',
           document,
           scope: 'document',
           instruction: '检查当前章节的连续性。',
         }),
         createDeepReasoningTask({
           taskId: 'desktop-daemon-reasoning',
+          workspaceId: 'test-ws',
           document,
           question: '下一场应该保留哪些叙事约束？',
           depth: 'focused',
@@ -71,6 +74,7 @@ describe('Desktop ↔ InkPi daemon vertical slice integration', () => {
         }),
         createDistillationTask({
           taskId: 'desktop-daemon-distillation',
+          workspaceId: 'test-ws',
           document,
           target: 'project',
           fields: ['entities', 'events', 'promises'],

@@ -8,6 +8,7 @@ import type {
 import type { SemanticDocument } from '../../domain/content'
 import type { StoryState } from '../../domain/story'
 import { compileCreativeContext, type CreativeContext } from '../context/contextCompiler'
+import { createTaskScope } from '../../types/taskScope'
 
 export const CREATIVE_TASK_KINDS = {
   assistant: 'creative.assistant',
@@ -22,6 +23,10 @@ export type CreativeTaskKind = (typeof CREATIVE_TASK_KINDS)[keyof typeof CREATIV
 
 export interface CreativeTaskBaseInput {
   taskId: string
+  /** 任务归属的 Workspace（INV-03）——所有 creative task 必须携带 */
+  workspaceId: string
+  /** 当前 workspace 的领域修订号（INV-06）；默认 1，生产应从 ActiveWritingContext.workspaceRevision 读取 */
+  workspaceRevision?: number
   document: SemanticDocument
   selection?: { from: number; to: number }
   neighboringDocuments?: SemanticDocument[]
@@ -192,15 +197,26 @@ function createCreativeTask(
 ): AiTask {
   const context = compileCreativeContext(input)
   const selection = toTaskSelection(input.document, input.selection)
+  // INV-03 / INV-06: 每个 AI 任务必须携带显式 scope，包含 workspaceId、workspaceRevision、
+  // 章节 ID、revision 与选区——让 Runtime JIT、缓存、Artifact 作用域严格隔离
+  const scope = createTaskScope({
+    workspaceId: input.workspaceId,
+    workspaceRevision: input.workspaceRevision ?? 1,
+    documentId: input.document.documentId,
+    documentRevision: input.document.revision,
+    selection: input.selection ? { from: input.selection.from, to: input.selection.to } : undefined,
+  })
   return {
     id: input.taskId,
     kind,
+    scope,
     input: {
       documentId: input.document.documentId,
       text: context.selectionText || context.text,
       selection,
       payload: {
         context,
+        workspaceId: input.workspaceId,
         ...options.extra,
       },
     },
@@ -208,14 +224,21 @@ function createCreativeTask(
       providerIds: ['creative.document', 'creative.story', 'retrieval.jit'],
       includeSelection: true,
       includeProjectState: Boolean(input.storyState),
-      metadata: { contextFingerprint: context.fingerprint },
+      metadata: {
+        contextFingerprint: context.fingerprint,
+        workspaceId: input.workspaceId,
+      },
     },
     executionPolicy: { ...options.executionPolicy },
     outputContract: { ...options.outputContract },
     effectPolicy: { ...options.effectPolicy },
     ...(options.intent ? { intent: options.intent } : {}),
     requirements: { ...options.requirements },
-    metadata: { ...input.metadata, contextFingerprint: context.fingerprint },
+    metadata: {
+      ...input.metadata,
+      contextFingerprint: context.fingerprint,
+      workspaceId: input.workspaceId,
+    },
   }
 }
 

@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useState,
+  useEffect,
   useCallback,
   useMemo,
   type FC,
@@ -63,6 +64,14 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
   )
   const [selection, setSelection] = useState<SemanticSelection | undefined>(undefined)
   const [dirty, setDirty] = useState<boolean>(false)
+
+  // 当 workspaceId 切换时，重置章节与选区状态，彻底杜绝跨 Workspace 状态残留 (INV-03, INV-06)
+  useEffect(() => {
+    setActiveChapterRecord(initialChapter)
+    setSelection(undefined)
+    setDirty(false)
+    setWorkspaceRevision(initialRevision)
+  }, [workspaceId, initialChapter, initialRevision])
 
   const chapter = useMemo(() => {
     if (!activeChapterRecord) return undefined
