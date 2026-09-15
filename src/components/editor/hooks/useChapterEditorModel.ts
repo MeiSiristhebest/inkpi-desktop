@@ -389,7 +389,11 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
         isSaved: true,
       })
-      onStats?.({ title: updated.title, wordCount: updated.wordCount, updatedAt: updated.updatedAt })
+      onStats?.({
+        title: updated.title,
+        wordCount: updated.wordCount,
+        updatedAt: updated.updatedAt,
+      })
     },
     [onStats, patch, projectId, reportSaveError],
   )
