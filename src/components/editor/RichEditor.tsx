@@ -36,6 +36,7 @@ import { ChapterTree } from './organisms/ChapterTree'
 import { EditorToolbar } from './organisms/EditorToolbar'
 import { FindReplaceBar } from './organisms/FindReplaceBar'
 import { StatusFooter } from './organisms/StatusFooter'
+import { loadContentIntoEditor, applyContentMutation } from './editorContentBridge'
 import { EditorCanvas } from './organisms/EditorCanvas'
 import { GlobalSearchPopup } from './organisms/GlobalSearchPopup'
 import { ChapterContextMenu } from './organisms/ChapterContextMenu'
@@ -427,7 +428,7 @@ export const RichEditor: FC<RichEditorProps> = ({
     if (!ch) return
     appliedIdRef.current = activeChapterId
     try {
-      ed.commands.setContent(ch.content || '')
+      loadContentIntoEditor(ed, ch.content || '')
       hideGhostText(ed)
       ghostTextRef.current = ''
       actions.setGhostText('')
@@ -545,7 +546,7 @@ export const RichEditor: FC<RichEditorProps> = ({
           updated.content !== undefined &&
           ed.getText() !== updated.content
         ) {
-          ed.commands.setContent(updated.content)
+          loadContentIntoEditor(ed, updated.content)
         }
       }}
     >
@@ -589,7 +590,7 @@ export const RichEditor: FC<RichEditorProps> = ({
           />
         )}
 
-          <div className="creative-editor-column flex-1 flex flex-col min-w-0 h-full">
+        <div className="creative-editor-column flex-1 flex flex-col min-w-0 h-full">
           <EditorToolbar
             model={model}
             editor={editor}
@@ -675,8 +676,14 @@ export const RichEditor: FC<RichEditorProps> = ({
           <SensitiveModal
             content={activeChapter?.content || ''}
             onApply={(newContent) => {
-              const ed = editorRef.current
-              if (ed && !ed.isDestroyed) ed.commands.setContent(newContent)
+              if (activeChapter) {
+                void applyContentMutation(editorRef.current, newContent, {
+                  workspaceId: projectId,
+                  chapterId: activeChapter.id,
+                  expectedRevision: activeChapter.revision,
+                  origin: 'sensitive-replace',
+                })
+              }
             }}
             onClose={() => actions.setShowSensitiveModal(false)}
           />
@@ -695,8 +702,12 @@ export const RichEditor: FC<RichEditorProps> = ({
           <HistoryModal
             chapter={activeChapter}
             onRestore={(content) => {
-              const ed = editorRef.current
-              if (ed && !ed.isDestroyed) ed.commands.setContent(content)
+              void applyContentMutation(editorRef.current, content, {
+                workspaceId: projectId,
+                chapterId: activeChapter.id,
+                expectedRevision: activeChapter.revision,
+                origin: 'history-restore',
+              })
             }}
             onClose={() => actions.setShowHistoryModal(false)}
           />

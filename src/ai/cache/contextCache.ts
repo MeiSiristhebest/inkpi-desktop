@@ -15,6 +15,8 @@ export interface CacheInvalidationEvent {
 }
 
 export interface ContextCacheKey {
+  /** Explicit workspace isolation (P0.12, INV-03) */
+  workspaceId?: string
   taskKind: string
   contextFingerprint: string
   /** Stable runtime instruction id/version. Dynamic user intent is separate. */
@@ -221,6 +223,7 @@ export class ContextCache<T> {
 
 export function serializeKey(key: ContextCacheKey): string {
   const parts: Array<[string, string]> = [
+    ['workspaceId', key.workspaceId || ''],
     ['layer', key.layer || 'context'],
     ['taskKind', key.taskKind],
     ['instruction', key.instruction || ''],
@@ -301,7 +304,16 @@ export function createDeterministicTaskCacheKey(
       'provider-unknown',
     ) ?? 'provider-unknown'
 
+  const workspaceId =
+    firstString(
+      (task as any).scope?.workspaceId,
+      metadata.workspaceId,
+      metadata.projectId,
+      task.input.documentId ? (task.input as any).projectId : undefined,
+    ) ?? ''
+
   return {
+    workspaceId,
     layer: 'provider',
     taskKind: task.kind,
     instruction,

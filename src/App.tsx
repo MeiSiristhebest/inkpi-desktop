@@ -1,5 +1,5 @@
 import { type FC } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, MotionConfig } from 'motion/react'
 import { spring, variants } from './motion'
 import { Engine } from './core/engine'
 import { Bookshelf } from './components/bookshelf/Bookshelf'
@@ -139,8 +139,10 @@ const ProjectEngine: FC<{
 export const App: FC = () => (
   <SettingsProvider>
     <PluginProvider>
-      <ThemeController />
-      <AppShell />
+      <MotionConfig reducedMotion="user">
+        <ThemeController />
+        <AppShell />
+      </MotionConfig>
     </PluginProvider>
   </SettingsProvider>
 )

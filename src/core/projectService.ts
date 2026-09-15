@@ -1,4 +1,4 @@
-import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
+import type { ProjectRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
 import type { FileDownloader } from '../ports/fileDownloader'
 import type { IdGenerator } from '../ports/idGenerator'
@@ -9,6 +9,7 @@ import { idGenerator as defaultIdGenerator } from '../adapters/idGenerator'
 import { clock as defaultClock } from '../adapters/clock'
 import { buildSeedVolumes, buildSeedChapters } from '../domain/seed'
 import { LEGACY_PROJECT_ID } from '../config'
+import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
 
 // ─────────────────────────────────────────────────────────────
 // 项目应用服务（原 projectManager）
@@ -149,37 +150,11 @@ export async function importProject(file: File): Promise<ProjectImportResult> {
   try {
     const text = await file.text()
     const data = JSON.parse(text)
-    if (!data.project || !data.project.id) {
-      return { ok: false, error: '文件缺少有效的项目数据（project.id 缺失）' }
+    const result = await workspaceLifecycleService.importWorkspace(data)
+    if (!result.ok || !result.project) {
+      return { ok: false, error: result.error || '导入工作区失败' }
     }
-
-    const project: ProjectRecord = {
-      ...data.project,
-      id: idGen.generate('proj'),
-      updatedAt: clock.now(),
-    }
-    await projectRepo.saveProject(project)
-
-    if (Array.isArray(data.volumes)) {
-      await Promise.all(
-        data.volumes.map((v: VolumeRecord) =>
-          projectRepo.saveVolume({ ...v, projectId: project.id }),
-        ),
-      )
-    }
-    if (Array.isArray(data.chapters)) {
-      await Promise.all(
-        data.chapters.map((c: ChapterRecord) =>
-          projectRepo.saveChapter({
-            ...c,
-            projectId: project.id,
-            id: c.id || idGen.generate('ch'),
-          }),
-        ),
-      )
-    }
-
-    return { ok: true, project }
+    return { ok: true, project: result.project }
   } catch (e) {
     console.warn('Import project failed:', e)
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
@@ -190,37 +165,21 @@ export async function updateProject(project: ProjectRecord): Promise<void> {
   await projectRepo.saveProject({ ...project, updatedAt: clock.now() })
 }
 
-/** 导出项目完整备份：项目元数据 + 所有卷 + 所有章节，下载为 JSON 文件（副作用委托给 FileDownloader 端口） */
+/** 导出项目完整备份（遵循 INV-04）：元数据、卷章正文与 40+ 领域表数据完整归档 */
 export async function exportProject(projectId: string): Promise<void> {
-  const [project, allVolumes, allChapters] = await Promise.all([
-    projectRepo.getProject(projectId),
-    projectRepo.getAllVolumes(),
-    projectRepo.getAllChapters(),
-  ])
-  if (!project) return
+  const archive = await workspaceLifecycleService.exportWorkspaceBackup(projectId)
+  if (!archive) return
 
-  const volumes = allVolumes.filter((v) => v.projectId === projectId)
-  const chapters = allChapters.filter((c) => c.projectId === projectId)
-  const payload = { project, volumes, chapters, exportedAt: clock.now() }
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' })
   fileDownloader.downloadBlob(
-    `${project.name || 'inkpi-project'}-backup-${new Date(clock.now()).toISOString().slice(0, 10)}.json`,
+    `${archive.project.name || 'inkpi-project'}-workspace-backup-${new Date(clock.now()).toISOString().slice(0, 10)}.json`,
     blob,
   )
 }
 
-/** 删除项目及其全部卷、章节数据（不可逆） */
+/** 删除/永久清除工作区数据（级联清除卷章与领域插件数据） */
 export async function deleteProject(projectId: string): Promise<void> {
-  const [allVolumes, allChapters] = await Promise.all([
-    projectRepo.getAllVolumes(),
-    projectRepo.getAllChapters(),
-  ])
-  const vids = allVolumes.filter((v) => v.projectId === projectId).map((v) => v.id)
-  const cids = allChapters.filter((c) => c.projectId === projectId).map((c) => c.id)
-
-  await projectRepo.deleteProject(projectId)
-  await Promise.all(vids.map((id) => projectRepo.deleteVolume(id)))
-  await Promise.all(cids.map((id) => projectRepo.deleteChapter(id)))
+  await workspaceLifecycleService.purgeWorkspace(projectId)
 }
 
 /** 一键创建示范项目：自带种子卷章，便于第一次使用即体验完整功能 */

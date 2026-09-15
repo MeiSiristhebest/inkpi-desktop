@@ -428,12 +428,22 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
     const init: Record<string, boolean> = {}
     projVols.forEach((v) => (init[v.id] = true))
+
+    // P1.3: 优先恢复上次阅读/写作的章节 (Resume Last Chapter)
+    const lastChapterKey = `inkpi_last_active_chapter:${projectId}`
+    let initialChapter = projChs[0] ?? null
+    const savedChapterId = await kvStoreRef.current.get(lastChapterKey)
+    if (savedChapterId) {
+      const found = projChs.find((c) => c.id === savedChapterId)
+      if (found) initialChapter = found
+    }
+
     patch({
       volumes: projVols,
       chapters: projChs,
       expanded: init,
-      activeChapterId: projChs[0]?.id ?? '',
-      activeChapter: projChs[0] ?? null,
+      activeChapterId: initialChapter?.id ?? '',
+      activeChapter: initialChapter,
     })
   }, [projectId, patch, runPersistence])
 
@@ -448,9 +458,14 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const selectChapter = useCallback(
     (ch: ChapterRecord) => {
+      // 切换章节前强制把当前正在防抖/暂存的内容存盘，绝不静默丢失未保存输入 (INV-01)
+      if (autosave.hasPending()) {
+        void autosave.flush().catch(reportSaveError)
+      }
+      void kvStoreRef.current.set(`inkpi_last_active_chapter:${projectId}`, ch.id)
       patch({ activeChapterId: ch.id, activeChapter: ch, isSaved: true })
     },
-    [patch],
+    [patch, autosave, reportSaveError, projectId],
   )
 
   const toggleVolume = useCallback(

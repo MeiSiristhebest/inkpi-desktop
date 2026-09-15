@@ -11,7 +11,7 @@ import {
 import type { ChapterRecord, VolumeRecord } from '../types'
 import type { CodexEntity } from '../plugins/living-codex/types'
 import { pluginEventBus } from './pluginEventBus'
-import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
+import { chapterMutationService } from '../services/defaultChapterMutationService'
 import { indexedDbCodexEntityRepository } from '../adapters/indexedDbCodexEntityRepository'
 import { clock } from '../adapters/clock'
 import type {
@@ -167,15 +167,6 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         }
       }
 
-      if (patch.expectedRevision !== internalRevision) {
-        return {
-          success: false,
-          conflict: true,
-          currentRevision: internalRevision,
-          error: `CAS Conflict: Expected revision ${patch.expectedRevision}, but current revision is ${internalRevision}`,
-        }
-      }
-
       let updatedContent = activeChapter.content || ''
 
       if (patch.type === 'full_replace') {
@@ -192,36 +183,45 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         updatedContent = patch.content
       }
 
-      const nextRevision = internalRevision + 1
-      const now = clock.now()
-      const updatedRecord: ChapterRecord = {
-        ...activeChapter,
-        content: updatedContent,
-        revision: nextRevision,
-        updatedAt: now,
+      // Delegate authoritative mutation to ChapterMutationService
+      const mutationResult = await chapterMutationService.mutate({
+        workspaceId: projectId,
+        chapterId: activeChapter.id,
+        activeChapterFallback: activeChapter,
+        expectedRevision: patch.expectedRevision ?? internalRevision,
+        mutation: { type: 'replace-content', content: updatedContent },
+        origin: 'plugin',
+      })
+
+      if (!mutationResult.success) {
+        return {
+          success: false,
+          conflict: mutationResult.conflict,
+          currentRevision: mutationResult.currentRevision ?? internalRevision,
+          error: mutationResult.error,
+        }
       }
 
-      setInternalRevision(nextRevision)
+      setInternalRevision(mutationResult.newRevision)
 
-      // Persist to IndexedDB via repository
-      try {
-        await indexedDbProjectRepository.saveChapter(updatedRecord)
-      } catch (err) {
-        console.warn('[DesktopPluginHostProvider] Error persisting chapter:', err)
-      }
-
+      const resultingChapter = mutationResult.chapter
       if (onChapterUpdate) {
-        onChapterUpdate(updatedRecord)
+        onChapterUpdate(resultingChapter)
+      } else if (activeChapter) {
+        activeChapter.content = resultingChapter.content
+        activeChapter.revision = resultingChapter.revision
+        activeChapter.wordCount = resultingChapter.wordCount
+        activeChapter.updatedAt = resultingChapter.updatedAt
       }
 
       return {
         success: true,
         conflict: false,
-        currentRevision: nextRevision,
-        updatedContent,
+        currentRevision: mutationResult.newRevision,
+        updatedContent: mutationResult.chapter.content,
       }
     },
-    [activeChapter, internalRevision, onChapterUpdate],
+    [activeChapter, internalRevision, onChapterUpdate, projectId],
   )
 
   const mutateCodexEntity = useCallback(

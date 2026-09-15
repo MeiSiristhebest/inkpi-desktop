@@ -51,13 +51,19 @@ export function compileStoryContext(
     options.maxItems === undefined
       ? Number.MAX_SAFE_INTEGER
       : Math.max(0, Math.floor(options.maxItems))
-  const canonicalFacts = items.filter((item) => item.canonical).slice(0, maxItems)
-  const hypotheses = items.filter((item) => !item.canonical).slice(0, maxItems)
-  const grouped = (collection: string) => items.filter((item) => item.collection === collection)
+  const filteredItems =
+    options.includeHypotheses === false ? items.filter((item) => item.canonical) : items
+  const canonicalFacts = filteredItems.filter((item) => item.canonical).slice(0, maxItems)
+  const hypotheses =
+    options.includeHypotheses === false
+      ? []
+      : filteredItems.filter((item) => !item.canonical).slice(0, maxItems)
+  const grouped = (collection: string) =>
+    filteredItems.filter((item) => item.collection === collection)
   const context: Omit<StoryContext, 'fingerprint'> = {
     revision: state.revision,
     canonicalFacts,
-    hypotheses: options.includeHypotheses === false ? [] : hypotheses,
+    hypotheses,
     entities: grouped('entities'),
     relations: grouped('relations'),
     events: grouped('events'),

@@ -1,0 +1,199 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { WorkspaceLifecycleService } from './workspaceLifecycleService'
+import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
+import type { ProjectRepository } from '../ports/projectRepository'
+import type { IdGenerator } from '../ports/idGenerator'
+import type { Clock } from '../ports/clock'
+import { db } from '../db/indexedDB'
+
+describe('WorkspaceLifecycleService', () => {
+  let projectRepo: ProjectRepository
+  let idGen: IdGenerator
+  let clock: Clock
+  let idCounter = 1
+
+  const mockProject: ProjectRecord = {
+    id: 'orig-proj',
+    name: '原版修仙录',
+    genre: '仙侠',
+    intro: '修仙传记',
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+
+  const mockVolume: VolumeRecord = {
+    id: 'orig-vol-1',
+    projectId: 'orig-proj',
+    title: '第一卷 筑基篇',
+    order: 0,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+
+  const mockChapter: ChapterRecord = {
+    id: 'orig-ch-1',
+    projectId: 'orig-proj',
+    volumeId: 'orig-vol-1',
+    title: '第一章 拜入宗门',
+    content: '<p>云海飘渺，灵峰高耸。</p>',
+    order: 0,
+    wordCount: 9,
+    status: 'draft',
+    revision: 1,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+
+  beforeEach(() => {
+    idCounter = 1
+    idGen = {
+      generate: (prefix) => `${prefix}_generated_${idCounter++}`,
+    }
+    clock = { now: () => 5000 }
+
+    const projects = [mockProject]
+    const volumes = [mockVolume]
+    const chapters = [mockChapter]
+
+    projectRepo = {
+      getAllProjects: vi.fn(async () => projects),
+      getProject: vi.fn(async (id) => projects.find((p) => p.id === id)),
+      saveProject: vi.fn(async (p) => {
+        const idx = projects.findIndex((it) => it.id === p.id)
+        if (idx >= 0) projects[idx] = p
+        else projects.push(p)
+      }),
+      deleteProject: vi.fn(async (id) => {
+        const idx = projects.findIndex((it) => it.id === id)
+        if (idx >= 0) projects.splice(idx, 1)
+      }),
+      getAllVolumes: vi.fn(async () => volumes),
+      getVolumesByProject: vi.fn(async (pId) => volumes.filter((v) => v.projectId === pId)),
+      saveVolume: vi.fn(async (v) => {
+        const idx = volumes.findIndex((it) => it.id === v.id)
+        if (idx >= 0) volumes[idx] = v
+        else volumes.push(v)
+      }),
+      deleteVolume: vi.fn(async (id) => {
+        const idx = volumes.findIndex((it) => it.id === id)
+        if (idx >= 0) volumes.splice(idx, 1)
+      }),
+      getAllChapters: vi.fn(async () => chapters),
+      getChaptersByProject: vi.fn(async (pId) => chapters.filter((c) => c.projectId === pId)),
+      saveChapter: vi.fn(async (c) => {
+        const idx = chapters.findIndex((it) => it.id === c.id)
+        if (idx >= 0) chapters[idx] = c
+        else chapters.push(c)
+      }),
+      deleteChapter: vi.fn(async (id) => {
+        const idx = chapters.findIndex((it) => it.id === id)
+        if (idx >= 0) chapters.splice(idx, 1)
+      }),
+    }
+  })
+
+  it('exports full workspace backup with valid manifest and metadata (INV-04)', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+
+    expect(backup).not.toBeNull()
+    if (backup) {
+      expect(backup.manifest.archiveType).toBe('inkpi-workspace-backup')
+      expect(backup.manifest.workspaceId).toBe('orig-proj')
+      expect(backup.manifest.core.volumesCount).toBe(1)
+      expect(backup.manifest.core.chaptersCount).toBe(1)
+      expect(backup.project.id).toBe('orig-proj')
+      expect(backup.volumes[0].id).toBe('orig-vol-1')
+      expect(backup.chapters[0].id).toBe('orig-ch-1')
+    }
+  })
+
+  it('imports workspace and completely remaps object graph to avoid collision (INV-03, INV-04)', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    // Add mock domain entity (Codex & Promise)
+    const backupWithDomain = {
+      ...backup!,
+      domainData: {
+        codexEntities: [
+          {
+            id: 'entity-1',
+            projectId: 'orig-proj',
+            name: '林凡',
+            category: 'character',
+          },
+        ],
+        promiseLedger: [
+          {
+            id: 'promise-1',
+            projectId: 'orig-proj',
+            title: '宗门大比夺魁',
+            chapterId: 'orig-ch-1',
+          },
+        ],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue('ok' as any)
+
+    const result = await service.importWorkspace(backupWithDomain)
+    expect(result.ok).toBe(true)
+    expect(result.workspaceId).toMatch(/^proj_generated_/)
+    expect(result.workspaceId).not.toBe('orig-proj')
+
+    // Verify volumes & chapters were remapped with new IDs and foreign keys
+    expect(projectRepo.saveVolume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.stringMatching(/^vol_generated_/),
+        projectId: result.workspaceId,
+      }),
+    )
+
+    expect(projectRepo.saveChapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.stringMatching(/^ch_generated_/),
+        projectId: result.workspaceId,
+        volumeId: expect.stringMatching(/^vol_generated_/),
+      }),
+    )
+
+    // Verify domain data foreign keys were updated to new workspaceId
+    expect(putSpy).toHaveBeenCalledWith(
+      'codexEntities',
+      expect.objectContaining({
+        projectId: result.workspaceId,
+        name: '林凡',
+      }),
+    )
+
+    expect(putSpy).toHaveBeenCalledWith(
+      'promiseLedger',
+      expect.objectContaining({
+        projectId: result.workspaceId,
+        chapterId: expect.stringMatching(/^ch_generated_/),
+      }),
+    )
+
+    putSpy.mockRestore()
+  })
+
+  it('purges workspace completely including chapters, volumes, and domain records', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const deleteSpy = vi.spyOn(db, 'delete').mockResolvedValue(undefined as any)
+    const getAllSpy = vi
+      .spyOn(db, 'getAll')
+      .mockResolvedValue([{ id: 'item-1', projectId: 'orig-proj' }] as any)
+
+    await service.purgeWorkspace('orig-proj')
+
+    expect(projectRepo.deleteChapter).toHaveBeenCalledWith('orig-ch-1')
+    expect(projectRepo.deleteVolume).toHaveBeenCalledWith('orig-vol-1')
+    expect(projectRepo.deleteProject).toHaveBeenCalledWith('orig-proj')
+    expect(deleteSpy).toHaveBeenCalled()
+
+    deleteSpy.mockRestore()
+    getAllSpy.mockRestore()
+  })
+})
