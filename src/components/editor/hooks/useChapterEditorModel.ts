@@ -365,12 +365,17 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       const target = ch ?? activeChapterRef.current
       if (!target) return
 
-      // P0-1: 用户输入存盘统一走 ChapterMutationService (INV-02)
-      // 使用权威的 durable revision 模型，存盘成功后才递增版本
+      // P0: 用户输入存盘统一走 ChapterMutationService (INV-02)
+      // 使用权威的 durable revision 模型，不绑定已陈旧的 target.revision，
+      // 允许 mutation 依据最新真实 durable 版本推进存盘，杜绝 fast-typing 导致的伪 CAS 冲突
+      const currentStoredRevision = activeChapterRef.current?.id === target.id
+        ? activeChapterRef.current?.revision
+        : target.revision
+
       const result = await chapterMutationService.mutate({
         workspaceId: projectId,
         chapterId: target.id,
-        expectedRevision: target.revision,
+        expectedRevision: currentStoredRevision,
         mutation: { type: 'replace-content', content: target.content || '' },
         origin: 'user-typing',
         countAsAuthorWriting: true,
@@ -467,10 +472,11 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
     if (initialChapter) {
       const draft = draftJournal.get(projectId, initialChapter.id)
-      // P0-5: 仅当 WAL 基础版本等于或高于持久化版本时才安全自动恢复，防止旧设备草稿覆盖新同步版本
+      const currentRev = initialChapter.revision ?? 1
+      // P1: WAL 严格恢复条件 (baseRevision === currentRev 自动恢复；< 为过时冲突；> 为异常)
       if (
         draft &&
-        draft.baseRevision >= (initialChapter.revision ?? 1) &&
+        draft.baseRevision === currentRev &&
         draft.updatedAt > (initialChapter.updatedAt || 0) &&
         draft.editorContent
       ) {
@@ -498,7 +504,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     const handleBeforeUnload = () => {
       // 窗口关闭或刷新时执行强制落盘，杜绝丢稿 (INV-01)
       if (autosave.hasPending()) {
-        void autosave.flush().catch(() => {})
+        void autosave.drain().catch(() => {})
       }
     }
 
@@ -518,9 +524,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const selectChapter = useCallback(
     (ch: ChapterRecord) => {
-      // 切换章节前强制把当前正在防抖/暂存的内容存盘，绝不静默丢失未保存输入 (INV-01)
+      // 切换章节前强制等待当前正在防抖/暂存的草稿全部 durable 落盘，杜绝切章竞态丢稿 (INV-01)
       if (autosave.hasPending()) {
-        void autosave.flush().catch(reportSaveError)
+        void autosave.drain().catch(reportSaveError)
       }
       void kvStoreRef.current.set(`inkpi_last_active_chapter:${projectId}`, ch.id)
       patch({ activeChapterId: ch.id, activeChapter: ch, isSaved: true })

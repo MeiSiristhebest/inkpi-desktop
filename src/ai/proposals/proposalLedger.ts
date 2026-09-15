@@ -818,8 +818,13 @@ function proposalsEqual(value: unknown, expected: AiProposal): boolean {
 
 function proposalSaveAllowed(current: AiProposal | undefined, next: AiProposal): boolean {
   if (!current) return true
-  if (current.status !== 'committed' && current.status !== 'undone') return true
-  return proposalsEqual(current, next)
+  // A proposal that is already undone cannot be modified further
+  if (current.status === 'undone') return proposalsEqual(current, next)
+  // A proposal that is committed can transition to undone
+  if (current.status === 'committed') {
+    return next.status === 'undone' || proposalsEqual(current, next)
+  }
+  return true
 }
 
 function patchesEqual(left: TextPatch[] | undefined, right: TextPatch[] | undefined): boolean {

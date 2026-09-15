@@ -48,6 +48,7 @@ import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
 import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
 import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
+import { hashText } from '../../ai/proposals'
 import { semanticTextFromContent } from '../../domain/content'
 import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 
@@ -381,6 +382,24 @@ export const RichEditor: FC<RichEditorProps> = ({
     onSelectionUpdate: () => {
       if (effectiveTypewriter) {
         requestAnimationFrame(recenterTypewriter)
+      }
+      if (activeWritingCtx && editorRef.current) {
+        const { from, to } = editorRef.current.state.selection
+        if (from === to) {
+          activeWritingCtx.setSelection(undefined)
+        } else {
+          const text = editorRef.current.state.doc.textBetween(from, to, ' ')
+          if (!text) {
+            activeWritingCtx.setSelection(undefined)
+          } else {
+            activeWritingCtx.setSelection({
+              from,
+              to,
+              text,
+              sourceHash: hashText(editorRef.current.getText()),
+            })
+          }
+        }
       }
     },
   })

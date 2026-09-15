@@ -27,8 +27,7 @@ import {
 } from '../../ai/orchestrator/distillationCheckpointStore'
 import { idGenerator } from '../../adapters/idGenerator'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
-
-const DISTILLATION_TASK_ID = 'project-distillation'
+import { buildDurableTaskId } from '../../types/durableTaskId'
 
 interface CreativeWorkflowsPanelProps {
   projectId: string
@@ -108,6 +107,16 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     () => createDistillationSourceFingerprint(documents),
     [documents],
   )
+  const distillationTaskId = useMemo(
+    () =>
+      buildDurableTaskId({
+        workspaceId: projectId,
+        operation: 'distill',
+        sourceFingerprint: distillationSourceFingerprint,
+        instance: 'project',
+      }),
+    [distillationSourceFingerprint, projectId],
+  )
   const distillationCheckpointRef = useRef<DistillationCheckpoint | undefined>(undefined)
   const checkpointLoadRef = useRef<Promise<void>>(Promise.resolve())
 
@@ -116,7 +125,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     distillationCheckpointRef.current = undefined
     setCheckpoint(undefined)
     const load = distillationCheckpointStore
-      .load(projectId, DISTILLATION_TASK_ID, distillationSourceFingerprint)
+      .load(projectId, distillationTaskId, distillationSourceFingerprint)
       .then((stored) => {
         if (!active) return
         distillationCheckpointRef.current = stored
@@ -132,7 +141,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     return () => {
       active = false
     }
-  }, [distillationCheckpointStore, distillationSourceFingerprint, projectId])
+  }, [distillationCheckpointStore, distillationSourceFingerprint, distillationTaskId, projectId])
   const auditMarkers: ContinuityDiagnosticMarker[] = useMemo(
     () => (auditDocument ? projectContinuityFindingsToEditor(auditDocument, auditFindings) : []),
     [auditDocument, auditFindings],
@@ -273,14 +282,14 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         setCheckpoint(nextCheckpoint)
         await distillationCheckpointStore.save(
           projectId,
-          DISTILLATION_TASK_ID,
+          distillationTaskId,
           nextCheckpoint,
           distillationSourceFingerprint,
         )
       }
       const result = await onDistillationWorkflow(
         {
-          taskId: DISTILLATION_TASK_ID,
+          taskId: distillationTaskId,
           workspaceId: projectId,
           documents,
           target: 'project',
@@ -296,7 +305,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
             const finishedChunks = completedChunks + failedChunks.length
             const isFinished = totalChunks > 0 && finishedChunks >= totalChunks
             setProgress({
-              taskId: DISTILLATION_TASK_ID,
+              taskId: distillationTaskId,
               kind: 'narrative.project.distill',
               status: isFinished ? (failedChunks.length ? 'failed' : 'completed') : 'running',
               progress: totalChunks ? Math.min(1, finishedChunks / totalChunks) : 0,
@@ -313,7 +322,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         setCheckpoint(result.checkpoint)
         await distillationCheckpointStore.save(
           projectId,
-          DISTILLATION_TASK_ID,
+          distillationTaskId,
           result.checkpoint,
           distillationSourceFingerprint,
         )

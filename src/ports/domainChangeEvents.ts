@@ -1,5 +1,6 @@
 export interface DomainChangedEvent {
   workspaceId: string
+  revision?: number
 }
 
 type DomainChangedListener = (event: DomainChangedEvent) => void
@@ -21,8 +22,11 @@ let channel: DomainChangeChannel | undefined
  * not publish here, so a pull cannot create a sync loop.
  */
 export const domainChangeEvents = {
-  publish(workspaceId: string): void {
-    const event = { workspaceId }
+  publish(workspaceId: string, revision?: number): void {
+    const event: DomainChangedEvent = {
+      workspaceId,
+      ...(revision !== undefined ? { revision } : {}),
+    }
     notify(event)
     try {
       getChannel()?.postMessage(event)
@@ -32,9 +36,9 @@ export const domainChangeEvents = {
     }
   },
 
-  subscribe(workspaceId: string, listener: () => void): () => void {
+  subscribe(workspaceId: string, listener: (event?: DomainChangedEvent) => void): () => void {
     const wrapped = (event: DomainChangedEvent) => {
-      if (event.workspaceId === workspaceId) listener()
+      if (event.workspaceId === workspaceId) listener(event)
     }
     listeners.add(wrapped)
     return () => listeners.delete(wrapped)

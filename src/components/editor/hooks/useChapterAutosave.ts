@@ -10,6 +10,8 @@ export interface ChapterAutosave {
   flush: () => Promise<void>
   /** 如果当前 pending 的正是特定 chapterId，立即存盘 */
   flushChapter: (chapterId: string) => Promise<void>
+  /** Drain barrier：等待当前正在进行的落库以及所有已排队的 draft 全部 durable 完成后才 resolve */
+  drain: () => Promise<void>
   /** 当前是否有正在防抖等待存盘或正在持久化的变更 */
   hasPending: () => boolean
   /** 立即取消尚未触发的存盘定时器与队列 */
@@ -22,6 +24,7 @@ export type ChapterAutosaveErrorHandler = (error: unknown, chapter: ChapterRecor
  * 章节自动存盘切片（单写者 Coalescing Queue 架构）：
  * 彻底解决 Save In-Flight 期间继续键入产生的并发分叉与 CAS 假冲突 (INV-01, INV-02)。
  * 保证最新键入始终排队 rebase 递进保存，绝不丢弃任何中间或最后键入的字符。
+ * 提供真正的 await autosave.drain() 作为切章与关闭时的落库 barrier。
  */
 export function useChapterAutosave(
   flush: (chapter: ChapterRecord) => void | Promise<void>,
@@ -32,6 +35,7 @@ export function useChapterAutosave(
   const isSaving = useRef(false)
   const generation = useRef(0)
   const savedGeneration = useRef(0)
+  const drainWaiters = useRef<Array<{ targetGen: number; resolve: () => void; reject: (err: unknown) => void }>>([])
 
   const cancel = useCallback(() => {
     if (timer.current) {
@@ -40,12 +44,35 @@ export function useChapterAutosave(
     }
     latestDraft.current = null
     isSaving.current = false
+    // 唤醒并清空等待中的 waiters
+    const waiters = drainWaiters.current
+    drainWaiters.current = []
+    waiters.forEach((w) => w.resolve())
+  }, [])
+
+  const checkWaiters = useCallback(() => {
+    const curSaved = savedGeneration.current
+    const remaining: typeof drainWaiters.current = []
+    for (const waiter of drainWaiters.current) {
+      if (curSaved >= waiter.targetGen && !isSaving.current) {
+        waiter.resolve()
+      } else {
+        remaining.push(waiter)
+      }
+    }
+    drainWaiters.current = remaining
   }, [])
 
   const processQueue = useCallback(async (): Promise<void> => {
     if (isSaving.current) return
-    if (!latestDraft.current) return
-    if (generation.current === savedGeneration.current) return
+    if (!latestDraft.current) {
+      checkWaiters()
+      return
+    }
+    if (generation.current === savedGeneration.current) {
+      checkWaiters()
+      return
+    }
 
     isSaving.current = true
     const currentSnapshot = latestDraft.current
@@ -56,30 +83,48 @@ export function useChapterAutosave(
       savedGeneration.current = currentGen
     } catch (error: unknown) {
       onError?.(error, currentSnapshot)
+      // 若发生持久化失败，通知等待该批次的 waiter
+      const failedWaiters = drainWaiters.current.filter((w) => w.targetGen <= currentGen)
+      drainWaiters.current = drainWaiters.current.filter((w) => w.targetGen > currentGen)
+      failedWaiters.forEach((w) => w.reject(error))
     } finally {
       isSaving.current = false
+      checkWaiters()
       // 若在保存期间又有新输入到达（generation 增加），立即无缝触发下一轮保存
       if (generation.current > savedGeneration.current && latestDraft.current) {
         void processQueue()
       }
     }
-  }, [flush, onError])
+  }, [flush, onError, checkWaiters])
 
-  const flushInternal = useCallback(async (): Promise<void> => {
+  const drain = useCallback((): Promise<void> => {
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = null
     }
-    await processQueue()
+
+    const targetGen = generation.current
+    if (!isSaving.current && (savedGeneration.current >= targetGen || !latestDraft.current)) {
+      return Promise.resolve()
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      drainWaiters.current.push({ targetGen, resolve, reject })
+      void processQueue()
+    })
   }, [processQueue])
+
+  const flushInternal = useCallback(async (): Promise<void> => {
+    await drain()
+  }, [drain])
 
   const flushChapter = useCallback(
     async (chapterId: string): Promise<void> => {
       if (latestDraft.current && latestDraft.current.id === chapterId) {
-        await flushInternal()
+        await drain()
       }
     },
-    [flushInternal],
+    [drain],
   )
 
   const hasPending = useCallback((): boolean => {
@@ -106,5 +151,5 @@ export function useChapterAutosave(
     [processQueue],
   )
 
-  return { schedule, flush: flushInternal, flushChapter, hasPending, cancel }
+  return { schedule, flush: flushInternal, flushChapter, drain, hasPending, cancel }
 }

@@ -229,7 +229,7 @@ async function appendDomainChange(
     })
     if (aggregate) await domainChangeStore.appendWithAggregate(changeSet, aggregate)
     else await domainChangeStore.append(changeSet)
-    domainChangeEvents.publish(workspaceId)
+    domainChangeEvents.publish(workspaceId, changeSet.baseRevision + 1)
   })
   domainAppendQueue = operationPromise.catch(() => undefined)
   await operationPromise

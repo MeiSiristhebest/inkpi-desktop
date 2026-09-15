@@ -283,7 +283,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     const proposal = rewriteProposal.proposal
     try {
       proposalLedger.accept(proposal.id)
-      await proposalLedger.commit(
+      const receipt = await proposalLedger.commit(
         proposal.id,
         activeChapterRevision,
         (patches) => {
@@ -300,8 +300,20 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         },
         hashText(current.text),
       )
+      const committedProposal = proposalLedger.get(proposal.id) ?? {
+        ...proposal,
+        status: 'committed' as const,
+        committedRevision: receipt.revision,
+      }
       setRewriteProposal((value) =>
-        value ? { ...value, status: 'committed', error: undefined } : value,
+        value
+          ? {
+              ...value,
+              proposal: committedProposal,
+              status: 'committed',
+              error: undefined,
+            }
+          : value,
       )
     } catch (error) {
       const stale =
@@ -340,8 +352,19 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
           }
         },
       )
+      const undoneProposal = proposalLedger.get(rewriteProposal.proposal.id) ?? {
+        ...rewriteProposal.proposal,
+        status: 'undone' as const,
+      }
       setRewriteProposal((value) =>
-        value ? { ...value, status: 'undone', error: undefined } : value,
+        value
+          ? {
+              ...value,
+              proposal: undoneProposal,
+              status: 'undone',
+              error: undefined,
+            }
+          : value,
       )
     } catch (error) {
       setRewriteProposal((value) =>

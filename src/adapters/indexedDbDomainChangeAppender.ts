@@ -51,7 +51,7 @@ export async function appendIndexedDbDomainChange(
     })
     if (input.aggregate) await domainChangeStore.appendWithAggregate(changeSet, input.aggregate)
     else await domainChangeStore.append(changeSet)
-    domainChangeEvents.publish(input.workspaceId)
+    domainChangeEvents.publish(input.workspaceId, changeSet.baseRevision + 1)
     return changeSet
   })
   domainAppendQueue = operationPromise.then(

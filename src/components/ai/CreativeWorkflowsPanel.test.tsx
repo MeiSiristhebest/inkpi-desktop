@@ -419,12 +419,12 @@ describe('CreativeWorkflowsPanel', () => {
     )
     expect(checkpointStore.load).toHaveBeenCalledWith(
       'project-1',
-      'project-distillation',
+      expect.stringMatching(/^project-1:distill:/),
       expect.any(String),
     )
     expect(checkpointStore.save).toHaveBeenCalledWith(
       'project-1',
-      'project-distillation',
+      expect.stringMatching(/^project-1:distill:/),
       next,
       expect.any(String),
     )

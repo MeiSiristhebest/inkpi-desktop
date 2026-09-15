@@ -23,10 +23,19 @@ jobs:
         with:
           path: inkpi-desktop
 
+      - name: Read Pinned Runtime Commit
+        id: runtime-pin
+        shell: bash
+        run: |
+          PINNED_REF=$(node -p \
+            "require('./inkpi-desktop/runtime.lock.json').pinnedCommit")
+          echo "pinned_ref=$PINNED_REF" >> "$GITHUB_OUTPUT"
+
       - name: Checkout Upstream InkPi Monorepo
         uses: actions/checkout@v4
         with:
           repository: MeiSiristhebest/inkpi
+          ref: ${{ steps.runtime-pin.outputs.pinned_ref || 'master' }}
           path: inkpi
 
       - name: Setup Bun Runtime
