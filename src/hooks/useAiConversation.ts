@@ -34,6 +34,7 @@ import {
 import { bootstrapDesktopTaskRecovery } from '../adapters/desktopTaskRecoveryBootstrap'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
+import { projectContent } from '../domain/content'
 import type { ChapterRecord } from '../types'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
 
@@ -640,7 +641,11 @@ export function useAiConversation(
           }
         }
 
-        const document = semanticDocumentFromText(targetChapterId, activeDocText, activeDocRevision)
+        const document =
+          activeWritingContext?.chapter?.id === targetChapterId &&
+          activeWritingContext?.chapter?.semanticDocument
+            ? activeWritingContext.chapter.semanticDocument
+            : projectContent(targetChapterId, activeDocText, activeDocRevision)
         const task = createAssistantTask({
           taskId: idGenerator.generate('assistant'),
           workspaceId: projectId || '',

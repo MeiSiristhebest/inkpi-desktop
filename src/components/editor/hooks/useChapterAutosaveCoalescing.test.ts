@@ -162,4 +162,79 @@ describe('useChapterAutosave Single-Writer Coalescing Queue', () => {
     expect(drainSettled).toBe(true)
     expect(result.current.hasPending()).toBe(false)
   })
+
+  it('drain() rejects and stops hot-looping when save fails, resuming on new input', async () => {
+    const flush = vi.fn(() => Promise.reject(new Error('IndexedDB CAS error')))
+    const onError = vi.fn()
+
+    const { result } = renderHook(() => useChapterAutosave(flush, onError))
+
+    const draftA: ChapterRecord = {
+      id: 'ch-1',
+      projectId: 'p1',
+      volumeId: 'v1',
+      title: '第一章',
+      content: 'A',
+      order: 1,
+      wordCount: 1,
+      status: 'draft',
+      revision: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    }
+
+    act(() => {
+      result.current.schedule(draftA, 200)
+    })
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+
+    // 等待第一轮保存尝试并失败
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(flush).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledTimes(1)
+
+    // 状态机已阻断：没有新输入时，绝不自旋热循环重试
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(flush).toHaveBeenCalledTimes(1)
+
+    // drain() 必须以持久化错误 reject
+    let drainError: unknown = null
+    await act(async () => {
+      try {
+        await result.current.drain()
+      } catch (err) {
+        drainError = err
+      }
+    })
+    expect(drainError).toBeTruthy()
+    expect((drainError as Error).message).toBe('IndexedDB CAS error')
+
+    // 当用户键入新输入后，解冻并允许尝试最新 draft
+    const draftB: ChapterRecord = {
+      ...draftA,
+      content: 'A + new text',
+      wordCount: 4,
+    }
+
+    act(() => {
+      result.current.schedule(draftB, 200)
+    })
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // 新的 generation 触发了第 2 次保存尝试
+    expect(flush).toHaveBeenCalledTimes(2)
+  })
 })

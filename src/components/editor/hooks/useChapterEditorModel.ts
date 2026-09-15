@@ -382,8 +382,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       })
 
       if (!result.success) {
-        reportSaveError(result.error)
-        return
+        throw new Error(result.error || 'Chapter mutation save failed')
       }
 
       const updated = result.chapter
@@ -400,7 +399,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         updatedAt: updated.updatedAt,
       })
     },
-    [onStats, patch, projectId, reportSaveError],
+    [onStats, patch, projectId],
   )
 
   const runPersistence = useCallback(

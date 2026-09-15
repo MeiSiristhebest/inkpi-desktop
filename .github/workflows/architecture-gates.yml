@@ -31,10 +31,17 @@ jobs:
         with:
           path: inkpi-desktop
 
+      - name: Read Pinned Runtime Commit
+        id: runtime-pin
+        shell: bash
+        run: |
+          PINNED_REF=$(node -p "require('./inkpi-desktop/runtime.lock.json').pinnedCommit")
+          echo "pinned_ref=$PINNED_REF" >> "$GITHUB_OUTPUT"
+
       - name: Checkout upstream InkPi Runtime
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.runtime_ref || 'master' }}
+          ref: ${{ inputs.runtime_ref || steps.runtime-pin.outputs.pinned_ref }}
           repository: MeiSiristhebest/inkpi
           path: inkpi
 
@@ -149,10 +156,17 @@ jobs:
         with:
           path: inkpi-desktop
 
+      - name: Read Pinned Runtime Commit
+        id: runtime-pin
+        shell: bash
+        run: |
+          PINNED_REF=$(node -p "require('./inkpi-desktop/runtime.lock.json').pinnedCommit")
+          echo "pinned_ref=$PINNED_REF" >> "$GITHUB_OUTPUT"
+
       - name: Checkout upstream InkPi Runtime
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.runtime_ref || 'master' }}
+          ref: ${{ inputs.runtime_ref || steps.runtime-pin.outputs.pinned_ref }}
           repository: MeiSiristhebest/inkpi
           path: inkpi
 
@@ -201,10 +215,17 @@ jobs:
         with:
           path: inkpi-desktop
 
+      - name: Read Pinned Runtime Commit
+        id: runtime-pin
+        shell: bash
+        run: |
+          PINNED_REF=$(node -p "require('./inkpi-desktop/runtime.lock.json').pinnedCommit")
+          echo "pinned_ref=$PINNED_REF" >> "$GITHUB_OUTPUT"
+
       - name: Checkout upstream InkPi Runtime
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.runtime_ref || 'master' }}
+          ref: ${{ inputs.runtime_ref || steps.runtime-pin.outputs.pinned_ref }}
           repository: MeiSiristhebest/inkpi
           path: inkpi
 

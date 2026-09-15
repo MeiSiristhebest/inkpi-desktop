@@ -49,7 +49,11 @@ import { DrawerDock } from './organisms/DrawerDock'
 import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
 import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
 import { hashText } from '../../ai/proposals'
-import { semanticTextFromContent } from '../../domain/content'
+import {
+  semanticTextFromContent,
+  semanticDocumentFromProseMirror,
+  semanticDocumentFromText,
+} from '../../domain/content'
 import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 
 export interface RichEditorProps {
@@ -388,15 +392,25 @@ export const RichEditor: FC<RichEditorProps> = ({
         if (from === to) {
           activeWritingCtx.setSelection(undefined)
         } else {
-          const text = editorRef.current.state.doc.textBetween(from, to, ' ')
-          if (!text) {
+          const rawText = editorRef.current.state.doc.textBetween(from, to, ' ')
+          if (!rawText) {
             activeWritingCtx.setSelection(undefined)
           } else {
+            const chId = activeChapter?.id || 'active'
+            const chRev = activeChapter?.revision ?? 1
+            const semanticDoc =
+              typeof editorRef.current.state?.doc?.toJSON === 'function'
+                ? semanticDocumentFromProseMirror(chId, editorRef.current.state.doc.toJSON(), chRev)
+                : semanticDocumentFromText(chId, editorRef.current.getText?.() || '', chRev)
+
+            const semanticRange = semanticDoc.sourceMap.editorRangeToSemantic({ from, to })
+            const text = semanticDoc.text.slice(semanticRange.from, semanticRange.to) || rawText
+
             activeWritingCtx.setSelection({
-              from,
-              to,
+              from: semanticRange.from,
+              to: semanticRange.to,
               text,
-              sourceHash: hashText(editorRef.current.getText()),
+              sourceHash: hashText(semanticDoc.text),
             })
           }
         }

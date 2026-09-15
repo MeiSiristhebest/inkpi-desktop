@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from 'react'
 import type { ChapterRecord } from '../types'
-import { semanticDocumentFromText, type SemanticDocument } from '../domain/content'
+import { projectContent, type SemanticDocument } from '../domain/content'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
+import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 
 export interface SemanticSelection {
   from: number
@@ -65,13 +67,49 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
   const [selection, setSelection] = useState<SemanticSelection | undefined>(undefined)
   const [dirty, setDirty] = useState<boolean>(false)
 
-  // 当 workspaceId 切换时，重置章节与选区状态，彻底杜绝跨 Workspace 状态残留 (INV-03, INV-06)
+  // 当 workspaceId 切换时，重置章节与选区状态，并获取当前 workspace 最新 durable revision (INV-03, INV-06)
   useEffect(() => {
     setActiveChapterRecord(initialChapter)
     setSelection(undefined)
     setDirty(false)
-    setWorkspaceRevision(initialRevision)
+    let cancelled = false
+    try {
+      const store = new IndexedDbDomainChangeStore()
+      if (workspaceId.trim()) {
+        store.latestRevision(workspaceId)
+          .then((latest) => {
+            if (!cancelled) setWorkspaceRevision(Math.max(initialRevision, latest))
+          })
+          .catch(() => {
+            if (!cancelled) setWorkspaceRevision(initialRevision)
+          })
+      } else {
+        setWorkspaceRevision(initialRevision)
+      }
+    } catch {
+      setWorkspaceRevision(initialRevision)
+    }
+
+    return () => {
+      cancelled = true
+    }
   }, [workspaceId, initialChapter, initialRevision])
+
+  // 订阅本地/跨窗口的领域变更事件，保持 workspaceRevision 实时最新闭环
+  useEffect(() => {
+    if (!workspaceId.trim()) return
+    const unsubscribe = domainChangeEvents.subscribe(workspaceId, (evt) => {
+      if (typeof evt?.revision === 'number') {
+        setWorkspaceRevision((prev) => Math.max(prev, evt.revision!))
+      } else {
+        const store = new IndexedDbDomainChangeStore()
+        store.latestRevision(workspaceId).then((rev) => {
+          setWorkspaceRevision((prev) => Math.max(prev, rev))
+        }).catch(() => {})
+      }
+    })
+    return unsubscribe
+  }, [workspaceId])
 
   const chapter = useMemo(() => {
     if (!activeChapterRecord) return undefined
@@ -82,7 +120,7 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
       title: activeChapterRecord.title,
       content: text,
       wordCount: activeChapterRecord.wordCount ?? 0,
-      semanticDocument: semanticDocumentFromText(
+      semanticDocument: projectContent(
         activeChapterRecord.id,
         text,
         activeChapterRecord.revision ?? 1,
