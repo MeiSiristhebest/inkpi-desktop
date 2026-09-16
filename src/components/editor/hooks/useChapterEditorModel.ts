@@ -386,18 +386,24 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }
 
       const updated = result.chapter
-      activeChapterRef.current = updated
       saveSnapshot(updated)
-      patch({
-        activeChapter: updated,
-        chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
-        isSaved: true,
-      })
-      onStats?.({
-        title: updated.title,
-        wordCount: updated.wordCount,
-        updatedAt: updated.updatedAt,
-      })
+      if (activeChapterRef.current?.id === updated.id) {
+        activeChapterRef.current = updated
+        patch({
+          activeChapter: updated,
+          chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+          isSaved: true,
+        })
+        onStats?.({
+          title: updated.title,
+          wordCount: updated.wordCount,
+          updatedAt: updated.updatedAt,
+        })
+      } else {
+        patch({
+          chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+        })
+      }
     },
     [onStats, patch, projectId],
   )
@@ -509,8 +515,35 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
     window.addEventListener('beforeunload', handleBeforeUnload)
 
+    // Tauri 原生窗口关闭拦截：防止用户直接点击原生 X 导致未落盘数据丢失
+    let unlistenTauriClose: (() => void) | undefined
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      void import('@tauri-apps/api/window')
+        .then(({ getCurrentWindow }) => {
+          const appWindow = getCurrentWindow()
+          return appWindow.onCloseRequested(async (event) => {
+            if (autosave.hasPending()) {
+              event.preventDefault()
+              try {
+                await autosave.drain()
+                await appWindow.destroy()
+              } catch (err) {
+                reportSaveError(err)
+              }
+            }
+          })
+        })
+        .then((unlisten) => {
+          unlistenTauriClose = unlisten
+        })
+        .catch(() => {})
+    }
+
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (unlistenTauriClose) {
+        unlistenTauriClose()
+      }
       // 组件卸载时强制原子 flush 而非仅仅 cancel
       if (autosave.hasPending()) {
         void autosave.flush().catch(() => {})
@@ -521,16 +554,34 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  const selectChapter = useCallback(
-    (ch: ChapterRecord) => {
+  const activateChapter = useCallback(
+    async (nextChapter: ChapterRecord | null) => {
       // 切换章节前强制等待当前正在防抖/暂存的草稿全部 durable 落盘，杜绝切章竞态丢稿 (INV-01)
       if (autosave.hasPending()) {
-        void autosave.drain().catch(reportSaveError)
+        try {
+          await autosave.drain()
+        } catch (err) {
+          reportSaveError(err)
+        }
       }
-      void kvStoreRef.current.set(`inkpi_last_active_chapter:${projectId}`, ch.id)
-      patch({ activeChapterId: ch.id, activeChapter: ch, isSaved: true })
+      if (nextChapter) {
+        void kvStoreRef.current.set(`inkpi_last_active_chapter:${projectId}`, nextChapter.id)
+      }
+      activeChapterRef.current = nextChapter
+      patch({
+        activeChapterId: nextChapter?.id ?? '',
+        activeChapter: nextChapter,
+        isSaved: true,
+      })
     },
     [patch, autosave, reportSaveError, projectId],
+  )
+
+  const selectChapter = useCallback(
+    (ch: ChapterRecord) => {
+      void activateChapter(ch)
+    },
+    [activateChapter],
   )
 
   const toggleVolume = useCallback(
@@ -598,13 +649,11 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(ch)))) return
       patch({
         chapters: [...stateRef.current.chapters, ch],
-        activeChapterId: ch.id,
-        activeChapter: ch,
         expanded: { ...stateRef.current.expanded, [volId]: true },
-        isSaved: true,
       })
+      await activateChapter(ch)
     },
-    [projectId, patch, runPersistence],
+    [projectId, patch, runPersistence, activateChapter],
   )
 
   const renameChapter = useCallback(
@@ -636,19 +685,12 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       if (!(await runPersistence(() => indexedDbProjectRepository.deleteChapter(chapter.id))))
         return
       const nextList = stateRef.current.chapters.filter((c) => c.id !== chapter.id)
-      const next: Partial<EditorModelState> = { chapters: nextList, deletingChapter: null }
+      patch({ chapters: nextList, deletingChapter: null })
       if (stateRef.current.activeChapterId === chapter.id) {
-        if (nextList.length > 0) {
-          next.activeChapterId = nextList[0].id
-          next.activeChapter = nextList[0]
-        } else {
-          next.activeChapterId = ''
-          next.activeChapter = null
-        }
+        await activateChapter(nextList.length > 0 ? nextList[0] : null)
       }
-      patch(next)
     },
-    [patch, runPersistence],
+    [patch, runPersistence, activateChapter],
   )
 
   const renameVolume = useCallback(
@@ -737,11 +779,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(copyCh)))) return
       patch({
         chapters: [...stateRef.current.chapters, copyCh],
-        activeChapterId: copyCh.id,
-        activeChapter: copyCh,
       })
+      await activateChapter(copyCh)
     },
-    [patch, runPersistence],
+    [patch, runPersistence, activateChapter],
   )
 
   const copyChapterText = useCallback(
@@ -968,18 +1009,16 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       const ch = stateRef.current.chapters.find((c) => c.id === r.chapterId)
       if (ch) {
         patch({
-          activeChapterId: ch.id,
-          activeChapter: ch,
-          isSaved: true,
           showGlobalSearch: false,
           findText: stateRef.current.globalQuery.trim(),
           showFindReplace: true,
         })
+        void activateChapter(ch)
       } else {
         patch({ showGlobalSearch: false })
       }
     },
-    [patch],
+    [patch, activateChapter],
   )
 
   const updateActiveTitle = useCallback(

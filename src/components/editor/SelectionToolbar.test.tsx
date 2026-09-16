@@ -205,4 +205,50 @@ describe('SelectionToolbar', () => {
       await db.delete('aiProposals', proposalId)
     }
   })
+
+  it('blocks proposal commit and surfaces error when durable chapter mutation fails', async () => {
+    const { chapterMutationService } = await import('../../services/defaultChapterMutationService')
+    const mutateSpy = vi.spyOn(chapterMutationService, 'mutate').mockResolvedValueOnce({
+      success: false,
+      conflict: true,
+      currentRevision: 99,
+      error: 'CAS Conflict: expected revision 4, but current revision is 99',
+    })
+
+    const { editor, handlers, getContent } = makeEditor({ from: 0, to: 5 })
+    render(
+      <SelectionToolbar
+        editor={editor}
+        containerRef={containerRef}
+        onAiTask={async () => ({
+          taskId: 'toolbar-fail-mutate',
+          kind: 'creative.rewrite',
+          status: 'completed' as const,
+          output: { format: 'patch' as const, patch: { from: 1, to: 3, text: '改写' } },
+        })}
+        activeChapterId="chapter-1"
+        activeChapterRevision={4}
+        workspaceId="test-workspace"
+      />,
+    )
+    act(() => {
+      handlers['selectionUpdate']?.()
+    })
+    fireEvent.click(screen.getByText('AI 润色'))
+    await waitFor(() =>
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'),
+    )
+
+    fireEvent.click(screen.getByText('接受'))
+
+    // 验证：由于落库失败，事务阻断，状态转为 stale 且展示冲突错误，编辑器内容保持不变
+    await waitFor(() => {
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('stale')
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('提案版本冲突')
+    })
+    expect(getContent()).toBe('选中文本')
+
+    mutateSpy.mockRestore()
+  })
 })
+

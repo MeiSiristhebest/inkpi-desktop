@@ -105,9 +105,9 @@ export function useChapterAutosave(
     } catch (error: unknown) {
       blockedError.current = error
       onError?.(error, currentSnapshot)
-      // 若发生持久化失败，通知等待该批次及更早的所有 waiter
-      const failedWaiters = drainWaiters.current.filter((w) => w.targetGen <= currentGen)
-      drainWaiters.current = drainWaiters.current.filter((w) => w.targetGen > currentGen)
+      // 任意 durable persistence failure 都必须 reject 当前全部 drain barriers，绝不允许留下悬挂 waiter
+      const failedWaiters = drainWaiters.current
+      drainWaiters.current = []
       failedWaiters.forEach((w) => w.reject(error))
     } finally {
       isSaving.current = false

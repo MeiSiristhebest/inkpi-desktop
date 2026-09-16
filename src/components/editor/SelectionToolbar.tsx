@@ -18,6 +18,7 @@ import { idGenerator } from '../../adapters/idGenerator'
 import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
 import { getProposalSyncRemote, isProposalSyncError, RemoteProposalStore } from '../../ai/proposals'
 import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
+import { chapterMutationService } from '../../services/defaultChapterMutationService'
 
 interface SelectionToolbarProps {
   /** TipTap 编辑器实例（任意结构，仅在具备 on/off/view 时生效） */
@@ -281,8 +282,53 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     if (!rewriteProposal || rewriteProposal.status !== 'pending') return
     const current = currentSemanticDocument()
     const proposal = rewriteProposal.proposal
+    const targetWorkspaceId = initialProjectId || ''
+    const targetChapterId = activeChapterId || proposal.documentId
+
     try {
       proposalLedger.accept(proposal.id)
+
+      // 计算正文替换后的全量内容（基于 SemanticDocument patches）
+      let patchedText = current.text
+      for (const patch of [...proposal.patches].sort((left, right) => right.from - left.from)) {
+        patchedText = patchedText.slice(0, patch.from) + patch.text + patchedText.slice(patch.to)
+      }
+
+      // 先持久化落盘 N+1 (CAS)
+      if (targetWorkspaceId && targetChapterId) {
+        const mutationResult = await chapterMutationService.mutate({
+          workspaceId: targetWorkspaceId,
+          chapterId: targetChapterId,
+          expectedRevision: activeChapterRevision,
+          mutation: {
+            type: 'replace-content',
+            content: patchedText,
+          },
+          origin: 'ai-rewrite',
+          activeChapterFallback: {
+            id: targetChapterId,
+            projectId: targetWorkspaceId,
+            volumeId: '',
+            title: '',
+            content: current.text,
+            wordCount: current.text.length,
+            order: 0,
+            status: 'draft',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            revision: activeChapterRevision ?? 1,
+          },
+        })
+
+        if (!mutationResult.success) {
+          throw new Error(
+            mutationResult.conflict
+              ? `提案版本冲突：期望版本 ${activeChapterRevision}，当前存储版本为 ${mutationResult.currentRevision}`
+              : (mutationResult.error || '持久化写入失败'),
+          )
+        }
+      }
+
       const receipt = await proposalLedger.commit(
         proposal.id,
         activeChapterRevision,
@@ -319,7 +365,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       const stale =
         error instanceof ProposalConflictError ||
         isProposalSyncError(error) ||
-        /source hash|stale/i.test(String(error))
+        /source hash|stale|版本冲突/i.test(String(error))
       setRewriteProposal((value) =>
         value
           ? {
@@ -340,14 +386,63 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
 
   const undoRewrite = async () => {
     if (!rewriteProposal || rewriteProposal.status !== 'committed') return
+    const targetWorkspaceId = initialProjectId || ''
+    const targetChapterId = activeChapterId || rewriteProposal.proposal.documentId
+    const currentRev = rewriteProposal.proposal.committedRevision ?? activeChapterRevision
+
     try {
+      const inversePatches = rewriteProposal.proposal.inversePatches
+      if (!inversePatches?.length) {
+        throw new Error('No inverse patches found on proposal')
+      }
+
+      const current = currentSemanticDocument()
+      let restoredText = current.text
+      for (const patch of [...inversePatches].sort((left, right) => right.from - left.from)) {
+        restoredText = restoredText.slice(0, patch.from) + patch.text + restoredText.slice(patch.to)
+      }
+
+      if (targetWorkspaceId && targetChapterId) {
+        const mutationResult = await chapterMutationService.mutate({
+          workspaceId: targetWorkspaceId,
+          chapterId: targetChapterId,
+          expectedRevision: currentRev,
+          mutation: {
+            type: 'replace-content',
+            content: restoredText,
+          },
+          origin: 'ai-rewrite',
+          activeChapterFallback: {
+            id: targetChapterId,
+            projectId: targetWorkspaceId,
+            volumeId: '',
+            title: '',
+            content: current.text,
+            wordCount: current.text.length,
+            order: 0,
+            status: 'draft',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            revision: currentRev ?? 1,
+          },
+        })
+
+        if (!mutationResult.success) {
+          throw new Error(
+            mutationResult.conflict
+              ? `撤销版本冲突：当前存储版本为 ${mutationResult.currentRevision}`
+              : (mutationResult.error || '撤销持久化写入失败'),
+          )
+        }
+      }
+
       await proposalLedger.undo(
         rewriteProposal.proposal.id,
-        rewriteProposal.proposal.committedRevision ?? activeChapterRevision,
+        currentRev,
         (patches) => {
-          const current = currentSemanticDocument()
+          const currentDoc = currentSemanticDocument()
           for (const patch of [...patches].sort((left, right) => right.from - left.from)) {
-            const range = current.sourceMap.semanticRangeToEditor(patch.from, patch.to)
+            const range = currentDoc.sourceMap.semanticRangeToEditor(patch.from, patch.to)
             editor.commands.insertContentAt({ from: range.from, to: range.to }, patch.text)
           }
         },

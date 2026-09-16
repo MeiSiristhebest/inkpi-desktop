@@ -237,4 +237,96 @@ describe('useChapterAutosave Single-Writer Coalescing Queue', () => {
     // 新的 generation 触发了第 2 次保存尝试
     expect(flush).toHaveBeenCalledTimes(2)
   })
+
+  it('save A in-flight -> B scheduled -> drain(target B) -> A fails -> drain B rejects immediately without hanging', async () => {
+    let rejectSaveA: ((err: Error) => void) | null = null
+    let resolveSaveB: (() => void) | null = null
+
+    const flush = vi.fn((chapter: ChapterRecord) => {
+      if (chapter.content === 'Draft A') {
+        return new Promise<void>((_, reject) => {
+          rejectSaveA = reject
+        })
+      }
+      return new Promise<void>((resolve) => {
+        resolveSaveB = resolve
+      })
+    })
+    const onError = vi.fn()
+
+    const { result } = renderHook(() => useChapterAutosave(flush, onError))
+
+    const draftA: ChapterRecord = {
+      id: 'ch-test',
+      projectId: 'p1',
+      volumeId: 'v1',
+      title: '第1章',
+      content: 'Draft A',
+      order: 1,
+      wordCount: 2,
+      status: 'draft',
+      revision: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    }
+
+    // 1. 触发 A 并推进定时器，进入持久化
+    act(() => {
+      result.current.schedule(draftA, 200)
+    })
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(flush).toHaveBeenCalledTimes(1)
+
+    // 2. A 正在保存中，作者继续输入 B 并触发 drain() 等待 B
+    const draftB: ChapterRecord = {
+      ...draftA,
+      content: 'Draft B (newer)',
+      wordCount: 4,
+    }
+    act(() => {
+      result.current.schedule(draftB, 200)
+    })
+
+    let drainBSettled = false
+    let drainBError: unknown = null
+    const drainBPromise = result.current.drain().then(
+      () => {
+        drainBSettled = true
+      },
+      (err) => {
+        drainBSettled = true
+        drainBError = err
+      },
+    )
+
+    // 此时 A 尚未结束，drainB 应仍在等待
+    expect(drainBSettled).toBe(false)
+
+    // 3. A 保存失败！
+    await act(async () => {
+      rejectSaveA!(new Error('Disk write error on Draft A'))
+      await Promise.resolve()
+    })
+
+    // 验证：等待最新 B 的 drain Promise 必须立即 reject，绝不挂起！
+    await act(async () => {
+      await drainBPromise
+    })
+
+    expect(drainBSettled).toBe(true)
+    expect(drainBError).toBeTruthy()
+    expect((drainBError as Error).message).toBe('Disk write error on Draft A')
+
+    // 4. 重试机制可用性验证：调用 retry() 或输入新版本后可恢复持久化最新内容
+    await act(async () => {
+      const retryPromise = result.current.retry()
+      expect(flush).toHaveBeenCalledTimes(2)
+      resolveSaveB!()
+      await retryPromise
+    })
+    expect(result.current.hasPending()).toBe(false)
+  })
 })
+
