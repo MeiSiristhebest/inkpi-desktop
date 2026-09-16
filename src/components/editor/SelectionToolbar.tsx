@@ -15,6 +15,7 @@ import {
   type AiProposal,
 } from '../../ai/proposals'
 import { idGenerator } from '../../adapters/idGenerator'
+import { clock } from '../../adapters/clock'
 import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
 import { getProposalSyncRemote, isProposalSyncError, RemoteProposalStore } from '../../ai/proposals'
 import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
@@ -314,8 +315,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             wordCount: current.text.length,
             order: 0,
             status: 'draft',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+            createdAt: clock.now(),
+            updatedAt: clock.now(),
             revision: activeChapterRevision ?? 1,
           },
         })
@@ -421,8 +422,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             wordCount: current.text.length,
             order: 0,
             status: 'draft',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+            createdAt: clock.now(),
+            updatedAt: clock.now(),
             revision: currentRev ?? 1,
           },
         })
