@@ -69,4 +69,34 @@ describe('story context compiler', () => {
     })
     expect(fragment.text).toContain('"revision":6')
   })
+
+  it('deduplicates facts so items in canonicalFacts are not duplicated in entities partition', () => {
+    let state = createStoryState(7)
+    state = upsertEntity(
+      state,
+      createStoryEntity({
+        id: 'fact-char',
+        kind: 'character',
+        name: '正典角色',
+        provenance: { sourceType: 'author', factLevel: 'canonical-fact' },
+      }),
+    )
+    state = upsertEntity(
+      state,
+      createStoryEntity({
+        id: 'hypo-char',
+        kind: 'character',
+        name: '未定角色',
+        provenance: { sourceType: 'ai-proposed', factLevel: 'hypothesis' },
+      }),
+    )
+
+    const withDedupe = compileStoryContext(state, { deduplicate: true })!
+    expect(withDedupe.canonicalFacts.map((f) => f.id)).toContain('fact-char')
+    // 由于 fact-char 已经在 canonicalFacts 中收录，entities 分区中去重过滤，只保留未收录的项
+    expect(withDedupe.entities.map((e) => e.id)).toEqual(['hypo-char'])
+
+    const withoutDedupe = compileStoryContext(state, { deduplicate: false })!
+    expect(withoutDedupe.entities.map((e) => e.id)).toEqual(['fact-char', 'hypo-char'])
+  })
 })

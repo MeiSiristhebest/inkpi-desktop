@@ -28,6 +28,8 @@ import {
 import { idGenerator } from '../../adapters/idGenerator'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
 import { buildDurableTaskId } from '../../types/durableTaskId'
+import { distillationReviewInbox } from '../../ai/proposals/distillationReviewInbox'
+import { DistillationInboxModal } from './DistillationInboxModal'
 
 interface CreativeWorkflowsPanelProps {
   projectId: string
@@ -76,6 +78,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const [auditDocument, setAuditDocument] = useState<SemanticDocument | null>(null)
   const [deepResult, setDeepResult] = useState<DeepReasoningResult | null>(null)
   const [distillation, setDistillation] = useState<DistillationWorkflowResult | null>(null)
+  const [isInboxOpen, setIsInboxOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<TaskStatusSnapshot | null>(null)
   const [steering, setSteering] = useState('')
@@ -326,6 +329,12 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           result.checkpoint,
           distillationSourceFingerprint,
         )
+        if (
+          result.facts &&
+          (result.facts.entities.length > 0 || result.facts.promises.length > 0)
+        ) {
+          distillationReviewInbox.ingestDistilledFacts(projectId, distillationTaskId, result.facts)
+        }
       }
     } catch (cause) {
       if (!controller.signal.aborted && token === runToken.current) {
@@ -521,17 +530,40 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         </div>
       )}
       {tab === 'distill' && distillation && (
-        <div data-testid="distillation-result" className="mt-2 space-y-1 text-xs">
+        <div data-testid="distillation-result" className="mt-2 space-y-2 text-xs">
           <p>{distillation.facts.summary}</p>
-          <p className="text-[var(--ink-text-faint)]">
-            {distillation.completedChunks}/{distillation.totalChunks} chunks · 实体{' '}
-            {distillation.facts.entities.length} · 事件 {distillation.facts.events.length} · 伏笔{' '}
-            {distillation.facts.promises.length}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[var(--ink-text-faint)]">
+              {distillation.completedChunks}/{distillation.totalChunks} chunks · 实体{' '}
+              {distillation.facts.entities.length} · 事件 {distillation.facts.events.length} · 伏笔{' '}
+              {distillation.facts.promises.length}
+            </p>
+            {distillationReviewInbox.listPending(projectId).length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsInboxOpen(true)}
+                className="rounded bg-[var(--ink-accent)] px-2 py-1 font-medium text-white hover:bg-[var(--ink-accent-hover)] transition-colors"
+              >
+                审查事实提炼 ({distillationReviewInbox.listPending(projectId).length})
+              </button>
+            )}
+          </div>
           {distillation.failedChunks.length > 0 && (
             <p className="text-amber-500">待重试：{distillation.failedChunks.length}</p>
           )}
         </div>
+      )}
+      {isInboxOpen && (
+        <DistillationInboxModal
+          items={distillationReviewInbox.listPending(projectId)}
+          onAccept={async (itemId, overrides) => {
+            await distillationReviewInbox.accept(itemId, overrides)
+          }}
+          onReject={(itemId) => {
+            distillationReviewInbox.reject(itemId)
+          }}
+          onClose={() => setIsInboxOpen(false)}
+        />
       )}
     </section>
   )

@@ -1,6 +1,10 @@
 import type { SemanticDocument } from '../../domain/content'
 import type { StoryState } from '../../domain/story'
 import { compileStoryContext, type StoryContext } from './storyContextCompiler'
+import {
+  calculateContextBudgetBuckets,
+  type ContextBudgetDistribution,
+} from './contextBudgetBuckets'
 
 export interface CreativeContextInput {
   document: SemanticDocument
@@ -9,6 +13,8 @@ export interface CreativeContextInput {
   storyState?: StoryState
   projectRevision?: number
   instruction?: string
+  totalTokenBudget?: number
+  taskKind?: string
 }
 
 export interface CreativeContext {
@@ -21,16 +27,45 @@ export interface CreativeContext {
   storyState?: StoryState
   storyContext?: StoryContext
   projectRevision?: number
+  budget?: ContextBudgetDistribution
   fingerprint: string
 }
 
+const CHARS_PER_TOKEN = 4
+
 export function compileCreativeContext(input: CreativeContextInput): CreativeContext {
   const selection = normalizeRange(input.selection, input.document.text.length)
+  const budget = input.totalTokenBudget
+    ? calculateContextBudgetBuckets(input.totalTokenBudget)
+    : undefined
+
+  let text = input.document.text
+  let selectionText = input.document.text.slice(selection.from, selection.to)
+
+  // 预算保护：如果提供了 token 预算且正文长度超出 sceneTokens 限制，
+  // 优先保留选区周围的上下文切片，防止超长文档将 StoryState/JIT 挤出上下文窗口
+  if (budget) {
+    const maxChars = budget.sceneTokens * CHARS_PER_TOKEN
+    if (text.length > maxChars) {
+      if (selectionText && selectionText.length <= maxChars) {
+        const halfSurround = Math.floor((maxChars - selectionText.length) / 2)
+        const start = Math.max(0, selection.from - halfSurround)
+        const end = Math.min(text.length, selection.to + halfSurround)
+        text = text.slice(start, end)
+      } else if (selectionText && selectionText.length > maxChars) {
+        selectionText = selectionText.slice(0, maxChars)
+        text = selectionText
+      } else {
+        text = text.slice(Math.max(0, text.length - maxChars))
+      }
+    }
+  }
+
   const context: Omit<CreativeContext, 'fingerprint'> = {
     documentId: input.document.documentId,
     revision: input.document.revision,
-    text: input.document.text,
-    selectionText: input.document.text.slice(selection.from, selection.to),
+    text,
+    selectionText,
     blocks: input.document.blocks.map(({ id, type, text, from, to }) => ({
       id,
       type,
@@ -44,8 +79,13 @@ export function compileCreativeContext(input: CreativeContextInput): CreativeCon
       text: document.text,
     })),
     storyState: input.storyState,
-    storyContext: compileStoryContext(input.storyState),
+    storyContext: compileStoryContext(input.storyState, {
+      taskKind: input.taskKind,
+      deduplicate: true,
+      maxItems: budget ? Math.floor(budget.canonicalStoryTokens / 25) : undefined,
+    }),
     projectRevision: input.projectRevision ?? input.document.revision,
+    budget,
   }
   return { ...context, fingerprint: fingerprint(context) }
 }

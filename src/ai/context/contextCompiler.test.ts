@@ -48,4 +48,22 @@ describe('creative context compiler', () => {
     expect(changed.selectionText).toBe('ab')
     expect(clamped.fingerprint).not.toBe(changed.fingerprint)
   })
+
+  it('clamps scene text when totalTokenBudget is exceeded to protect story/JIT memory', () => {
+    // 假设正文极长（例如 4000 字符），但分配给 scene 的预算只有 100 tokens (约 400 字符)
+    const longText = '长文本段落。'.repeat(400)
+    const document = semanticDocumentFromText('chapter-long', longText, 1)
+
+    const context = compileCreativeContext({
+      document,
+      selection: { from: 1000, to: 1050 },
+      totalTokenBudget: 500, // 500 tokens * 40% = 200 sceneTokens = 800 chars
+    })
+
+    expect(context.budget).toBeDefined()
+    expect(context.budget!.sceneTokens).toBe(200)
+    expect(context.text.length).toBeLessThanOrEqual(800)
+    // 选区文字应被保留在切片中
+    expect(context.text).toContain(longText.slice(1000, 1050))
+  })
 })

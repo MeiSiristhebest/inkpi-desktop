@@ -1,5 +1,7 @@
 export * from './context/contextCompiler'
 export * from './context/storyContextCompiler'
+export * from './context/jitQueryBuilder'
+export * from './context/contextBudgetBuckets'
 export * from './tasks/taskFactories'
 export * from './results/taskResults'
 export * from './results/continuityDiagnostics'

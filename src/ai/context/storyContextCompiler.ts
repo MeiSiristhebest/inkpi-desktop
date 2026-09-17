@@ -4,6 +4,19 @@ import { isCanonicalFact } from '../../domain/story/provenance'
 export interface StoryContextOptions {
   includeHypotheses?: boolean
   maxItems?: number
+  /**
+   * 去重模式（默认开启）：
+   * 当实体或事件已被 canonicalFacts 收录时，避免在 entities/events 中全量重复序列化，
+   * 显著精简 Token 占用，避免注意力稀释。
+   */
+  deduplicate?: boolean
+  /**
+   * 针对不同任务类型的定制化裁剪（task-aware projection）：
+   * - 'creative.continue' / 'creative.rewrite': 优先正典实体、人物关系与未完伏笔
+   * - 'narrative.continuity.audit': 突出世界观约束 (constraints)、时间线与全量伏笔
+   * - 'narrative.project.distill': 突出既有事实，辅助查漏补缺
+   */
+  taskKind?: string
 }
 
 export interface StoryContextItem {
@@ -35,6 +48,9 @@ export function compileStoryContext(
   options: StoryContextOptions = {},
 ): StoryContext | undefined {
   if (!state) return undefined
+  const deduplicate = options.deduplicate ?? options.taskKind !== undefined
+  const taskKind = options.taskKind
+
   const collections = [
     ['entities', state.entities],
     ['relations', state.relations],
@@ -44,22 +60,43 @@ export function compileStoryContext(
     ['promises', state.promises],
     ['constraints', state.constraints],
   ] as const
+
   const items = collections.flatMap(([collection, values]) =>
     Object.values(values).map((value) => toContextItem(collection, value)),
   )
+
   const maxItems =
     options.maxItems === undefined
       ? Number.MAX_SAFE_INTEGER
       : Math.max(0, Math.floor(options.maxItems))
+
   const filteredItems =
     options.includeHypotheses === false ? items.filter((item) => item.canonical) : items
+
   const canonicalFacts = filteredItems.filter((item) => item.canonical).slice(0, maxItems)
   const hypotheses =
     options.includeHypotheses === false
       ? []
       : filteredItems.filter((item) => !item.canonical).slice(0, maxItems)
-  const grouped = (collection: string) =>
-    filteredItems.filter((item) => item.collection === collection)
+
+  const canonicalIds = new Set(canonicalFacts.map((f) => f.id))
+
+  // 去重逻辑：若某 collection 的项已被 canonicalFacts 收录，且开启了 deduplicate，
+  // 则只保留其轻量引用或未收录的项，避免在最终 JSON 中重复出现
+  const grouped = (collection: string) => {
+    let list = filteredItems.filter((item) => item.collection === collection)
+    if (deduplicate && (collection === 'entities' || collection === 'events')) {
+      list = list.filter((item) => !canonicalIds.has(item.id))
+    }
+    // Task-aware 排序与过滤
+    if (taskKind === 'creative.continue' || taskKind === 'creative.rewrite') {
+      if (collection === 'promises') {
+        list = list.filter((item) => item.summary && !item.summary.includes('fulfilled'))
+      }
+    }
+    return list
+  }
+
   const context: Omit<StoryContext, 'fingerprint'> = {
     revision: state.revision,
     canonicalFacts,

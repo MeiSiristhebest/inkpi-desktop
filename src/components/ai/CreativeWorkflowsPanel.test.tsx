@@ -429,4 +429,53 @@ describe('CreativeWorkflowsPanel', () => {
       expect.any(String),
     )
   })
+
+  it('ingests distillation results into review inbox and opens DistillationInboxModal', async () => {
+    const distillResult = {
+      facts: {
+        summary: '提炼成功',
+        entities: [{ id: 'ent-1', kind: 'character', name: '林澈', attributes: { role: '主角' } }],
+        events: [],
+        promises: [{ id: 'prom-1', statement: '三年之约' }],
+      },
+      complete: true,
+      failedChunks: [],
+      completedChunks: 1,
+      totalChunks: 1,
+      checkpoint: {
+        facts: { summary: '提炼成功', entities: [], events: [], promises: [] },
+        completedChunkIndexes: [0],
+        failedChunkIndexes: [],
+        failedChunks: [],
+        nextChunk: 1,
+        chunkCount: 1,
+        step: 'distill-finished',
+        updatedAt: 100,
+      },
+      chunkTaskIds: ['task-1'],
+    }
+
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn().mockResolvedValue(distillResult)}
+        onSteerTask={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '项目提炼' }))
+    fireEvent.click(screen.getByRole('button', { name: '开始项目提炼' }))
+
+    await waitFor(() => expect(screen.getByText(/审查事实提炼/)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /审查事实提炼/ }))
+
+    expect(screen.getByText('AI 事实提炼审查箱 (Distillation Review Inbox)')).toBeInTheDocument()
+    expect(screen.getByText('林澈')).toBeInTheDocument()
+    expect(screen.getByText('三年之约')).toBeInTheDocument()
+  })
 })

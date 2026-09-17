@@ -8,6 +8,7 @@ import type {
 import type { SemanticDocument } from '../../domain/content'
 import type { StoryState } from '../../domain/story'
 import { compileCreativeContext, type CreativeContext } from '../context/contextCompiler'
+import { buildJitQuery } from '../context/jitQueryBuilder'
 import { createTaskScope } from '../../types/taskScope'
 
 export const CREATIVE_TASK_KINDS = {
@@ -195,8 +196,24 @@ function createCreativeTask(
     extra: Record<string, unknown>
   },
 ): AiTask {
-  const context = compileCreativeContext(input)
+  const context = compileCreativeContext({
+    ...input,
+    taskKind: kind,
+    totalTokenBudget: options.requirements.streaming ? 4000 : 8000,
+  })
   const selection = toTaskSelection(input.document, input.selection)
+
+  // 生产级 JIT Query Builder：结合正文、选区、指令、StoryState 进行实体挖掘与拓扑展开
+  const jitQuery = buildJitQuery({
+    workspaceId: input.workspaceId,
+    currentDocumentId: input.document.documentId,
+    currentDocumentText: context.text,
+    selectionText: context.selectionText,
+    userPrompt: options.intent ?? input.instruction,
+    storyState: input.storyState,
+    activeReferences: options.extra?.activeReferences as string[] | undefined,
+  })
+
   // INV-03 / INV-06: 每个 AI 任务必须携带显式 scope，包含 workspaceId、workspaceRevision、
   // 章节 ID、revision 与选区——让 Runtime JIT、缓存、Artifact 作用域严格隔离
   const scope = createTaskScope({
@@ -217,6 +234,11 @@ function createCreativeTask(
       payload: {
         context,
         workspaceId: input.workspaceId,
+        activeReferences: jitQuery.activeReferences,
+        keywords: jitQuery.keywords,
+        matchedEntityIds: jitQuery.matchedEntityIds,
+        expandedEntityIds: jitQuery.expandedEntityIds,
+        relevantPromiseIds: jitQuery.relevantPromiseIds,
         ...options.extra,
       },
     },
@@ -227,6 +249,8 @@ function createCreativeTask(
       metadata: {
         contextFingerprint: context.fingerprint,
         workspaceId: input.workspaceId,
+        activeReferences: jitQuery.activeReferences,
+        keywords: jitQuery.keywords,
       },
     },
     executionPolicy: { ...options.executionPolicy },
