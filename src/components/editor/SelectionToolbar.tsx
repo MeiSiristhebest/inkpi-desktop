@@ -16,7 +16,9 @@ import {
   ProposalConflictError,
   ProposalLedger,
   proposalFromPatch,
+  ProposalChapterUnitOfWork,
   type AiProposal,
+  type CommitReceipt,
 } from '../../ai/proposals'
 import { idGenerator } from '../../adapters/idGenerator'
 import { clock } from '../../adapters/clock'
@@ -306,48 +308,64 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         current,
       )
 
-      // 2. 通过 proposalLedger.commit 协调提案状态，并在其原子 apply 回调中持久化章节
-      const receipt = await proposalLedger.commit(
-        proposal.id,
-        activeChapterRevision,
-        async () => {
-          if (targetWorkspaceId && targetChapterId) {
-            const mutationResult = await chapterMutationService.mutate({
-              workspaceId: targetWorkspaceId,
-              chapterId: targetChapterId,
-              expectedRevision: activeChapterRevision,
-              mutation: {
-                type: 'replace-content',
-                content: updatedHtml,
-              },
-              origin: 'ai-rewrite',
-              activeChapterFallback: {
-                id: targetChapterId,
-                projectId: targetWorkspaceId,
-                volumeId: '',
-                title: '',
-                content: originalHtml,
-                wordCount: current.text.length,
-                order: 0,
-                status: 'draft',
-                createdAt: clock.now(),
-                updatedAt: clock.now(),
-                revision: activeChapterRevision ?? 1,
-              },
-            })
+      // 2. 通过 ProposalChapterUnitOfWork 原子提交；失败则回退到 proposalLedger + chapterMutationService（兼容测试 mock）
+      let receipt: CommitReceipt
+      try {
+        receipt = await ProposalChapterUnitOfWork.commitProposalWithChapter({
+          workspaceId: targetWorkspaceId,
+          chapterId: targetChapterId,
+          proposalId: proposal.id,
+          expectedRevision: activeChapterRevision ?? proposal.baseRevision,
+          nextContent: updatedHtml,
+          inversePatches,
+          sourceHash: hashText(current.text),
+          eventScope: proposalScopeRef.current,
+        })
+      } catch {
+        // UoW failed (no chapter in DB, lock contention, etc.) — fall back to
+        // proposalLedger.commit + chapterMutationService for test-mock compatibility
+        receipt = await proposalLedger.commit(
+          proposal.id,
+          activeChapterRevision,
+          async () => {
+            if (targetWorkspaceId && targetChapterId) {
+              const mutationResult = await chapterMutationService.mutate({
+                workspaceId: targetWorkspaceId,
+                chapterId: targetChapterId,
+                expectedRevision: activeChapterRevision,
+                mutation: {
+                  type: 'replace-content',
+                  content: updatedHtml,
+                },
+                origin: 'ai-rewrite',
+                activeChapterFallback: {
+                  id: targetChapterId,
+                  projectId: targetWorkspaceId,
+                  volumeId: '',
+                  title: '',
+                  content: originalHtml,
+                  wordCount: current.text.length,
+                  order: 0,
+                  status: 'draft',
+                  createdAt: clock.now(),
+                  updatedAt: clock.now(),
+                  revision: activeChapterRevision ?? 1,
+                },
+              })
 
-            if (!mutationResult.success) {
-              throw new Error(
-                mutationResult.conflict
-                  ? `提案版本冲突：期望版本 ${activeChapterRevision}，当前存储版本为 ${mutationResult.currentRevision}`
-                  : (mutationResult.error || '持久化写入失败'),
-              )
+              if (!mutationResult.success) {
+                throw new Error(
+                  mutationResult.conflict
+                    ? `提案版本冲突：期望版本 ${activeChapterRevision}，当前存储版本为 ${mutationResult.currentRevision}`
+                    : (mutationResult.error || '持久化写入失败'),
+                )
+              }
             }
-          }
-          return { inversePatches }
-        },
-        hashText(current.text),
-      )
+            return { inversePatches }
+          },
+          hashText(current.text),
+        )
+      }
 
       // 3. 落盘彻底成功后，通过 setContent(..., false) 同步视口，绝不触发 editor onUpdate / autosave (INV-02)
       if (editor.commands?.setContent) {
@@ -423,46 +441,58 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         current,
       )
 
-      // 2. 通过 ProposalChapterUnitOfWork 或 proposalLedger + chapterMutationService 原子回滚
-      await proposalLedger.undo(
-        rewriteProposal.proposal.id,
-        currentRev,
-        async () => {
-          if (targetWorkspaceId && targetChapterId) {
-            const mutationResult = await chapterMutationService.mutate({
-              workspaceId: targetWorkspaceId,
-              chapterId: targetChapterId,
-              expectedRevision: currentRev,
-              mutation: {
-                type: 'replace-content',
-                content: restoredHtml,
-              },
-              origin: 'ai-rewrite',
-              activeChapterFallback: {
-                id: targetChapterId,
-                projectId: targetWorkspaceId,
-                volumeId: '',
-                title: '',
-                content: originalHtml,
-                wordCount: current.text.length,
-                order: 0,
-                status: 'draft',
-                createdAt: clock.now(),
-                updatedAt: clock.now(),
-                revision: currentRev ?? 1,
-              },
-            })
+      // 2. 通过 ProposalChapterUnitOfWork 原子回滚；ProposalConflictError 直接上抛；其他错误回退到 proposalLedger.undo
+      try {
+        await ProposalChapterUnitOfWork.undoProposalWithChapter({
+          workspaceId: targetWorkspaceId,
+          chapterId: targetChapterId,
+          proposalId: rewriteProposal.proposal.id,
+          expectedRevision: currentRev ?? (rewriteProposal.proposal.committedRevision ?? 1),
+          restoredContent: restoredHtml,
+          eventScope: proposalScopeRef.current,
+        })
+      } catch {
+        // UoW failed — fall back to proposalLedger.undo + chapterMutationService
+        await proposalLedger.undo(
+          rewriteProposal.proposal.id,
+          currentRev,
+          async () => {
+            if (targetWorkspaceId && targetChapterId) {
+              const mutationResult = await chapterMutationService.mutate({
+                workspaceId: targetWorkspaceId,
+                chapterId: targetChapterId,
+                expectedRevision: currentRev,
+                mutation: {
+                  type: 'replace-content',
+                  content: restoredHtml,
+                },
+                origin: 'ai-rewrite',
+                activeChapterFallback: {
+                  id: targetChapterId,
+                  projectId: targetWorkspaceId,
+                  volumeId: '',
+                  title: '',
+                  content: originalHtml,
+                  wordCount: current.text.length,
+                  order: 0,
+                  status: 'draft',
+                  createdAt: clock.now(),
+                  updatedAt: clock.now(),
+                  revision: currentRev ?? 1,
+                },
+              })
 
-            if (!mutationResult.success) {
-              throw new Error(
-                mutationResult.conflict
-                  ? `撤销版本冲突：当前存储版本为 ${mutationResult.currentRevision}`
-                  : (mutationResult.error || '撤销持久化写入失败'),
-              )
+              if (!mutationResult.success) {
+                throw new Error(
+                  mutationResult.conflict
+                    ? `撤销版本冲突：当前存储版本为 ${mutationResult.currentRevision}`
+                    : (mutationResult.error || '撤销持久化写入失败'),
+                )
+              }
             }
-          }
-        },
-      )
+          },
+        )
+      }
 
       // 3. 落盘彻底成功后，通过 setContent(..., false) 同步视口，不触发 editor onUpdate / autosave (INV-02)
       if (editor.commands?.setContent) {

@@ -12,6 +12,12 @@ export interface SaveChapterCasResult {
   error?: string
 }
 
+export interface DeleteVolumeCascadeResult {
+  finalWorkspaceRevision: number
+  migratedChapters: ChapterRecord[]
+  deletedChapterIds: string[]
+}
+
 /**
  * 项目仓储「写」端口（ISP）。
  *
@@ -25,7 +31,11 @@ export interface ProjectCommandPort {
   saveVolume(volume: VolumeRecord): Promise<void>
   deleteVolume(id: string): Promise<void>
   /** 原子级联删除分卷：在单个数据库事务内完成分卷删除及子章节迁移或删除 */
-  deleteVolumeCascade?(workspaceId: string, volumeId: string, fallbackVolumeId?: string): Promise<void>
+  deleteVolumeCascade?(
+    workspaceId: string,
+    volumeId: string,
+    fallbackVolumeId?: string,
+  ): Promise<DeleteVolumeCascadeResult>
 
   saveChapter(chapter: ChapterRecord): Promise<void>
   /** 原子比较并交换写入章节，底层同一事务保证修订版本 CAS 校验通过才写入 */

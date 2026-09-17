@@ -23,6 +23,18 @@ let channel: DomainChangeChannel | undefined
  */
 export const domainChangeEvents = {
   publish(workspaceId: string, revision?: number): void {
+    if (revision !== undefined) {
+      if (!Number.isSafeInteger(revision) || revision < 0) {
+        throw new Error(
+          `domainChangeEvents.publish: Invalid workspace revision ${revision}. Revision must be a non-negative integer.`,
+        )
+      }
+      if (revision > 10_000_000_000) {
+        throw new Error(
+          `domainChangeEvents.publish: Invalid workspace revision ${revision}. It looks like a timestamp instead of an incremental workspace revision.`,
+        )
+      }
+    }
     const event: DomainChangedEvent = {
       workspaceId,
       ...(revision !== undefined ? { revision } : {}),

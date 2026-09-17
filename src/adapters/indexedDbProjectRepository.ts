@@ -8,6 +8,7 @@ import {
 } from './indexedDbDomainChangeStore'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
+import type { DeleteVolumeCascadeResult } from '../ports/projectCommand'
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
 // DomainChangeSet revisions are allocated by reading the current workspace
@@ -103,7 +104,13 @@ export const indexedDbProjectRepository: ProjectRepository = {
       )
     }
   },
-  deleteVolumeCascade: async (workspaceId: string, volumeId: string, fallbackVolumeId?: string) => {
+  deleteVolumeCascade: async (workspaceId: string, volumeId: string, fallbackVolumeId?: string): Promise<DeleteVolumeCascadeResult> => {
+    const result: DeleteVolumeCascadeResult = {
+      finalWorkspaceRevision: 0,
+      migratedChapters: [],
+      deletedChapterIds: [],
+    }
+
     await db.runTransaction(['volumes', 'chapters', 'domainChangeSets'], (transaction, fail) => {
       const volumeStore = transaction.objectStore('volumes')
       const chapterStore = transaction.objectStore('chapters')
@@ -144,6 +151,7 @@ export const indexedDbProjectRepository: ProjectRepository = {
                 updatedAt: now,
               }
               chapterStore.put(updated)
+              result.migratedChapters.push(updated)
               changes.push({
                 id: `chapter-change-${ch.id}-${ch.revision ?? 0}-${now}`,
                 aggregateType: 'chapter',
@@ -158,6 +166,7 @@ export const indexedDbProjectRepository: ProjectRepository = {
             // Delete all child chapters
             for (const ch of relatedChapters) {
               chapterStore.delete(ch.id)
+              result.deletedChapterIds.push(ch.id)
               changes.push({
                 id: `chapter-change-${ch.id}-${ch.revision ?? 0}-${now}`,
                 aggregateType: 'chapter',
@@ -185,6 +194,7 @@ export const indexedDbProjectRepository: ProjectRepository = {
             .filter((record: any) => record.workspaceId === workspaceId)
             .sort((a: any, b: any) => a.revision - b.revision)
           const baseRevision = workspaceChanges.at(-1)?.revision ?? 0
+          result.finalWorkspaceRevision = baseRevision + 1
 
           const changeSet = createDomainChangeSet({
             id: `delete-volume-${volumeId}-${now}`,
@@ -223,7 +233,8 @@ export const indexedDbProjectRepository: ProjectRepository = {
       domainReq.onerror = () => fail(domainReq.error)
     })
 
-    domainChangeEvents.publish(workspaceId, Date.now())
+    domainChangeEvents.publish(workspaceId, result.finalWorkspaceRevision)
+    return result
   },
 
   getAllChapters: () => db.getAll<ChapterRecord>('chapters'),

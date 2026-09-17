@@ -76,8 +76,8 @@ export interface ProposalLedgerOptions {
 }
 
 export class ProposalConflictError extends Error {
-  constructor(proposalId: string, expected: number, actual: number) {
-    super(`Proposal ${proposalId} is stale: expected revision ${expected}, received ${actual}`)
+  constructor(proposalId: string, expected: number, actual: number, message?: string) {
+    super(message ?? `Proposal ${proposalId} is stale: expected revision ${expected}, received ${actual}`)
     this.name = 'ProposalConflictError'
   }
 }

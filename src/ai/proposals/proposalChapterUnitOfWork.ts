@@ -67,13 +67,13 @@ export class ProposalChapterUnitOfWork {
       inversePatches,
       now = Date.now(),
       sourceHash,
-      fallbackChapter,
       eventScope,
     } = input
 
     let committedChapter!: ChapterRecord
     let committedProposal!: AiProposal
     let nextRevision = expectedRevision + 1
+    let committedWorkspaceRevision = 0
     let wordDelta = 0
 
     await db.runTransaction(
@@ -123,32 +123,27 @@ export class ProposalChapterUnitOfWork {
               throw new Error("Proposal " + proposalId + " source hash does not match current document")
             }
 
-            // 2. Validate Chapter state
-            const chapterToUse: ChapterRecord = currentChapter ?? {
-              id: chapterId,
-              projectId: workspaceId,
-              volumeId: fallbackChapter?.volumeId || "",
-              title: fallbackChapter?.title || "",
-              content: fallbackChapter?.content || "",
-              wordCount: fallbackChapter?.wordCount || 0,
-              order: fallbackChapter?.order || 0,
-              status: fallbackChapter?.status || "draft",
-              createdAt: fallbackChapter?.createdAt || now,
-              updatedAt: fallbackChapter?.updatedAt || now,
-              revision: expectedRevision,
+            // 2. Validate Chapter state — fail-closed: chapter MUST exist in DB
+            if (!currentChapter) {
+              throw new ProposalConflictError(
+                proposalId,
+                expectedRevision,
+                -1,
+                `Chapter ${chapterId} not found in database; cannot commit proposal atomically`,
+              )
             }
 
-            const chapterRev = chapterToUse.revision ?? 1
+            const chapterRev = currentChapter.revision ?? 1
             if (chapterRev !== expectedRevision) {
               throw new ProposalConflictError(proposalId, expectedRevision, chapterRev)
             }
 
             nextRevision = expectedRevision + 1
             const newWordCount = countWords(nextContent)
-            wordDelta = newWordCount - (chapterToUse.wordCount || 0)
+            wordDelta = newWordCount - (currentChapter.wordCount || 0)
 
             committedChapter = {
-              ...chapterToUse,
+              ...currentChapter,
               content: nextContent,
               wordCount: newWordCount,
               revision: nextRevision,
@@ -168,6 +163,7 @@ export class ProposalChapterUnitOfWork {
               .filter((record: any) => record.workspaceId === workspaceId)
               .sort((a: any, b: any) => a.revision - b.revision)
             const currentWorkspaceRev = workspaceChanges.at(-1)?.revision ?? 0
+            committedWorkspaceRevision = currentWorkspaceRev + 1
 
             const sourceDeviceId = typeof localStorage !== "undefined"
               ? localStorage.getItem("inkpi-device-id") || "desktop"
@@ -234,7 +230,7 @@ export class ProposalChapterUnitOfWork {
     // After atomic transaction completes successfully:
     draftJournal.clear(workspaceId, chapterId)
     chapterSaveEvents.publish(committedChapter)
-    domainChangeEvents.publish(workspaceId, nextRevision)
+    domainChangeEvents.publish(workspaceId, committedWorkspaceRevision)
     if (eventScope) {
       proposalStateEvents.publish({
         ...eventScope,
@@ -271,13 +267,13 @@ export class ProposalChapterUnitOfWork {
       expectedRevision,
       restoredContent,
       now = Date.now(),
-      fallbackChapter,
       eventScope,
     } = input
 
     let restoredChapter!: ChapterRecord
     let undoneProposal!: AiProposal
     let nextRevision = expectedRevision + 1
+    let committedWorkspaceRevision = 0
     let wordDelta = 0
 
     await db.runTransaction(
@@ -317,32 +313,27 @@ export class ProposalChapterUnitOfWork {
               throw new Error("Proposal " + proposalId + " must be committed before undo (status: " + currentProposal.status + ")")
             }
 
-            // 2. Validate Chapter state
-            const chapterToUse: ChapterRecord = currentChapter ?? {
-              id: chapterId,
-              projectId: workspaceId,
-              volumeId: fallbackChapter?.volumeId || "",
-              title: fallbackChapter?.title || "",
-              content: fallbackChapter?.content || "",
-              wordCount: fallbackChapter?.wordCount || 0,
-              order: fallbackChapter?.order || 0,
-              status: fallbackChapter?.status || "draft",
-              createdAt: fallbackChapter?.createdAt || now,
-              updatedAt: fallbackChapter?.updatedAt || now,
-              revision: expectedRevision,
+            // 2. Validate Chapter state — fail-closed: chapter MUST exist in DB
+            if (!currentChapter) {
+              throw new ProposalConflictError(
+                proposalId,
+                expectedRevision,
+                -1,
+                `Chapter ${chapterId} not found in database; cannot undo proposal atomically`,
+              )
             }
 
-            const chapterRev = chapterToUse.revision ?? 1
+            const chapterRev = currentChapter.revision ?? 1
             if (chapterRev !== expectedRevision) {
               throw new ProposalConflictError(proposalId, expectedRevision, chapterRev)
             }
 
             nextRevision = expectedRevision + 1
             const newWordCount = countWords(restoredContent)
-            wordDelta = newWordCount - (chapterToUse.wordCount || 0)
+            wordDelta = newWordCount - (currentChapter.wordCount || 0)
 
             restoredChapter = {
-              ...chapterToUse,
+              ...currentChapter,
               content: restoredContent,
               wordCount: newWordCount,
               revision: nextRevision,
@@ -360,6 +351,7 @@ export class ProposalChapterUnitOfWork {
               .filter((record: any) => record.workspaceId === workspaceId)
               .sort((a: any, b: any) => a.revision - b.revision)
             const currentWorkspaceRev = workspaceChanges.at(-1)?.revision ?? 0
+            committedWorkspaceRevision = currentWorkspaceRev + 1
 
             const sourceDeviceId = typeof localStorage !== "undefined"
               ? localStorage.getItem("inkpi-device-id") || "desktop"
@@ -426,7 +418,7 @@ export class ProposalChapterUnitOfWork {
     // After atomic transaction completes successfully:
     draftJournal.clear(workspaceId, chapterId)
     chapterSaveEvents.publish(restoredChapter)
-    domainChangeEvents.publish(workspaceId, nextRevision)
+    domainChangeEvents.publish(workspaceId, committedWorkspaceRevision)
     if (eventScope) {
       proposalStateEvents.publish({
         ...eventScope,

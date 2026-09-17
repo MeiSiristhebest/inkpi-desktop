@@ -757,18 +757,35 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       if (!success) return
 
       let chapters = stateRef.current.chapters
+      let updatedActiveChapter = stateRef.current.activeChapter
       if (fallbackVolId) {
         chapters = chapters.map((ch) =>
           ch.volumeId === volume.id ? { ...ch, volumeId: fallbackVolId, updatedAt: clock.now() } : ch,
         )
+        if (isCurrentInVolume && activeChapter) {
+          updatedActiveChapter = {
+            ...activeChapter,
+            volumeId: fallbackVolId,
+            updatedAt: clock.now(),
+          }
+          activeChapterRef.current = updatedActiveChapter
+        }
       } else {
         chapters = chapters.filter((c) => c.volumeId !== volume.id)
         if (isCurrentInVolume) {
           await activateChapter(chapters[0] ?? null, { skipDrain: true })
+          return
         }
       }
 
-      patch({ volumes, chapters, deletingVolume: null })
+      patch({
+        volumes,
+        chapters,
+        deletingVolume: null,
+        ...(isCurrentInVolume && fallbackVolId && updatedActiveChapter
+          ? { activeChapter: updatedActiveChapter }
+          : {}),
+      })
     },
     [patch, runPersistence, autosave, projectId, activateChapter, clock],
   )
