@@ -749,6 +749,33 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await waitFor(() => expect(screen.queryByText(/删除章节确认/)).not.toBeInTheDocument())
   })
 
+  it('safely deletes dirty active chapter with pending autosave without Chapter not found or hanging', async () => {
+    render(<RichEditor projectId="p-del-dirty" />)
+    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    // 触发编辑变更使得章节处于 dirty / pending 状态
+    h.getText = () => '未存盘的脏数据'
+    h.getHTML = () => '<p>未存盘的脏数据</p>'
+    act(() => {
+      h.capturedOnUpdate && h.capturedOnUpdate()
+    })
+
+    // 立即删除当前活动章节
+    fireEvent.contextMenu(chItem)
+    fireEvent.click(screen.getByText('删除本章节'))
+    expect(screen.getByText(/删除章节确认/)).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('确认删除'))
+    })
+
+    // 验证：当前章节成功删除，弹窗关闭，且平稳切换到后续章节（第002章 锈剑之鸣），未产生崩溃或未捕获的异常
+    await waitFor(() => {
+      expect(screen.queryByText(/删除章节确认/)).not.toBeInTheDocument()
+      expect(screen.getByDisplayValue('第002章 锈剑之鸣')).toBeInTheDocument()
+    })
+  })
+
   it('updates status from context menu and covers search and jump', async () => {
     render(<RichEditor projectId="p-status-ctx" />)
     const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
