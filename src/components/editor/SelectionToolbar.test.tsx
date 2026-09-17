@@ -77,6 +77,18 @@ describe('SelectionToolbar', () => {
   })
 
   it('creates a proposal and applies Accept then Undo through the editor boundary', async () => {
+    await db.put('chapters', {
+      id: 'chapter-1',
+      projectId: 'test-workspace',
+      title: '第1章',
+      content: '选中文本',
+      wordCount: 4,
+      order: 0,
+      status: 'draft',
+      createdAt: 0,
+      updatedAt: 0,
+      revision: 4,
+    })
     const { editor, handlers, getContent } = makeEditor({ from: 0, to: 5 })
     const onAiTask = vi.fn(async (): Promise<TaskResult> => ({
       taskId: 'toolbar-rewrite',
@@ -211,12 +223,18 @@ describe('SelectionToolbar', () => {
   })
 
   it('blocks proposal commit and surfaces error when durable chapter mutation fails', async () => {
-    const { chapterMutationService } = await import('../../services/defaultChapterMutationService')
-    const mutateSpy = vi.spyOn(chapterMutationService, 'mutate').mockResolvedValueOnce({
-      success: false,
-      conflict: true,
-      currentRevision: 99,
-      error: 'CAS Conflict: expected revision 4, but current revision is 99',
+    // 放入实际版本为 99 的章节，期望版本为 4，触发 ProposalChapterUnitOfWork 的 CAS 冲突
+    await db.put('chapters', {
+      id: 'chapter-1',
+      projectId: 'test-workspace',
+      title: '第1章',
+      content: '选中文本',
+      wordCount: 4,
+      order: 0,
+      status: 'draft',
+      createdAt: 0,
+      updatedAt: 0,
+      revision: 99,
     })
 
     const { editor, handlers, getContent } = makeEditor({ from: 0, to: 5 })
@@ -245,20 +263,32 @@ describe('SelectionToolbar', () => {
 
     fireEvent.click(screen.getByText('接受'))
 
-    // 验证：由于落库失败，事务阻断，状态转为 stale 且展示冲突错误，编辑器内容保持不变
+    // 验证：由于落库版本冲突，UoW 事务阻断，状态转为 stale 且展示冲突错误，编辑器内容保持不变
     await waitFor(() => {
       expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('stale')
-      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('提案版本冲突')
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('expected revision 4, received 99')
     })
     expect(getContent()).toBe('选中文本')
-
-    mutateSpy.mockRestore()
   })
 
   it('preserves HTML formatting when proposing and committing rewrites without emitting autosave update', async () => {
     let rawHtml = '<p>Hello <strong>world</strong></p>'
     const setContentSpy = vi.fn((html: string, emitUpdate?: boolean) => {
       rawHtml = html
+    })
+
+    await db.put('chapters', {
+      id: 'chapter-rich',
+      projectId: 'test-workspace',
+      volumeId: 'vol-1',
+      title: '第1章',
+      content: '<p>Hello <strong>world</strong></p>',
+      wordCount: 2,
+      order: 0,
+      status: 'draft',
+      createdAt: 0,
+      updatedAt: 0,
+      revision: 1,
     })
 
     const handlers: Record<string, (() => void) | undefined> = {}
@@ -285,28 +315,6 @@ describe('SelectionToolbar', () => {
       },
       chain: () => ({ focus: () => ({ toggleBold: () => ({ run: vi.fn() }) }) }),
     }
-
-    const { chapterMutationService } = await import('../../services/defaultChapterMutationService')
-    const mutateSpy = vi.spyOn(chapterMutationService, 'mutate').mockResolvedValueOnce({
-      success: true,
-      conflict: false,
-      previousRevision: 1,
-      newRevision: 2,
-      chapter: {
-        id: 'chapter-rich',
-        projectId: 'test-workspace',
-        volumeId: 'vol-1',
-        title: '第1章',
-        content: '<p>Hello <strong>universe</strong></p>',
-        wordCount: 2,
-        order: 0,
-        status: 'draft',
-        createdAt: 0,
-        updatedAt: 0,
-        revision: 2,
-      },
-      wordCountDelta: 0,
-    })
 
     render(
       <SelectionToolbar
@@ -340,16 +348,12 @@ describe('SelectionToolbar', () => {
 
     // 验证：调用了 setContent 并显式传入 emitUpdate: false，杜绝二次触发 autosave
     expect(setContentSpy).toHaveBeenCalledWith('<p>Hello <strong>universe</strong></p>', false)
-    expect(mutateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mutation: {
-          type: 'replace-content',
-          content: '<p>Hello <strong>universe</strong></p>',
-        },
-      }),
-    )
 
-    mutateSpy.mockRestore()
+    // 验证持久化层已更新
+    const persistedChapter = await db.get('chapters', 'chapter-rich')
+    expect(persistedChapter?.content).toBe('<p>Hello <strong>universe</strong></p>')
+    expect(persistedChapter?.revision).toBe(2)
   })
 })
+
 
