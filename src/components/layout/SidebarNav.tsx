@@ -88,17 +88,25 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     setCollapsedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }))
   }
 
-  // 过滤并归类插件
+  // 过滤并归类插件：仅展示在 CapabilityRegistry 中声明支持 navigation surface 的能力
   const groupedCategories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
+    const navigationPlugins = activePlugins.filter((p) => {
+      const cap = CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
+      if (cap && Array.isArray(cap.surfaces)) {
+        return (cap.surfaces as readonly string[]).includes('navigation')
+      }
+      return true
+    })
+
     const filtered = q
-      ? activePlugins.filter(
+      ? navigationPlugins.filter(
           (p) =>
             p.name.toLowerCase().includes(q) ||
             p.description?.toLowerCase().includes(q) ||
             p.id.toLowerCase().includes(q),
         )
-      : activePlugins
+      : navigationPlugins
 
     const map = new Map<DesktopPluginCategory, DesktopPlugin[]>()
     for (const cat of CATEGORY_ORDER) {
@@ -259,7 +267,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                           const Icon = p.icon || Sparkles
                           const isActive = activeTabId === p.id
                           const capability = CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
-                          const isProduction = capability?.maturity === 'production'
+                          const maturity = capability?.maturity
+                          const showBeta = maturity === 'beta'
+                          const showExp = maturity === 'experimental' || maturity === 'demo'
                           return (
                             <button
                               key={p.id}
@@ -274,16 +284,28 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                                 <Icon className="w-3 h-3 shrink-0" />
                                 <span className="sidebar-nav-plugin-label truncate">{p.name}</span>
                               </div>
-                              {isProduction && (
+                              {showBeta && (
                                 <span
                                   className={`text-[9px] px-1 py-0.2 rounded font-sans tracking-wide shrink-0 ${
                                     isActive
                                       ? 'bg-white/20 text-white'
-                                      : 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)]'
+                                      : 'bg-amber-500/15 text-amber-500'
                                   }`}
-                                  title="权威正典能力 (Production)"
+                                  title="调优测试能力 (Beta)"
                                 >
-                                  PROD
+                                  Beta
+                                </span>
+                              )}
+                              {showExp && (
+                                <span
+                                  className={`text-[9px] px-1 py-0.2 rounded font-sans tracking-wide shrink-0 ${
+                                    isActive
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-indigo-500/15 text-indigo-400'
+                                  }`}
+                                  title="启发式 / 实验能力 (Experimental)"
+                                >
+                                  实验
                                 </span>
                               )}
                             </button>

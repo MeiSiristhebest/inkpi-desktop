@@ -442,9 +442,8 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       const now = clock.now()
       const project = await indexedDbProjectRepository.getProject(projectId)
       // 遵循 INV-05 fail-closed 规则：
-      // 1. 若项目记录存在，只有显式标记为 templateType === 'demo' 才载入仙侠示范数据，其他（'blank' 或未知）一律纯净空白；
-      // 2. 若项目记录不存在（仅在未初始化项目的单元测试环境中），保留示范种子以兼容旧单测。
-      const isDemo = project ? project.templateType === 'demo' : true
+      // 只有显式标记为 templateType === 'demo' 才载入仙侠示范数据，其他（'blank'、缺失或未知）一律纯净空白
+      const isDemo = project?.templateType === 'demo'
 
       const initVols = (
         isDemo

@@ -59,6 +59,38 @@ describe('DomainApplicationServices & StoryState Integration', () => {
     expect(state!.entities['ent-1'].provenance.factLevel).toBe('canonical-fact')
   })
 
+  it('codexApplicationService.saveEntity with demo intent assigns hypothesis provenance and prevents canonical-fact', async () => {
+    await codexApplicationService.saveEntity(
+      {
+        id: 'ent-demo',
+        projectId: workspaceId,
+        name: '示范灵草',
+        aliases: [],
+        category: 'item',
+        attributes: {},
+        relations: [],
+        summary: 'Demo seed',
+        createdAt: 100,
+        updatedAt: 100,
+      },
+      'demo',
+    )
+
+    const entities = await db.getAll<CodexEntity>('codexEntities')
+    const saved = entities.find((e) => e.id === 'ent-demo')
+    expect(saved).toBeDefined()
+    expect((saved as any).provenance.sourceType).toBe('derived')
+    expect((saved as any).provenance.factLevel).toBe('hypothesis')
+
+    // Domain change sets must be appended with aggregate write
+    const domainChanges = await db.getAll<any>('domainChangeSets')
+    const entityChange = domainChanges.find(
+      (c) => c.workspaceId === workspaceId && c.changes?.[0]?.aggregateId === 'ent-demo',
+    )
+    expect(entityChange).toBeDefined()
+    expect(entityChange.changes[0].operation).toBe('upsert')
+  })
+
   it('untrusted / legacy entity without provenance materializes with hypothesis factLevel (fail-closed INV-05)', async () => {
     await db.put<CodexEntity>('codexEntities', {
       id: 'ent-untrusted',

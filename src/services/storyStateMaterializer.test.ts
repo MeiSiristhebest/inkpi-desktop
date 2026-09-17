@@ -137,4 +137,74 @@ describe('StoryStateMaterializer — 生产级领域物化流水线', () => {
     const secondState = await storyStateMaterializer.materialize(workspaceId)
     expect(secondState!.revision).toBe(1)
   })
+
+  it('projects codex relations into StoryState.relations with deterministic IDs', async () => {
+    await db.put<CodexEntity>('codexEntities', {
+      id: 'entity:master',
+      projectId: workspaceId,
+      name: '青云道人',
+      aliases: [],
+      category: 'character',
+      attributes: {},
+      relations: [
+        {
+          targetId: 'entity:disciple',
+          targetName: '叶凡',
+          relationType: '师徒',
+          description: '衣钵相传',
+        },
+      ],
+      summary: '掌教真尊',
+      createdAt: 1000,
+      updatedAt: 1000,
+    })
+
+    const state = await storyStateMaterializer.materialize(workspaceId)
+    expect(state).toBeDefined()
+    const expectedRelId = 'codex-rel:entity:master:entity:disciple:师徒'
+    expect(state!.relations[expectedRelId]).toBeDefined()
+    expect(state!.relations[expectedRelId].sourceEntityId).toBe('entity:master')
+    expect(state!.relations[expectedRelId].targetEntityId).toBe('entity:disciple')
+    expect(state!.relations[expectedRelId].type).toBe('师徒')
+    expect(state!.relations[expectedRelId].attributes).toEqual({ description: '衣钵相传' })
+  })
+
+  it('fails closed and throws error when IndexedDB read fails, preserving existing read model', async () => {
+    // 1. 成功建立基础状态
+    await db.put<CodexEntity>('codexEntities', {
+      id: 'entity:stable',
+      projectId: workspaceId,
+      name: '稳定实体',
+      aliases: [],
+      category: 'character',
+      attributes: {},
+      relations: [],
+      summary: '',
+      createdAt: 1000,
+      updatedAt: 1000,
+    })
+    const initial = await storyStateMaterializer.materialize(workspaceId)
+    expect(initial!.entities['entity:stable']).toBeDefined()
+
+    // 2. 模拟底层存储故障
+    const originalGetAll = db.getAll
+    db.getAll = (async (storeName: any) => {
+      if (storeName === 'codexEntities') {
+        throw new Error('Disk IO failure / IndexedDB corrupted')
+      }
+      return originalGetAll.call(db, storeName)
+    }) as any
+
+    try {
+      await expect(storyStateMaterializer.materialize(workspaceId)).rejects.toThrow(
+        'Disk IO failure / IndexedDB corrupted',
+      )
+    } finally {
+      db.getAll = originalGetAll
+    }
+
+    // 3. 验证未被清空
+    const current = await indexedDbStoryStateStore.load(workspaceId)
+    expect(current!.entities['entity:stable']).toBeDefined()
+  })
 })

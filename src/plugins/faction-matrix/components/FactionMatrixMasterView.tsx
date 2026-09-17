@@ -10,6 +10,7 @@ import type {
 import { factionMatrixEngine } from '../engine/FactionMatrixEngine'
 import { indexedDbFactionDiplomacyRepository } from '../../../adapters/indexedDbFactionDiplomacyRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { codexApplicationService } from '../../../services/domainApplicationServices'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
@@ -82,7 +83,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       createdAt: now,
       updatedAt: now,
     }
-    await indexedDbCodexEntityRepository.save(entity)
+    await codexApplicationService.saveEntity(entity as any, 'author-confirmed')
     setNewFactionName('')
     setIsAddingFaction(false)
     await loadAll()

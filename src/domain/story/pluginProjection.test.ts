@@ -205,7 +205,12 @@ describe('canonical StoryState plugin projection', () => {
 
   it('exposes only explicit plugin/source collection routes', () => {
     expect(STORY_PLUGIN_COLLECTION_MAP).toEqual({
-      'living-codex': { entity: 'entities', entities: 'entities' },
+      'living-codex': {
+        entity: 'entities',
+        entities: 'entities',
+        relation: 'relations',
+        relations: 'relations',
+      },
       'timeline-grid': {
         thread: 'timelines',
         threads: 'timelines',

@@ -13,6 +13,7 @@ import type { CodexEntity } from '../plugins/living-codex/types'
 import { pluginEventBus } from './pluginEventBus'
 import { chapterMutationService } from '../services/defaultChapterMutationService'
 import { indexedDbCodexEntityRepository } from '../adapters/indexedDbCodexEntityRepository'
+import { codexApplicationService } from '../services/domainApplicationServices'
 import { clock } from '../adapters/clock'
 import type {
   ChapterMutationPatch,
@@ -240,7 +241,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         ...patch,
         updatedAt: clock.now(),
       }
-      await indexedDbCodexEntityRepository.save(merged)
+      await codexApplicationService.saveEntity(merged, 'author-confirmed')
 
       scopedBus.emit('CODEX_ENTITY_TOUCHED', {
         projectId,

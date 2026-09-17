@@ -2,6 +2,7 @@ import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { codexApplicationService } from '../../../services/domainApplicationServices'
 import { pluginEventBus } from '../../../core/pluginEventBus'
 import { AftermathEngine } from '../engine/AftermathEngine'
 import type { AftermathPatchRecord } from '../types'
@@ -83,7 +84,7 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
             : changeNote,
           updatedAt: clock.now(),
         }
-        await indexedDbCodexEntityRepository.save(updatedEntity)
+        await codexApplicationService.saveEntity(updatedEntity, 'author-confirmed')
         pluginEventBus.scopedBus(projectId).emit('CODEX_ENTITY_TOUCHED', {
           projectId,
           entityId: targetEntity.id,

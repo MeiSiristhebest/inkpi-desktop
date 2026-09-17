@@ -2,7 +2,7 @@ import { useState, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { NameCategory, NameStyle, GeneratedNameItem } from '../types'
 import { nameForgeEngine } from '../engine/NameForgeEngine'
-import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { codexApplicationService } from '../../../services/domainApplicationServices'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
@@ -105,7 +105,7 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     }
 
     try {
-      await indexedDbCodexEntityRepository.save(entity)
+      await codexApplicationService.saveEntity(entity, 'author-confirmed')
       setSavedIds((prev) => new Set([...prev, item.id]))
     } catch (e) {
       console.error('Failed to save to living codex:', e)

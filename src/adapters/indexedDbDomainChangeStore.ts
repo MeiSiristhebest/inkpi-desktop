@@ -12,7 +12,15 @@ import type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChange
 export type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'
 
 export interface IndexedDbAggregateWrite {
-  store: 'projects' | 'volumes' | 'chapters' | 'settingsKV'
+  store:
+    | 'projects'
+    | 'volumes'
+    | 'chapters'
+    | 'settingsKV'
+    | 'codexEntities'
+    | 'narrativeThreads'
+    | 'timelineNodes'
+    | 'promiseLedger'
   key: string
   operation: 'upsert' | 'delete'
   value?: unknown
@@ -261,12 +269,17 @@ function cloneChangeSet(changeSet: DomainChangeSet): DomainChangeSet {
 }
 
 function assertAggregateWrite(aggregate: IndexedDbAggregateWrite): void {
-  if (
-    aggregate.store !== 'projects' &&
-    aggregate.store !== 'volumes' &&
-    aggregate.store !== 'chapters' &&
-    aggregate.store !== 'settingsKV'
-  ) {
+  const allowedStores = new Set<string>([
+    'projects',
+    'volumes',
+    'chapters',
+    'settingsKV',
+    'codexEntities',
+    'narrativeThreads',
+    'timelineNodes',
+    'promiseLedger',
+  ])
+  if (!allowedStores.has(aggregate.store)) {
     throw new Error('IndexedDB aggregate store is invalid')
   }
   if (typeof aggregate.key !== 'string' || !aggregate.key.trim())

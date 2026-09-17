@@ -95,10 +95,75 @@ vi.mock('@tiptap/react', async (importOriginal) => {
 const seedClear = async () => {
   for (const c of await db.getAll('chapters')) await db.delete('chapters', c.id)
   for (const v of await db.getAll('volumes')) await db.delete('volumes', v.id)
+  for (const p of await db.getAll('projects')) await db.delete('projects', p.id)
 }
 
 beforeEach(async () => {
   await seedClear()
+  // 为所有测试用的项目写入 templateType: 'demo' 记录，确保其在 fail-closed 语义下加载预期的仙侠示例章节
+  const testProjectIds = [
+    'p-rich',
+    'p-save',
+    'p-fmt',
+    'p-punc',
+    'p-fr',
+    'p-exp',
+    'p-zen',
+    'p-clean',
+    'p-polish',
+    'p-conn',
+    'p-footer',
+    'p-layout-contract',
+    'p-new',
+    'p-settings',
+    'p-format-menu',
+    'p-find2',
+    'p-exp2',
+    'p-exp3',
+    'p-reconnect',
+    'p-conn2',
+    'p-side',
+    'p-keys',
+    'p-ghost',
+    'p-type',
+    'p-global',
+    'p-tree-search',
+    'p-status',
+    'p-width',
+    'p-progress',
+    'p-long-task',
+    'p-editor-task',
+    'p-diagnostics',
+    'p-type-toggle',
+    'p-nav',
+    'p-modals',
+    'p-advanced-tools',
+    'p-advanced-cov',
+    'p-del-test',
+    'p-del-dirty',
+    'p-status-ctx',
+    'p-vol-ctx',
+    'p-num-cov',
+    'p-key-ctx',
+    'p-ctx-cov',
+    'p-crud',
+    'p-act',
+    'p-del-last',
+    'p-cov',
+    'p-split',
+    'p-stat',
+    'p-hist',
+  ]
+  for (const pid of testProjectIds) {
+    await db.put('projects', {
+      id: pid,
+      name: '测试项目',
+      templateType: 'demo',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+  }
+
   // 强制每个测试拥有独立的 mock editor 实例，避免并行/顺序执行时的状态串扰
   editorInstance = makeMockEditor()
   h.getHTML = () => '<p>初始内容</p>'

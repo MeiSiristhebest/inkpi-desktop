@@ -68,8 +68,13 @@ export const StoryStateProvider: FC<StoryStateProviderProps> = ({
       setIsLoading(true)
       setError(null)
       try {
+        // 冷启动或导入项目检测：检查是否缺失或落后于 workspace 权威版本
+        try {
+          await storyStateMaterializer.materializeIfStale(workspaceId)
+        } catch {
+          // best effort
+        }
         let loaded = await store.load(workspaceId)
-        // 冷启动或导入项目检测：若 DB 无已物化的 StoryState，主动触发一次物化 (P1-B)
         if (!loaded) {
           try {
             loaded = await storyStateMaterializer.materialize(workspaceId)

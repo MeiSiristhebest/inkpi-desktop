@@ -1,4 +1,5 @@
 import type { StoryEntity } from './entities'
+import type { StoryRelation } from './relations'
 import type { StoryEvent } from './events'
 import type { NarrativePromise, NarrativePromiseStatus } from './promises'
 import type { Provenance, ProvenanceSourceType, SourceEvidence, StoryFactLevel } from './provenance'
@@ -23,6 +24,8 @@ export const STORY_PLUGIN_COLLECTION_MAP = {
   'living-codex': {
     entity: 'entities',
     entities: 'entities',
+    relation: 'relations',
+    relations: 'relations',
   },
   'timeline-grid': {
     thread: 'timelines',
@@ -56,7 +59,7 @@ export interface StoryPluginProjectionOptions {
   revision?: number
 }
 
-type CanonicalStoryRecord = StoryEntity | StoryEvent | StoryTimeline | NarrativePromise
+type CanonicalStoryRecord = StoryEntity | StoryRelation | StoryEvent | StoryTimeline | NarrativePromise
 
 interface ProjectionRoute {
   targetCollection: StoryStateCollection
@@ -69,6 +72,8 @@ const PROJECTION_ROUTES: ProjectionRoutes = {
   'living-codex': {
     entity: { targetCollection: 'entities', project: projectCodexEntity },
     entities: { targetCollection: 'entities', project: projectCodexEntity },
+    relation: { targetCollection: 'relations', project: projectCodexRelation },
+    relations: { targetCollection: 'relations', project: projectCodexRelation },
   },
   'timeline-grid': {
     thread: { targetCollection: 'timelines', project: projectTimelineThread },
@@ -191,6 +196,38 @@ function projectCodexEntity(record: Record<string, unknown>, provenance: Provena
     aliases: sortStrings(aliases ?? []),
     attributes: cloneObject(attributes ?? {}),
     ...(status === undefined ? {} : { status }),
+    provenance: clone(provenance),
+  }
+}
+
+function projectCodexRelation(
+  record: Record<string, unknown>,
+  provenance: Provenance,
+): StoryRelation {
+  const id = requiredStringValue(record.id, 'id', 'living-codex/relation')
+  const sourceEntityId = requiredStringValue(
+    record.sourceEntityId,
+    'sourceEntityId',
+    `living-codex/relation/${id}`,
+  )
+  const targetEntityId = requiredStringValue(
+    record.targetEntityId ?? record.targetId,
+    'targetEntityId',
+    `living-codex/relation/${id}`,
+  )
+  const type = requiredStringValue(
+    record.type ?? record.relationType,
+    'type or relationType',
+    `living-codex/relation/${id}`,
+  )
+  const attributes = objectValue(record.attributes, `living-codex/relation/${id}`, 'attributes')
+
+  return {
+    id,
+    sourceEntityId,
+    targetEntityId,
+    type,
+    attributes: cloneObject(attributes ?? {}),
     provenance: clone(provenance),
   }
 }
