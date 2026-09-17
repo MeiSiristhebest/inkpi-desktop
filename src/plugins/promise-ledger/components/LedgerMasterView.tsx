@@ -117,7 +117,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }, [projectId])
 
   const handleSaveEntry = async (entry: PromiseLedgerEntry) => {
-    await promiseApplicationService.savePromise(entry)
+    await promiseApplicationService.savePromise(entry, 'author-confirmed')
     setEditingEntry(null)
     await loadEntries()
   }
@@ -138,7 +138,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
         createdAt: now,
         updatedAt: now,
       }
-      await promiseApplicationService.savePromise(item)
+      await promiseApplicationService.savePromise(item, 'demo')
     }
     await loadEntries()
   }

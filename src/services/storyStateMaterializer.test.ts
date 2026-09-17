@@ -169,12 +169,56 @@ describe('StoryStateMaterializer — 生产级领域物化流水线', () => {
     expect(state!.relations[expectedRelId].attributes).toEqual({ description: '衣钵相传' })
   })
 
-  it('fails closed and throws error when IndexedDB read fails, preserving existing read model', async () => {
-    // 1. 成功建立基础状态
+  it('prunes deleted codex relations so deleted relations do not remain as ghosts in StoryState', async () => {
+    // 1. 创建带有关系的实体
     await db.put<CodexEntity>('codexEntities', {
-      id: 'entity:stable',
+      id: 'entity:char-a',
       projectId: workspaceId,
-      name: '稳定实体',
+      name: '甲',
+      aliases: [],
+      category: 'character',
+      attributes: {},
+      relations: [
+        {
+          targetId: 'entity:char-b',
+          targetName: '乙',
+          relationType: '同门',
+          description: '',
+        },
+      ],
+      summary: '',
+      createdAt: 1000,
+      updatedAt: 1000,
+    })
+
+    const initial = await storyStateMaterializer.materialize(workspaceId)
+    const relId = 'codex-rel:entity:char-a:entity:char-b:同门'
+    expect(initial!.relations[relId]).toBeDefined()
+
+    // 2. 移除该实体的关系并重新保存
+    await db.put<CodexEntity>('codexEntities', {
+      id: 'entity:char-a',
+      projectId: workspaceId,
+      name: '甲',
+      aliases: [],
+      category: 'character',
+      attributes: {},
+      relations: [],
+      summary: '',
+      createdAt: 1000,
+      updatedAt: 2000,
+    })
+
+    // 3. 重新物化，确保关系被干净删除，不遗留幽灵
+    const updated = await storyStateMaterializer.materialize(workspaceId)
+    expect(updated!.relations[relId]).toBeUndefined()
+  })
+
+  it('fails closed and does not advance sourceRevision cursor if store.save fails', async () => {
+    await db.put<CodexEntity>('codexEntities', {
+      id: 'entity:cursor-test',
+      projectId: workspaceId,
+      name: '游标测试',
       aliases: [],
       category: 'character',
       attributes: {},
@@ -183,28 +227,24 @@ describe('StoryStateMaterializer — 生产级领域物化流水线', () => {
       createdAt: 1000,
       updatedAt: 1000,
     })
-    const initial = await storyStateMaterializer.materialize(workspaceId)
-    expect(initial!.entities['entity:stable']).toBeDefined()
 
-    // 2. 模拟底层存储故障
-    const originalGetAll = db.getAll
-    db.getAll = (async (storeName: any) => {
-      if (storeName === 'codexEntities') {
-        throw new Error('Disk IO failure / IndexedDB corrupted')
-      }
-      return originalGetAll.call(db, storeName)
+    // 模拟 store.save 失败
+    const originalSave = indexedDbStoryStateStore.save
+    indexedDbStoryStateStore.save = (async () => {
+      throw new Error('Store save failed')
     }) as any
 
     try {
       await expect(storyStateMaterializer.materialize(workspaceId)).rejects.toThrow(
-        'Disk IO failure / IndexedDB corrupted',
+        'Store save failed',
       )
     } finally {
-      db.getAll = originalGetAll
+      indexedDbStoryStateStore.save = originalSave
     }
 
-    // 3. 验证未被清空
-    const current = await indexedDbStoryStateStore.load(workspaceId)
-    expect(current!.entities['entity:stable']).toBeDefined()
+    // 此时 sourceRevisions 未被推高，下一次修复后 materialize 依然会生效
+    const recovered = await storyStateMaterializer.materialize(workspaceId)
+    expect(recovered).toBeDefined()
+    expect(recovered!.entities['entity:cursor-test']).toBeDefined()
   })
 })

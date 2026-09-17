@@ -135,21 +135,24 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const handleInitRealSkeleton = async () => {
     const now = clock.now()
     for (const t of DEFAULT_THREADS) {
-      await timelineApplicationService.saveThread({ ...t, projectId })
+      await timelineApplicationService.saveThread({ ...t, projectId }, 'demo')
     }
     for (const n of DEMO_NODES) {
-      await timelineApplicationService.saveNode({
-        ...n,
-        projectId,
-        createdAt: now,
-        updatedAt: now,
-      })
+      await timelineApplicationService.saveNode(
+        {
+          ...n,
+          projectId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        'demo',
+      )
     }
     await loadData()
   }
 
   const handleSaveNode = async (node: TimelineNode) => {
-    await timelineApplicationService.saveNode(node)
+    await timelineApplicationService.saveNode(node, 'author-confirmed')
     setEditingNode(null)
     await loadData()
   }

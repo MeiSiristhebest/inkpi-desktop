@@ -55,7 +55,7 @@ export class StoryStateMaterializer {
 
   public async materializeIfStale(workspaceId: string): Promise<StoryState | undefined> {
     if (!workspaceId) return undefined
-    const latestWsRev = await domainChangeStore.latestRevision(workspaceId).catch(() => 0)
+    const latestWsRev = await domainChangeStore.latestRevision(workspaceId)
     const knownRev = this.sourceRevisions.get(workspaceId) ?? -1
     const existing = await this.store.load(workspaceId)
 
@@ -73,7 +73,7 @@ export class StoryStateMaterializer {
       db.getAll<NarrativeThread>('narrativeThreads'),
       db.getAll<TimelineNode>('timelineNodes'),
       db.getAll<PromiseLedgerEntry>('promiseLedger'),
-      domainChangeStore.latestRevision(workspaceId).catch(() => 0),
+      domainChangeStore.latestRevision(workspaceId),
     ])
 
     // 按 workspaceId 严格过滤（遵循 INV-03: 数据永不串）
@@ -162,8 +162,14 @@ export class StoryStateMaterializer {
     // 6. 分区物化保护（Partition Merging）：
     // 更新 entities, relations, timelines, events, promises；
     // 严格保留现有 StoryState 中的其他分区（scenes, constraints 等），避免被破坏
+    // 对 relations 进行分区清理：过滤掉旧有的 codex-rel:* 关系，防止已删除关系残留幽灵
+    const preservedRelations = Object.fromEntries(
+      Object.entries(existingState?.relations ?? {}).filter(
+        ([id]) => !id.startsWith('codex-rel:'),
+      ),
+    )
     const mergedRelations = {
-      ...(existingState?.relations ?? {}),
+      ...preservedRelations,
       ...projectedState.relations,
     }
 
@@ -178,16 +184,17 @@ export class StoryStateMaterializer {
       constraints: existingState?.constraints ?? {},
     }
 
-    // 记录最新处理过的 workspace 变化版本
-    this.sourceRevisions.set(workspaceId, latestWsRev)
-
     // 比较内容是否产生实质变化（忽略 revision 本身）
     if (existingState && isStateContentEqual(existingState, newState)) {
+      this.sourceRevisions.set(workspaceId, latestWsRev)
       return existingState
     }
 
     // 7. 持久化权威 StoryState
     await this.store.save(workspaceId, newState)
+
+    // 记录最新处理过的 workspace 变化版本（仅在成功持久化后更新 cursor，防止更新丢失）
+    this.sourceRevisions.set(workspaceId, latestWsRev)
 
     // 8. 触发 StoryState 专用事件（解耦 Workspace 权威写入轴与 Materialized 读模型轴）
     storyStateEvents.publish(workspaceId, nextRevision)

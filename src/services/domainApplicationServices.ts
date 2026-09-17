@@ -27,7 +27,7 @@ function stripUndefined<T>(value: T): T {
   return clean as T
 }
 
-export function createIntentProvenance(intent: DomainWriteIntent = 'author-confirmed'): Provenance {
+export function createIntentProvenance(intent: DomainWriteIntent): Provenance {
   const now = clock.now()
   switch (intent) {
     case 'author-confirmed':
@@ -64,20 +64,40 @@ export function createIntentProvenance(intent: DomainWriteIntent = 'author-confi
   }
 }
 
+export function resolveProvenance(
+  existingProvenance: Provenance | undefined,
+  intent: DomainWriteIntent,
+): Provenance {
+  if (intent === 'ai-accepted') {
+    return {
+      ...(existingProvenance ?? {}),
+      sourceType: 'ai-extracted',
+      factLevel: 'canonical-fact',
+      evidence: existingProvenance?.evidence ? [...existingProvenance.evidence] : undefined,
+      createdAt: existingProvenance?.createdAt ?? clock.now(),
+    }
+  }
+  return createIntentProvenance(intent)
+}
+
 /**
  * Living Codex 领域应用服务
  */
 export const codexApplicationService = {
   async saveEntity(
     entity: CodexEntity,
-    intent: DomainWriteIntent = 'author-confirmed',
+    intent: DomainWriteIntent,
   ): Promise<void> {
-    const workspaceId = entity.projectId || 'default'
+    const workspaceId = entity.projectId
+    if (!workspaceId || !workspaceId.trim()) {
+      throw new Error(`[codexApplicationService.saveEntity] Missing required workspaceId for entity ${entity.id}`)
+    }
     const existing = await db.get<CodexEntity>('codexEntities', entity.id)
+    const existingProv = (entity as any).provenance ?? (existing as any)?.provenance
     const withProvenance: CodexEntity = {
       ...entity,
       updatedAt: clock.now(),
-      provenance: (entity as any).provenance ?? createIntentProvenance(intent),
+      provenance: resolveProvenance(existingProv, intent),
     } as any
 
     const occurredAt = clock.now()
@@ -97,9 +117,7 @@ export const codexApplicationService = {
       },
     })
 
-    if (workspaceId) {
-      await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
-    }
+    await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
   },
 
   async deleteEntity(id: string, workspaceId: string): Promise<void> {
@@ -132,13 +150,17 @@ export const codexApplicationService = {
 export const timelineApplicationService = {
   async saveThread(
     thread: NarrativeThread,
-    intent: DomainWriteIntent = 'author-confirmed',
+    intent: DomainWriteIntent,
   ): Promise<void> {
-    const workspaceId = thread.projectId || 'default'
+    const workspaceId = thread.projectId
+    if (!workspaceId || !workspaceId.trim()) {
+      throw new Error(`[timelineApplicationService.saveThread] Missing required workspaceId for thread ${thread.id}`)
+    }
     const existing = await db.get<NarrativeThread>('narrativeThreads', thread.id)
+    const existingProv = (thread as any).provenance ?? (existing as any)?.provenance
     const withProvenance: NarrativeThread = {
       ...thread,
-      provenance: (thread as any).provenance ?? createIntentProvenance(intent),
+      provenance: resolveProvenance(existingProv, intent),
     } as any
 
     const occurredAt = clock.now()
@@ -158,9 +180,7 @@ export const timelineApplicationService = {
       },
     })
 
-    if (workspaceId) {
-      await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
-    }
+    await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
   },
 
   async deleteThread(id: string, workspaceId: string): Promise<void> {
@@ -188,14 +208,18 @@ export const timelineApplicationService = {
 
   async saveNode(
     node: TimelineNode,
-    intent: DomainWriteIntent = 'author-confirmed',
+    intent: DomainWriteIntent,
   ): Promise<void> {
-    const workspaceId = node.projectId || 'default'
+    const workspaceId = node.projectId
+    if (!workspaceId || !workspaceId.trim()) {
+      throw new Error(`[timelineApplicationService.saveNode] Missing required workspaceId for node ${node.id}`)
+    }
     const existing = await db.get<TimelineNode>('timelineNodes', node.id)
+    const existingProv = (node as any).provenance ?? (existing as any)?.provenance
     const withProvenance: TimelineNode = {
       ...node,
       updatedAt: clock.now(),
-      provenance: (node as any).provenance ?? createIntentProvenance(intent),
+      provenance: resolveProvenance(existingProv, intent),
     } as any
 
     const occurredAt = clock.now()
@@ -215,9 +239,7 @@ export const timelineApplicationService = {
       },
     })
 
-    if (workspaceId) {
-      await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
-    }
+    await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
   },
 
   async deleteNode(id: string, workspaceId: string): Promise<void> {
@@ -250,14 +272,18 @@ export const timelineApplicationService = {
 export const promiseApplicationService = {
   async savePromise(
     entry: PromiseLedgerEntry,
-    intent: DomainWriteIntent = 'author-confirmed',
+    intent: DomainWriteIntent,
   ): Promise<void> {
-    const workspaceId = entry.projectId || 'default'
+    const workspaceId = entry.projectId
+    if (!workspaceId || !workspaceId.trim()) {
+      throw new Error(`[promiseApplicationService.savePromise] Missing required workspaceId for promise ${entry.id}`)
+    }
     const existing = await db.get<PromiseLedgerEntry>('promiseLedger', entry.id)
+    const existingProv = (entry as any).provenance ?? (existing as any)?.provenance
     const withProvenance: PromiseLedgerEntry = {
       ...entry,
       updatedAt: clock.now(),
-      provenance: (entry as any).provenance ?? createIntentProvenance(intent),
+      provenance: resolveProvenance(existingProv, intent),
     } as any
 
     const occurredAt = clock.now()
@@ -277,9 +303,7 @@ export const promiseApplicationService = {
       },
     })
 
-    if (workspaceId) {
-      await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
-    }
+    await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
   },
 
   async deletePromise(id: string, workspaceId: string): Promise<void> {

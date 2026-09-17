@@ -130,7 +130,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
   }
 
   const handleSaveEntity = async (entity: CodexEntity) => {
-    await codexApplicationService.saveEntity(entity)
+    await codexApplicationService.saveEntity(entity, 'author-confirmed')
     await loadEntities()
     setSelectedEntity(entity)
     setIsCreating(false)
@@ -149,7 +149,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
   const handleLoadDemoPack = async (pack: WorldviewDemoPack) => {
     const demoEntities = pack.entities(projectId)
     for (const ent of demoEntities) {
-      await codexApplicationService.saveEntity(ent)
+      await codexApplicationService.saveEntity(ent, 'demo')
     }
     await loadEntities()
     showToast(`已成功预载【${pack.title}】(${demoEntities.length}个实体)`)

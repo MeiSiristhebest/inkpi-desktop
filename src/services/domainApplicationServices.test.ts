@@ -32,18 +32,21 @@ describe('DomainApplicationServices & StoryState Integration', () => {
   })
 
   it('codexApplicationService.saveEntity stamps canonical author provenance and materializes story state', async () => {
-    await codexApplicationService.saveEntity({
-      id: 'ent-1',
-      projectId: workspaceId,
-      name: '楚行云',
-      aliases: ['楚师兄'],
-      category: 'character',
-      attributes: {},
-      relations: [],
-      summary: '真传大弟子',
-      createdAt: 100,
-      updatedAt: 100,
-    })
+    await codexApplicationService.saveEntity(
+      {
+        id: 'ent-1',
+        projectId: workspaceId,
+        name: '楚行云',
+        aliases: ['楚师兄'],
+        category: 'character',
+        attributes: {},
+        relations: [],
+        summary: '真传大弟子',
+        createdAt: 100,
+        updatedAt: 100,
+      },
+      'author-confirmed',
+    )
 
     const entities = await db.getAll<CodexEntity>('codexEntities')
     const saved = entities.find((e) => e.id === 'ent-1')
@@ -143,23 +146,26 @@ describe('DomainApplicationServices & StoryState Integration', () => {
     }
     await indexedDbStoryStateStore.save(workspaceId, initialState)
 
-    await promiseApplicationService.savePromise({
-      id: 'prom-1',
-      projectId: workspaceId,
-      clueName: '太古龙珠',
-      tier: 'sub_plot',
-      plantChapter: 5,
-      softDeadline: 15,
-      dueChapterLimit: 25,
-      plantNote: '龙珠藏于寒潭',
-      status: 'planted',
-      memoryDecayLambda: 0.05,
-      progressHistory: [],
-      relatedEntityIds: [],
-      relatedChapterIds: [],
-      createdAt: 200,
-      updatedAt: 200,
-    })
+    await promiseApplicationService.savePromise(
+      {
+        id: 'prom-1',
+        projectId: workspaceId,
+        clueName: '太古龙珠',
+        tier: 'sub_plot',
+        plantChapter: 5,
+        softDeadline: 15,
+        dueChapterLimit: 25,
+        plantNote: '龙珠藏于寒潭',
+        status: 'planted',
+        memoryDecayLambda: 0.05,
+        progressHistory: [],
+        relatedEntityIds: [],
+        relatedChapterIds: [],
+        createdAt: 200,
+        updatedAt: 200,
+      },
+      'author-confirmed',
+    )
 
     const updatedState = await indexedDbStoryStateStore.load(workspaceId)
     expect(updatedState).toBeDefined()
@@ -170,18 +176,21 @@ describe('DomainApplicationServices & StoryState Integration', () => {
   })
 
   it('delete operations trigger rematerialization', async () => {
-    await codexApplicationService.saveEntity({
-      id: 'ent-del',
-      projectId: workspaceId,
-      name: '要删除的实体',
-      aliases: [],
-      category: 'item',
-      attributes: {},
-      relations: [],
-      summary: '',
-      createdAt: 100,
-      updatedAt: 100,
-    })
+    await codexApplicationService.saveEntity(
+      {
+        id: 'ent-del',
+        projectId: workspaceId,
+        name: '要删除的实体',
+        aliases: [],
+        category: 'item',
+        attributes: {},
+        relations: [],
+        summary: '',
+        createdAt: 100,
+        updatedAt: 100,
+      },
+      'author-confirmed',
+    )
 
     let state = await indexedDbStoryStateStore.load(workspaceId)
     expect(state!.entities['ent-del']).toBeDefined()
@@ -189,5 +198,69 @@ describe('DomainApplicationServices & StoryState Integration', () => {
     await codexApplicationService.deleteEntity('ent-del', workspaceId)
     state = await indexedDbStoryStateStore.load(workspaceId)
     expect(state!.entities['ent-del']).toBeUndefined()
+  })
+
+  it('ai-accepted intent upgrades ai-proposed entity to canonical-fact while retaining evidence', async () => {
+    // 假设先前存在一个由 AI 提议的实体，具有 evidence
+    const proposedEntity: CodexEntity = {
+      id: 'ent-ai-proposed',
+      projectId: workspaceId,
+      name: 'AI 提议的法宝',
+      aliases: [],
+      category: 'item',
+      attributes: {},
+      relations: [],
+      summary: '从第3章提取',
+      createdAt: 100,
+      updatedAt: 100,
+      provenance: {
+        sourceType: 'ai-proposed',
+        factLevel: 'proposal',
+        createdAt: 100,
+        evidence: [
+          {
+            documentId: 'doc-1',
+            blockId: 'blk-1',
+            excerpt: '他在寒潭边捡起了一枚古朴的铜镜',
+          },
+        ],
+      } as any,
+    }
+
+    // 用户在 UI 点击接受 proposal，以 'ai-accepted' 意图保存
+    await codexApplicationService.saveEntity(proposedEntity, 'ai-accepted')
+
+    const entities = await db.getAll<CodexEntity>('codexEntities')
+    const saved = entities.find((e) => e.id === 'ent-ai-proposed')
+    expect(saved).toBeDefined()
+    const prov = (saved as any).provenance
+    expect(prov).toBeDefined()
+    expect(prov.sourceType).toBe('ai-extracted')
+    expect(prov.factLevel).toBe('canonical-fact')
+    expect(prov.evidence).toHaveLength(1)
+    expect(prov.evidence[0].excerpt).toBe('他在寒潭边捡起了一枚古朴的铜镜')
+
+    const state = await indexedDbStoryStateStore.load(workspaceId)
+    expect(state!.entities['ent-ai-proposed'].provenance.factLevel).toBe('canonical-fact')
+    expect(state!.entities['ent-ai-proposed'].provenance.sourceType).toBe('ai-extracted')
+  })
+
+  it('throws fail-closed error if workspaceId/projectId is empty or missing', async () => {
+    const invalidEntity: any = {
+      id: 'ent-invalid',
+      projectId: '   ',
+      name: '无工作区实体',
+      aliases: [],
+      category: 'item',
+      attributes: {},
+      relations: [],
+      summary: '',
+      createdAt: 100,
+      updatedAt: 100,
+    }
+
+    await expect(
+      codexApplicationService.saveEntity(invalidEntity, 'author-confirmed'),
+    ).rejects.toThrow('Missing required workspaceId')
   })
 })

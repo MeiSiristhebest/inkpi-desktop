@@ -79,6 +79,10 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
   const handleSaveToCodex = async (item: GeneratedNameItem) => {
     if (savedIds.has(item.id)) return
+    if (!projectId || !projectId.trim()) {
+      console.error('Cannot save to living codex: missing required projectId')
+      return
+    }
 
     let codexCategory: CodexCategory = 'character'
     if (item.category === 'sect_faction') codexCategory = 'faction'
@@ -89,7 +93,7 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     const now = clock.now()
     const entity = {
       id: idGenerator.generate('codex'),
-      projectId: projectId || 'default',
+      projectId,
       name: item.name,
       aliases: [],
       category: codexCategory,
