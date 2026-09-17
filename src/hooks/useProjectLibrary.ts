@@ -20,7 +20,12 @@ export interface ProjectLibrary {
   projects: ProjectRecord[]
   activeProjectId: string | null
   setActiveProjectId: (id: string | null) => void
-  createProject: (name: string, genre: string, intro: string) => Promise<void>
+  createProject: (
+    name: string,
+    genre: string,
+    intro: string,
+    templateType?: 'blank' | 'demo',
+  ) => Promise<void>
   importProject: (file: File) => Promise<void>
   createDemo: () => Promise<void>
   exportProject: (id: string) => Promise<void>
@@ -36,11 +41,19 @@ export function useProjectLibrary(): ProjectLibrary {
     loadProjects().then((list) => setProjects(list))
   }, [])
 
-  const handleCreateProject = useCallback(async (name: string, genre: string, intro: string) => {
-    const project = await createProject(name, genre, intro)
-    setProjects((prev) => [project, ...prev])
-    setActiveProjectId(project.id)
-  }, [])
+  const handleCreateProject = useCallback(
+    async (
+      name: string,
+      genre: string,
+      intro: string,
+      templateType: 'blank' | 'demo' = 'blank',
+    ) => {
+      const project = await createProject(name, genre, intro, templateType)
+      setProjects((prev) => [project, ...prev])
+      setActiveProjectId(project.id)
+    },
+    [],
+  )
 
   const handleImportProject = useCallback(async (file: File) => {
     const result = await importProject(file)

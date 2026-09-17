@@ -8,6 +8,7 @@ export interface ProjectRecord {
   intro?: string
   cover?: string
   projectType?: 'full' | 'custom' | 'lite' | 'minimal'
+  templateType?: 'blank' | 'demo' | 'custom'
   features?: string[]
   createdAt: number
   updatedAt: number

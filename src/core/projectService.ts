@@ -7,7 +7,7 @@ import { indexedDbProjectRepository } from '../adapters/indexedDbProjectReposito
 import { blobFileDownloader } from '../adapters/blobFileDownloader'
 import { idGenerator as defaultIdGenerator } from '../adapters/idGenerator'
 import { clock as defaultClock } from '../adapters/clock'
-import { buildSeedVolumes, buildSeedChapters } from '../domain/seed'
+import { buildSeedVolumes, buildSeedChapters, buildBlankVolumes, buildBlankChapters } from '../domain/seed'
 import { LEGACY_PROJECT_ID } from '../config'
 import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
 
@@ -120,6 +120,7 @@ export async function createProject(
   name: string,
   genre = '未分类',
   intro = '',
+  templateType: 'blank' | 'demo' = 'blank',
 ): Promise<ProjectRecord> {
   const now = clock.now()
   const project: ProjectRecord = {
@@ -127,15 +128,22 @@ export async function createProject(
     name,
     genre,
     intro,
+    templateType,
     createdAt: now,
     updatedAt: now,
   }
 
   await projectRepo.saveProject(project)
 
-  // 每个新项目附赠默认种子卷章，避免打开后空无一物
-  const volumes = buildSeedVolumes(project.id, idGen, clock)
-  const chapters = buildSeedChapters(project.id, volumes[0]?.id, idGen, clock)
+  // INV-05: 严格分离 Blank 与 Demo。普通新项目默认生成单卷单空章，不得静默注入“林凡/玄剑宗”示范事实
+  const isDemo = templateType === 'demo'
+  const volumes = isDemo
+    ? buildSeedVolumes(project.id, idGen, clock)
+    : buildBlankVolumes(project.id, idGen, clock)
+  const chapters = isDemo
+    ? buildSeedChapters(project.id, volumes[0]?.id, idGen, clock)
+    : buildBlankChapters(project.id, volumes[0]?.id, idGen, clock)
+
   await Promise.all(volumes.map((v) => projectRepo.saveVolume(v)))
   await Promise.all(chapters.map((c) => projectRepo.saveChapter(c)))
 
@@ -188,5 +196,7 @@ export async function createDemoProject(): Promise<ProjectRecord> {
     '示范 · 苍澜纪元',
     '仙侠修真',
     '废脉少年于测灵大典觉醒，吞噬进化，从杂役一路镇压神族。',
+    'demo',
   )
 }
+

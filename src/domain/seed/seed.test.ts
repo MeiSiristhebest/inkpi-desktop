@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { buildSeedVolumes, buildSeedChapters } from '../seed'
+import {
+  buildSeedVolumes,
+  buildSeedChapters,
+  buildBlankVolumes,
+  buildBlankChapters,
+} from '../seed'
 
 describe('seed builders — 首次启动卷章种子', () => {
   it('buildSeedVolumes returns two project-scoped volumes with unique dynamic ids', () => {
@@ -24,9 +29,21 @@ describe('seed builders — 首次启动卷章种子', () => {
     expect(chs.every((c) => c.volumeId === vols[0].id)).toBe(true)
   })
 
-  it('buildSeedChapters without a volume id still produces a valid chapter list', () => {
-    const chs = buildSeedChapters('p-y')
-    expect(chs).toHaveLength(3)
-    expect(chs[0].projectId).toBe('p-y')
+  it('buildBlankVolumes returns single volume with default title', () => {
+    const vols = buildBlankVolumes('p-blank')
+    expect(vols).toHaveLength(1)
+    expect(vols[0].title).toBe('正文卷')
+    expect(vols[0].projectId).toBe('p-blank')
+  })
+
+  it('buildBlankChapters returns single draft chapter with zero wordcount', () => {
+    const chs = buildBlankChapters('p-blank', 'vol-b')
+    expect(chs).toHaveLength(1)
+    expect(chs[0].title).toBe('第1章')
+    expect(chs[0].wordCount).toBe(0)
+    expect(chs[0].content).toBe('<p></p>')
+    expect(chs[0].status).toBe('draft')
+    expect(chs[0].volumeId).toBe('vol-b')
   })
 })
+

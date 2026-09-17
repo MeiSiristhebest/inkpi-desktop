@@ -12,7 +12,7 @@ import type { ProjectEditFormValues } from './organisms/ProjectEditForm'
 interface BookshelfProps {
   projects: ProjectRecord[]
   onOpenProject: (id: string) => void
-  onCreateProject: (name: string, genre: string, intro: string) => void
+  onCreateProject: (name: string, genre: string, intro: string, templateType?: 'blank' | 'demo') => void
   onImportProject?: (file: File) => void
   /** 一键创建自带种子内容的示范项目，便于首次体验 */
   onCreateDemo?: () => void

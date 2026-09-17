@@ -75,10 +75,29 @@ describe('projectService — 工作区聚合统计', () => {
     expect(map.pX.volumes).toBe(1)
   })
 
-  it('createDemoProject seeds a usable project', async () => {
+  it('createProject defaults to pure blank project (INV-05)', async () => {
+    const p = await createProject('纯净新书', '科幻灵异', '一本完全崭新的小说')
+    expect(p.templateType).toBe('blank')
+    const [volumes, chapters] = await Promise.all([
+      db.getAll<VolumeRecord>('volumes'),
+      db.getAll<ChapterRecord>('chapters'),
+    ])
+    const pVols = volumes.filter((v) => v.projectId === p.id)
+    const pChs = chapters.filter((c) => c.projectId === p.id)
+    expect(pVols).toHaveLength(1)
+    expect(pVols[0].title).toBe('正文卷')
+    expect(pChs).toHaveLength(1)
+    expect(pChs[0].title).toBe('第1章')
+    expect(pChs[0].content).toBe('<p></p>')
+    expect(pChs[0].wordCount).toBe(0)
+  })
+
+  it('createDemoProject seeds a usable project with demo content', async () => {
     const p = await createDemoProject()
     expect(p.name).toContain('示范')
+    expect(p.templateType).toBe('demo')
     const ws = await loadWorkspaceStats([p])
-    expect(ws.totalChapters).toBeGreaterThan(0)
+    expect(ws.totalChapters).toBe(3)
   })
 })
+

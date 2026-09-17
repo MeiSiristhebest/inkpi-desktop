@@ -20,7 +20,12 @@ import {
   htmlToPlain,
   fontStackFor,
 } from '../../../domain/text'
-import { buildSeedVolumes, buildSeedChapters } from '../../../domain/seed'
+import {
+  buildSeedVolumes,
+  buildSeedChapters,
+  buildBlankVolumes,
+  buildBlankChapters,
+} from '../../../domain/seed'
 import { composeChapterTitle } from '../../../domain/chapter/chapterNaming'
 import { blankChapterContent } from '../../../domain/chapter/blankContent'
 import { useSettings, type AppSettings } from '../../../core/settings'
@@ -432,34 +437,46 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     const projVols = allVols.sort((a, b) => a.order - b.order)
     const projChs = allChs.sort((a, b) => a.order - b.order)
 
-    // 首次启动：写入种子卷章（仅当该项目无任何数据）
+    // 首次启动：写入初始卷章（仅当该项目完全无任何卷章数据）
     if (projVols.length === 0 && projChs.length === 0) {
       const now = clock.now()
-      const seedVols = buildSeedVolumes(projectId, idGenerator, clock).map((v) => ({
+      const project = await indexedDbProjectRepository.getProject(projectId)
+      // 仅当项目显式指定为 'blank' 模板时才初始化为空白（INV-05）；未设置模板类型或未持久化项目记录时默认保留种子示例（向后兼容测试及单组件挂载）
+      const isBlank = project?.templateType === 'blank'
+
+      const initVols = (
+        isBlank
+          ? buildBlankVolumes(projectId, idGenerator, clock)
+          : buildSeedVolumes(projectId, idGenerator, clock)
+      ).map((v) => ({
         ...v,
         createdAt: now,
         updatedAt: now,
       }))
-      const firstVolumeId = seedVols[0]?.id
-      const seedChs = buildSeedChapters(projectId, firstVolumeId, idGenerator, clock).map((c) => ({
+      const firstVolumeId = initVols[0]?.id
+      const initChs = (
+        isBlank
+          ? buildBlankChapters(projectId, firstVolumeId, idGenerator, clock)
+          : buildSeedChapters(projectId, firstVolumeId, idGenerator, clock)
+      ).map((c) => ({
         ...c,
         createdAt: now,
         updatedAt: now,
       }))
-      for (const v of seedVols) {
+      for (const v of initVols) {
         if (!(await runPersistence(() => indexedDbProjectRepository.saveVolume(v)))) return
       }
-      for (const c of seedChs) {
+      for (const c of initChs) {
         if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(c)))) return
       }
       const init: Record<string, boolean> = {}
-      seedVols.forEach((v) => (init[v.id] = true))
+      initVols.forEach((v) => (init[v.id] = true))
       patch({
-        volumes: seedVols,
-        chapters: seedChs,
+        volumes: initVols,
+        chapters: initChs,
         expanded: init,
-        activeChapterId: seedChs[0]?.id ?? '',
-        activeChapter: seedChs[0] ?? null,
+        activeChapterId: initChs[0]?.id ?? '',
+        activeChapter: initChs[0] ?? null,
       })
       return
     }

@@ -49,10 +49,54 @@ export const buildSeedVolumes = (
 }
 
 /**
- * 为指定项目生成三章示范正文（带 HTML 内容，可直接喂给 TipTap）。
- *
- * 章节通过 firstVolumeId 挂到第一卷，保持章节 → 卷的从属关系；
- * ID 与时间戳同样由注入的 IdGenerator / Clock 产生，领域层无副作用。
+ * 为纯净空白项目生成单个默认正文卷（遵循 INV-05：无示范设定、无测试角色侵入）。
+ */
+export const buildBlankVolumes = (
+  projectId: string = LEGACY_PROJECT_ID,
+  idGen: IdGenerator = fallbackIdGenerator,
+  clock: Clock = fallbackClock,
+): VolumeRecord[] => {
+  const now = clock.now()
+  return [
+    {
+      id: idGen.generate('vol'),
+      projectId,
+      title: '正文卷',
+      order: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ]
+}
+
+/**
+ * 为纯净空白项目生成单张初始空白章节（内容为空或极简草稿占位，wordCount = 0）。
+ */
+export const buildBlankChapters = (
+  projectId: string = LEGACY_PROJECT_ID,
+  volumeId: string = '',
+  idGen: IdGenerator = fallbackIdGenerator,
+  clock: Clock = fallbackClock,
+): ChapterRecord[] => {
+  const now = clock.now()
+  return [
+    {
+      id: idGen.generate('ch'),
+      projectId,
+      volumeId,
+      title: '第1章',
+      content: '<p></p>',
+      wordCount: 0,
+      order: 1,
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ]
+}
+
+/**
+ * 为指定项目生成三章示范正文（带 HTML 内容，可直接喂给 TipTap，供 Demo 示范项目使用）。
  */
 export const buildSeedChapters = (
   projectId: string = LEGACY_PROJECT_ID,

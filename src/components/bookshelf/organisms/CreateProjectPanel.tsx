@@ -5,23 +5,24 @@ import { readCoverImage } from '../coverUpload'
 
 interface CreateProjectPanelProps {
   onClose: () => void
-  onCreate: (name: string, genre: string, intro: string) => void
+  onCreate: (name: string, genre: string, intro: string, templateType?: 'blank' | 'demo') => void
 }
 
 /**
  * 展开式「新建小说项目」面板（原子设计 · organisms）。
  * 自身持有书名 / 封面 / 项目形态等临时状态；封面上传（FileReader + 体积校验）
- * 通过共享 readCoverImage 完成，仍走 UI 层的浏览器能力。提交时回传 (name, defaultGenre, '') 给父级。
+ * 通过共享 readCoverImage 完成，仍走 UI 层的浏览器能力。提交时回传 (name, defaultGenre, '', templateType) 给父级。
  */
 export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProps) => {
   const [name, setName] = useState('')
   const [cover, setCover] = useState('')
   const [projectType, setProjectType] = useState<'full' | 'custom'>('full')
+  const [templateType, setTemplateType] = useState<'blank' | 'demo'>('blank')
   const coverInputRef = useRef<HTMLInputElement>(null)
 
   const handleCreate = () => {
     if (!name.trim()) return
-    onCreate(name.trim(), defaultGenreFor(projectType), '')
+    onCreate(name.trim(), defaultGenreFor(projectType), '', templateType)
   }
 
   return (
@@ -110,6 +111,40 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
                 <div className="text-[12.5px] font-medium">自定义项目</div>
                 <div className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">
                   从功能全集里自由选择模块
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-[var(--ink-text-muted)] mb-1 block">初始化模板</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTemplateType('blank')}
+                className={`flex-1 text-left px-3 py-2 rounded-lg border transition-colors cursor-pointer ${
+                  templateType === 'blank'
+                    ? 'border-[var(--ink-accent)]/50 bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]'
+                    : 'border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[var(--ink-text)] hover:border-[var(--ink-border-strong)]'
+                }`}
+              >
+                <div className="text-[12.5px] font-medium">纯净空白</div>
+                <div className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">
+                  单卷单空白章，0预置设定
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplateType('demo')}
+                className={`flex-1 text-left px-3 py-2 rounded-lg border transition-colors cursor-pointer ${
+                  templateType === 'demo'
+                    ? 'border-[var(--ink-accent)]/50 bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]'
+                    : 'border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[var(--ink-text)] hover:border-[var(--ink-border-strong)]'
+                }`}
+              >
+                <div className="text-[12.5px] font-medium">示范模板 (苍澜纪元)</div>
+                <div className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">
+                  自带两卷三章修仙样例与设定
                 </div>
               </button>
             </div>

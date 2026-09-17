@@ -14,6 +14,7 @@ import type { StoryState } from '../domain/story'
 import { indexedDbStoryStateStore } from '../adapters/indexedDbStoryStateStore'
 import type { StoryStateStore } from '../ports/storyStateStore'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
+import { storyStateMaterializer } from '../services/storyStateMaterializer'
 
 export type StoryStateUpdater = (current: StoryState | undefined) => StoryState
 
@@ -119,8 +120,13 @@ export const StoryStateProvider: FC<StoryStateProviderProps> = ({
     let reloadTimer: ReturnType<typeof setTimeout> | null = null
     const scheduleReload = () => {
       if (reloadTimer) clearTimeout(reloadTimer)
-      reloadTimer = setTimeout(() => {
+      reloadTimer = setTimeout(async () => {
         reloadTimer = null
+        try {
+          await storyStateMaterializer.materialize(workspaceId)
+        } catch {
+          // Best effort projection from plugin records
+        }
         void reloadStoryState()
       }, 50)
     }
