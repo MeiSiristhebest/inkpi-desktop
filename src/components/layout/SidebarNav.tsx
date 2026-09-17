@@ -19,6 +19,7 @@ import {
 import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
+import { CAPABILITY_REGISTRY } from '../../core/capabilityRegistry'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
 
 interface SidebarNavProps {
@@ -257,18 +258,34 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                         {plugins.map((p) => {
                           const Icon = p.icon || Sparkles
                           const isActive = activeTabId === p.id
+                          const capability = CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
+                          const isProduction = capability?.maturity === 'production'
                           return (
                             <button
                               key={p.id}
                               onClick={() => onSelectTab(p.id)}
-                              className={`w-full text-left px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                              className={`w-full text-left px-2 py-1 rounded-md text-xs font-medium flex items-center justify-between gap-1.5 transition-colors ${
                                 isActive
                                   ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
                                   : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
                               }`}
                             >
-                              <Icon className="w-3 h-3 shrink-0" />
-                              <span className="sidebar-nav-plugin-label truncate">{p.name}</span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Icon className="w-3 h-3 shrink-0" />
+                                <span className="sidebar-nav-plugin-label truncate">{p.name}</span>
+                              </div>
+                              {isProduction && (
+                                <span
+                                  className={`text-[9px] px-1 py-0.2 rounded font-sans tracking-wide shrink-0 ${
+                                    isActive
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)]'
+                                  }`}
+                                  title="权威正典能力 (Production)"
+                                >
+                                  PROD
+                                </span>
+                              )}
                             </button>
                           )
                         })}

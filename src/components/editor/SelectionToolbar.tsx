@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Bold, Italic, Wand2, Anchor, CheckCircle2 } from 'lucide-react'
+import { Bold, Italic, Wand2, Anchor, CheckCircle2, Sparkles } from 'lucide-react'
 import { spring, variants, gesture } from '../../motion'
 import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
@@ -242,7 +242,6 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     const selection = semanticDocument.sourceMap.editorRangeToSemantic({ from, to })
     const sourceHash = hashText(semanticDocument.text)
     setRewriteBusy(true)
-    onOpenAssistant?.()
     try {
       const result = await onAiTask(
         createRewriteTask({
@@ -512,6 +511,20 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             >
               <CheckCircle2 className="w-3 h-3" />
               <span>文字体检</span>
+            </motion.button>
+          )}
+
+          {onOpenAssistant && state.show && (
+            <motion.button
+              type="button"
+              {...gesture.button}
+              transition={spring.snappy}
+              onClick={onOpenAssistant}
+              className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors duration-150 cursor-pointer"
+              title="在右侧助手面板中讨论或深度扩写"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>AI 对话</span>
             </motion.button>
           )}
         </>
