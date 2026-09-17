@@ -14,6 +14,7 @@ import type { StoryState } from '../domain/story'
 import { indexedDbStoryStateStore } from '../adapters/indexedDbStoryStateStore'
 import type { StoryStateStore } from '../ports/storyStateStore'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
+import { storyStateEvents } from '../ports/storyStateEvents'
 import { storyStateMaterializer } from '../services/storyStateMaterializer'
 
 export type StoryStateUpdater = (current: StoryState | undefined) => StoryState
@@ -67,7 +68,15 @@ export const StoryStateProvider: FC<StoryStateProviderProps> = ({
       setIsLoading(true)
       setError(null)
       try {
-        const loaded = await store.load(workspaceId)
+        let loaded = await store.load(workspaceId)
+        // 冷启动或导入项目检测：若 DB 无已物化的 StoryState，主动触发一次物化 (P1-B)
+        if (!loaded) {
+          try {
+            loaded = await storyStateMaterializer.materialize(workspaceId)
+          } catch {
+            // best effort
+          }
+        }
         if (
           currentOperation !== operationId.current ||
           workspaceSessionRef.current !== workspaceSession
@@ -130,9 +139,13 @@ export const StoryStateProvider: FC<StoryStateProviderProps> = ({
         void reloadStoryState()
       }, 50)
     }
-    const unsubscribe = domainChangeEvents.subscribe(workspaceId, scheduleReload)
+    const unsubDomain = domainChangeEvents.subscribe(workspaceId, scheduleReload)
+    const unsubStoryState = storyStateEvents.subscribe(workspaceId, () => {
+      void reloadStoryState()
+    })
     return () => {
-      unsubscribe()
+      unsubDomain()
+      unsubStoryState()
       if (reloadTimer) clearTimeout(reloadTimer)
     }
   }, [reloadStoryState, workspaceId])

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { CodexEntity, CodexCategory } from '../types'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { codexApplicationService } from '../../../services/domainApplicationServices'
 import { blobFileDownloader } from '../../../adapters/blobFileDownloader'
 import { confirmDialog } from '../../../adapters/confirmDialog'
 import { clock } from '../../../adapters/clock'
@@ -129,7 +130,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
   }
 
   const handleSaveEntity = async (entity: CodexEntity) => {
-    await indexedDbCodexEntityRepository.save(entity)
+    await codexApplicationService.saveEntity(entity)
     await loadEntities()
     setSelectedEntity(entity)
     setIsCreating(false)
@@ -137,7 +138,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
   }
 
   const handleDeleteEntity = async (entityId: string) => {
-    await indexedDbCodexEntityRepository.delete(entityId)
+    await codexApplicationService.deleteEntity(entityId, projectId)
     await loadEntities()
     setSelectedEntity(null)
     setIsCreating(false)
@@ -148,7 +149,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
   const handleLoadDemoPack = async (pack: WorldviewDemoPack) => {
     const demoEntities = pack.entities(projectId)
     for (const ent of demoEntities) {
-      await indexedDbCodexEntityRepository.save(ent)
+      await codexApplicationService.saveEntity(ent)
     }
     await loadEntities()
     showToast(`已成功预载【${pack.title}】(${demoEntities.length}个实体)`)
@@ -159,7 +160,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
     if (!(await confirmDialog.confirm('确定要清空当前工程的所有世界观实体吗？此操作不可逆。')))
       return
     for (const ent of entities) {
-      await indexedDbCodexEntityRepository.delete(ent.id)
+      await codexApplicationService.deleteEntity(ent.id, projectId)
     }
     await loadEntities()
     setSelectedEntity(null)

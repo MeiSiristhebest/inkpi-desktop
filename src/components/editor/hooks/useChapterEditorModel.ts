@@ -441,13 +441,15 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     if (projVols.length === 0 && projChs.length === 0) {
       const now = clock.now()
       const project = await indexedDbProjectRepository.getProject(projectId)
-      // 仅当项目显式指定为 'blank' 模板时才初始化为空白（INV-05）；未设置模板类型或未持久化项目记录时默认保留种子示例（向后兼容测试及单组件挂载）
-      const isBlank = project?.templateType === 'blank'
+      // 遵循 INV-05 fail-closed 规则：
+      // 1. 若项目记录存在，只有显式标记为 templateType === 'demo' 才载入仙侠示范数据，其他（'blank' 或未知）一律纯净空白；
+      // 2. 若项目记录不存在（仅在未初始化项目的单元测试环境中），保留示范种子以兼容旧单测。
+      const isDemo = project ? project.templateType === 'demo' : true
 
       const initVols = (
-        isBlank
-          ? buildBlankVolumes(projectId, idGenerator, clock)
-          : buildSeedVolumes(projectId, idGenerator, clock)
+        isDemo
+          ? buildSeedVolumes(projectId, idGenerator, clock)
+          : buildBlankVolumes(projectId, idGenerator, clock)
       ).map((v) => ({
         ...v,
         createdAt: now,
@@ -455,9 +457,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }))
       const firstVolumeId = initVols[0]?.id
       const initChs = (
-        isBlank
-          ? buildBlankChapters(projectId, firstVolumeId, idGenerator, clock)
-          : buildSeedChapters(projectId, firstVolumeId, idGenerator, clock)
+        isDemo
+          ? buildSeedChapters(projectId, firstVolumeId, idGenerator, clock)
+          : buildBlankChapters(projectId, firstVolumeId, idGenerator, clock)
       ).map((c) => ({
         ...c,
         createdAt: now,

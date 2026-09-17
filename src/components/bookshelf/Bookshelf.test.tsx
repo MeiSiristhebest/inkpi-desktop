@@ -39,7 +39,7 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(onOpen).toHaveBeenCalledWith('p1')
   })
 
-  it('新建项目面板展开并收集信息回调', async () => {
+  it('新建项目面板展开并收集信息回调（默认纯净空白）', async () => {
     const onCreate = vi.fn()
     render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
 
@@ -50,7 +50,25 @@ describe('Bookshelf (InkPi 主页)', () => {
     })
     fireEvent.click(screen.getByText('创建并进入项目'))
 
-    await waitFor(() => expect(onCreate).toHaveBeenCalledWith('吞天神脉（测试）', '东方玄幻', ''))
+    await waitFor(() =>
+      expect(onCreate).toHaveBeenCalledWith('吞天神脉（测试）', '东方玄幻', '', 'blank'),
+    )
+  })
+
+  it('新建项目面板支持显式选择示范模板', async () => {
+    const onCreate = vi.fn()
+    render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
+
+    fireEvent.click(screen.getByText('新建小说项目'))
+    fireEvent.click(screen.getByText('示范模板 (苍澜纪元)'))
+    fireEvent.change(screen.getByPlaceholderText('给这本书起个名字，其他信息之后随时可以补'), {
+      target: { value: '苍澜测试' },
+    })
+    fireEvent.click(screen.getByText('创建并进入项目'))
+
+    await waitFor(() =>
+      expect(onCreate).toHaveBeenCalledWith('苍澜测试', '东方玄幻', '', 'demo'),
+    )
   })
 
   it('不渲染创建示范项目等外来冗余按钮', () => {

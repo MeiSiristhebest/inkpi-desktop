@@ -235,7 +235,11 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
         input: expect.objectContaining({ documentId: firstId }),
       }),
     )
-    expect(onOpenAssistant).toHaveBeenCalled()
+    // 行内润色解耦：默认不暴力强开右侧助手抽屉
+    expect(onOpenAssistant).not.toHaveBeenCalled()
+    // 工具条提供显式 AI 对话入口，点击时才打开
+    fireEvent.click(screen.getByText('AI 对话'))
+    expect(onOpenAssistant).toHaveBeenCalledTimes(1)
   })
 
   it('shows the daemon connection status', async () => {

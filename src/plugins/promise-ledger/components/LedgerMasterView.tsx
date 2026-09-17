@@ -5,6 +5,7 @@ import { ledgerEngine } from '../engine/LedgerEngine'
 import { DebtGanttChart } from './DebtGanttChart'
 import { PromiseEntryEditor } from './PromiseEntryEditor'
 import { indexedDbPromiseLedgerRepository } from '../../../adapters/indexedDbPromiseLedgerRepository'
+import { promiseApplicationService } from '../../../services/domainApplicationServices'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
@@ -116,13 +117,13 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }, [projectId])
 
   const handleSaveEntry = async (entry: PromiseLedgerEntry) => {
-    await indexedDbPromiseLedgerRepository.save(entry)
+    await promiseApplicationService.savePromise(entry)
     setEditingEntry(null)
     await loadEntries()
   }
 
   const handleDeleteEntry = async (id: string) => {
-    await indexedDbPromiseLedgerRepository.delete(id)
+    await promiseApplicationService.deletePromise(id, projectId)
     await loadEntries()
   }
 
@@ -137,7 +138,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
         createdAt: now,
         updatedAt: now,
       }
-      await indexedDbPromiseLedgerRepository.save(item)
+      await promiseApplicationService.savePromise(item)
     }
     await loadEntries()
   }

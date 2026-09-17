@@ -6,6 +6,7 @@ import { causalEngine } from '../engine/CausalEngine'
 import { TimelineNodeCard } from './TimelineNodeCard'
 import { ConflictPanel } from './ConflictPanel'
 import { indexedDbTimelineRepository } from '../../../adapters/indexedDbTimelineRepository'
+import { timelineApplicationService } from '../../../services/domainApplicationServices'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
@@ -134,10 +135,10 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const handleInitRealSkeleton = async () => {
     const now = clock.now()
     for (const t of DEFAULT_THREADS) {
-      await indexedDbTimelineRepository.saveThread({ ...t, projectId })
+      await timelineApplicationService.saveThread({ ...t, projectId })
     }
     for (const n of DEMO_NODES) {
-      await indexedDbTimelineRepository.saveNode({
+      await timelineApplicationService.saveNode({
         ...n,
         projectId,
         createdAt: now,
@@ -148,13 +149,13 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }
 
   const handleSaveNode = async (node: TimelineNode) => {
-    await indexedDbTimelineRepository.saveNode(node)
+    await timelineApplicationService.saveNode(node)
     setEditingNode(null)
     await loadData()
   }
 
   const handleDeleteNode = async (id: string) => {
-    await indexedDbTimelineRepository.deleteNode(id)
+    await timelineApplicationService.deleteNode(id, projectId)
     setEditingNode(null)
     await loadData()
   }
