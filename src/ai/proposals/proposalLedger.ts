@@ -50,16 +50,16 @@ export interface ProposalStore {
   save(proposal: AiProposal): Promise<void>
 }
 
-type ProposalOperation = 'commit' | 'undo'
+export type ProposalOperation = 'commit' | 'undo'
 
-interface ProposalOperationClaim {
+export interface ProposalOperationClaim {
   proposalId: string
   operation: ProposalOperation
   token: string
   expected: AiProposal
 }
 
-interface AtomicProposalStore extends ProposalStore {
+export interface AtomicProposalStore extends ProposalStore {
   compareAndSwapProposal(expected: AiProposal, next: AiProposal): Promise<boolean>
   acquireProposalOperation(
     expected: AiProposal,

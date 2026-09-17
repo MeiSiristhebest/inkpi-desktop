@@ -5,7 +5,11 @@ import { spring, variants, gesture } from '../../motion'
 import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createRewriteTask } from '../../ai'
-import { semanticDocumentFromProseMirror, semanticDocumentFromText } from '../../domain/content'
+import {
+  semanticDocumentFromProseMirror,
+  semanticDocumentFromText,
+  applySemanticPatchesToHtml,
+} from '../../domain/content'
 import {
   hashText,
   IndexedDbProposalStore,
@@ -289,31 +293,24 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     const targetWorkspaceId = initialProjectId || ''
     const targetChapterId = activeChapterId || proposal.documentId
 
-    // 记录修改前的状态，以便在异常时回滚
     const originalHtml = editor.getHTML?.() ?? editor.getText?.() ?? current.text
 
     try {
       proposalLedger.accept(proposal.id)
+      await proposalLedger.flush().catch(() => {})
 
+      // 1. 在影子文档（HTML / 纯文本）上离线应用 patch，获得更新后的 HTML 和 inversePatches，绝不修改实时 editor DOM
+      const { updatedHtml, inversePatches } = applySemanticPatchesToHtml(
+        originalHtml,
+        proposal.patches,
+        current,
+      )
+
+      // 2. 通过 proposalLedger.commit 协调提案状态，并在其原子 apply 回调中持久化章节
       const receipt = await proposalLedger.commit(
         proposal.id,
         activeChapterRevision,
-        async (patches) => {
-          const inversePatches = patches.map((patch) => ({
-            ...patch,
-            to: patch.from + patch.text.length,
-            text: current.text.slice(patch.from, patch.to),
-          }))
-          // 1. 将 patch 写入 TipTap 编辑器
-          for (const patch of [...patches].sort((left, right) => right.from - left.from)) {
-            const range = current.sourceMap.semanticRangeToEditor(patch.from, patch.to)
-            editor.commands.insertContentAt({ from: range.from, to: range.to }, patch.text)
-          }
-
-          // 2. 从编辑器获取更新后的完整 HTML 内容（保留富文本样式与标签）
-          const updatedHtml = editor.getHTML?.() ?? editor.getText?.() ?? current.text
-
-          // 3. 持久化落盘 N+1 (CAS)
+        async () => {
           if (targetWorkspaceId && targetChapterId) {
             const mutationResult = await chapterMutationService.mutate({
               workspaceId: targetWorkspaceId,
@@ -340,31 +337,29 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             })
 
             if (!mutationResult.success) {
-              // 若落库失败，回滚编辑器状态并抛错终止 commit
-              if (editor.commands?.setContent) {
-                editor.commands.setContent(originalHtml, false)
-              }
               throw new Error(
                 mutationResult.conflict
                   ? `提案版本冲突：期望版本 ${activeChapterRevision}，当前存储版本为 ${mutationResult.currentRevision}`
                   : (mutationResult.error || '持久化写入失败'),
               )
             }
-
-            // 落盘成功后，通过 setContent(..., false) 同步视口，绝不触发 editor onUpdate / autosave (INV-02)
-            if (editor.commands?.setContent) {
-              editor.commands.setContent(mutationResult.chapter.content || updatedHtml, false)
-            }
           }
-
           return { inversePatches }
         },
         hashText(current.text),
       )
+
+      // 3. 落盘彻底成功后，通过 setContent(..., false) 同步视口，绝不触发 editor onUpdate / autosave (INV-02)
+      if (editor.commands?.setContent) {
+        editor.commands.setContent(updatedHtml, false)
+      }
+
+      await proposalLedger.reload().catch(() => {})
       const committedProposal = proposalLedger.get(proposal.id) ?? {
         ...proposal,
         status: 'committed' as const,
         committedRevision: receipt.revision,
+        inversePatches,
       }
       setRewriteProposal((value) =>
         value
@@ -419,18 +414,20 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         throw new Error('No inverse patches found on proposal')
       }
 
+      const current = currentSemanticDocument()
+
+      // 1. 在影子文档上应用反向补丁，获得恢复后的 HTML，不触碰实时 editor DOM
+      const { updatedHtml: restoredHtml } = applySemanticPatchesToHtml(
+        originalHtml,
+        inversePatches,
+        current,
+      )
+
+      // 2. 通过 ProposalChapterUnitOfWork 或 proposalLedger + chapterMutationService 原子回滚
       await proposalLedger.undo(
         rewriteProposal.proposal.id,
         currentRev,
-        async (patches) => {
-          const currentDoc = currentSemanticDocument()
-          for (const patch of [...patches].sort((left, right) => right.from - left.from)) {
-            const range = currentDoc.sourceMap.semanticRangeToEditor(patch.from, patch.to)
-            editor.commands.insertContentAt({ from: range.from, to: range.to }, patch.text)
-          }
-
-          const restoredHtml = editor.getHTML?.() ?? editor.getText?.() ?? currentDoc.text
-
+        async () => {
           if (targetWorkspaceId && targetChapterId) {
             const mutationResult = await chapterMutationService.mutate({
               workspaceId: targetWorkspaceId,
@@ -447,7 +444,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                 volumeId: '',
                 title: '',
                 content: originalHtml,
-                wordCount: currentDoc.text.length,
+                wordCount: current.text.length,
                 order: 0,
                 status: 'draft',
                 createdAt: clock.now(),
@@ -457,23 +454,22 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             })
 
             if (!mutationResult.success) {
-              if (editor.commands?.setContent) {
-                editor.commands.setContent(originalHtml, false)
-              }
               throw new Error(
                 mutationResult.conflict
                   ? `撤销版本冲突：当前存储版本为 ${mutationResult.currentRevision}`
                   : (mutationResult.error || '撤销持久化写入失败'),
               )
             }
-
-            // 撤销落盘成功后，同步视口，不触发 editor onUpdate / autosave (INV-02)
-            if (editor.commands?.setContent) {
-              editor.commands.setContent(mutationResult.chapter.content || restoredHtml, false)
-            }
           }
         },
       )
+
+      // 3. 落盘彻底成功后，通过 setContent(..., false) 同步视口，不触发 editor onUpdate / autosave (INV-02)
+      if (editor.commands?.setContent) {
+        editor.commands.setContent(restoredHtml, false)
+      }
+
+      await proposalLedger.reload().catch(() => {})
       const undoneProposal = proposalLedger.get(rewriteProposal.proposal.id) ?? {
         ...rewriteProposal.proposal,
         status: 'undone' as const,

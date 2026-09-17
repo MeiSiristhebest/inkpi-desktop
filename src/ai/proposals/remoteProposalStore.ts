@@ -1,6 +1,13 @@
 import type { ProposalSyncPushResult, TaskResult } from '@inkpi/protocol'
 import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
-import { IndexedDbProposalStore, type AiProposal, type ProposalStore } from './proposalLedger'
+import {
+  IndexedDbProposalStore,
+  type AiProposal,
+  type ProposalStore,
+  type AtomicProposalStore,
+  type ProposalOperation,
+  type ProposalOperationClaim,
+} from './proposalLedger'
 
 export type ProposalSyncRemoteProvider = () => ProposalSyncRemote | undefined
 export type ProposalSyncRemoteSource = ProposalSyncRemote | ProposalSyncRemoteProvider
@@ -93,7 +100,7 @@ export function getProposalSyncRemote(
  * IndexedDB is written before the daemon projection. The projection is only
  * updated after that local write and is never used as the source of list().
  */
-export class RemoteProposalStore implements ProposalStore {
+export class RemoteProposalStore implements AtomicProposalStore {
   private readonly local: ProposalStore
   private readonly workspaceId: string
   private readonly remoteProvider: () => ProposalSyncRemote | undefined
@@ -179,6 +186,81 @@ export class RemoteProposalStore implements ProposalStore {
 
   async flush(): Promise<void> {
     await this.writeTail
+  }
+
+  async compareAndSwapProposal(expected: AiProposal, next: AiProposal): Promise<boolean> {
+    if ('compareAndSwapProposal' in this.local && typeof (this.local as any).compareAndSwapProposal === 'function') {
+      const swapped = await (this.local as any).compareAndSwapProposal(expected, next)
+      if (swapped) {
+        // Asynchronously sync to remote projection if available
+        void this.syncRemoteProjection(next)
+      }
+      return swapped
+    }
+    await this.local.save(next)
+    void this.syncRemoteProjection(next)
+    return true
+  }
+
+  async acquireProposalOperation(
+    expected: AiProposal,
+    operation: ProposalOperation,
+  ): Promise<ProposalOperationClaim | undefined> {
+    if ('acquireProposalOperation' in this.local && typeof (this.local as any).acquireProposalOperation === 'function') {
+      return (this.local as any).acquireProposalOperation(expected, operation)
+    }
+    return {
+      proposalId: expected.id,
+      operation,
+      token: 'fallback-claim',
+      expected: cloneProposal(expected),
+    }
+  }
+
+  async completeProposalOperation(claim: ProposalOperationClaim, next: AiProposal): Promise<boolean> {
+    if ('completeProposalOperation' in this.local && typeof (this.local as any).completeProposalOperation === 'function') {
+      const completed = await (this.local as any).completeProposalOperation(claim, next)
+      if (completed) {
+        await this.syncRemoteProjection(next)
+      }
+      return completed
+    }
+    await this.local.save(next)
+    await this.syncRemoteProjection(next)
+    return true
+  }
+
+  async releaseProposalOperation(claim: ProposalOperationClaim): Promise<void> {
+    if ('releaseProposalOperation' in this.local && typeof (this.local as any).releaseProposalOperation === 'function') {
+      return (this.local as any).releaseProposalOperation(claim)
+    }
+  }
+
+  private async syncRemoteProjection(next: AiProposal): Promise<void> {
+    const remote = this.remoteProvider()
+    if (!remote) return
+
+    const operation = this.writeTail
+      .catch(() => undefined)
+      .then(async () => {
+        const expectedRevision = await this.ensureProjectionRevision(remote)
+        const result = await remote.pushProposalState(
+          this.workspaceId,
+          cloneProposal(next),
+          expectedRevision,
+        )
+        if (!result.accepted) {
+          this.projectionRevision = isRevision(result.revision) ? result.revision : undefined
+          throw new ProposalSyncError(this.workspaceId, next.id, expectedRevision, result)
+        }
+        this.projectionRevision = requireRevision(result.revision, 'push result')
+        if (result.duplicate) {
+          const snapshot = await remote.snapshotProposals(this.workspaceId)
+          this.projectionRevision = requireRevision(snapshot.revision, 'snapshot')
+        }
+      })
+    this.writeTail = operation.catch(() => undefined)
+    await operation
   }
 
   private async ensureProjectionRevision(remote: ProposalSyncRemote): Promise<number> {

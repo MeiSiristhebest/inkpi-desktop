@@ -722,45 +722,55 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const deleteVolume = useCallback(
     async (volume: VolumeRecord) => {
-      if (!(await runPersistence(() => indexedDbProjectRepository.deleteVolume(volume.id)))) return
       const volumes = stateRef.current.volumes.filter((v) => v.id !== volume.id)
       const fallbackVolId = volumes[0]?.id
-      let chapters = stateRef.current.chapters
-      let persistenceFailed = false
-      if (fallbackVolId) {
-        chapters = await Promise.all(
-          chapters.map(async (ch) => {
-            if (ch.volumeId === volume.id) {
-              const updated = { ...ch, volumeId: fallbackVolId, updatedAt: clock.now() }
-              if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) {
-                persistenceFailed = true
-                return ch
-              }
-              return updated
+      const activeChapter = stateRef.current.activeChapter
+      const isCurrentInVolume = activeChapter?.volumeId === volume.id
+
+      if (isCurrentInVolume && activeChapter && !fallbackVolId) {
+        autosave.cancel('volume-deleted')
+        draftJournal.clear(projectId, activeChapter.id)
+      }
+
+      const success = await runPersistence(async () => {
+        if (typeof indexedDbProjectRepository.deleteVolumeCascade === 'function') {
+          await indexedDbProjectRepository.deleteVolumeCascade(projectId, volume.id, fallbackVolId)
+        } else {
+          // Fallback if port implementation doesn't provide cascade
+          await indexedDbProjectRepository.deleteVolume(volume.id)
+          if (fallbackVolId) {
+            for (const ch of stateRef.current.chapters.filter((c) => c.volumeId === volume.id)) {
+              await indexedDbProjectRepository.saveChapter({
+                ...ch,
+                volumeId: fallbackVolId,
+                updatedAt: clock.now(),
+              })
             }
-            return ch
-          }),
+          } else {
+            for (const ch of stateRef.current.chapters.filter((c) => c.volumeId === volume.id)) {
+              await indexedDbProjectRepository.deleteChapter(ch.id)
+            }
+          }
+        }
+      })
+
+      if (!success) return
+
+      let chapters = stateRef.current.chapters
+      if (fallbackVolId) {
+        chapters = chapters.map((ch) =>
+          ch.volumeId === volume.id ? { ...ch, volumeId: fallbackVolId, updatedAt: clock.now() } : ch,
         )
-        if (persistenceFailed) return
       } else {
-        // 无其余分卷时，删除该卷下所有章节
-        const activeChapter = stateRef.current.activeChapter
-        const isCurrentInVolume = activeChapter?.volumeId === volume.id
-        if (isCurrentInVolume && activeChapter) {
-          autosave.cancel('volume-deleted')
-          draftJournal.clear(projectId, activeChapter.id)
-        }
-        for (const ch of chapters.filter((c) => c.volumeId === volume.id)) {
-          if (!(await runPersistence(() => indexedDbProjectRepository.deleteChapter(ch.id)))) return
-        }
         chapters = chapters.filter((c) => c.volumeId !== volume.id)
         if (isCurrentInVolume) {
           await activateChapter(chapters[0] ?? null, { skipDrain: true })
         }
       }
+
       patch({ volumes, chapters, deletingVolume: null })
     },
-    [patch, runPersistence, autosave, projectId, activateChapter],
+    [patch, runPersistence, autosave, projectId, activateChapter, clock],
   )
 
   const moveChapterToVolume = useCallback(

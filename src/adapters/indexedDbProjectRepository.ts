@@ -103,6 +103,128 @@ export const indexedDbProjectRepository: ProjectRepository = {
       )
     }
   },
+  deleteVolumeCascade: async (workspaceId: string, volumeId: string, fallbackVolumeId?: string) => {
+    await db.runTransaction(['volumes', 'chapters', 'domainChangeSets'], (transaction, fail) => {
+      const volumeStore = transaction.objectStore('volumes')
+      const chapterStore = transaction.objectStore('chapters')
+      const domainStore = transaction.objectStore('domainChangeSets')
+
+      const volumeReq = volumeStore.get(volumeId)
+      const chaptersReq = chapterStore.getAll()
+      const domainReq = domainStore.getAll()
+
+      let volumeLoaded = false
+      let chaptersLoaded = false
+      let domainLoaded = false
+
+      let volumeRecord: VolumeRecord | undefined
+      let allChapters: ChapterRecord[] | undefined
+      let allDomainChanges: any[] | undefined
+
+      const checkReady = () => {
+        if (!volumeLoaded || !chaptersLoaded || !domainLoaded) return
+        try {
+          if (!volumeRecord) {
+            // Volume already deleted or doesn't exist
+            return
+          }
+
+          const now = Date.now()
+          const changes: any[] = []
+          const relatedChapters = (allChapters || []).filter(
+            (ch) => ch.projectId === workspaceId && ch.volumeId === volumeId,
+          )
+
+          if (fallbackVolumeId) {
+            // Migrate all child chapters to fallback volume
+            for (const ch of relatedChapters) {
+              const updated: ChapterRecord = {
+                ...ch,
+                volumeId: fallbackVolumeId,
+                updatedAt: now,
+              }
+              chapterStore.put(updated)
+              changes.push({
+                id: `chapter-change-${ch.id}-${ch.revision ?? 0}-${now}`,
+                aggregateType: 'chapter',
+                aggregateId: ch.id,
+                operation: 'upsert',
+                revision: ch.revision ?? 0,
+                payload: updated,
+                occurredAt: now,
+              })
+            }
+          } else {
+            // Delete all child chapters
+            for (const ch of relatedChapters) {
+              chapterStore.delete(ch.id)
+              changes.push({
+                id: `chapter-change-${ch.id}-${ch.revision ?? 0}-${now}`,
+                aggregateType: 'chapter',
+                aggregateId: ch.id,
+                operation: 'delete',
+                revision: ch.revision ?? 0,
+                occurredAt: now,
+              })
+            }
+          }
+
+          // Delete the volume itself
+          volumeStore.delete(volumeId)
+          changes.push({
+            id: `volume-change-${volumeId}-0-${now}`,
+            aggregateType: 'volume',
+            aggregateId: volumeId,
+            operation: 'delete',
+            revision: 0,
+            occurredAt: now,
+          })
+
+          // Append DomainChangeSet atomically
+          const workspaceChanges = (allDomainChanges || [])
+            .filter((record: any) => record.workspaceId === workspaceId)
+            .sort((a: any, b: any) => a.revision - b.revision)
+          const baseRevision = workspaceChanges.at(-1)?.revision ?? 0
+
+          const changeSet = createDomainChangeSet({
+            id: `delete-volume-${volumeId}-${now}`,
+            workspaceId,
+            sourceDeviceId,
+            baseRevision,
+            changes,
+            createdAt: now,
+          })
+
+          domainStore.put(changeSet)
+        } catch (err) {
+          fail(err)
+        }
+      }
+
+      volumeReq.onsuccess = () => {
+        volumeRecord = volumeReq.result
+        volumeLoaded = true
+        checkReady()
+      }
+      volumeReq.onerror = () => fail(volumeReq.error)
+
+      chaptersReq.onsuccess = () => {
+        allChapters = chaptersReq.result
+        chaptersLoaded = true
+        checkReady()
+      }
+      chaptersReq.onerror = () => fail(chaptersReq.error)
+
+      domainReq.onsuccess = () => {
+        allDomainChanges = domainReq.result
+        domainLoaded = true
+        checkReady()
+      }
+      domainReq.onerror = () => fail(domainReq.error)
+    })
+
+    domainChangeEvents.publish(workspaceId, Date.now())
+  },
 
   getAllChapters: () => db.getAll<ChapterRecord>('chapters'),
   getChaptersByProject: (projectId) =>

@@ -20,3 +20,4 @@ export {
   type TextSourceMap,
 } from './sourceMap'
 export { decodeHtmlEntities, normalizeHtmlText, normalizeText } from './textNormalizer'
+export { applySemanticPatchesToHtml } from './shadowHtmlPatcher'
