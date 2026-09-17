@@ -20,6 +20,8 @@ import { InspireTools } from '../components/tools/InspireTools'
 import { CheckTools } from '../components/tools/CheckTools'
 import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
+import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
+import { CommandPaletteModal } from '../components/CommandPaletteModal'
 
 interface EngineProps {
   projectId: string
@@ -113,6 +115,7 @@ export const Engine: FC<EngineProps> = ({
   // 当前激活的页签（默认直达正文写作 editor）
   const [activeTabId, setActiveTabId] = useState<string>('editor')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(() => !isCompactViewport())
   const compactViewportRef = useRef(isCompactViewport())
   const [rightOpen, setRightOpen] = useState(defaultRightOpen)
@@ -120,6 +123,38 @@ export const Engine: FC<EngineProps> = ({
   const [focusMode, setFocusMode] = useState(false)
   const [isTypewriter, setIsTypewriter] = useState(false)
   const [stats, setStats] = useState<Stats>({ wordCount: 0 })
+
+  useEffect(() => {
+    const unreg = registerDefaultCommands()
+    setNavigationHandler({
+      openView: (tabId) => setActiveTabId(tabId),
+      openAssistant: () => {
+        onOpenAssistant?.()
+        setRightOpen(true)
+      },
+      openActivityCenter: () => {
+        onOpenAssistant?.()
+        setRightOpen(true)
+      },
+      openSettings: () => setSettingsOpen(true),
+    })
+    return () => {
+      unreg()
+      setNavigationHandler(null)
+    }
+  }, [onOpenAssistant])
+
+  // 全局快捷键监听：Cmd/Ctrl+K 打开全局指令面板
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCommandPaletteOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     const handleViewportResize = () => {
@@ -395,6 +430,10 @@ export const Engine: FC<EngineProps> = ({
       )}
 
       <SettingsView open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CommandPaletteModal
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
     </div>
   )
 }
