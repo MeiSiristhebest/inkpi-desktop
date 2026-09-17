@@ -15,8 +15,27 @@ describe('AiAssistantPanel Component', () => {
         onClose={vi.fn()}
       />,
     )
-    expect(screen.getByText('AI 副驾驶')).toBeInTheDocument()
+    expect(screen.getByText('副驾驶')).toBeInTheDocument()
+    expect(screen.getByText('活动中心')).toBeInTheDocument()
     expect(screen.getByText('与 InkPi Agent 对话')).toBeInTheDocument()
+  })
+
+  it('should switch to activity center when activity tab is clicked', () => {
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input=""
+        busy={false}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /活动中心/ }))
+    expect(screen.getByTestId('ai-activity-center')).toBeInTheDocument()
+    expect(screen.getByText('所有后台任务已完成，无挂起活动')).toBeInTheDocument()
   })
 
   it('should render user and assistant messages and handle input & send', () => {

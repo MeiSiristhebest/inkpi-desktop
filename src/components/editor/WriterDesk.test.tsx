@@ -346,8 +346,9 @@ describe('WriterDesk — 编辑、排版、字号、行距、存盘与随动感�
         ),
       { timeout: 2000 },
     )
-    // 保存后应恢复「已保存」标记
-    expect(screen.getByText('已保存')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('已保存')).toBeInTheDocument(), {
+      timeout: 2000,
+    })
   })
 
   it('toggles living-codex side drawer in writer toolbar', async () => {

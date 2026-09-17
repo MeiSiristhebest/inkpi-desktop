@@ -99,14 +99,19 @@ export interface ArtifactStore {
   get(id: string): Promise<AiArtifact | undefined>
   list(taskId?: string): Promise<AiArtifact[]>
   listByType?(type: string): Promise<AiArtifact[]>
+  listByWorkspace?(workspaceId: string): Promise<AiArtifact[]>
 }
 
 /** Normalizes and validates an artifact entering the Desktop-authoritative store. */
 export function normalizeDesktopArtifact(artifact: AiArtifact): AiArtifact {
   const normalized = normalizeArtifactForPersistence(artifact)
-  const ownership = normalized.ownership ?? {
+  const workspaceId =
+    normalized.ownership?.workspaceId ?? (normalized.metadata?.workspaceId as string | undefined)
+  const ownership = {
     owner: 'desktop' as const,
     authoritative: true,
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(normalized.ownership ?? {}),
   }
   assertArtifactOwnership(ownership)
   if (ownership.owner !== 'desktop' || ownership.authoritative !== true) {
@@ -123,7 +128,11 @@ export function assertAiArtifact(value: unknown): asserts value is AiArtifact {
   assertNonEmptyString(value.taskId, 'Artifact task id')
   assertNonEmptyString(value.kind, 'Artifact kind')
   assertNonEmptyString(value.type, 'Artifact type')
-  if (typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1) {
+  if (
+    typeof value.version !== 'number' ||
+    !Number.isSafeInteger(value.version) ||
+    value.version < 1
+  ) {
     throw new Error('Artifact version must be a positive safe integer')
   }
   assertTimestamp(value.createdAt, 'Artifact createdAt')
@@ -151,7 +160,8 @@ export function assertArtifactOwnership(value: unknown): asserts value is Artifa
   if (typeof value.authoritative !== 'boolean') {
     throw new Error('Artifact ownership authoritative flag is invalid')
   }
-  if (value.workspaceId !== undefined) assertNonEmptyString(value.workspaceId, 'Artifact workspace id')
+  if (value.workspaceId !== undefined)
+    assertNonEmptyString(value.workspaceId, 'Artifact workspace id')
 }
 
 export class IndexedDbArtifactStore implements ArtifactStore {
@@ -182,9 +192,9 @@ export class IndexedDbArtifactStore implements ArtifactStore {
   }
 
   get(id: string): Promise<AiArtifact | undefined> {
-    return db.get<AiArtifact>('aiArtifacts', id).then((artifact) =>
-      artifact ? normalizeDesktopArtifact(artifact) : undefined,
-    )
+    return db
+      .get<AiArtifact>('aiArtifacts', id)
+      .then((artifact) => (artifact ? normalizeDesktopArtifact(artifact) : undefined))
   }
 
   async list(taskId?: string): Promise<AiArtifact[]> {
@@ -200,6 +210,18 @@ export class IndexedDbArtifactStore implements ArtifactStore {
     return artifacts
       .map(normalizeDesktopArtifact)
       .filter((artifact) => artifact.type === type)
+      .sort((left, right) => left.createdAt - right.createdAt)
+  }
+
+  async listByWorkspace(workspaceId: string): Promise<AiArtifact[]> {
+    const artifacts = await db.getAll<AiArtifact>('aiArtifacts')
+    return artifacts
+      .map(normalizeDesktopArtifact)
+      .filter(
+        (artifact) =>
+          artifact.ownership?.workspaceId === workspaceId ||
+          (artifact.metadata?.workspaceId as string | undefined) === workspaceId,
+      )
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 }

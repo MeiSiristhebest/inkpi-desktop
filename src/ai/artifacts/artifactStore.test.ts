@@ -160,6 +160,26 @@ describe('AI artifact runtime', () => {
     expect(rehydrated?.content).toEqual({ summary: { text: '持久化内容' } })
     expect(await store.listByType('creative.distillation-checkpoint')).toHaveLength(1)
   })
+
+  it('filters artifacts by workspaceId via listByWorkspace', async () => {
+    const store = new IndexedDbArtifactStore()
+    const artA = makeArtifact('art-ws-1', { info: 'ws1' }, 10)
+    artA.ownership = { owner: 'desktop', authoritative: true, workspaceId: 'project-alpha' }
+
+    const artB = makeArtifact('art-ws-2', { info: 'ws2' }, 20)
+    artB.ownership = { owner: 'desktop', authoritative: true, workspaceId: 'project-beta' }
+
+    await store.save(artA)
+    await store.save(artB)
+
+    const alphaList = await store.listByWorkspace('project-alpha')
+    expect(alphaList).toHaveLength(1)
+    expect(alphaList[0].id).toBe('art-ws-1')
+
+    const betaList = await store.listByWorkspace('project-beta')
+    expect(betaList).toHaveLength(1)
+    expect(betaList[0].id).toBe('art-ws-2')
+  })
 })
 
 function makeArtifact(id: string, content: unknown, timestamp: number): AiArtifact {

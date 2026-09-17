@@ -100,6 +100,12 @@ const ProjectEngine: FC<{
   runDeepReasoning: import('./hooks/useAiConversation').AiConversation['runDeepReasoning']
   runDistillationWorkflow: import('./hooks/useAiConversation').AiConversation['runDistillationWorkflow']
   steerTask: import('./hooks/useAiConversation').AiConversation['steerTask']
+  taskRecovery?: import('./db/taskRecoveryStore').TaskRecoveryRecord[]
+  taskRecoveryLoading?: boolean
+  taskRecoveryError?: string
+  resumeTask?: (taskId: string) => Promise<boolean>
+  cancelTask?: (taskId: string) => Promise<boolean>
+  dismissTask?: (taskId: string) => Promise<boolean>
   onHome: () => void
 }> = (props) => {
   const { chapters } = useProjectData()
@@ -141,6 +147,13 @@ const ProjectEngine: FC<{
                   onInputChange={props.setAiInput}
                   onSend={() => props.sendAiPrompt(props.aiInput)}
                   onClose={() => props.setAiPanelOpen(false)}
+                  taskRecovery={props.taskRecovery}
+                  taskRecoveryLoading={props.taskRecoveryLoading}
+                  taskRecoveryError={props.taskRecoveryError}
+                  onResumeTask={props.resumeTask}
+                  onCancelTask={props.cancelTask}
+                  onDismissTask={props.dismissTask}
+                  onSteerTask={props.steerTask}
                 />
               </motion.div>
             )}
@@ -299,6 +312,12 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   runDeepReasoning={runDeepReasoning}
                   runDistillationWorkflow={runDistillationWorkflow}
                   steerTask={steerTask}
+                  taskRecovery={taskRecovery}
+                  taskRecoveryLoading={taskRecoveryLoading}
+                  taskRecoveryError={taskRecoveryError}
+                  resumeTask={resumeTask}
+                  cancelTask={cancelTask}
+                  dismissTask={dismissTask}
                 />
               </ProjectWorkspace>
             </ProjectDataProvider>
