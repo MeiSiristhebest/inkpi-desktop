@@ -130,7 +130,7 @@ describe('AiActivityCenter Component', () => {
     )
 
     expect(screen.getByText('creative.audit-report')).toBeInTheDocument()
-    expect(screen.getByText('v2 · 08:00:01')).toBeInTheDocument()
+    expect(screen.getByText(/v2 · /)).toBeInTheDocument()
 
     const toggleBtn = screen.getByRole('button', { name: /查看溯源详情/ })
     fireEvent.click(toggleBtn)

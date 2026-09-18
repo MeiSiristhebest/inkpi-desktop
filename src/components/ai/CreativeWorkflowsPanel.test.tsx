@@ -478,4 +478,95 @@ describe('CreativeWorkflowsPanel', () => {
     expect(screen.getByText('林澈')).toBeInTheDocument()
     expect(screen.getByText('三年之约')).toBeInTheDocument()
   })
+
+  it('restores pending distillation review items on mount without requiring distillation run', async () => {
+    const { distillationReviewInbox } = await import('../../ai/proposals/distillationReviewInbox')
+    await distillationReviewInbox.ingestDistilledFacts('project-1', 'task-stored', {
+      summary: '历史提炼',
+      entities: [{ kind: 'character', name: '历史人物' }],
+      events: [],
+      promises: [],
+    })
+
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn()}
+        onSteerTask={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText(/审查提炼/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText(/审查提炼/))
+
+    expect(screen.getByText('AI 事实提炼审查箱 (Distillation Review Inbox)')).toBeInTheDocument()
+    expect(screen.getByText('历史人物')).toBeInTheDocument()
+  })
+
+  it('opens merge picker and merges into existing entity', async () => {
+    const { distillationReviewInbox } = await import('../../ai/proposals/distillationReviewInbox')
+    const { indexedDbCodexEntityRepository } =
+      await import('../../adapters/indexedDbCodexEntityRepository')
+
+    await indexedDbCodexEntityRepository.save({
+      id: 'existing-entity-1',
+      projectId: 'project-1',
+      name: '既有掌门',
+      type: 'character',
+      summary: '宗门掌门人',
+      tags: [],
+      customFields: {},
+      createdAt: 10,
+      updatedAt: 10,
+      revision: 1,
+    } as any)
+
+    await distillationReviewInbox.ingestDistilledFacts('project-1', 'task-merge', {
+      summary: '合并测试提炼',
+      entities: [{ kind: 'character', name: '新发现掌门' }],
+      events: [],
+      promises: [],
+    })
+
+    const mergeSpy = vi.spyOn(distillationReviewInbox, 'mergeIntoEntity')
+
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn()}
+        onSteerTask={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText(/审查提炼/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText(/审查提炼/))
+
+    expect(screen.getByText('新发现掌门')).toBeInTheDocument()
+    const mergeBtns = screen.getAllByRole('button', { name: '合并已有实体' })
+    fireEvent.click(mergeBtns[0])
+
+    await waitFor(() => expect(screen.getByTestId('distillation-merge-picker')).toBeInTheDocument())
+    expect(screen.getByText('选择合并目标实体')).toBeInTheDocument()
+    expect(screen.getByText('既有掌门')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('既有掌门'))
+
+    await waitFor(() => {
+      expect(mergeSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ id: 'existing-entity-1', name: '既有掌门' }),
+      )
+    })
+    await waitFor(() => {
+      expect(screen.queryByTestId('distillation-merge-picker')).not.toBeInTheDocument()
+    })
+  })
 })

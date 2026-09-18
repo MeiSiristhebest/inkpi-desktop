@@ -21,6 +21,8 @@ import type { ReactNode } from 'react'
 import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
+import { IndexedDbArtifactStore, type AiArtifact } from './ai/artifacts/artifactStore'
+import { useState, useEffect, useCallback } from 'react'
 
 const ProjectWorkspace: FC<{
   projectId: string
@@ -101,6 +103,7 @@ const ProjectEngine: FC<{
   runDistillationWorkflow: import('./hooks/useAiConversation').AiConversation['runDistillationWorkflow']
   steerTask: import('./hooks/useAiConversation').AiConversation['steerTask']
   taskRecovery?: import('./db/taskRecoveryStore').TaskRecoveryRecord[]
+  artifacts?: AiArtifact[]
   taskRecoveryLoading?: boolean
   taskRecoveryError?: string
   resumeTask?: (taskId: string) => Promise<boolean>
@@ -120,7 +123,7 @@ const ProjectEngine: FC<{
       onAiTask={props.onAiTask}
       onOpenAssistant={props.onOpenAssistant}
       onHome={props.onHome}
-      rightPanel={
+      renderInspector={(state, onClose) => (
         <>
           <CreativeWorkflowsPanel
             projectId={props.projectId}
@@ -132,7 +135,7 @@ const ProjectEngine: FC<{
             onSteerTask={props.steerTask}
           />
           <AnimatePresence>
-            {props.aiPanelOpen && (
+            {state.surface !== 'closed' && (
               <motion.div
                 key="ai-assistant-drawer"
                 {...variants.slideInFromRight}
@@ -144,10 +147,15 @@ const ProjectEngine: FC<{
                   input={props.aiInput}
                   busy={props.aiBusy}
                   connected={props.isConnected}
+                  initialTab={state.surface === 'activity' ? 'activity' : 'chat'}
                   onInputChange={props.setAiInput}
                   onSend={() => props.sendAiPrompt(props.aiInput)}
-                  onClose={() => props.setAiPanelOpen(false)}
+                  onClose={() => {
+                    props.setAiPanelOpen(false)
+                    onClose()
+                  }}
                   taskRecovery={props.taskRecovery}
+                  artifacts={props.artifacts}
                   taskRecoveryLoading={props.taskRecoveryLoading}
                   taskRecoveryError={props.taskRecoveryError}
                   onResumeTask={props.resumeTask}
@@ -159,7 +167,7 @@ const ProjectEngine: FC<{
             )}
           </AnimatePresence>
         </>
-      }
+      )}
     />
   )
 }
@@ -170,12 +178,10 @@ const ProjectEngine: FC<{
  */
 export const App: FC = () => (
   <SettingsProvider>
-    <PluginProvider>
-      <MotionConfig reducedMotion="user">
-        <ThemeController />
-        <AppShell />
-      </MotionConfig>
-    </PluginProvider>
+    <MotionConfig reducedMotion="user">
+      <ThemeController />
+      <AppShell />
+    </MotionConfig>
   </SettingsProvider>
 )
 
@@ -190,11 +196,13 @@ const AppShell: FC = () => {
   const library = useProjectLibrary()
 
   return (
-    <ActiveWritingContextProvider workspaceId={library.activeProjectId || ''}>
-      <StoryStateProvider workspaceId={library.activeProjectId}>
-        <AppShellContent settings={settings} library={library} />
-      </StoryStateProvider>
-    </ActiveWritingContextProvider>
+    <PluginProvider workspaceId={library.activeProjectId ?? undefined}>
+      <ActiveWritingContextProvider workspaceId={library.activeProjectId || ''}>
+        <StoryStateProvider workspaceId={library.activeProjectId}>
+          <AppShellContent settings={settings} library={library} />
+        </StoryStateProvider>
+      </ActiveWritingContextProvider>
+    </PluginProvider>
   )
 }
 
@@ -251,6 +259,26 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     cancelTask,
     dismissTask,
   } = ai
+
+  const [artifacts, setArtifacts] = useState<AiArtifact[]>([])
+
+  const loadArtifacts = useCallback(async (projectId: string) => {
+    try {
+      const store = new IndexedDbArtifactStore()
+      const items = await store.listByWorkspace(projectId)
+      setArtifacts(items)
+    } catch (e) {
+      console.error('Failed to load workspace artifacts:', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeProjectId) {
+      void loadArtifacts(activeProjectId)
+    } else {
+      setArtifacts([])
+    }
+  }, [activeProjectId, loadArtifacts])
 
   const content = (
     <AnimatePresence mode="wait">
@@ -313,6 +341,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   runDistillationWorkflow={runDistillationWorkflow}
                   steerTask={steerTask}
                   taskRecovery={taskRecovery}
+                  artifacts={artifacts}
                   taskRecoveryLoading={taskRecoveryLoading}
                   taskRecoveryError={taskRecoveryError}
                   resumeTask={resumeTask}

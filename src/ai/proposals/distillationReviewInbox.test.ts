@@ -22,8 +22,8 @@ describe('DistillationReviewInbox', () => {
     await db.delete('settingsKV', `storyState::${workspaceId}`)
   })
 
-  it('ingests distilled entities and promises as pending review items', () => {
-    const items = inbox.ingestDistilledFacts(
+  it('ingests distilled entities and promises as pending review items', async () => {
+    const items = await inbox.ingestDistilledFacts(
       workspaceId,
       'task-distill-1',
       {
@@ -46,7 +46,7 @@ describe('DistillationReviewInbox', () => {
   })
 
   it('accepts an entity proposal: upgrades factLevel to canonical-fact and materializes into StoryState', async () => {
-    const [item] = inbox.ingestDistilledFacts(
+    const [item] = await inbox.ingestDistilledFacts(
       workspaceId,
       'task-distill-2',
       {
@@ -80,7 +80,7 @@ describe('DistillationReviewInbox', () => {
   })
 
   it('rejects a review item without modifying canonical domain data', async () => {
-    const [item] = inbox.ingestDistilledFacts(workspaceId, 'task-distill-3', {
+    const [item] = await inbox.ingestDistilledFacts(workspaceId, 'task-distill-3', {
       summary: '错误提取',
       entities: [{ kind: 'character', name: '假名字' }],
       events: [],
@@ -97,7 +97,7 @@ describe('DistillationReviewInbox', () => {
   })
 
   it('ingests and accepts events into timelineNodes with ai-accepted provenance', async () => {
-    const [eventItem] = inbox.ingestDistilledFacts(workspaceId, 'task-distill-4', {
+    const [eventItem] = await inbox.ingestDistilledFacts(workspaceId, 'task-distill-4', {
       summary: '战斗事件',
       entities: [],
       events: [{ type: 'combat', description: '青云门大战黑水玄蛇', entityIds: ['entity-snake'] }],
@@ -118,7 +118,7 @@ describe('DistillationReviewInbox', () => {
   })
 
   it('supports keepHypothesis: saves to codex as non-canonical hypothesis', async () => {
-    const [item] = inbox.ingestDistilledFacts(workspaceId, 'task-distill-5', {
+    const [item] = await inbox.ingestDistilledFacts(workspaceId, 'task-distill-5', {
       summary: '推测实体',
       entities: [{ kind: 'character', name: '神秘黑衣人' }],
       events: [],
@@ -150,7 +150,7 @@ describe('DistillationReviewInbox', () => {
     }
     await db.put('codexEntities', targetEntity)
 
-    const [item] = inbox.ingestDistilledFacts(workspaceId, 'task-distill-6', {
+    const [item] = await inbox.ingestDistilledFacts(workspaceId, 'task-distill-6', {
       summary: '别名提取',
       entities: [{ kind: 'character', name: '祖师祠堂老人' }],
       events: [],
@@ -168,7 +168,7 @@ describe('DistillationReviewInbox', () => {
   })
 
   it('restores pending items from durable storage after simulated reload', async () => {
-    inbox.ingestDistilledFacts(workspaceId, 'task-distill-7', {
+    await inbox.ingestDistilledFacts(workspaceId, 'task-distill-7', {
       summary: '持久化测试',
       entities: [{ kind: 'item', name: '玄火鉴' }],
       events: [],

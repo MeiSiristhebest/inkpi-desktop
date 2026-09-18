@@ -310,4 +310,31 @@ describe('Engine — 主视口路由与多栏布局', () => {
     fireEvent.change(searchInput, { target: { value: '' } })
     fireEvent.click(screen.getByText('正文写作'))
   })
+
+  it('renders custom inspector and supports closing it via callback', () => {
+    let closed = false
+    render(
+      <Engine
+        projectId="p1"
+        defaultRightOpen
+        renderInspector={(state, onClose) => (
+          <div data-testid="custom-inspector">
+            <span>{state.surface}</span>
+            <button
+              onClick={() => {
+                closed = true
+                onClose()
+              }}
+            >
+              关闭检查器
+            </button>
+          </div>
+        )}
+      />,
+    )
+
+    expect(screen.getByTestId('custom-inspector')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '关闭检查器' }))
+    expect(closed).toBe(true)
+  })
 })

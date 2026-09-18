@@ -37,6 +37,8 @@ interface EngineProps {
   projectName?: string
   /** 自定义右侧面板（例如 AI 副驾驶），传入时右侧信息栏显示该面板而非默认统计 */
   rightPanel?: ReactNode
+  /** 自定义右侧检查器视图渲染函数，依据 inspectorState 的 surface 动态渲染 */
+  renderInspector?: (state: InspectorState, onClose: () => void) => ReactNode
   /** 右侧信息栏默认是否开启（默认关闭，保持正文写作画布宽敞；测试中可显式开启） */
   defaultRightOpen?: boolean
   /** 写作台工具栏中「打开 AI 副驾驶」的回调 */
@@ -111,6 +113,7 @@ export const Engine: FC<EngineProps> = ({
   projectId,
   projectName,
   rightPanel,
+  renderInspector,
   defaultRightOpen = false,
   onOpenAssistant,
   isConnected,
@@ -401,7 +404,7 @@ export const Engine: FC<EngineProps> = ({
           {isRightPanelOpen &&
             !isFullscreen &&
             !focusMode &&
-            (rightPanel ? (
+            (renderInspector || rightPanel ? (
               <aside
                 style={{ width: `${rightWidth}px` }}
                 data-testid="project-engine-right-panel"
@@ -418,7 +421,13 @@ export const Engine: FC<EngineProps> = ({
                       : 'hover:bg-[var(--ink-accent)]/50'
                   }`}
                 />
-                <div className="h-full">{rightPanel}</div>
+                <div className="h-full">
+                  {renderInspector
+                    ? renderInspector(inspectorState, () =>
+                        setInspectorState({ surface: 'closed' }),
+                      )
+                    : rightPanel}
+                </div>
               </aside>
             ) : !onOpenAssistant ? (
               <aside

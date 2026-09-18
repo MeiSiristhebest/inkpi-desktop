@@ -36,15 +36,16 @@ export class DistillationReviewInbox {
   /**
    * 将任务蒸馏结果转换为审查项并入箱（实体、事件、伏笔全量捕获并落盘）
    */
-  public ingestDistilledFacts(
+  public async ingestDistilledFacts(
     workspaceId: string,
     taskId: string,
     facts: DistilledStoryFacts,
     evidence?: SourceEvidence[],
-  ): DistillationItem[] {
+  ): Promise<DistillationItem[]> {
     const now = clock.now()
     const confidence = facts.confidence ?? 0.85
     const ingested: DistillationItem[] = []
+    const savePromises: Promise<void>[] = []
 
     // 1. 实体候选
     for (const entity of facts.entities || []) {
@@ -64,7 +65,7 @@ export class DistillationReviewInbox {
         createdAt: now,
       }
       this.memoryCache.set(id, item)
-      void distillationReviewStore.save(item)
+      savePromises.push(distillationReviewStore.save(item))
       ingested.push(item)
     }
 
@@ -89,7 +90,7 @@ export class DistillationReviewInbox {
         createdAt: now,
       }
       this.memoryCache.set(id, item)
-      void distillationReviewStore.save(item)
+      savePromises.push(distillationReviewStore.save(item))
       ingested.push(item)
     }
 
@@ -109,10 +110,11 @@ export class DistillationReviewInbox {
         createdAt: now,
       }
       this.memoryCache.set(id, item)
-      void distillationReviewStore.save(item)
+      savePromises.push(distillationReviewStore.save(item))
       ingested.push(item)
     }
 
+    await Promise.all(savePromises)
     return ingested
   }
 
@@ -144,7 +146,7 @@ export class DistillationReviewInbox {
     itemId: string,
     overrides?: { name?: string; summary?: string; attributes?: Record<string, unknown> },
   ): Promise<void> {
-    const item = this.memoryCache.get(itemId) ?? (await this.loadItem(itemId))
+    const item = await this.loadItem(itemId)
     if (!item) throw new Error(`DistillationItem not found: ${itemId}`)
     if (item.status !== 'pending') {
       throw new Error(`Cannot accept item in '${item.status}' status`)
@@ -187,11 +189,13 @@ export class DistillationReviewInbox {
 
       await codexApplicationService.saveEntity(codexEntity, 'ai-accepted')
     } else if (item.category === 'event') {
+      const parsedChapter =
+        typeof finalAttributes.chapterOrder === 'number' ? finalAttributes.chapterOrder : 0
       const timelineNode: TimelineNode = {
         id: idGenerator.generate('timeline-node'),
         projectId: item.workspaceId,
-        threadId: 'main-thread',
-        chapterOrder: 1,
+        threadId: (finalAttributes.threadId as string) || 'main-thread',
+        chapterOrder: parsedChapter,
         eventTitle: finalName,
         summary: finalSummary,
         status: 'drafted',
@@ -206,15 +210,19 @@ export class DistillationReviewInbox {
 
       await timelineApplicationService.saveNode(timelineNode, 'ai-accepted')
     } else if (item.category === 'promise') {
+      const parsedPlantChapter =
+        typeof finalAttributes.plantChapter === 'number' ? finalAttributes.plantChapter : 0
       const promiseEntry: PromiseLedgerEntry = {
         id: idGenerator.generate('promise'),
         projectId: item.workspaceId,
         clueName: finalName,
         tier: 'sub_plot',
-        plantChapter: 1,
+        plantChapter: parsedPlantChapter,
         plantNote: finalSummary,
-        dueChapterLimit: 20,
-        softDeadline: 15,
+        dueChapterLimit:
+          typeof finalAttributes.dueChapterLimit === 'number' ? finalAttributes.dueChapterLimit : 0,
+        softDeadline:
+          typeof finalAttributes.softDeadline === 'number' ? finalAttributes.softDeadline : 0,
         status: 'planted',
         memoryDecayLambda: 0.05,
         progressHistory: [],
@@ -293,8 +301,8 @@ export class DistillationReviewInbox {
     }
 
     const now = clock.now()
-    const updatedAliases = Array.from(new Set([...targetEntity.aliases, item.name]))
-    const updatedSummary = `${targetEntity.summary}\n【提炼补充】：${item.summary}`.trim()
+    const updatedAliases = Array.from(new Set([...(targetEntity.aliases ?? []), item.name]))
+    const updatedSummary = `${targetEntity.summary || ''}\n【提炼补充】：${item.summary}`.trim()
     const mergedEntity: CodexEntity = {
       ...targetEntity,
       aliases: updatedAliases,
@@ -333,8 +341,20 @@ export class DistillationReviewInbox {
     }
   }
 
-  private async loadItem(id: string): Promise<DistillationItem | undefined> {
-    return this.memoryCache.get(id)
+  private async loadItem(id: string, workspaceId?: string): Promise<DistillationItem | undefined> {
+    const cached = this.memoryCache.get(id)
+    if (cached) return cached
+    if (workspaceId) {
+      const stored = await distillationReviewStore.get(workspaceId, id)
+      if (stored) {
+        this.memoryCache.set(stored.id, stored)
+        return stored
+      }
+    }
+    for (const item of this.memoryCache.values()) {
+      if (item.id === id) return item
+    }
+    return undefined
   }
 }
 

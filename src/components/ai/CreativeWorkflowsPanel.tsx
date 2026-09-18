@@ -28,8 +28,13 @@ import {
 import { idGenerator } from '../../adapters/idGenerator'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
 import { buildDurableTaskId } from '../../types/durableTaskId'
-import { distillationReviewInbox } from '../../ai/proposals/distillationReviewInbox'
+import {
+  distillationReviewInbox,
+  type DistillationItem,
+} from '../../ai/proposals/distillationReviewInbox'
 import { DistillationInboxModal } from './DistillationInboxModal'
+import { indexedDbCodexEntityRepository } from '../../adapters/indexedDbCodexEntityRepository'
+import type { CodexEntity } from '../../plugins/living-codex/types'
 
 interface CreativeWorkflowsPanelProps {
   projectId: string
@@ -79,6 +84,9 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const [deepResult, setDeepResult] = useState<DeepReasoningResult | null>(null)
   const [distillation, setDistillation] = useState<DistillationWorkflowResult | null>(null)
   const [isInboxOpen, setIsInboxOpen] = useState(false)
+  const [pendingReviewItems, setPendingReviewItems] = useState<DistillationItem[]>([])
+  const [mergeTargetModalItem, setMergeTargetModalItem] = useState<string | null>(null)
+  const [existingEntities, setExistingEntities] = useState<CodexEntity[]>([])
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<TaskStatusSnapshot | null>(null)
   const [steering, setSteering] = useState('')
@@ -89,6 +97,22 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   const runToken = useRef(0)
   const autoAuditTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastAutoAuditRevision = useRef<string | null>(null)
+
+  const refreshPendingReviews = () => {
+    setPendingReviewItems(distillationReviewInbox.listPending(projectId))
+  }
+
+  useEffect(() => {
+    let active = true
+    distillationReviewInbox.restoreFromStorage(projectId).then(() => {
+      if (active) {
+        setPendingReviewItems(distillationReviewInbox.listPending(projectId))
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [projectId])
 
   useEffect(() => {
     if (!chapters.some((chapter) => chapter.id === selectedChapterId)) {
@@ -335,7 +359,12 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
             result.facts.promises.length > 0 ||
             (result.facts.events && result.facts.events.length > 0))
         ) {
-          distillationReviewInbox.ingestDistilledFacts(projectId, distillationTaskId, result.facts)
+          await distillationReviewInbox.ingestDistilledFacts(
+            projectId,
+            distillationTaskId,
+            result.facts,
+          )
+          refreshPendingReviews()
         }
       }
     } catch (cause) {
@@ -359,6 +388,28 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     else setSteering('')
   }
 
+  const handleOpenMergePicker = async (itemId: string) => {
+    try {
+      const allEntities = await indexedDbCodexEntityRepository.getAll()
+      const workspaceEntities = allEntities.filter((e) => e.projectId === projectId)
+      setExistingEntities(workspaceEntities)
+      setMergeTargetModalItem(itemId)
+    } catch (e) {
+      console.error('Failed to load entities for merge:', e)
+    }
+  }
+
+  const handleExecuteMerge = async (targetEntity: CodexEntity) => {
+    if (!mergeTargetModalItem) return
+    try {
+      await distillationReviewInbox.mergeIntoEntity(mergeTargetModalItem, targetEntity)
+      setMergeTargetModalItem(null)
+      refreshPendingReviews()
+    } catch (e) {
+      console.error('Failed to merge into entity:', e)
+    }
+  }
+
   return (
     <section
       data-testid="creative-workflows-panel"
@@ -368,9 +419,23 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         <div className="flex items-center gap-1.5 text-[13px] font-medium">
           <Activity className="h-3.5 w-3.5 text-[var(--ink-accent)]" /> 创作工作流
         </div>
-        <span className="text-[10px] text-[var(--ink-text-faint)]">
-          {connected ? 'Runtime 已连接' : '离线'}
-        </span>
+        <div className="flex items-center gap-2">
+          {pendingReviewItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                refreshPendingReviews()
+                setIsInboxOpen(true)
+              }}
+              className="text-[11px] font-medium text-[var(--ink-accent)] hover:underline flex items-center gap-1"
+            >
+              审查提炼 ({pendingReviewItems.length})
+            </button>
+          )}
+          <span className="text-[10px] text-[var(--ink-text-faint)]">
+            {connected ? 'Runtime 已连接' : '离线'}
+          </span>
+        </div>
       </div>
       <div className="mb-2 grid grid-cols-3 gap-1">
         <TabButton active={tab === 'audit'} onClick={() => setTab('audit')}>
@@ -540,13 +605,13 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
               {distillation.facts.entities.length} · 事件 {distillation.facts.events.length} · 伏笔{' '}
               {distillation.facts.promises.length}
             </p>
-            {distillationReviewInbox.listPending(projectId).length > 0 && (
+            {pendingReviewItems.length > 0 && (
               <button
                 type="button"
                 onClick={() => setIsInboxOpen(true)}
                 className="rounded bg-[var(--ink-accent)] px-2 py-1 font-medium text-white hover:bg-[var(--ink-accent-hover)] transition-colors"
               >
-                审查事实提炼 ({distillationReviewInbox.listPending(projectId).length})
+                审查事实提炼 ({pendingReviewItems.length})
               </button>
             )}
           </div>
@@ -557,15 +622,73 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       )}
       {isInboxOpen && (
         <DistillationInboxModal
-          items={distillationReviewInbox.listPending(projectId)}
+          items={pendingReviewItems}
           onAccept={async (itemId, overrides) => {
             await distillationReviewInbox.accept(itemId, overrides)
+            refreshPendingReviews()
           }}
-          onReject={(itemId) => {
-            distillationReviewInbox.reject(itemId)
+          onKeepHypothesis={async (itemId) => {
+            await distillationReviewInbox.keepHypothesis(itemId)
+            refreshPendingReviews()
+          }}
+          onMerge={async (itemId) => {
+            await handleOpenMergePicker(itemId)
+          }}
+          onReject={async (itemId) => {
+            await distillationReviewInbox.reject(itemId)
+            refreshPendingReviews()
           }}
           onClose={() => setIsInboxOpen(false)}
         />
+      )}
+      {mergeTargetModalItem && (
+        <div
+          data-testid="distillation-merge-picker-backdrop"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+        >
+          <div
+            data-testid="distillation-merge-picker"
+            className="w-full max-w-md bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col"
+          >
+            <div className="px-4 py-3 border-b border-[var(--ink-border)] flex items-center justify-between">
+              <h4 className="text-[14px] font-semibold text-[var(--ink-text)]">选择合并目标实体</h4>
+              <button
+                onClick={() => setMergeTargetModalItem(null)}
+                className="text-xs text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+              >
+                取消
+              </button>
+            </div>
+            <div className="p-4 max-h-60 overflow-y-auto space-y-2">
+              {existingEntities.length === 0 ? (
+                <p className="text-xs text-[var(--ink-text-faint)] text-center py-4">
+                  当前项目中暂无可合并的实体
+                </p>
+              ) : (
+                existingEntities.map((entity) => (
+                  <button
+                    key={entity.id}
+                    type="button"
+                    onClick={() => void handleExecuteMerge(entity)}
+                    className="w-full text-left p-2.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] transition-colors flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="text-xs font-medium text-[var(--ink-text)]">
+                        {entity.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--ink-text-muted)] truncate max-w-[280px]">
+                        {entity.summary || '无摘要'}
+                      </div>
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--ink-bg-panel)] text-[var(--ink-text-faint)]">
+                      {entity.category}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </section>
   )
