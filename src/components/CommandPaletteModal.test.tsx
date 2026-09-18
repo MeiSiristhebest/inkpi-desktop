@@ -34,6 +34,8 @@ describe('CommandPaletteModal Component', () => {
 
     expect(screen.getByText('打开大屏')).toBeInTheDocument()
     expect(screen.getByText('启动连续性审计')).toBeInTheDocument()
+    expect(screen.getByText('view')).toBeInTheDocument()
+    expect(screen.getByText('continuity')).toBeInTheDocument()
 
     const input = screen.getByPlaceholderText('搜索命令、视图、能力、插件或快捷操作…')
     fireEvent.change(input, { target: { value: '审计' } })

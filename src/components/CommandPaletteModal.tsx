@@ -116,6 +116,11 @@ export const CommandPaletteModal: FC<CommandPaletteModalProps> = ({ isOpen, onCl
                   <div className="flex items-center gap-2 min-w-0">
                     <CmdIcon className="w-3.5 h-3.5 opacity-60 shrink-0" />
                     <span className="truncate">{cmd.title}</span>
+                    {cmd.category && (
+                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text-muted)] shrink-0">
+                        {cmd.category}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0 text-[11px] text-[var(--ink-text-faint)]">
                     {cmd.shortcut && (
