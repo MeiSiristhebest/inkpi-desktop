@@ -103,8 +103,41 @@ describe('AiActivityCenter Component', () => {
       />,
     )
 
-    expect(screen.getByText('近期完成产物 (1)')).toBeInTheDocument()
+    expect(screen.getByText(/产物与已完成结果/)).toBeInTheDocument()
     expect(screen.getByText('第1章连续性诊断')).toBeInTheDocument()
     expect(screen.getByText('发现 2 处潜在时间线冲突')).toBeInTheDocument()
+  })
+
+  it('renders artifacts and toggles Advanced details', () => {
+    render(
+      <AiActivityCenter
+        recoveryRecords={[]}
+        artifacts={[
+          {
+            id: 'art-demo-1',
+            taskId: 'task-audit-1',
+            kind: 'audit-report',
+            type: 'creative.audit-report',
+            version: 2,
+            content: {},
+            provenance: { sourceRevision: 42 },
+            ownership: { owner: 'desktop', authoritative: true, workspaceId: 'ws-demo' },
+            createdAt: 1000,
+            updatedAt: 1000,
+          },
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('creative.audit-report')).toBeInTheDocument()
+    expect(screen.getByText('v2 · 08:00:01')).toBeInTheDocument()
+
+    const toggleBtn = screen.getByRole('button', { name: /查看溯源详情/ })
+    fireEvent.click(toggleBtn)
+
+    expect(screen.getByTestId('artifact-details-art-demo-1')).toBeInTheDocument()
+    expect(screen.getByText('Task ID: task-audit-1')).toBeInTheDocument()
+    expect(screen.getByText('Workspace: ws-demo')).toBeInTheDocument()
+    expect(screen.getByText('Source Rev: 42')).toBeInTheDocument()
   })
 })

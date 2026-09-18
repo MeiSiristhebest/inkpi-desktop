@@ -1,7 +1,8 @@
-import { useState, type FC } from 'react'
+import { useState, useEffect, type FC } from 'react'
 import { Sparkles, X, RefreshCw, Activity } from 'lucide-react'
 import { AiActivityCenter } from './AiActivityCenter'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
+import type { AiArtifact } from '../../ai/artifacts/artifactStore'
 
 interface AiMessage {
   role: 'user' | 'assistant'
@@ -16,7 +17,10 @@ interface AiAssistantPanelProps {
   onInputChange: (value: string) => void
   onSend: () => void
   onClose: () => void
+  initialTab?: 'chat' | 'activity'
+  onTabChange?: (tab: 'chat' | 'activity') => void
   taskRecovery?: TaskRecoveryRecord[]
+  artifacts?: AiArtifact[]
   taskRecoveryLoading?: boolean
   taskRecoveryError?: string
   onResumeTask?: (taskId: string) => Promise<boolean>
@@ -33,7 +37,10 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   onInputChange,
   onSend,
   onClose,
+  initialTab = 'chat',
+  onTabChange,
   taskRecovery = [],
+  artifacts = [],
   taskRecoveryLoading = false,
   taskRecoveryError,
   onResumeTask,
@@ -41,7 +48,16 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   onDismissTask,
   onSteerTask,
 }) => {
-  const [activeTab, setActiveTab] = useState<'chat' | 'activity'>('chat')
+  const [activeTab, setActiveTab] = useState<'chat' | 'activity'>(initialTab)
+
+  useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
+
+  const handleSwitchTab = (tab: 'chat' | 'activity') => {
+    setActiveTab(tab)
+    onTabChange?.(tab)
+  }
 
   return (
     <aside className="w-full h-full flex flex-col border-l border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
@@ -49,7 +65,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setActiveTab('chat')}
+            onClick={() => handleSwitchTab('chat')}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-medium transition-colors ${
               activeTab === 'chat'
                 ? 'bg-[var(--ink-bg-elevated)] text-[var(--ink-accent)]'
@@ -61,7 +77,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('activity')}
+            onClick={() => handleSwitchTab('activity')}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-medium transition-colors ${
               activeTab === 'activity'
                 ? 'bg-[var(--ink-bg-elevated)] text-[var(--ink-accent)]'
@@ -70,9 +86,9 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           >
             <Activity className="w-3.5 h-3.5" />
             活动中心
-            {taskRecovery.length > 0 && (
+            {(taskRecovery.length > 0 || artifacts.length > 0) && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]">
-                {taskRecovery.length}
+                {taskRecovery.length + artifacts.length}
               </span>
             )}
           </button>
@@ -90,6 +106,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
         <div className="flex-1 overflow-hidden">
           <AiActivityCenter
             recoveryRecords={taskRecovery}
+            artifacts={artifacts}
             loading={taskRecoveryLoading}
             error={taskRecoveryError}
             onResume={onResumeTask}

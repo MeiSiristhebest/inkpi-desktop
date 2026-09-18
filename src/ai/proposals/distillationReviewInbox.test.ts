@@ -4,6 +4,7 @@ import { db } from '../../db/indexedDB'
 import type { CodexEntity } from '../../plugins/living-codex/types'
 import type { PromiseLedgerEntry } from '../../plugins/promise-ledger/types'
 import { indexedDbStoryStateStore } from '../../adapters/indexedDbStoryStateStore'
+import { distillationReviewStore } from './distillationReviewStore'
 
 describe('DistillationReviewInbox', () => {
   const workspaceId = 'proj-inbox-test'
@@ -11,6 +12,7 @@ describe('DistillationReviewInbox', () => {
 
   beforeEach(async () => {
     inbox = new DistillationReviewInbox()
+    await distillationReviewStore.clear(workspaceId)
     for (const e of await db.getAll<CodexEntity>('codexEntities')) {
       if (e.projectId === workspaceId) await db.delete('codexEntities', e.id)
     }
@@ -85,12 +87,101 @@ describe('DistillationReviewInbox', () => {
       promises: [],
     })
 
-    inbox.reject(item.id)
+    await inbox.reject(item.id)
     expect(item.status).toBe('rejected')
     expect(inbox.listPending(workspaceId)).toHaveLength(0)
 
     const allCodex = await db.getAll<CodexEntity>('codexEntities')
     const found = allCodex.find((e) => e.name === '假名字')
     expect(found).toBeUndefined()
+  })
+
+  it('ingests and accepts events into timelineNodes with ai-accepted provenance', async () => {
+    const [eventItem] = inbox.ingestDistilledFacts(workspaceId, 'task-distill-4', {
+      summary: '战斗事件',
+      entities: [],
+      events: [{ type: 'combat', description: '青云门大战黑水玄蛇', entityIds: ['entity-snake'] }],
+      promises: [],
+    })
+
+    expect(eventItem.category).toBe('event')
+    await inbox.accept(eventItem.id)
+    expect(eventItem.status).toBe('accepted')
+
+    const nodes = await db.getAll<any>('timelineNodes')
+    const savedNode = nodes.find(
+      (n) => n.projectId === workspaceId && n.eventTitle.includes('黑水玄蛇'),
+    )
+    expect(savedNode).toBeDefined()
+    expect(savedNode!.provenance.factLevel).toBe('canonical-fact')
+    expect(savedNode!.provenance.sourceType).toBe('ai-extracted')
+  })
+
+  it('supports keepHypothesis: saves to codex as non-canonical hypothesis', async () => {
+    const [item] = inbox.ingestDistilledFacts(workspaceId, 'task-distill-5', {
+      summary: '推测实体',
+      entities: [{ kind: 'character', name: '神秘黑衣人' }],
+      events: [],
+      promises: [],
+    })
+
+    await inbox.keepHypothesis(item.id)
+    expect(item.status).toBe('hypothesis')
+
+    const allCodex = await db.getAll<CodexEntity>('codexEntities')
+    const saved = allCodex.find((e) => e.projectId === workspaceId && e.name === '神秘黑衣人')
+    expect(saved).toBeDefined()
+    expect(saved!.provenance.factLevel).toBe('hypothesis')
+  })
+
+  it('supports mergeIntoEntity: merges alias and summary into existing entity', async () => {
+    const targetEntity: CodexEntity = {
+      id: 'codex-existing-1',
+      projectId: workspaceId,
+      name: '万剑一',
+      aliases: ['万前辈'],
+      category: 'character',
+      attributes: {},
+      relations: [],
+      summary: '青云门隐世宿老',
+      createdAt: 1000,
+      updatedAt: 1000,
+      provenance: { sourceType: 'author', factLevel: 'canonical-fact', createdAt: 1000 },
+    }
+    await db.put('codexEntities', targetEntity)
+
+    const [item] = inbox.ingestDistilledFacts(workspaceId, 'task-distill-6', {
+      summary: '别名提取',
+      entities: [{ kind: 'character', name: '祖师祠堂老人' }],
+      events: [],
+      promises: [],
+    })
+
+    await inbox.mergeIntoEntity(item.id, targetEntity)
+    expect(item.status).toBe('merged')
+    expect(item.mergedIntoId).toBe(targetEntity.id)
+
+    const updated = await db.get<CodexEntity>('codexEntities', targetEntity.id)
+    expect(updated).toBeDefined()
+    expect(updated!.aliases).toContain('祖师祠堂老人')
+    expect(updated!.summary).toContain('【提炼补充】')
+  })
+
+  it('restores pending items from durable storage after simulated reload', async () => {
+    inbox.ingestDistilledFacts(workspaceId, 'task-distill-7', {
+      summary: '持久化测试',
+      entities: [{ kind: 'item', name: '玄火鉴' }],
+      events: [],
+      promises: [],
+    })
+
+    // 新建一个全新实例模拟应用重启
+    const reloadedInbox = new DistillationReviewInbox()
+    expect(reloadedInbox.listPending(workspaceId)).toHaveLength(0)
+
+    await reloadedInbox.restoreFromStorage(workspaceId)
+    const pending = reloadedInbox.listPending(workspaceId)
+    expect(pending).toHaveLength(1)
+    expect(pending[0].name).toBe('玄火鉴')
   })
 })

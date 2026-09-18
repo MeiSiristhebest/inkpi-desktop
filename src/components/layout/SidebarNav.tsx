@@ -93,10 +93,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     const q = searchQuery.trim().toLowerCase()
     const navigationPlugins = activePlugins.filter((p) => {
       const cap = CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
-      if (cap && Array.isArray(cap.surfaces)) {
-        return (cap.surfaces as readonly string[]).includes('navigation')
-      }
-      return true
+      return Boolean(
+        cap &&
+        Array.isArray(cap.surfaces) &&
+        (cap.surfaces as readonly string[]).includes('navigation'),
+      )
     })
 
     const filtered = q
@@ -266,7 +267,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                         {plugins.map((p) => {
                           const Icon = p.icon || Sparkles
                           const isActive = activeTabId === p.id
-                          const capability = CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
+                          const capability =
+                            CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
                           const maturity = capability?.maturity
                           const showBeta = maturity === 'beta'
                           const showExp = maturity === 'experimental' || maturity === 'demo'

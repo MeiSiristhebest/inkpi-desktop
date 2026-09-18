@@ -1,11 +1,14 @@
 import { commandRegistry, type Command } from './commandRegistry'
 import { CAPABILITY_REGISTRY } from './capabilityRegistry'
+import type { InspectorSurface } from '../types/inspectorState'
 
 export interface NavigationHandler {
   openView: (tabId: string) => void
   openAssistant: () => void
   openActivityCenter?: () => void
   openSettings?: () => void
+  openInspector?: (surface: InspectorSurface, pluginId?: string) => void
+  openDrawer?: (pluginId: string) => void
   saveCurrentChapter?: () => Promise<void> | void
 }
 
@@ -47,7 +50,11 @@ export function registerDefaultCommands(): () => void {
       shortcut: 'Mod+J',
       category: 'intelligence',
       execute: () => {
-        activeNavigationHandler?.openAssistant()
+        if (activeNavigationHandler?.openInspector) {
+          activeNavigationHandler.openInspector('assistant')
+        } else {
+          activeNavigationHandler?.openAssistant()
+        }
       },
     },
     {
@@ -56,7 +63,9 @@ export function registerDefaultCommands(): () => void {
       keywords: ['activity', 'tasks', 'recovery', '活动中心', '任务', '后台'],
       category: 'intelligence',
       execute: () => {
-        if (activeNavigationHandler?.openActivityCenter) {
+        if (activeNavigationHandler?.openInspector) {
+          activeNavigationHandler.openInspector('activity')
+        } else if (activeNavigationHandler?.openActivityCenter) {
           activeNavigationHandler.openActivityCenter()
         } else {
           activeNavigationHandler?.openAssistant()
@@ -79,14 +88,26 @@ export function registerDefaultCommands(): () => void {
     unregisterCallbacks.push(commandRegistry.register(cmd))
   }
 
-  // 2. 从 CAPABILITY_REGISTRY 动态注册已收敛能力
+  // 2. 从 CAPABILITY_REGISTRY 动态注册已收敛能力，依据 surface 精准分发
   for (const cap of Object.values(CAPABILITY_REGISTRY)) {
     const surfaces = cap.surfaces as readonly string[]
     const isNavigation = surfaces.includes('navigation') || surfaces.includes('canvas')
+    const isInspector = surfaces.includes('inspector')
+    const isDrawer = surfaces.includes('drawer')
     const categoryStr = cap.category as string
+
+    // 动态生成恰当的动词描述
+    const actionLabel = isNavigation
+      ? '打开'
+      : isInspector
+        ? '在右栏审查'
+        : isDrawer
+          ? '呼出抽屉'
+          : '执行'
+
     const cmd: Command = {
       id: `cmd-capability-${cap.id}`,
-      title: `打开 ${cap.name}`,
+      title: `${actionLabel} ${cap.name}`,
       keywords: [cap.id, cap.name, cap.category, '插件', '模块'],
       category:
         categoryStr === 'worldbuilding'
@@ -99,6 +120,14 @@ export function registerDefaultCommands(): () => void {
       execute: () => {
         if (isNavigation) {
           activeNavigationHandler?.openView(cap.id)
+        } else if (isInspector) {
+          if (activeNavigationHandler?.openInspector) {
+            activeNavigationHandler.openInspector('plugin', cap.id)
+          } else if (activeNavigationHandler?.openDrawer) {
+            activeNavigationHandler.openDrawer(cap.id)
+          }
+        } else if (isDrawer) {
+          activeNavigationHandler?.openDrawer?.(cap.id)
         }
       },
     }

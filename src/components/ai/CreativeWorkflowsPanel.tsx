@@ -331,7 +331,9 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         )
         if (
           result.facts &&
-          (result.facts.entities.length > 0 || result.facts.promises.length > 0)
+          (result.facts.entities.length > 0 ||
+            result.facts.promises.length > 0 ||
+            (result.facts.events && result.facts.events.length > 0))
         ) {
           distillationReviewInbox.ingestDistilledFacts(projectId, distillationTaskId, result.facts)
         }

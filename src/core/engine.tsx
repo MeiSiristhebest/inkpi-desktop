@@ -22,6 +22,14 @@ import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
 import { CommandPaletteModal } from '../components/CommandPaletteModal'
+import {
+  type InspectorState,
+  type InspectorSurface,
+  initialInspectorState,
+  toggleInspectorSurface,
+} from '../types/inspectorState'
+import { useOptionalActiveWritingContext } from './activeWritingContext'
+import { useOptionalPluginHostContext } from './pluginHostContext'
 
 interface EngineProps {
   projectId: string
@@ -118,11 +126,19 @@ export const Engine: FC<EngineProps> = ({
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(() => !isCompactViewport())
   const compactViewportRef = useRef(isCompactViewport())
-  const [rightOpen, setRightOpen] = useState(defaultRightOpen)
+  const [inspectorState, setInspectorState] = useState<InspectorState>(() =>
+    defaultRightOpen ? { surface: 'assistant' } : initialInspectorState,
+  )
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const [isTypewriter, setIsTypewriter] = useState(false)
   const [stats, setStats] = useState<Stats>({ wordCount: 0 })
+
+  const activeWritingCtx = useOptionalActiveWritingContext()
+  const pluginHostCtx = useOptionalPluginHostContext()
+
+  // 统一面板开合状态：由 inspectorState 作为单一真理来源
+  const isRightPanelOpen = inspectorState.surface !== 'closed'
 
   useEffect(() => {
     const unreg = registerDefaultCommands()
@@ -130,11 +146,20 @@ export const Engine: FC<EngineProps> = ({
       openView: (tabId) => setActiveTabId(tabId),
       openAssistant: () => {
         onOpenAssistant?.()
-        setRightOpen(true)
+        setInspectorState({ surface: 'assistant' })
       },
       openActivityCenter: () => {
         onOpenAssistant?.()
-        setRightOpen(true)
+        setInspectorState({ surface: 'activity' })
+      },
+      openInspector: (surface: InspectorSurface, pluginId?: string) => {
+        if (surface === 'assistant' || surface === 'activity') {
+          onOpenAssistant?.()
+        }
+        setInspectorState({ surface, pluginId })
+      },
+      openDrawer: (pluginId: string) => {
+        pluginHostCtx?.openDrawer(pluginId)
       },
       openSettings: () => setSettingsOpen(true),
     })
@@ -142,7 +167,7 @@ export const Engine: FC<EngineProps> = ({
       unreg()
       setNavigationHandler(null)
     }
-  }, [onOpenAssistant])
+  }, [onOpenAssistant, pluginHostCtx])
 
   // 全局快捷键监听：Cmd/Ctrl+K 打开全局指令面板
   useEffect(() => {
@@ -226,9 +251,9 @@ export const Engine: FC<EngineProps> = ({
     onToggleFullscreen: () => setIsFullscreen((f) => !f),
     onToggleRightPanel: () => {
       if (onOpenAssistant) onOpenAssistant()
-      setRightOpen((o) => !o)
+      setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
     },
-    isRightOpen: rightOpen,
+    isRightOpen: isRightPanelOpen,
     hasAssistant: Boolean(onOpenAssistant),
   }
 
@@ -338,18 +363,26 @@ export const Engine: FC<EngineProps> = ({
                 <IconButton
                   onClick={() => {
                     onOpenAssistant()
-                    setRightOpen((o) => !o)
+                    setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
                   }}
-                  title={rightOpen ? '收起 AI 助手' : '打开 AI 助手'}
-                  className={rightOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''}
+                  title={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}
+                  className={
+                    isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
+                  }
                 >
                   <Sparkles className="w-4 h-4" />
                 </IconButton>
               ) : (
                 <IconButton
-                  onClick={() => setRightOpen((o) => !o)}
-                  title={rightOpen ? '收起信息栏' : '展开信息栏'}
-                  className={rightOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''}
+                  onClick={() =>
+                    setInspectorState((curr) =>
+                      curr.surface === 'closed' ? { surface: 'assistant' } : { surface: 'closed' },
+                    )
+                  }
+                  title={isRightPanelOpen ? '收起信息栏' : '展开信息栏'}
+                  className={
+                    isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
+                  }
                 >
                   <PanelRight className="w-4 h-4" />
                 </IconButton>
@@ -365,7 +398,7 @@ export const Engine: FC<EngineProps> = ({
           </div>
 
           {/* 右侧面板：展开且非全屏/非聚焦时呈现（优先展示 AI 对话助手） */}
-          {rightOpen &&
+          {isRightPanelOpen &&
             !isFullscreen &&
             !focusMode &&
             (rightPanel ? (
@@ -433,6 +466,7 @@ export const Engine: FC<EngineProps> = ({
       <CommandPaletteModal
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
+        context={activeWritingCtx ?? undefined}
       />
     </div>
   )

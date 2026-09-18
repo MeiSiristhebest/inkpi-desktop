@@ -172,4 +172,40 @@ describe('AiAssistantPanel Component', () => {
     )
     expect((screen.getByText('发送') as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('should support initialTab="activity" and show badge for artifacts', () => {
+    const onTabChange = vi.fn()
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input=""
+        busy={false}
+        connected={true}
+        initialTab="activity"
+        onTabChange={onTabChange}
+        artifacts={[
+          {
+            id: 'art-1',
+            type: 'creative.story-plan',
+            version: 1,
+            taskId: 't-1',
+            kind: 'story-plan',
+            content: {},
+            provenance: {},
+            createdAt: 1000,
+            updatedAt: 1000,
+          },
+        ]}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('ai-activity-center')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '副驾驶' }))
+    expect(onTabChange).toHaveBeenCalledWith('chat')
+  })
 })

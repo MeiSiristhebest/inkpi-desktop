@@ -1,6 +1,17 @@
 import { useState, type FC } from 'react'
-import { Activity, Play, XCircle, AlertTriangle, Send, Trash2 } from 'lucide-react'
+import {
+  Activity,
+  Play,
+  XCircle,
+  AlertTriangle,
+  Send,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+} from 'lucide-react'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
+import type { AiArtifact } from '../../ai/artifacts/artifactStore'
 
 export interface ActivityResultItem {
   id: string
@@ -9,6 +20,7 @@ export interface ActivityResultItem {
   summary: string
   completedAt: number
   status: 'completed' | 'failed'
+  artifact?: AiArtifact
 }
 
 export interface AiActivityCenterProps {
@@ -20,6 +32,8 @@ export interface AiActivityCenterProps {
   error?: string
   /** 历史已完成/沉淀的结果列表（可选） */
   recentResults?: ActivityResultItem[]
+  /** 工作区产物列表（可选） */
+  artifacts?: AiArtifact[]
   /** 交互回调 */
   onResume?: (taskId: string) => Promise<boolean>
   onCancel?: (taskId: string) => Promise<boolean>
@@ -32,6 +46,7 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
   loading = false,
   error,
   recentResults = [],
+  artifacts = [],
   onResume,
   onCancel,
   onDismiss,
@@ -39,6 +54,11 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
 }) => {
   const [steerInputs, setSteerInputs] = useState<Record<string, string>>({})
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({})
+
+  const toggleDetails = (id: string) => {
+    setExpandedDetails((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
 
   const handleSteer = async (taskId: string) => {
     const text = (steerInputs[taskId] || '').trim()
@@ -234,26 +254,104 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
           })}
         </div>
 
-        {/* 2. 近期产出与历史结果 */}
-        {recentResults.length > 0 && (
+        {/* 2. 工作区产物与完成结果 (True AI Result Center) */}
+        {(recentResults.length > 0 || artifacts.length > 0) && (
           <div className="space-y-2 pt-2 border-t border-[var(--ink-border)]">
             <div className="text-[11px] font-semibold text-[var(--ink-text-muted)] uppercase tracking-wider">
-              近期完成产物 ({recentResults.length})
+              产物与已完成结果 ({recentResults.length + artifacts.length})
             </div>
-            {recentResults.map((item) => (
-              <div
-                key={item.id}
-                className="p-2.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-1 text-[11px]"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-[var(--ink-text)]">{item.title}</span>
-                  <span className="text-[10px] text-[var(--ink-text-faint)]">
-                    {new Date(item.completedAt).toLocaleTimeString()}
-                  </span>
+
+            {/* Recent Results */}
+            {recentResults.map((item) => {
+              const isExpanded = Boolean(expandedDetails[item.id])
+              return (
+                <div
+                  key={item.id}
+                  data-testid={`activity-result-${item.id}`}
+                  className="p-2.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-1.5 text-[11px]"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-[var(--ink-text)]">{item.title}</span>
+                    <span className="text-[10px] text-[var(--ink-text-faint)]">
+                      {new Date(item.completedAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <p className="text-[var(--ink-text-muted)] leading-relaxed">{item.summary}</p>
+                  {item.artifact && (
+                    <div className="pt-1">
+                      <button
+                        onClick={() => toggleDetails(item.id)}
+                        className="flex items-center gap-1 text-[10px] text-[var(--ink-accent)] hover:underline"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="w-3 h-3" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3" />
+                        )}
+                        <span>{isExpanded ? '收起溯源参数' : '查看参数与溯源 (Advanced)'}</span>
+                      </button>
+                      {isExpanded && (
+                        <div
+                          data-testid={`result-details-${item.id}`}
+                          className="mt-1.5 p-2 rounded bg-[var(--ink-bg-panel)] font-mono text-[10px] text-[var(--ink-text-muted)] space-y-0.5"
+                        >
+                          <div>ID: {item.artifact.id}</div>
+                          <div>任务: {item.artifact.taskId}</div>
+                          <div>类型: {item.artifact.type}</div>
+                          <div>版本: {item.artifact.version}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <p className="text-[var(--ink-text-muted)] leading-relaxed">{item.summary}</p>
-              </div>
-            ))}
+              )
+            })}
+
+            {/* Standalone Artifacts */}
+            {artifacts.map((art) => {
+              const isExpanded = Boolean(expandedDetails[art.id])
+              return (
+                <div
+                  key={art.id}
+                  data-testid={`activity-artifact-${art.id}`}
+                  className="p-2.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-1.5 text-[11px]"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-medium text-[var(--ink-text)]">
+                      <FileText className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
+                      {art.type}
+                    </span>
+                    <span className="text-[10px] text-[var(--ink-text-faint)]">
+                      v{art.version} · {new Date(art.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <div className="pt-1">
+                    <button
+                      onClick={() => toggleDetails(art.id)}
+                      className="flex items-center gap-1 text-[10px] text-[var(--ink-accent)] hover:underline"
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-3 h-3" />
+                      ) : (
+                        <ChevronRight className="w-3 h-3" />
+                      )}
+                      <span>{isExpanded ? '收起溯源参数' : '查看溯源详情 (Advanced)'}</span>
+                    </button>
+                    {isExpanded && (
+                      <div
+                        data-testid={`artifact-details-${art.id}`}
+                        className="mt-1.5 p-2 rounded bg-[var(--ink-bg-panel)] font-mono text-[10px] text-[var(--ink-text-muted)] space-y-0.5"
+                      >
+                        <div>ID: {art.id}</div>
+                        <div>Task ID: {art.taskId}</div>
+                        <div>Workspace: {art.ownership?.workspaceId || '—'}</div>
+                        <div>Source Rev: {art.provenance?.sourceRevision ?? '—'}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
