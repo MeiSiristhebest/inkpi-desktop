@@ -342,4 +342,146 @@ describe('WorkspaceLifecycleService', () => {
     await service.processPendingPurgeTombstones(remoteClient)
     expect(remoteClient.purgeWorkspace).not.toHaveBeenCalled()
   })
+
+  it('deeply remaps nested StoryState in settingsKV (entities, relations, events, promises)', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const backupWithStoryState = {
+      ...backup!,
+      domainData: {
+        codexEntities: [
+          { id: 'ent-1', projectId: 'orig-proj', name: 'Lin Fan' },
+          { id: 'ent-2', projectId: 'orig-proj', name: 'Elder Wu' },
+        ],
+        narrativeThreads: [
+          { id: 'th-1', projectId: 'orig-proj', name: 'Main Quest' },
+        ],
+        settingsKV: [
+          {
+            key: 'storyState::orig-proj',
+            value: {
+              projectId: 'orig-proj',
+              entities: {
+                'ent-1': { id: 'ent-1', name: 'Lin Fan' },
+                'ent-2': { id: 'ent-2', name: 'Elder Wu' },
+              },
+              relations: {
+                'rel-1': {
+                  id: 'rel-1',
+                  sourceEntityId: 'ent-1',
+                  targetEntityId: 'ent-2',
+                  type: 'master-disciple',
+                },
+              },
+              events: {
+                'evt-1': {
+                  id: 'evt-1',
+                  entityIds: ['ent-1', 'ent-2'],
+                },
+              },
+              promises: {
+                'prom-1': {
+                  id: 'prom-1',
+                  threadId: 'th-1',
+                },
+              },
+            },
+          },
+        ],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+    const result = await service.importWorkspace(backupWithStoryState)
+    expect(result.ok).toBe(true)
+
+    const putCalls = putSpy.mock.calls
+    const storyStatePut = putCalls.find(
+      (call) => call[0] === 'settingsKV' && (call[1] as any).key.startsWith('storyState::'),
+    )
+    expect(storyStatePut).toBeDefined()
+    const remappedState = (storyStatePut![1] as any).value
+
+    // Verify entities keys and IDs were remapped
+    const entityKeys = Object.keys(remappedState.entities)
+    expect(entityKeys).toHaveLength(2)
+    expect(entityKeys[0]).not.toBe('ent-1')
+    expect(entityKeys[0]).toContain('-imported-')
+    expect(remappedState.entities[entityKeys[0]].id).toBe(entityKeys[0])
+
+    // Verify relations sourceEntityId & targetEntityId match new entity IDs
+    const rel = remappedState.relations['rel-1']
+    expect(rel.sourceEntityId).toBe(remappedState.entities[entityKeys[0]].id)
+    expect(rel.targetEntityId).toBe(remappedState.entities[entityKeys[1]].id)
+
+    // Verify events entityIds match new entity IDs
+    const evt = remappedState.events['evt-1']
+    expect(evt.entityIds).toEqual(entityKeys)
+
+    // Verify promises threadId was remapped with thread namespace
+    const prom = remappedState.promises['prom-1']
+    expect(prom.threadId).not.toBe('th-1')
+    expect(prom.threadId).toContain('-imported-')
+
+    putSpy.mockRestore()
+  })
+
+  it('deeply remaps artifact lineage and fails Pass 3 if lineage.parentArtifactId is dangling', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const backupWithArtifacts = {
+      ...backup!,
+      domainData: {
+        aiArtifacts: [
+          {
+            id: 'art-parent',
+            projectId: 'orig-proj',
+            ownership: { workspaceId: 'orig-proj' },
+          },
+          {
+            id: 'art-child',
+            projectId: 'orig-proj',
+            ownership: { workspaceId: 'orig-proj' },
+            lineage: { parentArtifactId: 'art-parent' },
+          },
+        ],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+    const successResult = await service.importWorkspace(backupWithArtifacts)
+    expect(successResult.ok).toBe(true)
+
+    const putCalls = putSpy.mock.calls
+    const childPut = putCalls.find((call) => call[0] === 'aiArtifacts' && (call[1] as any).id.startsWith('art-child'))
+    expect(childPut).toBeDefined()
+    const remappedChild = childPut![1] as any
+    expect(remappedChild.lineage.parentArtifactId).not.toBe('art-parent')
+    expect(remappedChild.lineage.parentArtifactId).toContain('art-parent-imported-')
+    putSpy.mockRestore()
+
+    // Test failure when parentArtifactId is dangling
+    const danglingBackup = {
+      ...backup!,
+      domainData: {
+        aiArtifacts: [
+          {
+            id: 'art-child',
+            projectId: 'orig-proj',
+            ownership: { workspaceId: 'orig-proj' },
+            lineage: { parentArtifactId: 'ghost-parent-artifact' },
+          },
+        ],
+      },
+    }
+
+    const failResult = await service.importWorkspace(danglingBackup)
+    expect(failResult.ok).toBe(false)
+    expect(failResult.error).toContain('Referential integrity violation')
+    expect(failResult.error).toContain('ghost-parent-artifact')
+  })
 })

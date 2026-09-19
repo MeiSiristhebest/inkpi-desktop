@@ -13,8 +13,8 @@ describe('Runtime Compatibility Gate (CI Contract Enforcement)', () => {
   it('pinned commit in runtime.lock.json corresponds to latest verified runtime', () => {
     expect(runtimeLock.pinnedCommit).toBeDefined()
     expect(runtimeLock.pinnedCommit.length).toBe(40)
-    // Must be at or newer than d7c1334 (which introduced workspace.purge and JIT keywords)
-    expect(runtimeLock.pinnedCommit).toBe('ce33aef93e75a831cf707110339abbe9c8eea546')
+    // Pinned commit must match verified upstream commit d7c1334 on MeiSiristhebest/inkpi
+    expect(runtimeLock.pinnedCommit).toBe('d7c1334f9f4328113df83ddfc7863502436fc2b8')
   })
 
   it('verifies Artifact protocol contract supports workspace isolation', () => {

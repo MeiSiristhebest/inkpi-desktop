@@ -23,7 +23,6 @@ import type {
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createPluginAnalysisTask, taskResultText } from '../ai'
 import { resolvePluginContextProvider } from './pluginDefinitions'
-import { IndexedDbArtifactStore } from '../ai/artifacts/artifactStore'
 import type { PluginAnalysisResult } from '../types/pluginHost'
 
 export const DesktopPluginHostContext = createContext<DesktopPluginHostContextValue | null>(null)
@@ -127,32 +126,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
 
           const taskResult = await runTask(task)
           const textOutput = taskResultText(taskResult)
-          let artifactId: string | undefined
-
-          if (taskResult?.status === 'completed' && textOutput) {
-            try {
-              const store = new IndexedDbArtifactStore()
-              const artifact = await store.save({
-                taskId: task.id,
-                kind: 'analysis',
-                title: `${pluginId} 分析产物`,
-                format: 'text',
-                data: textOutput,
-                ownership: {
-                  workspaceId: projectId,
-                  documentId: activeChapter?.id,
-                },
-                metadata: {
-                  pluginId,
-                  workspaceId: projectId,
-                  sourceRevision: activeChapter?.revision,
-                },
-              })
-              artifactId = artifact.id
-            } catch (e) {
-              console.warn(`[PluginHost] Failed to auto-persist artifact for ${pluginId}:`, e)
-            }
-          }
+          // Canonical artifactId persisted by CreativeIntelligence / ArtifactRuntime
+          const artifactId = taskResult?.artifactIds?.[0] ?? (taskResult?.provenance as any)?.artifactId
 
           return {
             taskId: task.id,
@@ -193,34 +168,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           })
 
           const taskResult = await runTask(task)
-          const text = taskResultText(taskResult)
-
-          // Auto-persist completed analysis output into workspace-scoped artifact store
-          if (taskResult?.status === 'completed' && text) {
-            try {
-              const store = new IndexedDbArtifactStore()
-              await store.save({
-                taskId: task.id,
-                kind: 'analysis',
-                title: `${pluginId} 分析产物`,
-                format: 'text',
-                data: text,
-                ownership: {
-                  workspaceId: projectId,
-                  documentId: activeChapter?.id,
-                },
-                metadata: {
-                  pluginId,
-                  workspaceId: projectId,
-                  sourceRevision: activeChapter?.revision,
-                },
-              })
-            } catch (err) {
-              console.warn(`[PluginHost] Auto-persisting artifact failed for ${pluginId}:`, err)
-            }
-          }
-
-          return text
+          return taskResultText(taskResult)
         } catch {
           return null
         }

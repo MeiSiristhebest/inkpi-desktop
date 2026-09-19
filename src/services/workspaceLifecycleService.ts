@@ -278,7 +278,7 @@ export class WorkspaceLifecycleService {
       updatedAt: now,
     }
 
-    // ── PASS 1: ID PRE-ALLOCATION (P0-1, INV-08) ──
+    // ── PASS 1: NAMESPACED ID PRE-ALLOCATION (P0-1, INV-08) ──
     const volumeIdMap = new Map<string, string>()
     const oldVolumes = Array.isArray(archive.volumes) ? archive.volumes : []
     const newVolumes: VolumeRecord[] = oldVolumes.map((vol) => {
@@ -309,37 +309,46 @@ export class WorkspaceLifecycleService {
       }
     })
 
+    // Strict namespaced ID maps to prevent cross-store key collisions
     const entityIdMap = new Map<string, string>()
     const threadIdMap = new Map<string, string>()
     const promiseIdMap = new Map<string, string>()
+    const artifactIdMap = new Map<string, string>()
+    const timelineNodeIdMap = new Map<string, string>()
     const sourceDomainData = archive.domainData || {}
 
-    // Pre-allocate all domain primary IDs before writing any record
+    // Pre-allocate deterministic namespaced primary IDs
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
       if (!Array.isArray(records)) continue
       for (const rec of records) {
         if (rec && typeof rec === 'object' && 'id' in rec && typeof rec.id === 'string') {
           const generatedId = `${rec.id}-imported-${this.idGen.generate('sub').slice(-6)}`
-          entityIdMap.set(rec.id, generatedId)
           if (storeName === 'narrativeThreads') {
             threadIdMap.set(rec.id, generatedId)
           } else if (storeName === 'promiseLedger') {
             promiseIdMap.set(rec.id, generatedId)
+          } else if (storeName === 'aiArtifacts') {
+            artifactIdMap.set(rec.id, generatedId)
+          } else if (storeName === 'timelineNodes') {
+            timelineNodeIdMap.set(rec.id, generatedId)
+          } else {
+            // Default entity namespace (codexEntities, formData, tableRows, cardRecords, etc.)
+            entityIdMap.set(rec.id, generatedId)
           }
         }
       }
     }
 
-    // ── PASS 2: DEEP RECURSIVE FOREIGN KEY & TOPOLOGY REMAPPING ──
+    // ── PASS 2: SCHEMA-DRIVEN DEEP RECURSIVE TOPOLOGY REMAPPING ──
     const remappedDomainData: Record<string, Record<string, unknown>[]> = {}
     let totalRemappedDomainRecords = 0
     const encodedOldWorkspaceId = encodeURIComponent(oldWorkspaceId)
     const encodedNewWorkspaceId = encodeURIComponent(newWorkspaceId)
 
-    const remapId = (id: unknown): string | unknown =>
+    const remapEntityId = (id: unknown): string | unknown =>
       typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id
 
-    const remapIdArray = (ids: unknown): unknown[] | unknown => {
+    const remapEntityArray = (ids: unknown): unknown[] | unknown => {
       if (!Array.isArray(ids)) return ids
       return ids.map((id) => (typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id))
     }
@@ -352,7 +361,7 @@ export class WorkspaceLifecycleService {
         if (!rec || typeof rec !== 'object') continue
         const item: Record<string, any> = { ...rec }
 
-        // 1. Remap workspace/project foreign key
+        // 1. Workspace / Project Foreign Keys
         if ('projectId' in item && item.projectId === oldWorkspaceId) {
           item.projectId = newWorkspaceId
         }
@@ -360,42 +369,116 @@ export class WorkspaceLifecycleService {
           item.workspaceId = newWorkspaceId
         }
 
-        // 2. Remap settingsKV keys (plain & URL-encoded)
+        // 2. SettingsKV & Nested StoryState Object Graph Remapping
         if (storeName === 'settingsKV' && 'key' in item && typeof item.key === 'string') {
           item.key = item.key
             .replaceAll(encodedOldWorkspaceId, encodedNewWorkspaceId)
             .replaceAll(oldWorkspaceId, newWorkspaceId)
 
           if (item.value && typeof item.value === 'object') {
-            const val = { ...(item.value as Record<string, unknown>) }
+            const val = { ...(item.value as Record<string, any>) }
             if (val.projectId === oldWorkspaceId) val.projectId = newWorkspaceId
             if (val.workspaceId === oldWorkspaceId) val.workspaceId = newWorkspaceId
             if (typeof val.chapterId === 'string' && chapterIdMap.has(val.chapterId)) {
               val.chapterId = chapterIdMap.get(val.chapterId)!
             }
+
+            // Recursive StoryState Nested Graph Remapping (P0-1)
+            if (item.key.startsWith('storyState::') || val.entities || val.relations) {
+              // Remap entities dictionary
+              if (val.entities && typeof val.entities === 'object') {
+                const remappedEntities: Record<string, any> = {}
+                for (const [oldEntId, entData] of Object.entries(val.entities)) {
+                  const newEntId = entityIdMap.get(oldEntId) ?? oldEntId
+                  remappedEntities[newEntId] = {
+                    ...(entData as any),
+                    id: newEntId,
+                  }
+                }
+                val.entities = remappedEntities
+              }
+
+              // Remap relations dictionary
+              if (val.relations && typeof val.relations === 'object') {
+                const remappedRelations: Record<string, any> = {}
+                for (const [oldRelId, relData] of Object.entries(val.relations)) {
+                  const rel = { ...(relData as any) }
+                  if (rel.sourceEntityId && entityIdMap.has(rel.sourceEntityId)) {
+                    rel.sourceEntityId = entityIdMap.get(rel.sourceEntityId)!
+                  }
+                  if (rel.targetEntityId && entityIdMap.has(rel.targetEntityId)) {
+                    rel.targetEntityId = entityIdMap.get(rel.targetEntityId)!
+                  }
+                  remappedRelations[oldRelId] = rel
+                }
+                val.relations = remappedRelations
+              }
+
+              // Remap events
+              if (val.events && typeof val.events === 'object') {
+                const remappedEvents: Record<string, any> = {}
+                for (const [oldEvtId, evtData] of Object.entries(val.events)) {
+                  const evt = { ...(evtData as any) }
+                  if (Array.isArray(evt.entityIds)) {
+                    evt.entityIds = remapEntityArray(evt.entityIds)
+                  }
+                  remappedEvents[oldEvtId] = evt
+                }
+                val.events = remappedEvents
+              }
+
+              // Remap promises
+              if (val.promises && typeof val.promises === 'object') {
+                const remappedPromises: Record<string, any> = {}
+                for (const [oldPromId, promData] of Object.entries(val.promises)) {
+                  const prom = { ...(promData as any) }
+                  if (prom.threadId && threadIdMap.has(prom.threadId)) {
+                    prom.threadId = threadIdMap.get(prom.threadId)!
+                  }
+                  remappedPromises[oldPromId] = prom
+                }
+                val.promises = remappedPromises
+              }
+            }
+
             item.value = val
           }
         }
 
-        // 3. Remap aiArtifacts ownership, metadata & parentArtifactId
+        // 3. AiArtifacts Deep Lineage, Provenance & Ownership Remapping
         if (storeName === 'aiArtifacts') {
           if (item.ownership && typeof item.ownership === 'object') {
             item.ownership = { ...item.ownership, workspaceId: newWorkspaceId }
           }
           if (item.metadata && typeof item.metadata === 'object') {
             item.metadata = { ...item.metadata, workspaceId: newWorkspaceId }
+            if (item.metadata.parentArtifactId && artifactIdMap.has(item.metadata.parentArtifactId)) {
+              item.metadata.parentArtifactId = artifactIdMap.get(item.metadata.parentArtifactId)!
+            }
           }
-          if (item.parentArtifactId && entityIdMap.has(item.parentArtifactId)) {
-            item.parentArtifactId = entityIdMap.get(item.parentArtifactId)!
+          if (item.lineage && typeof item.lineage === 'object') {
+            item.lineage = { ...item.lineage }
+            if (item.lineage.parentArtifactId && artifactIdMap.has(item.lineage.parentArtifactId)) {
+              item.lineage.parentArtifactId = artifactIdMap.get(item.lineage.parentArtifactId)!
+            }
+          }
+          if (item.provenance && typeof item.provenance === 'object') {
+            item.provenance = { ...item.provenance }
+            if (item.provenance.parentArtifactId && artifactIdMap.has(item.provenance.parentArtifactId)) {
+              item.provenance.parentArtifactId = artifactIdMap.get(item.provenance.parentArtifactId)!
+            }
+          }
+          if (item.documentId && chapterIdMap.has(item.documentId)) {
+            item.documentId = chapterIdMap.get(item.documentId)!
           }
         }
 
-        // 4. Remap volume foreign key
+        // 4. Volume Foreign Keys
         if (typeof item.volumeId === 'string' && volumeIdMap.has(item.volumeId)) {
           item.volumeId = volumeIdMap.get(item.volumeId)!
         }
 
-        // 5. Remap chapter foreign keys
+        // 5. Chapter Foreign Keys
         if (typeof item.chapterId === 'string' && chapterIdMap.has(item.chapterId)) {
           item.chapterId = chapterIdMap.get(item.chapterId)!
         }
@@ -409,7 +492,7 @@ export class WorkspaceLifecycleService {
           item.documentId = chapterIdMap.get(item.documentId)!
         }
 
-        // 6. Systematic Deep Entity & Relational Foreign Key Remapping (P0-1)
+        // 6. Systematic Entity & Relational Foreign Keys
         if (typeof item.sourceEntityId === 'string' && entityIdMap.has(item.sourceEntityId)) {
           item.sourceEntityId = entityIdMap.get(item.sourceEntityId)!
         }
@@ -434,39 +517,39 @@ export class WorkspaceLifecycleService {
         if (typeof item.parentId === 'string' && entityIdMap.has(item.parentId)) {
           item.parentId = entityIdMap.get(item.parentId)!
         }
-        if (typeof item.parentEventId === 'string' && entityIdMap.has(item.parentEventId)) {
-          item.parentEventId = entityIdMap.get(item.parentEventId)!
+        if (typeof item.parentEventId === 'string' && timelineNodeIdMap.has(item.parentEventId)) {
+          item.parentEventId = timelineNodeIdMap.get(item.parentEventId)!
         }
 
-        // 7. Remap thread & promise cross references
-        if (typeof item.threadId === 'string' && entityIdMap.has(item.threadId)) {
-          item.threadId = entityIdMap.get(item.threadId)!
+        // 7. Thread & Promise Cross-References
+        if (typeof item.threadId === 'string' && threadIdMap.has(item.threadId)) {
+          item.threadId = threadIdMap.get(item.threadId)!
         }
-        if (typeof item.promiseId === 'string' && entityIdMap.has(item.promiseId)) {
-          item.promiseId = entityIdMap.get(item.promiseId)!
+        if (typeof item.promiseId === 'string' && promiseIdMap.has(item.promiseId)) {
+          item.promiseId = promiseIdMap.get(item.promiseId)!
         }
 
-        // 8. Remap arrays of entity IDs
+        // 8. Arrays of Entity IDs
         if (Array.isArray(item.entityIds)) {
-          item.entityIds = remapIdArray(item.entityIds)
+          item.entityIds = remapEntityArray(item.entityIds)
         }
         if (Array.isArray(item.relatedEntityIds)) {
-          item.relatedEntityIds = remapIdArray(item.relatedEntityIds)
+          item.relatedEntityIds = remapEntityArray(item.relatedEntityIds)
         }
         if (Array.isArray(item.linkedEntityIds)) {
-          item.linkedEntityIds = remapIdArray(item.linkedEntityIds)
+          item.linkedEntityIds = remapEntityArray(item.linkedEntityIds)
         }
         if (Array.isArray(item.characterIds)) {
-          item.characterIds = remapIdArray(item.characterIds)
+          item.characterIds = remapEntityArray(item.characterIds)
         }
         if (Array.isArray(item.involvedEntityIds)) {
-          item.involvedEntityIds = remapIdArray(item.involvedEntityIds)
+          item.involvedEntityIds = remapEntityArray(item.involvedEntityIds)
         }
         if (Array.isArray(item.references)) {
-          item.references = remapIdArray(item.references)
+          item.references = remapEntityArray(item.references)
         }
 
-        // 9. Remap nested relation collections
+        // 9. Nested Codex Entity Relations
         if (Array.isArray(item.relations)) {
           item.relations = item.relations.map((rel: any) => {
             if (rel && typeof rel === 'object' && typeof rel.targetId === 'string') {
@@ -479,9 +562,19 @@ export class WorkspaceLifecycleService {
           })
         }
 
-        // 10. Remap primary ID to avoid collision
-        if ('id' in item && typeof item.id === 'string' && entityIdMap.has(item.id)) {
-          item.id = entityIdMap.get(item.id)!
+        // 10. Primary ID Mapping (Using Namespaced Pre-allocated Map)
+        if ('id' in item && typeof item.id === 'string') {
+          if (storeName === 'narrativeThreads' && threadIdMap.has(item.id)) {
+            item.id = threadIdMap.get(item.id)!
+          } else if (storeName === 'promiseLedger' && promiseIdMap.has(item.id)) {
+            item.id = promiseIdMap.get(item.id)!
+          } else if (storeName === 'aiArtifacts' && artifactIdMap.has(item.id)) {
+            item.id = artifactIdMap.get(item.id)!
+          } else if (storeName === 'timelineNodes' && timelineNodeIdMap.has(item.id)) {
+            item.id = timelineNodeIdMap.get(item.id)!
+          } else if (entityIdMap.has(item.id)) {
+            item.id = entityIdMap.get(item.id)!
+          }
         }
 
         remappedList.push(item)
@@ -491,12 +584,13 @@ export class WorkspaceLifecycleService {
       totalRemappedDomainRecords += remappedList.length
     }
 
-    // ── PASS 3: TOPOLOGICAL REFERENTIAL INTEGRITY CHECK (P0-1, INV-08) ──
+    // ── PASS 3: STRICT TOPOLOGICAL GRAPH INTEGRITY VALIDATION (P0-1, INV-08) ──
     const validVolumeIds = new Set(newVolumes.map((v) => v.id))
     const validChapterIds = new Set(newChapters.map((c) => c.id))
     const validEntityIds = new Set(Array.from(entityIdMap.values()))
+    const validArtifactIds = new Set(Array.from(artifactIdMap.values()))
 
-    // Check chapters reference valid volumes
+    // 1. Validate chapters reference valid volumes
     for (const ch of newChapters) {
       if (ch.volumeId && !validVolumeIds.has(ch.volumeId)) {
         return {
@@ -506,7 +600,7 @@ export class WorkspaceLifecycleService {
       }
     }
 
-    // Check domain records reference valid chapters, volumes, and entities
+    // 2. Validate domain records reference valid chapters, volumes, entities, and artifact lineage
     for (const [storeName, records] of Object.entries(remappedDomainData)) {
       for (const rec of records) {
         if (rec.volumeId && typeof rec.volumeId === 'string' && !validVolumeIds.has(rec.volumeId)) {
@@ -521,7 +615,6 @@ export class WorkspaceLifecycleService {
             error: `Referential integrity violation: ${storeName} record references non-existent chapter '${rec.chapterId}'`,
           }
         }
-        // Validate relational integrity: sourceEntityId and targetEntityId must point to valid new entities
         if (rec.sourceEntityId && typeof rec.sourceEntityId === 'string' && !validEntityIds.has(rec.sourceEntityId)) {
           return {
             ok: false,
@@ -532,6 +625,43 @@ export class WorkspaceLifecycleService {
           return {
             ok: false,
             error: `Referential integrity violation: ${storeName} record references non-existent targetEntityId '${rec.targetEntityId}'`,
+          }
+        }
+        // Validate nested codex relations targetId
+        if (Array.isArray(rec.relations)) {
+          for (const rel of rec.relations) {
+            if (rel && typeof rel === 'object' && typeof rel.targetId === 'string' && !validEntityIds.has(rel.targetId)) {
+              return {
+                ok: false,
+                error: `Referential integrity violation: ${storeName} entity contains nested relation pointing to non-existent targetId '${rel.targetId}'`,
+              }
+            }
+          }
+        }
+        // Validate artifact lineage parent
+        if (storeName === 'aiArtifacts' && rec.lineage && typeof rec.lineage === 'object' && rec.lineage.parentArtifactId) {
+          if (!validArtifactIds.has(rec.lineage.parentArtifactId)) {
+            return {
+              ok: false,
+              error: `Referential integrity violation: aiArtifacts lineage references non-existent parentArtifactId '${rec.lineage.parentArtifactId}'`,
+            }
+          }
+        }
+        // Validate nested StoryState relations
+        if (storeName === 'settingsKV' && rec.key && rec.key.startsWith('storyState::') && rec.value && rec.value.relations) {
+          for (const [relId, rel] of Object.entries(rec.value.relations as Record<string, any>)) {
+            if (rel.sourceEntityId && !validEntityIds.has(rel.sourceEntityId)) {
+              return {
+                ok: false,
+                error: `Referential integrity violation: StoryState relation '${relId}' references non-existent sourceEntityId '${rel.sourceEntityId}'`,
+              }
+            }
+            if (rel.targetEntityId && !validEntityIds.has(rel.targetEntityId)) {
+              return {
+                ok: false,
+                error: `Referential integrity violation: StoryState relation '${relId}' references non-existent targetEntityId '${rel.targetEntityId}'`,
+              }
+            }
           }
         }
       }
