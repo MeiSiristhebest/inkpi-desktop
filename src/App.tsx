@@ -109,6 +109,9 @@ const ProjectEngine: FC<{
   resumeTask?: (taskId: string) => Promise<boolean>
   cancelTask?: (taskId: string) => Promise<boolean>
   dismissTask?: (taskId: string) => Promise<boolean>
+  domainSyncState?: import('./hooks/useAiConversation').DomainSyncState
+  syncConflict?: import('./domain/sync/domainSyncService').DomainSyncConflict
+  onRetrySync?: () => void
   onHome: () => void
 }> = (props) => {
   const { chapters } = useProjectData()
@@ -147,6 +150,9 @@ const ProjectEngine: FC<{
                   input={props.aiInput}
                   busy={props.aiBusy}
                   connected={props.isConnected}
+                  domainSyncState={props.domainSyncState}
+                  syncConflict={props.syncConflict}
+                  onRetrySync={props.onRetrySync}
                   initialTab={state.surface === 'activity' ? 'activity' : 'chat'}
                   onInputChange={props.setAiInput}
                   onSend={() => props.sendAiPrompt(props.aiInput)}
@@ -258,6 +264,9 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     resumeTask,
     cancelTask,
     dismissTask,
+    domainSyncState,
+    syncConflict,
+    syncDomain,
   } = ai
 
   const [artifacts, setArtifacts] = useState<AiArtifact[]>([])
@@ -347,6 +356,11 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   resumeTask={resumeTask}
                   cancelTask={cancelTask}
                   dismissTask={dismissTask}
+                  domainSyncState={domainSyncState}
+                  syncConflict={syncConflict}
+                  onRetrySync={() => {
+                    if (activeProjectId) void syncDomain(activeProjectId)
+                  }}
                 />
               </ProjectWorkspace>
             </ProjectDataProvider>

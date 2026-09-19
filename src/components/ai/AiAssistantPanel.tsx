@@ -1,8 +1,9 @@
 import { useState, useEffect, type FC } from 'react'
-import { Sparkles, X, RefreshCw, Activity } from 'lucide-react'
+import { Sparkles, X, RefreshCw, Activity, AlertTriangle, CheckCircle2, CloudOff } from 'lucide-react'
 import { AiActivityCenter } from './AiActivityCenter'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
 import type { AiArtifact } from '../../ai/artifacts/artifactStore'
+import type { DomainSyncConflict } from '../../domain/sync/domainSyncService'
 
 interface AiMessage {
   role: 'user' | 'assistant'
@@ -14,6 +15,9 @@ interface AiAssistantPanelProps {
   input: string
   busy: boolean
   connected: boolean
+  domainSyncState?: 'synced' | 'syncing' | 'offline' | 'pending' | 'conflict'
+  syncConflict?: DomainSyncConflict
+  onRetrySync?: () => void
   onInputChange: (value: string) => void
   onSend: () => void
   onClose: () => void
@@ -34,6 +38,9 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   input,
   busy,
   connected,
+  domainSyncState = 'offline',
+  syncConflict,
+  onRetrySync,
   onInputChange,
   onSend,
   onClose,
@@ -49,6 +56,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   onSteerTask,
 }) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'activity'>(initialTab)
+  const [showConflictModal, setShowConflictModal] = useState(false)
 
   useEffect(() => {
     setActiveTab(initialTab)
@@ -93,13 +101,63 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
             )}
           </button>
         </div>
-        <button
-          onClick={onClose}
-          title="收起"
-          className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Domain Sync State Indicator */}
+          {domainSyncState === 'synced' && (
+            <span
+              title="领域数据已与 Daemon 保持权威同步"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+            >
+              <CheckCircle2 className="w-2.5 h-2.5" />
+              已同步
+            </span>
+          )}
+          {domainSyncState === 'syncing' && (
+            <span
+              title="正在与 Daemon 异步投影同步…"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse"
+            >
+              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+              正在同步
+            </span>
+          )}
+          {domainSyncState === 'pending' && (
+            <span
+              title="存在尚未推送到 Daemon 的本地领域修改"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              待同步
+            </span>
+          )}
+          {domainSyncState === 'conflict' && (
+            <button
+              type="button"
+              onClick={() => setShowConflictModal(true)}
+              title="存在领域投影版本冲突，点击查看详情"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
+            >
+              <AlertTriangle className="w-2.5 h-2.5" />
+              存在冲突
+            </button>
+          )}
+          {domainSyncState === 'offline' && (
+            <span
+              title="Daemon 离线，领域修改暂存于本地 IndexedDB"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]"
+            >
+              <CloudOff className="w-2.5 h-2.5" />
+              离线
+            </span>
+          )}
+          <button
+            onClick={onClose}
+            title="收起"
+            className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {activeTab === 'activity' ? (
@@ -172,6 +230,86 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
             </div>
           </div>
         </>
+      )}
+
+      {/* Domain Sync Conflict Inspection Modal */}
+      {showConflictModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ink-border)]">
+              <div className="flex items-center gap-2 text-rose-500 font-medium text-[13px]">
+                <AlertTriangle className="w-4 h-4" />
+                领域数据同步冲突
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConflictModal(false)}
+                className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3 text-[12px]">
+              <p className="text-[var(--ink-text-muted)] leading-relaxed">
+                本地 IndexedDB 与 Daemon 远程投影产生版本分叉，当前自动同步已暂停以防丢失本地事实。
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-[var(--ink-bg-panel)] border border-[var(--ink-border)]">
+                <div>
+                  <div className="text-[11px] text-[var(--ink-text-faint)]">本地版本 (Local)</div>
+                  <div className="font-mono font-medium text-[var(--ink-text)]">
+                    rev {syncConflict?.localRevision ?? '?'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-[var(--ink-text-faint)]">远程版本 (Remote)</div>
+                  <div className="font-mono font-medium text-[var(--ink-text)]">
+                    rev {syncConflict?.remoteRevision ?? '?'}
+                  </div>
+                </div>
+              </div>
+
+              {syncConflict?.conflictingAggregates && syncConflict.conflictingAggregates.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-medium text-[var(--ink-text-muted)] mb-1">
+                    冲突聚合实体 ({syncConflict.conflictingAggregates.length}):
+                  </div>
+                  <div className="max-h-36 overflow-y-auto space-y-1 p-2 rounded bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] font-mono text-[11px]">
+                    {syncConflict.conflictingAggregates.map((agg, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-[var(--ink-text-muted)]">
+                        <span>{agg.aggregateType}</span>
+                        <span className="text-[var(--ink-text-faint)]">{agg.aggregateId}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
+              <button
+                type="button"
+                onClick={() => setShowConflictModal(false)}
+                className="px-3 py-1.5 rounded-md text-[12px] border border-[var(--ink-border)] text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
+              >
+                稍后处理
+              </button>
+              {onRetrySync && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConflictModal(false)
+                    onRetrySync()
+                  }}
+                  className="px-3 py-1.5 rounded-md text-[12px] bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors"
+                >
+                  重新尝试同步
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </aside>
   )

@@ -37,6 +37,7 @@ import { indexedDbProjectRepository } from '../adapters/indexedDbProjectReposito
 import { projectContent } from '../domain/content'
 import type { ChapterRecord } from '../types'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
+import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -347,7 +348,12 @@ export function useAiConversation(
         setDomainSyncState('offline')
       })
     }
-    if (result.connected) setConnectionEpoch((epoch) => epoch + 1)
+    if (result.connected) {
+      setConnectionEpoch((epoch) => epoch + 1)
+      if (result.client) {
+        void workspaceLifecycleService.processPendingPurgeTombstones(result.client)
+      }
+    }
     if (!result.connected) {
       console.warn('[InkPi Desktop] Daemon 连接失败，进入离线沙盒模式')
     }

@@ -231,4 +231,115 @@ describe('WorkspaceLifecycleService', () => {
     expect(remoteClient.purgeWorkspace).toHaveBeenCalledWith('orig-proj')
     expect(projectRepo.deleteProject).toHaveBeenCalledWith('orig-proj')
   })
+
+  it('deeply remaps entity relations, sourceEntityId, targetEntityId, and array references (P0-1)', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const backupWithGraph = {
+      ...backup!,
+      domainData: {
+        codexEntities: [
+          {
+            id: 'ent-a',
+            projectId: 'orig-proj',
+            name: 'Hero',
+            relations: [{ targetId: 'ent-b', type: 'ally' }],
+          },
+          {
+            id: 'ent-b',
+            projectId: 'orig-proj',
+            name: 'Mentor',
+          },
+        ],
+        characterRelations: [
+          {
+            id: 'rel-1',
+            projectId: 'orig-proj',
+            sourceEntityId: 'ent-a',
+            targetEntityId: 'ent-b',
+          },
+        ],
+        timelineNodes: [
+          {
+            id: 'node-1',
+            projectId: 'orig-proj',
+            entityIds: ['ent-a', 'ent-b'],
+          },
+        ],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+    const result = await service.importWorkspace(backupWithGraph)
+    expect(result.ok).toBe(true)
+
+    // Inspect the putSpy calls to verify deep remapped IDs
+    const putCalls = putSpy.mock.calls
+    const relPut = putCalls.find((call) => call[0] === 'characterRelations')
+    expect(relPut).toBeDefined()
+    const remappedRel = relPut![1] as any
+    expect(remappedRel.sourceEntityId).not.toBe('ent-a')
+    expect(remappedRel.sourceEntityId).toContain('-imported-')
+    expect(remappedRel.targetEntityId).not.toBe('ent-b')
+    expect(remappedRel.targetEntityId).toContain('-imported-')
+
+    const codexPut = putCalls.find((call) => call[0] === 'codexEntities' && (call[1] as any).name === 'Hero')
+    expect(codexPut).toBeDefined()
+    const heroEntity = codexPut![1] as any
+    expect(heroEntity.relations[0].targetId).toBe(remappedRel.targetEntityId)
+
+    const timelinePut = putCalls.find((call) => call[0] === 'timelineNodes')
+    expect(timelinePut).toBeDefined()
+    const timelineNode = timelinePut![1] as any
+    expect(timelineNode.entityIds[0]).toBe(remappedRel.sourceEntityId)
+    expect(timelineNode.entityIds[1]).toBe(remappedRel.targetEntityId)
+
+    putSpy.mockRestore()
+  })
+
+  it('fails and rolls back if an entity relation references a dangling entity (P0-1 Graph Integrity)', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const brokenGraph = {
+      ...backup!,
+      domainData: {
+        characterRelations: [
+          {
+            id: 'rel-broken',
+            projectId: 'orig-proj',
+            sourceEntityId: 'ghost-entity-999',
+            targetEntityId: 'ghost-entity-888',
+          },
+        ],
+      },
+    }
+
+    const result = await service.importWorkspace(brokenGraph)
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('Referential integrity violation')
+    expect(result.error).toContain('ghost-entity-999')
+  })
+
+  it('records durable purge tombstone on offline purge and retries upon processPendingPurgeTombstones', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    // Purge without remote client (simulating offline)
+    await service.purgeWorkspace('offline-project-to-purge')
+
+    // Now remote client becomes available
+    const remoteClient = {
+      purgeWorkspace: vi.fn().mockResolvedValue({ purged: true, workspaceId: 'offline-project-to-purge' }),
+    }
+
+    await service.processPendingPurgeTombstones(remoteClient)
+    expect(remoteClient.purgeWorkspace).toHaveBeenCalledWith('offline-project-to-purge')
+
+    // Second call should not trigger again since tombstone was cleared
+    remoteClient.purgeWorkspace.mockClear()
+    await service.processPendingPurgeTombstones(remoteClient)
+    expect(remoteClient.purgeWorkspace).not.toHaveBeenCalled()
+  })
 })

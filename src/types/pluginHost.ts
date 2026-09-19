@@ -21,6 +21,17 @@ export interface ChapterMutationResult {
   error?: string
 }
 
+export interface PluginAnalysisResult {
+  taskId: string
+  artifactId?: string
+  result: string | null
+  provenance: {
+    pluginId: string
+    workspaceId: string
+    timestamp: number
+  }
+}
+
 export interface DesktopPluginHostContextValue {
   projectId: string
   projectName: string
@@ -50,6 +61,11 @@ export interface DesktopPluginHostContextValue {
       input: unknown,
       metadata?: Record<string, unknown>,
     ) => Promise<string | null>
+    runPluginAnalysis?: (
+      pluginId: string,
+      input: unknown,
+      metadata?: Record<string, unknown>,
+    ) => Promise<PluginAnalysisResult | null>
     runPluginTool?: (pluginId: string, input: Record<string, unknown>) => Promise<unknown | null>
     runPluginWorkflow?: (
       pluginId: string,

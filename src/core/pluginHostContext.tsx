@@ -23,6 +23,8 @@ import type {
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createPluginAnalysisTask, taskResultText } from '../ai'
 import { resolvePluginContextProvider } from './pluginDefinitions'
+import { IndexedDbArtifactStore } from '../ai/artifacts/artifactStore'
+import type { PluginAnalysisResult } from '../types/pluginHost'
 
 export const DesktopPluginHostContext = createContext<DesktopPluginHostContextValue | null>(null)
 
@@ -99,6 +101,73 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
     return {
       isAvailable: !!isAiConnected,
       runTask,
+      runPluginAnalysis: async (
+        pluginId: string,
+        input: unknown,
+        metadata?: Record<string, unknown>,
+      ): Promise<PluginAnalysisResult | null> => {
+        try {
+          const contextProvider = resolvePluginContextProvider(pluginId)
+          const context = contextProvider
+            ? await contextProvider({
+                projectId,
+                currentText: typeof input === 'string' ? input : (JSON.stringify(input) ?? ''),
+                activeChapterId: activeChapter?.id,
+              })
+            : undefined
+
+          const task = createPluginAnalysisTask({
+            pluginId,
+            input,
+            workspaceId: projectId,
+            documentId: activeChapter?.id,
+            context,
+            metadata,
+          })
+
+          const taskResult = await runTask(task)
+          const textOutput = taskResultText(taskResult)
+          let artifactId: string | undefined
+
+          if (taskResult?.status === 'completed' && textOutput) {
+            try {
+              const store = new IndexedDbArtifactStore()
+              const artifact = await store.save({
+                taskId: task.id,
+                kind: 'analysis',
+                title: `${pluginId} 分析产物`,
+                format: 'text',
+                data: textOutput,
+                ownership: {
+                  workspaceId: projectId,
+                  documentId: activeChapter?.id,
+                },
+                metadata: {
+                  pluginId,
+                  workspaceId: projectId,
+                  sourceRevision: activeChapter?.revision,
+                },
+              })
+              artifactId = artifact.id
+            } catch (e) {
+              console.warn(`[PluginHost] Failed to auto-persist artifact for ${pluginId}:`, e)
+            }
+          }
+
+          return {
+            taskId: task.id,
+            artifactId,
+            result: textOutput,
+            provenance: {
+              pluginId,
+              workspaceId: projectId,
+              timestamp: clock.now(),
+            },
+          }
+        } catch {
+          return null
+        }
+      },
       runPluginTask: async (
         pluginId: string,
         input: unknown,
@@ -113,17 +182,45 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
                 activeChapterId: activeChapter?.id,
               })
             : undefined
-          return taskResultText(
-            await runTask(
-              createPluginAnalysisTask({
-                pluginId,
-                input,
-                documentId: activeChapter?.id,
-                context,
-                metadata,
-              }),
-            ),
-          )
+
+          const task = createPluginAnalysisTask({
+            pluginId,
+            input,
+            workspaceId: projectId,
+            documentId: activeChapter?.id,
+            context,
+            metadata,
+          })
+
+          const taskResult = await runTask(task)
+          const text = taskResultText(taskResult)
+
+          // Auto-persist completed analysis output into workspace-scoped artifact store
+          if (taskResult?.status === 'completed' && text) {
+            try {
+              const store = new IndexedDbArtifactStore()
+              await store.save({
+                taskId: task.id,
+                kind: 'analysis',
+                title: `${pluginId} 分析产物`,
+                format: 'text',
+                data: text,
+                ownership: {
+                  workspaceId: projectId,
+                  documentId: activeChapter?.id,
+                },
+                metadata: {
+                  pluginId,
+                  workspaceId: projectId,
+                  sourceRevision: activeChapter?.revision,
+                },
+              })
+            } catch (err) {
+              console.warn(`[PluginHost] Auto-persisting artifact failed for ${pluginId}:`, err)
+            }
+          }
+
+          return text
         } catch {
           return null
         }

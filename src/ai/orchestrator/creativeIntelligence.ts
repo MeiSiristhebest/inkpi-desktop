@@ -395,12 +395,18 @@ export class CreativeIntelligence {
       ...(sessionId ? { sessionId } : {}),
       ...(executionRunId ? { executionRunId } : {}),
     }
-    const artifact = await this.artifactRuntime.persistTaskResult(
-      task,
-      result,
-      artifactId,
-      persistenceOptions,
-    )
+    let artifact
+    try {
+      artifact = await this.artifactRuntime.persistTaskResult(
+        task,
+        result,
+        artifactId,
+        persistenceOptions,
+      )
+    } catch (err) {
+      console.warn('[CreativeIntelligence] Persisting artifact failed or storage unconfigured; falling back gracefully:', err)
+      return result
+    }
     if (!artifact) return result
     const artifactIds = uniqueStrings([...(result.artifactIds ?? []), artifact.id])
     return {

@@ -81,6 +81,43 @@ export const PROJECT_DOMAIN_STORES: string[] = [
   'aiProposals',
 ]
 
+const PURGE_TOMBSTONES_KEY = 'inkpi-purge-tombstones'
+
+export interface PurgeTombstone {
+  workspaceId: string
+  purgedAt: number
+}
+
+function loadPurgeTombstones(): PurgeTombstone[] {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PURGE_TOMBSTONES_KEY) : null
+    return raw ? (JSON.parse(raw) as PurgeTombstone[]) : []
+  } catch {
+    return []
+  }
+}
+
+function savePurgeTombstones(tombstones: PurgeTombstone[]): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(PURGE_TOMBSTONES_KEY, JSON.stringify(tombstones))
+    }
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+function recordPurgeTombstone(workspaceId: string): void {
+  const current = loadPurgeTombstones().filter((t) => t.workspaceId !== workspaceId)
+  current.push({ workspaceId, purgedAt: Date.now() })
+  savePurgeTombstones(current)
+}
+
+function clearPurgeTombstone(workspaceId: string): void {
+  const current = loadPurgeTombstones().filter((t) => t.workspaceId !== workspaceId)
+  savePurgeTombstones(current)
+}
+
 export class WorkspaceLifecycleService {
   readonly projectRepo: ProjectRepository
   readonly idGen: IdGenerator
@@ -241,6 +278,7 @@ export class WorkspaceLifecycleService {
       updatedAt: now,
     }
 
+    // ── PASS 1: ID PRE-ALLOCATION (P0-1, INV-08) ──
     const volumeIdMap = new Map<string, string>()
     const oldVolumes = Array.isArray(archive.volumes) ? archive.volumes : []
     const newVolumes: VolumeRecord[] = oldVolumes.map((vol) => {
@@ -272,21 +310,39 @@ export class WorkspaceLifecycleService {
     })
 
     const entityIdMap = new Map<string, string>()
+    const threadIdMap = new Map<string, string>()
+    const promiseIdMap = new Map<string, string>()
     const sourceDomainData = archive.domainData || {}
-    for (const [, records] of Object.entries(sourceDomainData)) {
+
+    // Pre-allocate all domain primary IDs before writing any record
+    for (const [storeName, records] of Object.entries(sourceDomainData)) {
       if (!Array.isArray(records)) continue
       for (const rec of records) {
         if (rec && typeof rec === 'object' && 'id' in rec && typeof rec.id === 'string') {
-          entityIdMap.set(rec.id, `${rec.id}-imported-${this.idGen.generate('sub').slice(-6)}`)
+          const generatedId = `${rec.id}-imported-${this.idGen.generate('sub').slice(-6)}`
+          entityIdMap.set(rec.id, generatedId)
+          if (storeName === 'narrativeThreads') {
+            threadIdMap.set(rec.id, generatedId)
+          } else if (storeName === 'promiseLedger') {
+            promiseIdMap.set(rec.id, generatedId)
+          }
         }
       }
     }
 
-    // ── PASS 2: DEEP FOREIGN KEY REMAPPING ──
+    // ── PASS 2: DEEP RECURSIVE FOREIGN KEY & TOPOLOGY REMAPPING ──
     const remappedDomainData: Record<string, Record<string, unknown>[]> = {}
     let totalRemappedDomainRecords = 0
     const encodedOldWorkspaceId = encodeURIComponent(oldWorkspaceId)
     const encodedNewWorkspaceId = encodeURIComponent(newWorkspaceId)
+
+    const remapId = (id: unknown): string | unknown =>
+      typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id
+
+    const remapIdArray = (ids: unknown): unknown[] | unknown => {
+      if (!Array.isArray(ids)) return ids
+      return ids.map((id) => (typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id))
+    }
 
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
       if (!Array.isArray(records)) continue
@@ -294,9 +350,9 @@ export class WorkspaceLifecycleService {
 
       for (const rec of records) {
         if (!rec || typeof rec !== 'object') continue
-        const item = { ...rec }
+        const item: Record<string, any> = { ...rec }
 
-        // Remap workspace/project foreign key
+        // 1. Remap workspace/project foreign key
         if ('projectId' in item && item.projectId === oldWorkspaceId) {
           item.projectId = newWorkspaceId
         }
@@ -304,13 +360,12 @@ export class WorkspaceLifecycleService {
           item.workspaceId = newWorkspaceId
         }
 
-        // Remap settingsKV keys (plain & URL-encoded)
+        // 2. Remap settingsKV keys (plain & URL-encoded)
         if (storeName === 'settingsKV' && 'key' in item && typeof item.key === 'string') {
           item.key = item.key
             .replaceAll(encodedOldWorkspaceId, encodedNewWorkspaceId)
             .replaceAll(oldWorkspaceId, newWorkspaceId)
 
-          // If the stored value inside settingsKV has workspaceId or projectId or chapterId
           if (item.value && typeof item.value === 'object') {
             const val = { ...(item.value as Record<string, unknown>) }
             if (val.projectId === oldWorkspaceId) val.projectId = newWorkspaceId
@@ -322,49 +377,109 @@ export class WorkspaceLifecycleService {
           }
         }
 
-        // Remap aiArtifacts ownership & metadata
+        // 3. Remap aiArtifacts ownership, metadata & parentArtifactId
         if (storeName === 'aiArtifacts') {
-          if ('ownership' in item && typeof item.ownership === 'object' && item.ownership) {
-            item.ownership = { ...(item.ownership as any), workspaceId: newWorkspaceId }
+          if (item.ownership && typeof item.ownership === 'object') {
+            item.ownership = { ...item.ownership, workspaceId: newWorkspaceId }
           }
-          if ('metadata' in item && typeof item.metadata === 'object' && item.metadata) {
-            item.metadata = { ...(item.metadata as any), workspaceId: newWorkspaceId }
+          if (item.metadata && typeof item.metadata === 'object') {
+            item.metadata = { ...item.metadata, workspaceId: newWorkspaceId }
+          }
+          if (item.parentArtifactId && entityIdMap.has(item.parentArtifactId)) {
+            item.parentArtifactId = entityIdMap.get(item.parentArtifactId)!
           }
         }
 
-        // Remap volume foreign key
-        if (
-          'volumeId' in item &&
-          typeof item.volumeId === 'string' &&
-          volumeIdMap.has(item.volumeId)
-        ) {
+        // 4. Remap volume foreign key
+        if (typeof item.volumeId === 'string' && volumeIdMap.has(item.volumeId)) {
           item.volumeId = volumeIdMap.get(item.volumeId)!
         }
 
-        // Remap chapter foreign keys
-        if (
-          'chapterId' in item &&
-          typeof item.chapterId === 'string' &&
-          chapterIdMap.has(item.chapterId)
-        ) {
+        // 5. Remap chapter foreign keys
+        if (typeof item.chapterId === 'string' && chapterIdMap.has(item.chapterId)) {
           item.chapterId = chapterIdMap.get(item.chapterId)!
         }
-        if (
-          'sourceChapterId' in item &&
-          typeof item.sourceChapterId === 'string' &&
-          chapterIdMap.has(item.sourceChapterId)
-        ) {
+        if (typeof item.sourceChapterId === 'string' && chapterIdMap.has(item.sourceChapterId)) {
           item.sourceChapterId = chapterIdMap.get(item.sourceChapterId)!
         }
-        if (
-          'documentId' in item &&
-          typeof item.documentId === 'string' &&
-          chapterIdMap.has(item.documentId)
-        ) {
+        if (typeof item.targetChapterId === 'string' && chapterIdMap.has(item.targetChapterId)) {
+          item.targetChapterId = chapterIdMap.get(item.targetChapterId)!
+        }
+        if (typeof item.documentId === 'string' && chapterIdMap.has(item.documentId)) {
           item.documentId = chapterIdMap.get(item.documentId)!
         }
 
-        // Remap primary ID to avoid collision
+        // 6. Systematic Deep Entity & Relational Foreign Key Remapping (P0-1)
+        if (typeof item.sourceEntityId === 'string' && entityIdMap.has(item.sourceEntityId)) {
+          item.sourceEntityId = entityIdMap.get(item.sourceEntityId)!
+        }
+        if (typeof item.targetEntityId === 'string' && entityIdMap.has(item.targetEntityId)) {
+          item.targetEntityId = entityIdMap.get(item.targetEntityId)!
+        }
+        if (typeof item.targetId === 'string' && entityIdMap.has(item.targetId)) {
+          item.targetId = entityIdMap.get(item.targetId)!
+        }
+        if (typeof item.entityId === 'string' && entityIdMap.has(item.entityId)) {
+          item.entityId = entityIdMap.get(item.entityId)!
+        }
+        if (typeof item.characterId === 'string' && entityIdMap.has(item.characterId)) {
+          item.characterId = entityIdMap.get(item.characterId)!
+        }
+        if (typeof item.locationId === 'string' && entityIdMap.has(item.locationId)) {
+          item.locationId = entityIdMap.get(item.locationId)!
+        }
+        if (typeof item.factionId === 'string' && entityIdMap.has(item.factionId)) {
+          item.factionId = entityIdMap.get(item.factionId)!
+        }
+        if (typeof item.parentId === 'string' && entityIdMap.has(item.parentId)) {
+          item.parentId = entityIdMap.get(item.parentId)!
+        }
+        if (typeof item.parentEventId === 'string' && entityIdMap.has(item.parentEventId)) {
+          item.parentEventId = entityIdMap.get(item.parentEventId)!
+        }
+
+        // 7. Remap thread & promise cross references
+        if (typeof item.threadId === 'string' && entityIdMap.has(item.threadId)) {
+          item.threadId = entityIdMap.get(item.threadId)!
+        }
+        if (typeof item.promiseId === 'string' && entityIdMap.has(item.promiseId)) {
+          item.promiseId = entityIdMap.get(item.promiseId)!
+        }
+
+        // 8. Remap arrays of entity IDs
+        if (Array.isArray(item.entityIds)) {
+          item.entityIds = remapIdArray(item.entityIds)
+        }
+        if (Array.isArray(item.relatedEntityIds)) {
+          item.relatedEntityIds = remapIdArray(item.relatedEntityIds)
+        }
+        if (Array.isArray(item.linkedEntityIds)) {
+          item.linkedEntityIds = remapIdArray(item.linkedEntityIds)
+        }
+        if (Array.isArray(item.characterIds)) {
+          item.characterIds = remapIdArray(item.characterIds)
+        }
+        if (Array.isArray(item.involvedEntityIds)) {
+          item.involvedEntityIds = remapIdArray(item.involvedEntityIds)
+        }
+        if (Array.isArray(item.references)) {
+          item.references = remapIdArray(item.references)
+        }
+
+        // 9. Remap nested relation collections
+        if (Array.isArray(item.relations)) {
+          item.relations = item.relations.map((rel: any) => {
+            if (rel && typeof rel === 'object' && typeof rel.targetId === 'string') {
+              return {
+                ...rel,
+                targetId: entityIdMap.get(rel.targetId) ?? rel.targetId,
+              }
+            }
+            return rel
+          })
+        }
+
+        // 10. Remap primary ID to avoid collision
         if ('id' in item && typeof item.id === 'string' && entityIdMap.has(item.id)) {
           item.id = entityIdMap.get(item.id)!
         }
@@ -376,9 +491,10 @@ export class WorkspaceLifecycleService {
       totalRemappedDomainRecords += remappedList.length
     }
 
-    // ── PASS 3: REFERENTIAL INTEGRITY CHECK (P0-1, INV-08) ──
+    // ── PASS 3: TOPOLOGICAL REFERENTIAL INTEGRITY CHECK (P0-1, INV-08) ──
     const validVolumeIds = new Set(newVolumes.map((v) => v.id))
     const validChapterIds = new Set(newChapters.map((c) => c.id))
+    const validEntityIds = new Set(Array.from(entityIdMap.values()))
 
     // Check chapters reference valid volumes
     for (const ch of newChapters) {
@@ -390,7 +506,7 @@ export class WorkspaceLifecycleService {
       }
     }
 
-    // Check domain records reference valid chapters / volumes
+    // Check domain records reference valid chapters, volumes, and entities
     for (const [storeName, records] of Object.entries(remappedDomainData)) {
       for (const rec of records) {
         if (rec.volumeId && typeof rec.volumeId === 'string' && !validVolumeIds.has(rec.volumeId)) {
@@ -403,6 +519,19 @@ export class WorkspaceLifecycleService {
           return {
             ok: false,
             error: `Referential integrity violation: ${storeName} record references non-existent chapter '${rec.chapterId}'`,
+          }
+        }
+        // Validate relational integrity: sourceEntityId and targetEntityId must point to valid new entities
+        if (rec.sourceEntityId && typeof rec.sourceEntityId === 'string' && !validEntityIds.has(rec.sourceEntityId)) {
+          return {
+            ok: false,
+            error: `Referential integrity violation: ${storeName} record references non-existent sourceEntityId '${rec.sourceEntityId}'`,
+          }
+        }
+        if (rec.targetEntityId && typeof rec.targetEntityId === 'string' && !validEntityIds.has(rec.targetEntityId)) {
+          return {
+            ok: false,
+            error: `Referential integrity violation: ${storeName} record references non-existent targetEntityId '${rec.targetEntityId}'`,
           }
         }
       }
@@ -454,11 +583,37 @@ export class WorkspaceLifecycleService {
   }
 
   /**
+   * Processes any pending workspace purge tombstones whenever the Daemon connection is restored.
+   */
+  async processPendingPurgeTombstones(remoteClient?: {
+    purgeWorkspace?: (id: string) => Promise<unknown>
+    request?: (method: string, params?: unknown) => Promise<unknown>
+  }): Promise<void> {
+    if (!remoteClient) return
+    const tombstones = loadPurgeTombstones()
+    if (tombstones.length === 0) return
+
+    for (const tombstone of tombstones) {
+      try {
+        if (typeof remoteClient.purgeWorkspace === 'function') {
+          await remoteClient.purgeWorkspace(tombstone.workspaceId)
+        } else if (typeof remoteClient.request === 'function') {
+          await remoteClient.request('workspace.purge', { workspaceId: tombstone.workspaceId })
+        }
+        clearPurgeTombstone(tombstone.workspaceId)
+      } catch (e) {
+        console.warn(`[WorkspaceLifecycle] Retrying purge tombstone failed for ${tombstone.workspaceId}:`, e)
+      }
+    }
+  }
+
+  /**
    * 永久清除工作区数据 (Permanent Purge) (P0-2, P0.8):
-   * 1. 若提供了 remoteClient (RpcClient 或 AiAssistant)，先跨进程触发 Daemon 远程 purge:
-   *    workspace.purge(workspaceId)
-   * 2. 清除本地 Project、Volumes、Chapters、所有领域及插件表、AI 产物、Domain Change 记录以及本地 Draft Journal，
-   * 彻底杜绝孤魂残留与跨工作区泄漏。
+   * 1. 记录 durable purge tombstone，确保离线删除在下次 Daemon 连接时必被补偿重放。
+   * 2. 若当前已连接 remoteClient，先跨进程触发 Daemon 远程 purge: workspace.purge(workspaceId)
+   *    成功后即刻解除 tombstone。
+   * 3. 清除本地 Project、Volumes、Chapters、所有领域及插件表、AI 产物、Domain Change 记录以及本地 Draft Journal，
+   *    彻底杜绝孤魂残留与跨工作区泄漏。
    */
   async purgeWorkspace(
     workspaceId: string,
@@ -467,7 +622,10 @@ export class WorkspaceLifecycleService {
       request?: (method: string, params?: unknown) => Promise<unknown>
     },
   ): Promise<void> {
-    // 0. Remote purge if client provided
+    // 0. Durable tombstone registration (offline-resilient)
+    recordPurgeTombstone(workspaceId)
+
+    // 1. Remote purge if client provided
     if (remoteClient) {
       try {
         if (typeof remoteClient.purgeWorkspace === 'function') {
@@ -475,12 +633,14 @@ export class WorkspaceLifecycleService {
         } else if (typeof remoteClient.request === 'function') {
           await remoteClient.request('workspace.purge', { workspaceId })
         }
+        // Remote succeeded: clear tombstone immediately
+        clearPurgeTombstone(workspaceId)
       } catch (e) {
-        console.warn(`Remote workspace.purge failed for ${workspaceId}:`, e)
+        console.warn(`Remote workspace.purge failed for ${workspaceId}; durable tombstone retained:`, e)
       }
     }
 
-    // 1. Delete chapters and volumes
+    // 2. Delete chapters and volumes
     const allVolumes = await this.projectRepo.getAllVolumes()
     const allChapters = await this.projectRepo.getAllChapters()
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)

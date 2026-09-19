@@ -43,6 +43,7 @@ export interface ContinueTaskInput extends CreativeTaskBaseInput {
 
 export interface AssistantTaskInput extends CreativeTaskBaseInput {
   question: string
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>
 }
 
 export interface RewriteTaskInput extends CreativeTaskBaseInput {
@@ -119,7 +120,10 @@ export function createAssistantTask(input: AssistantTaskInput): AiTask {
       outputFormats: ['text'],
       streaming: true,
     },
-    extra: { question: input.question },
+    extra: {
+      question: input.question,
+      ...(input.conversationHistory ? { conversationHistory: input.conversationHistory } : {}),
+    },
   })
 }
 
