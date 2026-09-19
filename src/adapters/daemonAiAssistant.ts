@@ -171,6 +171,11 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
         createDaemonDomainSyncRemote(client),
       ).sync(workspaceId),
 
+    purgeWorkspace: (workspaceId: string) =>
+      client.request<{ purged: boolean; workspaceId: string }>('workspace.purge', {
+        workspaceId,
+      }),
+
     status: () => client.request<{ running: boolean }>('daemon.status'),
 
     close: () => client.close(),

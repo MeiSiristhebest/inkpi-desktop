@@ -116,6 +116,8 @@ interface ActiveTask {
   promise: Promise<unknown>
 }
 
+export type DomainSyncState = 'synced' | 'syncing' | 'offline' | 'pending' | 'conflict'
+
 export interface AiConversation {
   isConnected: boolean
   isReconnecting: boolean
@@ -155,6 +157,8 @@ export interface AiConversation {
     metadata?: Record<string, unknown>,
   ) => Promise<unknown | null>
   syncDomain: (workspaceId: string) => Promise<DomainSyncResult | null>
+  domainSyncState: DomainSyncState
+  syncConflict?: DomainSyncConflict
 }
 
 export interface UseAiConversationOptions {
@@ -203,6 +207,8 @@ export function useAiConversation(
   const [taskRecovery, setTaskRecovery] = useState<TaskRecoveryRecord[]>([])
   const [taskRecoveryLoading, setTaskRecoveryLoading] = useState(Boolean(workspaceId))
   const [taskRecoveryError, setTaskRecoveryError] = useState<string>()
+  const [domainSyncState, setDomainSyncState] = useState<DomainSyncState>('offline')
+  const [syncConflict, setSyncConflict] = useState<DomainSyncConflict | undefined>(undefined)
 
   const replaceRecoveryRecords = useCallback((records: TaskRecoveryRecord[]) => {
     const sorted = [...records].sort((left, right) => right.updatedAt - left.updatedAt)
@@ -307,6 +313,7 @@ export function useAiConversation(
       if (mountedRef.current && connectionAttemptRef.current === attempt) {
         setIsConnected(false)
         setIsReconnecting(false)
+        setDomainSyncState('offline')
         console.warn('[InkPi Desktop] Daemon 连接失败:', error)
       }
       return
@@ -324,6 +331,9 @@ export function useAiConversation(
     }
     setIsConnected(result.connected)
     setIsReconnecting(false)
+    if (!result.connected) {
+      setDomainSyncState('offline')
+    }
     const subscribeToConnectionState = result.client?.subscribeToConnectionState
     if (subscribeToConnectionState) {
       const client = result.client
@@ -334,6 +344,7 @@ export function useAiConversation(
         clientRef.current = null
         setIsConnected(false)
         setIsReconnecting(false)
+        setDomainSyncState('offline')
       })
     }
     if (result.connected) setConnectionEpoch((epoch) => epoch + 1)
@@ -418,28 +429,53 @@ export function useAiConversation(
     }
   }, [workspaceId])
 
-  useEffect(() => {
-    if (!workspaceId || !isConnected || !clientRef.current?.syncDomain) return
-    void clientRef.current.syncDomain(workspaceId).catch((error) => {
+  const executeDomainSync = useCallback(async (wId: string): Promise<DomainSyncResult | null> => {
+    if (!clientRef.current?.syncDomain || !isConnected) {
+      setDomainSyncState('offline')
+      return null
+    }
+    setDomainSyncState('syncing')
+    try {
+      const result = await clientRef.current.syncDomain(wId)
+      if (result.conflict) {
+        setDomainSyncState('conflict')
+        setSyncConflict(result.conflict)
+      } else {
+        setDomainSyncState('synced')
+        setSyncConflict(undefined)
+      }
+      return result
+    } catch (error) {
       console.warn('[InkPi Desktop] Domain projection sync failed:', error)
-    })
-  }, [isConnected, workspaceId])
+      setDomainSyncState('offline')
+      return null
+    }
+  }, [isConnected])
+
+  useEffect(() => {
+    if (!workspaceId || !isConnected) {
+      setDomainSyncState('offline')
+      return
+    }
+    void executeDomainSync(workspaceId)
+  }, [executeDomainSync, isConnected, workspaceId])
 
   useEffect(() => {
     if (!workspaceId) return
     let timer: ReturnType<typeof setTimeout> | null = null
     let syncQueue: Promise<unknown> = Promise.resolve()
     const scheduleSync = () => {
-      if (!isConnected || !clientRef.current?.syncDomain) return
+      if (!isConnected || !clientRef.current?.syncDomain) {
+        setDomainSyncState(isConnected ? 'pending' : 'offline')
+        return
+      }
+      setDomainSyncState('pending')
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         timer = null
         syncQueue = syncQueue
           .catch(() => undefined)
-          .then(() => clientRef.current?.syncDomain?.(workspaceId))
-          .catch((error: unknown) => {
-            console.warn('[InkPi Desktop] Local domain change sync failed:', error)
-          })
+          .then(() => executeDomainSync(workspaceId))
       }, 100)
     }
     const unsubscribe = domainChangeEvents.subscribe(workspaceId, scheduleSync)
@@ -447,7 +483,7 @@ export function useAiConversation(
       unsubscribe()
       if (timer) clearTimeout(timer)
     }
-  }, [isConnected, workspaceId])
+  }, [executeDomainSync, isConnected, workspaceId])
 
   const runTrackedTask = useCallback(
     (task: AiTask): Promise<TaskResult | null> => {
@@ -600,7 +636,8 @@ export function useAiConversation(
       if (!trimmed || aiBusyRef.current) return
 
       setAiPanelOpen(true)
-      setAiMessages((prev) => [...prev, { role: 'user', text: trimmed }])
+      const newMessages = [...aiMessages, { role: 'user' as const, text: trimmed }]
+      setAiMessages(newMessages)
       setAiInput('')
 
       if (!clientRef.current || !isConnected) {
@@ -646,12 +683,17 @@ export function useAiConversation(
           activeWritingContext?.chapter?.semanticDocument
             ? activeWritingContext.chapter.semanticDocument
             : projectContent(targetChapterId, activeDocText, activeDocRevision)
+
+        // P1-5: 构造滚动多轮历史 turns (提取最近 6 轮历史)
+        const rollingHistory = newMessages.slice(-6)
+
         const task = createAssistantTask({
           taskId: idGenerator.generate('assistant'),
           workspaceId: projectId || '',
           workspaceRevision: activeWritingContext?.workspaceRevision ?? 1,
           document,
           question: trimmed,
+          conversationHistory: rollingHistory,
           selection: activeWritingContext?.selection
             ? { from: activeWritingContext.selection.from, to: activeWritingContext.selection.to }
             : undefined,
@@ -1103,6 +1145,8 @@ export function useAiConversation(
     runPluginTool,
     runPluginWorkflow,
     syncDomain,
+    domainSyncState,
+    syncConflict,
   }
 }
 

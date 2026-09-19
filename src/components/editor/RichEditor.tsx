@@ -46,7 +46,6 @@ import { RenameVolumeDialog } from './organisms/RenameVolumeDialog'
 import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
-import { DesktopPluginHostProvider } from '../../core/pluginHostContext'
 import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
 import { hashText } from '../../ai/proposals'
 import {
@@ -570,29 +569,7 @@ export const RichEditor: FC<RichEditorProps> = ({
 
   /* ── 渲染 ──────────────────────────────────────────────── */
   return (
-    <DesktopPluginHostProvider
-      projectId={projectId}
-      activeChapter={activeChapter}
-      volumes={model.volumes}
-      chapters={model.chapters}
-      onAiTask={aiTaskHandler}
-      isAiConnected={isConnected}
-      onRefreshHierarchy={async () => {
-        await model.actions.refreshData()
-      }}
-      onChapterUpdate={(updated) => {
-        const ed = editorRef.current
-        if (
-          ed &&
-          !ed.isDestroyed &&
-          updated.content !== undefined &&
-          ed.getText() !== updated.content
-        ) {
-          loadContentIntoEditor(ed, updated.content)
-        }
-      }}
-    >
-      <div className="creative-editor-root flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+    <div className="creative-editor-root flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
         {visibleTaskProgress && (
           <div
             data-testid="editor-long-task-status"
@@ -838,7 +815,6 @@ export const RichEditor: FC<RichEditorProps> = ({
         {renamingVolume && <RenameVolumeDialog model={model} />}
         {deletingVolume && <DeleteVolumeDialog model={model} />}
       </div>
-    </DesktopPluginHostProvider>
   )
 }
 

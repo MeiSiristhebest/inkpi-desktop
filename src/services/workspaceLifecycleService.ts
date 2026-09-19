@@ -31,6 +31,7 @@ export interface ImportWorkspaceResult {
 // Stores strictly scoped to a project that must be backed up, remapped upon import, or wiped upon purge.
 export const PROJECT_DOMAIN_STORES: string[] = [
   'settingsKV',
+  'dailyStats',
   'codexEntities',
   'formData',
   'tableRows',
@@ -211,9 +212,10 @@ export class WorkspaceLifecycleService {
   }
 
   /**
-   * 导入工作区并执行完整的 Object Graph Remapping (INV-03, INV-04)：
-   * 生成全新的 workspaceId、volumeId、chapterId 以及各类 domain entity ID，
-   * 递归重映射所有的 foreign keys (projectId, volumeId, chapterId 等)，杜绝全局 ID 碰撞与跨项目污染。
+   * 导入工作区并执行完整的 3-Pass Object Graph Remapping (P0-1, INV-03, INV-04, INV-08):
+   * Pass 1: 分配全新的 workspaceId、volumeId、chapterId 以及各类 domain entity ID 映射。
+   * Pass 2: 递归重映射所有的 foreign keys (projectId, volumeId, chapterId, lineage, settingsKV 编码 key 等)，杜绝全局 ID 碰撞与跨项目污染。
+   * Pass 3: 严格引用完整性校验 (Referential Integrity Check)，若发现任何孤立或断裂的外键，立即抛出异常触发自动回滚。
    */
   async importWorkspace(archiveRaw: unknown): Promise<ImportWorkspaceResult> {
     if (!archiveRaw || typeof archiveRaw !== 'object') {
@@ -230,7 +232,7 @@ export class WorkspaceLifecycleService {
     const newWorkspaceId = this.idGen.generate('proj')
     const now = this.clockPort.now()
 
-    // 1. Remap Project
+    // ── PASS 1: ID ALLOCATION ──
     const newProject: ProjectRecord = {
       ...sourceProject,
       id: newWorkspaceId,
@@ -239,7 +241,6 @@ export class WorkspaceLifecycleService {
       updatedAt: now,
     }
 
-    // 2. Remap Volumes
     const volumeIdMap = new Map<string, string>()
     const oldVolumes = Array.isArray(archive.volumes) ? archive.volumes : []
     const newVolumes: VolumeRecord[] = oldVolumes.map((vol) => {
@@ -254,7 +255,6 @@ export class WorkspaceLifecycleService {
       }
     })
 
-    // 3. Remap Chapters
     const chapterIdMap = new Map<string, string>()
     const oldChapters = Array.isArray(archive.chapters) ? archive.chapters : []
     const newChapters: ChapterRecord[] = oldChapters.map((ch) => {
@@ -271,10 +271,22 @@ export class WorkspaceLifecycleService {
       }
     })
 
-    // 4. Remap Domain & Plugin Stores
+    const entityIdMap = new Map<string, string>()
+    const sourceDomainData = archive.domainData || {}
+    for (const [, records] of Object.entries(sourceDomainData)) {
+      if (!Array.isArray(records)) continue
+      for (const rec of records) {
+        if (rec && typeof rec === 'object' && 'id' in rec && typeof rec.id === 'string') {
+          entityIdMap.set(rec.id, `${rec.id}-imported-${this.idGen.generate('sub').slice(-6)}`)
+        }
+      }
+    }
+
+    // ── PASS 2: DEEP FOREIGN KEY REMAPPING ──
     const remappedDomainData: Record<string, Record<string, unknown>[]> = {}
     let totalRemappedDomainRecords = 0
-    const sourceDomainData = archive.domainData || {}
+    const encodedOldWorkspaceId = encodeURIComponent(oldWorkspaceId)
+    const encodedNewWorkspaceId = encodeURIComponent(newWorkspaceId)
 
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
       if (!Array.isArray(records)) continue
@@ -291,15 +303,33 @@ export class WorkspaceLifecycleService {
         if ('workspaceId' in item && item.workspaceId === oldWorkspaceId) {
           item.workspaceId = newWorkspaceId
         }
+
+        // Remap settingsKV keys (plain & URL-encoded)
         if (storeName === 'settingsKV' && 'key' in item && typeof item.key === 'string') {
-          item.key = item.key.replaceAll(oldWorkspaceId, newWorkspaceId)
+          item.key = item.key
+            .replaceAll(encodedOldWorkspaceId, encodedNewWorkspaceId)
+            .replaceAll(oldWorkspaceId, newWorkspaceId)
+
+          // If the stored value inside settingsKV has workspaceId or projectId or chapterId
+          if (item.value && typeof item.value === 'object') {
+            const val = { ...(item.value as Record<string, unknown>) }
+            if (val.projectId === oldWorkspaceId) val.projectId = newWorkspaceId
+            if (val.workspaceId === oldWorkspaceId) val.workspaceId = newWorkspaceId
+            if (typeof val.chapterId === 'string' && chapterIdMap.has(val.chapterId)) {
+              val.chapterId = chapterIdMap.get(val.chapterId)!
+            }
+            item.value = val
+          }
         }
-        if (
-          storeName === 'aiArtifacts' &&
-          'ownership' in item &&
-          typeof item.ownership === 'object'
-        ) {
-          item.ownership = { ...(item.ownership as any), workspaceId: newWorkspaceId }
+
+        // Remap aiArtifacts ownership & metadata
+        if (storeName === 'aiArtifacts') {
+          if ('ownership' in item && typeof item.ownership === 'object' && item.ownership) {
+            item.ownership = { ...(item.ownership as any), workspaceId: newWorkspaceId }
+          }
+          if ('metadata' in item && typeof item.metadata === 'object' && item.metadata) {
+            item.metadata = { ...(item.metadata as any), workspaceId: newWorkspaceId }
+          }
         }
 
         // Remap volume foreign key
@@ -311,7 +341,7 @@ export class WorkspaceLifecycleService {
           item.volumeId = volumeIdMap.get(item.volumeId)!
         }
 
-        // Remap chapter foreign key
+        // Remap chapter foreign keys
         if (
           'chapterId' in item &&
           typeof item.chapterId === 'string' &&
@@ -326,10 +356,17 @@ export class WorkspaceLifecycleService {
         ) {
           item.sourceChapterId = chapterIdMap.get(item.sourceChapterId)!
         }
+        if (
+          'documentId' in item &&
+          typeof item.documentId === 'string' &&
+          chapterIdMap.has(item.documentId)
+        ) {
+          item.documentId = chapterIdMap.get(item.documentId)!
+        }
 
         // Remap primary ID to avoid collision
-        if ('id' in item && typeof item.id === 'string') {
-          item.id = `${item.id}-imported-${this.idGen.generate('sub').slice(-6)}`
+        if ('id' in item && typeof item.id === 'string' && entityIdMap.has(item.id)) {
+          item.id = entityIdMap.get(item.id)!
         }
 
         remappedList.push(item)
@@ -339,7 +376,39 @@ export class WorkspaceLifecycleService {
       totalRemappedDomainRecords += remappedList.length
     }
 
-    // 5. Atomic-style persistence with automatic rollback on failure (P0-6, INV-08)
+    // ── PASS 3: REFERENTIAL INTEGRITY CHECK (P0-1, INV-08) ──
+    const validVolumeIds = new Set(newVolumes.map((v) => v.id))
+    const validChapterIds = new Set(newChapters.map((c) => c.id))
+
+    // Check chapters reference valid volumes
+    for (const ch of newChapters) {
+      if (ch.volumeId && !validVolumeIds.has(ch.volumeId)) {
+        return {
+          ok: false,
+          error: `Referential integrity violation: Chapter '${ch.id}' references unknown volume '${ch.volumeId}'`,
+        }
+      }
+    }
+
+    // Check domain records reference valid chapters / volumes
+    for (const [storeName, records] of Object.entries(remappedDomainData)) {
+      for (const rec of records) {
+        if (rec.volumeId && typeof rec.volumeId === 'string' && !validVolumeIds.has(rec.volumeId)) {
+          return {
+            ok: false,
+            error: `Referential integrity violation: ${storeName} record references non-existent volume '${rec.volumeId}'`,
+          }
+        }
+        if (rec.chapterId && typeof rec.chapterId === 'string' && !validChapterIds.has(rec.chapterId)) {
+          return {
+            ok: false,
+            error: `Referential integrity violation: ${storeName} record references non-existent chapter '${rec.chapterId}'`,
+          }
+        }
+      }
+    }
+
+    // Atomic-style persistence with automatic rollback on failure (P0-1, INV-08)
     try {
       await this.projectRepo.saveProject(newProject)
       for (const vol of newVolumes) {
@@ -385,11 +454,32 @@ export class WorkspaceLifecycleService {
   }
 
   /**
-   * 永久清除工作区数据 (Permanent Purge) (P0.8)：
-   * 清除 Project、Volumes、Chapters、所有领域及插件表、AI 产物、Domain Change 记录以及本地 Draft Journal，
+   * 永久清除工作区数据 (Permanent Purge) (P0-2, P0.8):
+   * 1. 若提供了 remoteClient (RpcClient 或 AiAssistant)，先跨进程触发 Daemon 远程 purge:
+   *    workspace.purge(workspaceId)
+   * 2. 清除本地 Project、Volumes、Chapters、所有领域及插件表、AI 产物、Domain Change 记录以及本地 Draft Journal，
    * 彻底杜绝孤魂残留与跨工作区泄漏。
    */
-  async purgeWorkspace(workspaceId: string): Promise<void> {
+  async purgeWorkspace(
+    workspaceId: string,
+    remoteClient?: {
+      purgeWorkspace?: (id: string) => Promise<unknown>
+      request?: (method: string, params?: unknown) => Promise<unknown>
+    },
+  ): Promise<void> {
+    // 0. Remote purge if client provided
+    if (remoteClient) {
+      try {
+        if (typeof remoteClient.purgeWorkspace === 'function') {
+          await remoteClient.purgeWorkspace(workspaceId)
+        } else if (typeof remoteClient.request === 'function') {
+          await remoteClient.request('workspace.purge', { workspaceId })
+        }
+      } catch (e) {
+        console.warn(`Remote workspace.purge failed for ${workspaceId}:`, e)
+      }
+    }
+
     // 1. Delete chapters and volumes
     const allVolumes = await this.projectRepo.getAllVolumes()
     const allChapters = await this.projectRepo.getAllChapters()
@@ -409,12 +499,30 @@ export class WorkspaceLifecycleService {
     await this.projectRepo.deleteProject(workspaceId)
 
     // 3. Purge all related domain & plugin stores
+    const encodedWorkspaceId = encodeURIComponent(workspaceId)
     for (const storeName of PROJECT_DOMAIN_STORES) {
       if (typeof db.getAll === 'function' && typeof db.delete === 'function') {
         try {
           const records = await db.getAll<Record<string, unknown>>(storeName as any)
           for (const rec of records) {
-            if (rec.projectId === workspaceId || rec.workspaceId === workspaceId) {
+            let matches =
+              rec.projectId === workspaceId ||
+              rec.workspaceId === workspaceId ||
+              (rec as any).ownership?.workspaceId === workspaceId
+
+            if (!matches && storeName === 'settingsKV') {
+              const key = String((rec as any).key || '')
+              matches =
+                key.includes(workspaceId) ||
+                key.includes(encodedWorkspaceId) ||
+                key.startsWith(`ai-task-recovery::${encodedWorkspaceId}`) ||
+                key.startsWith(`distillation-review::${encodedWorkspaceId}`) ||
+                key.startsWith(`storyState::${workspaceId}`) ||
+                key.startsWith(`inkpi-excluded-nums-${workspaceId}`) ||
+                key.startsWith(`inkpi-daily-goal-${workspaceId}`)
+            }
+
+            if (matches) {
               const primaryKey = (rec.id || (rec as any).key || (rec as any).projectId) as string
               if (primaryKey) {
                 await db.delete(storeName as any, primaryKey).catch(() => {})

@@ -25,4 +25,21 @@ describe('CAPABILITY_REGISTRY (P2.1, P2.2, INV-10)', () => {
     expect(sentinel?.surfaces).toContain('inspector')
     expect(sentinel?.surfaces).not.toContain('canvas')
   })
+
+  it('maps all domain tab modules from TAB_DEFINITIONS (P1-6)', () => {
+    const positioning = getCapability('positioning')
+    expect(positioning).toBeDefined()
+    expect(positioning?.category).toBe('core')
+    expect(positioning?.maturity).toBe('production')
+
+    const master = getCapability('master')
+    expect(master?.category).toBe('plot')
+
+    const charMain = getCapability('char-main')
+    expect(charMain?.category).toBe('worldbuilding')
+    expect(charMain?.surfaces).toContain('drawer')
+
+    const inspireTools = getCapability('inspire-tools')
+    expect(inspireTools?.maturity).toBe('beta')
+  })
 })

@@ -196,4 +196,39 @@ describe('WorkspaceLifecycleService', () => {
     deleteSpy.mockRestore()
     getAllSpy.mockRestore()
   })
+
+  it('fails and rolls back if referential integrity is broken in Pass 3 (P0-1, INV-08)', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    // Add broken foreign key referencing non-existent chapter
+    const brokenBackup = {
+      ...backup!,
+      domainData: {
+        promiseLedger: [
+          {
+            id: 'broken-promise',
+            projectId: 'orig-proj',
+            chapterId: 'non-existent-ch-999',
+          },
+        ],
+      },
+    }
+
+    const result = await service.importWorkspace(brokenBackup)
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('Referential integrity violation')
+  })
+
+  it('calls remote purgeWorkspace before local purge when remoteClient is provided (P0-2)', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const remoteClient = {
+      purgeWorkspace: vi.fn().mockResolvedValue({ purged: true, workspaceId: 'orig-proj' }),
+    }
+
+    await service.purgeWorkspace('orig-proj', remoteClient)
+    expect(remoteClient.purgeWorkspace).toHaveBeenCalledWith('orig-proj')
+    expect(projectRepo.deleteProject).toHaveBeenCalledWith('orig-proj')
+  })
 })
