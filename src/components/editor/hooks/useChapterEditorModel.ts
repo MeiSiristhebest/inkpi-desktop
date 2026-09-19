@@ -344,13 +344,23 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     const key = `chapter-history-${ch.id}`
     void kvStoreRef.current.get(key).then((raw) => {
       try {
-        const existing = JSON.parse(raw || '[]')
+        const existing: Array<{
+          kind?: 'auto' | 'milestone'
+          timestamp: number
+          wordCount: number
+          content: string
+        }> = JSON.parse(raw || '[]')
         const snapshot = {
+          kind: 'auto' as const,
           timestamp: clock.now(),
           wordCount: ch.wordCount,
           content: ch.content,
         }
-        const updated = [snapshot, ...existing.slice(0, 19)]
+        // Preserve all milestones; evict oldest auto entries beyond 20-slot cap
+        const milestones = existing.filter((s) => s.kind === 'milestone')
+        const autos = existing.filter((s) => s.kind !== 'milestone')
+        const trimmedAutos = autos.slice(0, 19) // keep at most 19 prior autos + 1 new = 20
+        const updated = [snapshot, ...trimmedAutos, ...milestones]
         void kvStoreRef.current.set(key, JSON.stringify(updated))
       } catch {
         /* ignore */
@@ -374,9 +384,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       // P0: 用户输入存盘统一走 ChapterMutationService (INV-02)
       // 使用权威的 durable revision 模型，不绑定已陈旧的 target.revision，
       // 允许 mutation 依据最新真实 durable 版本推进存盘，杜绝 fast-typing 导致的伪 CAS 冲突
-      const currentStoredRevision = activeChapterRef.current?.id === target.id
-        ? activeChapterRef.current?.revision
-        : target.revision
+      const currentStoredRevision =
+        activeChapterRef.current?.id === target.id
+          ? activeChapterRef.current?.revision
+          : target.revision
 
       const result = await chapterMutationService.mutate({
         workspaceId: projectId,
@@ -778,7 +789,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       let updatedActiveChapter = stateRef.current.activeChapter
       if (fallbackVolId) {
         chapters = chapters.map((ch) =>
-          ch.volumeId === volume.id ? { ...ch, volumeId: fallbackVolId, updatedAt: clock.now() } : ch,
+          ch.volumeId === volume.id
+            ? { ...ch, volumeId: fallbackVolId, updatedAt: clock.now() }
+            : ch,
         )
         if (isCurrentInVolume && activeChapter) {
           updatedActiveChapter = {

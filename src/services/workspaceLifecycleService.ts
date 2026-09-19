@@ -85,6 +85,181 @@ export const PROJECT_DOMAIN_STORES: string[] = [
   'aiProposals',
 ]
 
+export type IdNamespace =
+  'volume' | 'chapter' | 'entity' | 'timelineNode' | 'thread' | 'promise' | 'artifact'
+
+export interface WorkspaceReferenceDescriptor {
+  storeName: string
+  idNamespace?: IdNamespace
+  references: Array<{
+    targetNamespace: IdNamespace
+    path: string
+    kind: 'scalar' | 'array' | 'objectArray'
+    objectProperty?: string
+  }>
+}
+
+export const WORKSPACE_STORE_DESCRIPTORS: WorkspaceReferenceDescriptor[] = [
+  {
+    storeName: 'narrativeThreads',
+    idNamespace: 'thread',
+    references: [],
+  },
+  {
+    storeName: 'timelineNodes',
+    idNamespace: 'timelineNode',
+    references: [
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+      { targetNamespace: 'thread', path: 'threadId', kind: 'scalar' },
+      { targetNamespace: 'timelineNode', path: 'parentEventId', kind: 'scalar' },
+      { targetNamespace: 'timelineNode', path: 'prerequisites', kind: 'array' },
+      { targetNamespace: 'timelineNode', path: 'nextEventIds', kind: 'array' },
+      { targetNamespace: 'entity', path: 'entityIds', kind: 'array' },
+      { targetNamespace: 'entity', path: 'characterIds', kind: 'array' },
+      { targetNamespace: 'entity', path: 'locationId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'promiseLedger',
+    idNamespace: 'promise',
+    references: [
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+      { targetNamespace: 'chapter', path: 'relatedChapterIds', kind: 'array' },
+      { targetNamespace: 'thread', path: 'threadId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'relatedEntityIds', kind: 'array' },
+    ],
+  },
+  {
+    storeName: 'aiArtifacts',
+    idNamespace: 'artifact',
+    references: [
+      { targetNamespace: 'chapter', path: 'documentId', kind: 'scalar' },
+      { targetNamespace: 'artifact', path: 'metadata.parentArtifactId', kind: 'scalar' },
+      { targetNamespace: 'artifact', path: 'lineage.parentArtifactId', kind: 'scalar' },
+      { targetNamespace: 'artifact', path: 'provenance.parentArtifactId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'codexEntities',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'entity', path: 'parentId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'relatedEntityIds', kind: 'array' },
+      {
+        targetNamespace: 'entity',
+        path: 'relations',
+        kind: 'objectArray',
+        objectProperty: 'targetId',
+      },
+    ],
+  },
+  {
+    storeName: 'geoMapGrids',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'entity', path: 'locationId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'parentLocationId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'linkedOverlays.activeCharacterIds', kind: 'array' },
+      { targetNamespace: 'promise', path: 'linkedOverlays.foreshadowIds', kind: 'array' },
+      { targetNamespace: 'timelineNode', path: 'linkedOverlays.timelineEventIds', kind: 'array' },
+    ],
+  },
+  {
+    storeName: 'sceneBeats',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'volume', path: 'volumeId', kind: 'scalar' },
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'characterIds', kind: 'array' },
+      { targetNamespace: 'entity', path: 'locationId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'clueMatrices',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'sourceEntityId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'targetEntityId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'targetId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'entityIds', kind: 'array' },
+      { targetNamespace: 'entity', path: 'relatedEntityIds', kind: 'array' },
+    ],
+  },
+  {
+    storeName: 'readerHooks',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'relatedEntityIds', kind: 'array' },
+    ],
+  },
+  {
+    storeName: 'combatDuels',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'characterIds', kind: 'array' },
+      { targetNamespace: 'entity', path: 'locationId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'factionDiplomacies',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'entity', path: 'sourceEntityId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'targetEntityId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'factionId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'diffReviews',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'chapter', path: 'sourceChapterId', kind: 'scalar' },
+      { targetNamespace: 'chapter', path: 'targetChapterId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'dialogueVoiceprints',
+    idNamespace: 'entity',
+    references: [{ targetNamespace: 'entity', path: 'characterId', kind: 'scalar' }],
+  },
+  {
+    storeName: 'voiceScriptCasts',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'entity', path: 'characterId', kind: 'scalar' },
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'storyboardScenes',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'characterIds', kind: 'array' },
+      { targetNamespace: 'entity', path: 'locationId', kind: 'scalar' },
+    ],
+  },
+  {
+    storeName: 'subPlotStrands',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'thread', path: 'threadId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'entityIds', kind: 'array' },
+    ],
+  },
+  {
+    storeName: 'characterRelations',
+    idNamespace: 'entity',
+    references: [
+      { targetNamespace: 'entity', path: 'sourceEntityId', kind: 'scalar' },
+      { targetNamespace: 'entity', path: 'targetEntityId', kind: 'scalar' },
+    ],
+  },
+]
+
 const PURGE_TOMBSTONES_KEY = 'inkpi-purge-tombstones'
 
 export interface PurgeTombstone {
@@ -109,6 +284,18 @@ function savePurgeTombstones(tombstones: PurgeTombstone[]): void {
     }
   } catch {
     // ignore storage quota errors
+  }
+
+  try {
+    if (typeof db.put === 'function') {
+      db.put('settingsKV', {
+        key: PURGE_TOMBSTONES_KEY,
+        value: tombstones,
+        updatedAt: Date.now(),
+      }).catch(() => {})
+    }
+  } catch {
+    // ignore IndexedDB persistence errors
   }
 }
 
@@ -365,22 +552,28 @@ export class WorkspaceLifecycleService {
       sourceDomainData[store] = records
     }
 
-    // Pre-allocate deterministic namespaced primary IDs
+    // Pre-allocate deterministic namespaced primary IDs using WORKSPACE_STORE_DESCRIPTORS
+    const descriptorMap = new Map<string, WorkspaceReferenceDescriptor>(
+      WORKSPACE_STORE_DESCRIPTORS.map((d) => [d.storeName, d]),
+    )
+
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
       if (!Array.isArray(records)) continue
+      const desc = descriptorMap.get(storeName)
+      const ns: IdNamespace = desc?.idNamespace ?? 'entity'
+
       for (const rec of records) {
         if (rec && typeof rec === 'object' && 'id' in rec && typeof rec.id === 'string') {
           const generatedId = `${rec.id}-imported-${this.idGen.generate('sub').slice(-6)}`
-          if (storeName === 'narrativeThreads') {
+          if (ns === 'thread') {
             threadIdMap.set(rec.id, generatedId)
-          } else if (storeName === 'promiseLedger') {
+          } else if (ns === 'promise') {
             promiseIdMap.set(rec.id, generatedId)
-          } else if (storeName === 'aiArtifacts') {
+          } else if (ns === 'artifact') {
             artifactIdMap.set(rec.id, generatedId)
-          } else if (storeName === 'timelineNodes') {
+          } else if (ns === 'timelineNode') {
             timelineNodeIdMap.set(rec.id, generatedId)
           } else {
-            // Default entity namespace (codexEntities, formData, tableRows, cardRecords, etc.)
             entityIdMap.set(rec.id, generatedId)
           }
         }
@@ -441,25 +634,81 @@ export class WorkspaceLifecycleService {
     const encodedOldWorkspaceId = encodeURIComponent(oldWorkspaceId)
     const encodedNewWorkspaceId = encodeURIComponent(newWorkspaceId)
 
-    const remapEntityId = (id: unknown): string | unknown =>
-      typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id
-
-    const remapEntityArray = (ids: unknown): unknown[] | unknown => {
-      if (!Array.isArray(ids)) return ids
-      return ids.map((id) =>
-        typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id,
-      )
+    const getNamespaceMap = (ns: IdNamespace): Map<string, string> => {
+      switch (ns) {
+        case 'volume':
+          return volumeIdMap
+        case 'chapter':
+          return chapterIdMap
+        case 'entity':
+          return entityIdMap
+        case 'timelineNode':
+          return timelineNodeIdMap
+        case 'thread':
+          return threadIdMap
+        case 'promise':
+          return promiseIdMap
+        case 'artifact':
+          return artifactIdMap
+      }
     }
 
-    const remapTimelineNodeArray = (ids: unknown): unknown[] | unknown => {
-      if (!Array.isArray(ids)) return ids
-      return ids.map((id) =>
-        typeof id === 'string' && timelineNodeIdMap.has(id) ? timelineNodeIdMap.get(id)! : id,
-      )
+    const remapByNamespace = (val: unknown, ns: IdNamespace): unknown => {
+      if (typeof val !== 'string') return val
+      const map = getNamespaceMap(ns)
+      return map.get(val) ?? val
+    }
+
+    const remapArrayByNamespace = (arr: unknown, ns: IdNamespace): unknown => {
+      if (!Array.isArray(arr)) return arr
+      const map = getNamespaceMap(ns)
+      return arr.map((item) => (typeof item === 'string' && map.has(item) ? map.get(item)! : item))
+    }
+
+    const remapDottedPath = (
+      obj: Record<string, any>,
+      path: string,
+      kind: 'scalar' | 'array' | 'objectArray',
+      ns: IdNamespace,
+      objectProp?: string,
+    ): void => {
+      const parts = path.split('.')
+      let current = obj
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!current || typeof current !== 'object') return
+        current = current[parts[i]]
+      }
+      if (!current || typeof current !== 'object') return
+      const lastKey = parts[parts.length - 1]
+
+      if (kind === 'scalar') {
+        if (typeof current[lastKey] === 'string') {
+          current[lastKey] = remapByNamespace(current[lastKey], ns)
+        }
+      } else if (kind === 'array') {
+        if (Array.isArray(current[lastKey])) {
+          current[lastKey] = remapArrayByNamespace(current[lastKey], ns)
+        }
+      } else if (kind === 'objectArray' && objectProp) {
+        if (Array.isArray(current[lastKey])) {
+          current[lastKey] = current[lastKey].map((elem: any) => {
+            if (elem && typeof elem === 'object' && typeof elem[objectProp] === 'string') {
+              return {
+                ...elem,
+                [objectProp]: remapByNamespace(elem[objectProp], ns),
+              }
+            }
+            return elem
+          })
+        }
+      }
     }
 
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
       if (!Array.isArray(records)) continue
+      const desc = descriptorMap.get(storeName)
+      const primaryNs: IdNamespace = desc?.idNamespace ?? 'entity'
+      const primaryMap = getNamespaceMap(primaryNs)
       const remappedList: Record<string, unknown>[] = []
 
       for (const rec of records) {
@@ -527,7 +776,7 @@ export class WorkspaceLifecycleService {
                   const newEvtId = timelineNodeIdMap.get(oldEvtId) ?? oldEvtId
                   evt.id = newEvtId
                   if (Array.isArray(evt.entityIds)) {
-                    evt.entityIds = remapEntityArray(evt.entityIds)
+                    evt.entityIds = remapArrayByNamespace(evt.entityIds, 'entity')
                   }
                   remappedEvents[newEvtId] = evt
                 }
@@ -542,13 +791,13 @@ export class WorkspaceLifecycleService {
                   const newTlId = threadIdMap.get(oldTlId) ?? oldTlId
                   tl.id = newTlId
                   if (Array.isArray(tl.eventIds)) {
-                    tl.eventIds = remapTimelineNodeArray(tl.eventIds)
+                    tl.eventIds = remapArrayByNamespace(tl.eventIds, 'timelineNode')
                   }
                   if (Array.isArray(tl.constraints)) {
                     tl.constraints = tl.constraints.map((c: any) => ({
                       ...c,
                       eventIds: Array.isArray(c?.eventIds)
-                        ? remapTimelineNodeArray(c.eventIds)
+                        ? remapArrayByNamespace(c.eventIds, 'timelineNode')
                         : c?.eventIds,
                     }))
                   }
@@ -584,145 +833,39 @@ export class WorkspaceLifecycleService {
           }
           if (item.metadata && typeof item.metadata === 'object') {
             item.metadata = { ...item.metadata, workspaceId: newWorkspaceId }
-            if (
-              item.metadata.parentArtifactId &&
-              artifactIdMap.has(item.metadata.parentArtifactId)
-            ) {
-              item.metadata.parentArtifactId = artifactIdMap.get(item.metadata.parentArtifactId)!
-            }
-          }
-          if (item.lineage && typeof item.lineage === 'object') {
-            item.lineage = { ...item.lineage }
-            if (item.lineage.parentArtifactId && artifactIdMap.has(item.lineage.parentArtifactId)) {
-              item.lineage.parentArtifactId = artifactIdMap.get(item.lineage.parentArtifactId)!
-            }
-          }
-          if (item.provenance && typeof item.provenance === 'object') {
-            item.provenance = { ...item.provenance }
-            if (
-              item.provenance.parentArtifactId &&
-              artifactIdMap.has(item.provenance.parentArtifactId)
-            ) {
-              item.provenance.parentArtifactId = artifactIdMap.get(
-                item.provenance.parentArtifactId,
-              )!
-            }
-          }
-          if (item.documentId && chapterIdMap.has(item.documentId)) {
-            item.documentId = chapterIdMap.get(item.documentId)!
           }
         }
 
-        // 4. Volume Foreign Keys
-        if (typeof item.volumeId === 'string' && volumeIdMap.has(item.volumeId)) {
-          item.volumeId = volumeIdMap.get(item.volumeId)!
-        }
-
-        // 5. Chapter Foreign Keys
-        if (typeof item.chapterId === 'string' && chapterIdMap.has(item.chapterId)) {
-          item.chapterId = chapterIdMap.get(item.chapterId)!
-        }
-        if (typeof item.sourceChapterId === 'string' && chapterIdMap.has(item.sourceChapterId)) {
-          item.sourceChapterId = chapterIdMap.get(item.sourceChapterId)!
-        }
-        if (typeof item.targetChapterId === 'string' && chapterIdMap.has(item.targetChapterId)) {
-          item.targetChapterId = chapterIdMap.get(item.targetChapterId)!
-        }
-        if (typeof item.documentId === 'string' && chapterIdMap.has(item.documentId)) {
-          item.documentId = chapterIdMap.get(item.documentId)!
-        }
-
-        // 6. Systematic Entity & Relational Foreign Keys
-        if (typeof item.sourceEntityId === 'string' && entityIdMap.has(item.sourceEntityId)) {
-          item.sourceEntityId = entityIdMap.get(item.sourceEntityId)!
-        }
-        if (typeof item.targetEntityId === 'string' && entityIdMap.has(item.targetEntityId)) {
-          item.targetEntityId = entityIdMap.get(item.targetEntityId)!
-        }
-        if (typeof item.targetId === 'string' && entityIdMap.has(item.targetId)) {
-          item.targetId = entityIdMap.get(item.targetId)!
-        }
-        if (typeof item.entityId === 'string' && entityIdMap.has(item.entityId)) {
-          item.entityId = entityIdMap.get(item.entityId)!
-        }
-        if (typeof item.characterId === 'string' && entityIdMap.has(item.characterId)) {
-          item.characterId = entityIdMap.get(item.characterId)!
-        }
-        if (typeof item.locationId === 'string' && entityIdMap.has(item.locationId)) {
-          item.locationId = entityIdMap.get(item.locationId)!
-        }
-        if (typeof item.factionId === 'string' && entityIdMap.has(item.factionId)) {
-          item.factionId = entityIdMap.get(item.factionId)!
-        }
-        if (typeof item.parentId === 'string' && entityIdMap.has(item.parentId)) {
-          item.parentId = entityIdMap.get(item.parentId)!
-        }
-        if (typeof item.parentEventId === 'string' && timelineNodeIdMap.has(item.parentEventId)) {
-          item.parentEventId = timelineNodeIdMap.get(item.parentEventId)!
-        }
-
-        // 7. Thread & Promise Cross-References
-        if (typeof item.threadId === 'string' && threadIdMap.has(item.threadId)) {
-          item.threadId = threadIdMap.get(item.threadId)!
-        }
-        if (typeof item.promiseId === 'string' && promiseIdMap.has(item.promiseId)) {
-          item.promiseId = promiseIdMap.get(item.promiseId)!
-        }
-
-        // 8. Arrays of Entity IDs & Timeline IDs
-        if (Array.isArray(item.entityIds)) {
-          item.entityIds = remapEntityArray(item.entityIds)
-        }
-        if (Array.isArray(item.relatedEntityIds)) {
-          item.relatedEntityIds = remapEntityArray(item.relatedEntityIds)
-        }
-        if (Array.isArray(item.linkedEntityIds)) {
-          item.linkedEntityIds = remapEntityArray(item.linkedEntityIds)
-        }
-        if (Array.isArray(item.characterIds)) {
-          item.characterIds = remapEntityArray(item.characterIds)
-        }
-        if (Array.isArray(item.involvedEntityIds)) {
-          item.involvedEntityIds = remapEntityArray(item.involvedEntityIds)
-        }
-        if (Array.isArray(item.references)) {
-          item.references = remapEntityArray(item.references)
-        }
-        if (storeName === 'timelineNodes') {
-          if (Array.isArray(item.prerequisites)) {
-            item.prerequisites = remapTimelineNodeArray(item.prerequisites)
+        // 4. Declarative Schema-Driven Reference Remapping
+        if (desc) {
+          for (const ref of desc.references) {
+            remapDottedPath(item, ref.path, ref.kind, ref.targetNamespace, ref.objectProperty)
           }
-          if (Array.isArray(item.nextEventIds)) {
-            item.nextEventIds = remapTimelineNodeArray(item.nextEventIds)
+        } else {
+          // Fallback heuristic for ad-hoc stores not yet in descriptors
+          if (typeof item.volumeId === 'string' && volumeIdMap.has(item.volumeId)) {
+            item.volumeId = volumeIdMap.get(item.volumeId)!
+          }
+          if (typeof item.chapterId === 'string' && chapterIdMap.has(item.chapterId)) {
+            item.chapterId = chapterIdMap.get(item.chapterId)!
+          }
+          if (typeof item.locationId === 'string' && entityIdMap.has(item.locationId)) {
+            item.locationId = entityIdMap.get(item.locationId)!
+          }
+          if (typeof item.entityId === 'string' && entityIdMap.has(item.entityId)) {
+            item.entityId = entityIdMap.get(item.entityId)!
+          }
+          if (typeof item.sourceEntityId === 'string' && entityIdMap.has(item.sourceEntityId)) {
+            item.sourceEntityId = entityIdMap.get(item.sourceEntityId)!
+          }
+          if (typeof item.targetEntityId === 'string' && entityIdMap.has(item.targetEntityId)) {
+            item.targetEntityId = entityIdMap.get(item.targetEntityId)!
           }
         }
 
-        // 9. Nested Codex Entity Relations
-        if (Array.isArray(item.relations)) {
-          item.relations = item.relations.map((rel: any) => {
-            if (rel && typeof rel === 'object' && typeof rel.targetId === 'string') {
-              return {
-                ...rel,
-                targetId: entityIdMap.get(rel.targetId) ?? rel.targetId,
-              }
-            }
-            return rel
-          })
-        }
-
-        // 10. Primary ID Mapping (Using Namespaced Pre-allocated Map)
-        if ('id' in item && typeof item.id === 'string') {
-          if (storeName === 'narrativeThreads' && threadIdMap.has(item.id)) {
-            item.id = threadIdMap.get(item.id)!
-          } else if (storeName === 'promiseLedger' && promiseIdMap.has(item.id)) {
-            item.id = promiseIdMap.get(item.id)!
-          } else if (storeName === 'aiArtifacts' && artifactIdMap.has(item.id)) {
-            item.id = artifactIdMap.get(item.id)!
-          } else if (storeName === 'timelineNodes' && timelineNodeIdMap.has(item.id)) {
-            item.id = timelineNodeIdMap.get(item.id)!
-          } else if (entityIdMap.has(item.id)) {
-            item.id = entityIdMap.get(item.id)!
-          }
+        // 5. Primary ID Mapping
+        if ('id' in item && typeof item.id === 'string' && primaryMap.has(item.id)) {
+          item.id = primaryMap.get(item.id)!
         }
 
         remappedList.push(item)
@@ -739,6 +882,26 @@ export class WorkspaceLifecycleService {
     const validArtifactIds = new Set(Array.from(artifactIdMap.values()))
     const validTimelineNodeIds = new Set(Array.from(timelineNodeIdMap.values()))
     const validThreadIds = new Set(Array.from(threadIdMap.values()))
+    const validPromiseIds = new Set(Array.from(promiseIdMap.values()))
+
+    const getValidSetForNamespace = (ns: IdNamespace): Set<string> => {
+      switch (ns) {
+        case 'volume':
+          return validVolumeIds
+        case 'chapter':
+          return validChapterIds
+        case 'entity':
+          return validEntityIds
+        case 'timelineNode':
+          return validTimelineNodeIds
+        case 'thread':
+          return validThreadIds
+        case 'promise':
+          return validPromiseIds
+        case 'artifact':
+          return validArtifactIds
+      }
+    }
 
     // 1. Validate chapters reference valid volumes
     for (const ch of newChapters) {
@@ -750,129 +913,128 @@ export class WorkspaceLifecycleService {
       }
     }
 
-    // 2. Validate domain records reference valid chapters, volumes, entities, timeline nodes, and artifact lineage
+    // Helper to extract values by dotted path
+    const extractPathValues = (obj: any, path: string): unknown[] => {
+      const parts = path.split('.')
+      let current: any[] = [obj]
+      for (const part of parts) {
+        const next: any[] = []
+        for (const item of current) {
+          if (item && typeof item === 'object' && part in item) {
+            next.push(item[part])
+          }
+        }
+        current = next
+      }
+      return current
+    }
+
+    // 2. Validate domain records against declarative descriptors
     for (const [storeName, records] of Object.entries(remappedDomainData)) {
+      const desc = descriptorMap.get(storeName)
+
       for (const rec of records) {
-        if (rec.volumeId && typeof rec.volumeId === 'string' && !validVolumeIds.has(rec.volumeId)) {
-          return {
-            ok: false,
-            error: `Referential integrity violation: ${storeName} record references non-existent volume '${rec.volumeId}'`,
-          }
-        }
-        if (
-          rec.chapterId &&
-          typeof rec.chapterId === 'string' &&
-          !validChapterIds.has(rec.chapterId)
-        ) {
-          return {
-            ok: false,
-            error: `Referential integrity violation: ${storeName} record references non-existent chapter '${rec.chapterId}'`,
-          }
-        }
-        if (
-          rec.sourceEntityId &&
-          typeof rec.sourceEntityId === 'string' &&
-          !validEntityIds.has(rec.sourceEntityId)
-        ) {
-          return {
-            ok: false,
-            error: `Referential integrity violation: ${storeName} record references non-existent sourceEntityId '${rec.sourceEntityId}'`,
-          }
-        }
-        if (
-          rec.targetEntityId &&
-          typeof rec.targetEntityId === 'string' &&
-          !validEntityIds.has(rec.targetEntityId)
-        ) {
-          return {
-            ok: false,
-            error: `Referential integrity violation: ${storeName} record references non-existent targetEntityId '${rec.targetEntityId}'`,
-          }
-        }
-        // Validate timelineNodes prerequisites and nextEventIds
-        if (storeName === 'timelineNodes') {
-          if (Array.isArray(rec.prerequisites)) {
-            for (const preId of rec.prerequisites) {
-              if (typeof preId === 'string' && !validTimelineNodeIds.has(preId)) {
-                return {
-                  ok: false,
-                  error: `Referential integrity violation: timelineNodes node '${rec.id}' references non-existent prerequisite '${preId}'`,
+        if (desc) {
+          for (const ref of desc.references) {
+            const validSet = getValidSetForNamespace(ref.targetNamespace)
+            const extracted = extractPathValues(rec, ref.path)
+
+            for (const val of extracted) {
+              if (ref.kind === 'scalar') {
+                if (typeof val === 'string' && val.length > 0 && !validSet.has(val)) {
+                  return {
+                    ok: false,
+                    error: `Referential integrity violation: ${storeName} record references non-existent ${ref.targetNamespace} '${val}' at '${ref.path}'`,
+                  }
+                }
+              } else if (ref.kind === 'array') {
+                if (Array.isArray(val)) {
+                  for (const elem of val) {
+                    if (typeof elem === 'string' && elem.length > 0 && !validSet.has(elem)) {
+                      return {
+                        ok: false,
+                        error: `Referential integrity violation: ${storeName} record references non-existent ${ref.targetNamespace} '${elem}' at '${ref.path}'`,
+                      }
+                    }
+                  }
+                }
+              } else if (ref.kind === 'objectArray' && ref.objectProperty) {
+                if (Array.isArray(val)) {
+                  for (const elem of val) {
+                    if (
+                      elem &&
+                      typeof elem === 'object' &&
+                      typeof elem[ref.objectProperty] === 'string'
+                    ) {
+                      const targetVal = elem[ref.objectProperty]
+                      if (targetVal && !validSet.has(targetVal)) {
+                        return {
+                          ok: false,
+                          error: `Referential integrity violation: ${storeName} entity contains nested relation pointing to non-existent ${ref.targetNamespace} '${targetVal}'`,
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
           }
-          if (Array.isArray(rec.nextEventIds)) {
-            for (const nextId of rec.nextEventIds) {
-              if (typeof nextId === 'string' && !validTimelineNodeIds.has(nextId)) {
-                return {
-                  ok: false,
-                  error: `Referential integrity violation: timelineNodes node '${rec.id}' references non-existent nextEventId '${nextId}'`,
-                }
-              }
-            }
-          }
+        } else {
+          // Fallback checks for unconfigured stores
           if (
-            rec.threadId &&
-            typeof rec.threadId === 'string' &&
-            !validThreadIds.has(rec.threadId)
+            rec.volumeId &&
+            typeof rec.volumeId === 'string' &&
+            !validVolumeIds.has(rec.volumeId)
           ) {
             return {
               ok: false,
-              error: `Referential integrity violation: timelineNodes node '${rec.id}' references non-existent threadId '${rec.threadId}'`,
+              error: `Referential integrity violation: ${storeName} record references non-existent volume '${rec.volumeId}'`,
             }
           }
-        }
-        // Validate promiseLedger threadId
-        if (
-          storeName === 'promiseLedger' &&
-          rec.threadId &&
-          typeof rec.threadId === 'string' &&
-          !validThreadIds.has(rec.threadId)
-        ) {
-          return {
-            ok: false,
-            error: `Referential integrity violation: promiseLedger record '${rec.id}' references non-existent threadId '${rec.threadId}'`,
-          }
-        }
-        // Validate nested codex relations targetId
-        if (Array.isArray(rec.relations)) {
-          for (const rel of rec.relations) {
-            if (
-              rel &&
-              typeof rel === 'object' &&
-              typeof rel.targetId === 'string' &&
-              !validEntityIds.has(rel.targetId)
-            ) {
-              return {
-                ok: false,
-                error: `Referential integrity violation: ${storeName} entity contains nested relation pointing to non-existent targetId '${rel.targetId}'`,
-              }
-            }
-          }
-        }
-        // Validate artifact lineage parent
-        if (
-          storeName === 'aiArtifacts' &&
-          rec.lineage &&
-          typeof rec.lineage === 'object' &&
-          rec.lineage.parentArtifactId
-        ) {
-          if (!validArtifactIds.has(rec.lineage.parentArtifactId)) {
+          if (
+            rec.chapterId &&
+            typeof rec.chapterId === 'string' &&
+            !validChapterIds.has(rec.chapterId)
+          ) {
             return {
               ok: false,
-              error: `Referential integrity violation: aiArtifacts lineage references non-existent parentArtifactId '${rec.lineage.parentArtifactId}'`,
+              error: `Referential integrity violation: ${storeName} record references non-existent chapter '${rec.chapterId}'`,
+            }
+          }
+          if (
+            rec.sourceEntityId &&
+            typeof rec.sourceEntityId === 'string' &&
+            !validEntityIds.has(rec.sourceEntityId)
+          ) {
+            return {
+              ok: false,
+              error: `Referential integrity violation: ${storeName} record references non-existent sourceEntityId '${rec.sourceEntityId}'`,
+            }
+          }
+          if (
+            rec.targetEntityId &&
+            typeof rec.targetEntityId === 'string' &&
+            !validEntityIds.has(rec.targetEntityId)
+          ) {
+            return {
+              ok: false,
+              error: `Referential integrity violation: ${storeName} record references non-existent targetEntityId '${rec.targetEntityId}'`,
             }
           }
         }
-        // Validate nested StoryState relations
+
+        // Validate nested StoryState relations inside settingsKV
         if (
           storeName === 'settingsKV' &&
           rec.key &&
+          typeof rec.key === 'string' &&
           rec.key.startsWith('storyState::') &&
           rec.value &&
-          rec.value.relations
+          (rec.value as any).relations
         ) {
-          for (const [relId, rel] of Object.entries(rec.value.relations as Record<string, any>)) {
+          for (const [relId, rel] of Object.entries(
+            (rec.value as any).relations as Record<string, any>,
+          )) {
             if (rel.sourceEntityId && !validEntityIds.has(rel.sourceEntityId)) {
               return {
                 ok: false,

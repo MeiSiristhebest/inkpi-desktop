@@ -1,6 +1,7 @@
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbMultiverseRepository } from '../../../adapters/indexedDbMultiverseRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { MultiverseEngine } from '../engine/MultiverseEngine'
 import type { MultiverseBranchRecord, MultiverseSimulationResult } from '../types'
 import { GitFork, GitBranch, Send, Trash2, ArrowRight } from 'lucide-react'
@@ -9,44 +10,14 @@ import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
 
-const DEFAULT_CANON_CHAPTERS = [
-  {
-    index: 12,
-    title: '第12章 太虚秘境',
-    summary: '主角林凡进入宗门禁地太虚秘境争夺造化',
-    entities: ['林凡', '苏清月'],
-  },
-  {
-    index: 13,
-    title: '第13章 阴阳煞阵',
-    summary: '林凡偶遇被黑煞门围攻的青玄宗圣女苏清月',
-    entities: ['林凡', '苏清月', '黑煞门长老'],
-  },
-  {
-    index: 14,
-    title: '第14章 舍身相救',
-    summary: '危急关头林凡施展禁术击退强敌，救下垂死的苏清月，获得青玄宗结盟青睐',
-    entities: ['林凡', '苏清月'],
-  },
-  {
-    index: 15,
-    title: '第15章 宗门大比',
-    summary: '在苏清月圣药相助下，林凡在宗门大比中一举夺魁碾压赵家仇敌',
-    entities: ['林凡', '赵家长老'],
-  },
-  {
-    index: 16,
-    title: '第16章 踏平赵家',
-    summary: '主角携手青玄宗大势彻底覆灭赵家，扬名东荒',
-    entities: ['林凡', '赵家'],
-  },
-]
+type CanonChapter = { index: number; title: string; summary: string; entities: string[] }
 
 export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
-  const [forkIndex, setForkIndex] = useState<number>(14)
+  const [canonChapters, setCanonChapters] = useState<CanonChapter[]>([])
+  const [forkIndex, setForkIndex] = useState<number>(0)
   const [premise, setPremise] = useState<string>(
-    '如果主角在第14章没有现身救下女配苏清月，选择暗中取宝独善其身',
+    '如果主角在该章节没有现身救下女配，选择暗中取宝独善其身',
   )
   const [branches, setBranches] = useState<MultiverseBranchRecord[]>([])
   const [activeBranch, setActiveBranch] = useState<MultiverseSimulationResult | null>(null)
@@ -60,6 +31,25 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
     loadBranches().catch(console.error)
   }, [projectId])
 
+  // Load real chapters from IndexedDB and map to CanonChapter shape
+  useEffect(() => {
+    indexedDbProjectRepository
+      .getChaptersByProject(projectId)
+      .then((chapters) => {
+        const mapped: CanonChapter[] = chapters
+          .sort((a, b) => a.order - b.order)
+          .map((ch) => ({
+            index: ch.order,
+            title: ch.title,
+            summary: ch.content.replace(/<[^>]+>/g, '').slice(0, 80),
+            entities: [],
+          }))
+        setCanonChapters(mapped)
+        if (mapped.length > 0) setForkIndex(mapped[0].index)
+      })
+      .catch(console.error)
+  }, [projectId])
+
   useEffect(() => {
     onStats?.({
       title: '平行宇宙因果沙盒',
@@ -70,7 +60,8 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
 
   // 执行实时分支因果模拟；连接 Daemon 时由 Runtime Workflow 负责，离线时保留本地确定性回退。
   useEffect(() => {
-    const localResult = MultiverseEngine.simulateFork(DEFAULT_CANON_CHAPTERS, forkIndex, premise)
+    if (canonChapters.length < 2) return
+    const localResult = MultiverseEngine.simulateFork(canonChapters, forkIndex, premise)
     setActiveBranch(localResult)
     const runtimeAssistant = host?.aiAssistant
     if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginWorkflow) return
@@ -80,10 +71,13 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
       .runPluginWorkflow(
         'multiverse-whatif',
         {
-          canonChapters: DEFAULT_CANON_CHAPTERS.map((chapter) => ({
+          canonChapters: canonChapters.map((chapter) => ({
             ...chapter,
             title: semanticTextFromContent(`multiverse-title-${chapter.index}`, chapter.title),
-            summary: semanticTextFromContent(`multiverse-summary-${chapter.index}`, chapter.summary),
+            summary: semanticTextFromContent(
+              `multiverse-summary-${chapter.index}`,
+              chapter.summary,
+            ),
             entities: chapter.entities.map((entity, index) =>
               semanticTextFromContent(`multiverse-entity-${chapter.index}-${index}`, entity),
             ),
@@ -100,7 +94,7 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
     return () => {
       cancelled = true
     }
-  }, [forkIndex, host?.aiAssistant, premise, projectId])
+  }, [canonChapters, forkIndex, host?.aiAssistant, premise, projectId])
 
   const handleSaveBranch = async () => {
     if (!activeBranch) return
@@ -141,38 +135,48 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
         </button>
       </div>
 
-      {/* 分支控制输入 */}
-      <div className="p-4 rounded-xl border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-        <div>
-          <label className="text-xs font-bold text-slate-500 block mb-1">
-            分歧奇点章节 (Fork Point):
-          </label>
-          <select
-            value={forkIndex}
-            onChange={(e) => setForkIndex(Number(e.target.value))}
-            className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"
-          >
-            {DEFAULT_CANON_CHAPTERS.map((ch) => (
-              <option key={ch.index} value={ch.index}>
-                {ch.title}
-              </option>
-            ))}
-          </select>
+      {/* 空状态提示 */}
+      {canonChapters.length < 2 && (
+        <div className="text-center py-16 text-slate-400 dark:text-slate-500">
+          <GitFork className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">请先在项目中创建至少 2 个章节，才能启动平行宇宙推演。</p>
         </div>
+      )}
 
-        <div className="md:col-span-3">
-          <label className="text-xs font-bold text-slate-500 block mb-1">
-            “What-If” 假设前提假设词:
-          </label>
-          <input
-            type="text"
-            value={premise}
-            onChange={(e) => setPremise(e.target.value)}
-            className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"
-            placeholder="例如：如果主角在第14章没有救下女配..."
-          />
+      {/* 分支控制输入 */}
+      {canonChapters.length >= 2 && (
+        <div className="p-4 rounded-xl border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div>
+            <label className="text-xs font-bold text-slate-500 block mb-1">
+              分歧奇点章节 (Fork Point):
+            </label>
+            <select
+              value={forkIndex}
+              onChange={(e) => setForkIndex(Number(e.target.value))}
+              className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"
+            >
+              {canonChapters.map((ch) => (
+                <option key={ch.index} value={ch.index}>
+                  {ch.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-3">
+            <label className="text-xs font-bold text-slate-500 block mb-1">
+              “What-If” 假设前提假设词:
+            </label>
+            <input
+              type="text"
+              value={premise}
+              onChange={(e) => setPremise(e.target.value)}
+              className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"
+              placeholder="例如：如果主角在第14章没有救下女配..."
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 主宇宙 vs 平行宇宙双轨因果对照 */}
       {activeBranch && (
@@ -183,7 +187,7 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
           </h3>
 
           <div className="space-y-3">
-            {DEFAULT_CANON_CHAPTERS.map((canon, idx) => {
+            {canonChapters.map((canon, idx) => {
               const branch = activeBranch.nodes[idx]
               const isFork = canon.index === forkIndex
               const isPost = canon.index > forkIndex

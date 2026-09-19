@@ -609,4 +609,127 @@ describe('WorkspaceLifecycleService', () => {
     expect(failResult.error).toContain('Referential integrity violation')
     expect(failResult.error).toContain('ghost-prerequisite-node')
   })
+
+  it('remaps promiseLedger relatedChapterIds and fails Pass 3 on dangling chapter reference', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const backupWithPromiseChapters = {
+      ...backup!,
+      domainData: {
+        narrativeThreads: [{ id: 'th-1', projectId: 'orig-proj', name: 'Main' }],
+        promiseLedger: [
+          {
+            id: 'prom-1',
+            projectId: 'orig-proj',
+            threadId: 'th-1',
+            chapterId: 'orig-ch-1',
+            relatedChapterIds: ['orig-ch-1'],
+          },
+        ],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+    const result = await service.importWorkspace(backupWithPromiseChapters)
+    expect(result.ok).toBe(true)
+
+    const putCalls = putSpy.mock.calls
+    const savedPromise = putCalls.find((c) => c[0] === 'promiseLedger')?.[1] as any
+    expect(savedPromise).toBeDefined()
+    expect(savedPromise.relatedChapterIds[0]).not.toBe('orig-ch-1')
+    expect(savedPromise.relatedChapterIds[0]).toBe(savedPromise.chapterId)
+    putSpy.mockRestore()
+
+    // Dangling chapter in relatedChapterIds
+    const danglingPromiseBackup = {
+      ...backup!,
+      domainData: {
+        narrativeThreads: [{ id: 'th-1', projectId: 'orig-proj' }],
+        promiseLedger: [
+          {
+            id: 'prom-1',
+            projectId: 'orig-proj',
+            threadId: 'th-1',
+            chapterId: 'orig-ch-1',
+            relatedChapterIds: ['non-existent-ch-999'],
+          },
+        ],
+      },
+    }
+    const failResult = await service.importWorkspace(danglingPromiseBackup)
+    expect(failResult.ok).toBe(false)
+    expect(failResult.error).toContain('Referential integrity violation')
+    expect(failResult.error).toContain('non-existent-ch-999')
+  })
+
+  it('remaps geoMapGrids linkedOverlays (timelineEventIds, activeCharacterIds, foreshadowIds) and fails Pass 3 on dangling refs', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const backupWithGeoMap = {
+      ...backup!,
+      domainData: {
+        codexEntities: [{ id: 'hero-1', projectId: 'orig-proj', name: 'Hero' }],
+        narrativeThreads: [{ id: 'th-1', projectId: 'orig-proj', name: 'Main' }],
+        timelineNodes: [{ id: 'evt-1', projectId: 'orig-proj', threadId: 'th-1' }],
+        promiseLedger: [{ id: 'prom-1', projectId: 'orig-proj', threadId: 'th-1' }],
+        geoMapGrids: [
+          {
+            id: 'map-1',
+            projectId: 'orig-proj',
+            locationId: 'hero-1',
+            linkedOverlays: {
+              activeCharacterIds: ['hero-1'],
+              foreshadowIds: ['prom-1'],
+              timelineEventIds: ['evt-1'],
+            },
+          },
+        ],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+    const result = await service.importWorkspace(backupWithGeoMap)
+    expect(result.ok).toBe(true)
+
+    const putCalls = putSpy.mock.calls
+    const savedMap = putCalls.find((c) => c[0] === 'geoMapGrids')?.[1] as any
+    const savedHero = putCalls.find((c) => c[0] === 'codexEntities')?.[1] as any
+    const savedEvt = putCalls.find((c) => c[0] === 'timelineNodes')?.[1] as any
+    const savedProm = putCalls.find((c) => c[0] === 'promiseLedger')?.[1] as any
+
+    expect(savedMap).toBeDefined()
+    expect(savedMap.linkedOverlays.activeCharacterIds).toEqual([savedHero.id])
+    expect(savedMap.linkedOverlays.timelineEventIds).toEqual([savedEvt.id])
+    expect(savedMap.linkedOverlays.foreshadowIds).toEqual([savedProm.id])
+    putSpy.mockRestore()
+
+    // Dangling timelineEventId in linkedOverlays
+    const danglingGeoBackup = {
+      ...backup!,
+      domainData: {
+        codexEntities: [{ id: 'hero-1', projectId: 'orig-proj', name: 'Hero' }],
+        geoMapGrids: [
+          {
+            id: 'map-1',
+            projectId: 'orig-proj',
+            locationId: 'hero-1',
+            linkedOverlays: {
+              activeCharacterIds: ['hero-1'],
+              foreshadowIds: [],
+              timelineEventIds: ['ghost-event-999'],
+            },
+          },
+        ],
+      },
+    }
+
+    const failResult = await service.importWorkspace(danglingGeoBackup)
+    expect(failResult.ok).toBe(false)
+    expect(failResult.error).toContain('Referential integrity violation')
+    expect(failResult.error).toContain('ghost-event-999')
+  })
 })

@@ -28,6 +28,7 @@ import { useWritingSessionStats } from './hooks/useWritingSessionStats'
 import { indexedDbProjectRepository } from '../../adapters/indexedDbProjectRepository'
 import { indexedDbCodexEntityRepository } from '../../adapters/indexedDbCodexEntityRepository'
 import { localStorageKeyValueStore } from '../../adapters/localStorageKeyValueStore'
+import { writingGoalService } from '../../services/writingGoalService'
 import type { ProjectRecord } from '../../types'
 import type { CodexEntity } from '../../plugins/living-codex/types'
 import { ChapterReferencesSidebar } from '../../plugins/living-codex/components/ChapterReferencesSidebar'
@@ -229,7 +230,7 @@ export const RichEditor: FC<RichEditorProps> = ({
 
   const [showGoalModal, setShowGoalModal] = useState(false)
   const [dailyGoalTarget, setDailyGoalTarget] = useState(() => {
-    const saved = localStorageKeyValueStore.getSync(`inkpi-daily-goal-${projectId}`)
+    const saved = writingGoalService.getGoalSync(projectId)
     return saved ? Number(saved) || 4600 : 4600
   })
 
@@ -570,251 +571,249 @@ export const RichEditor: FC<RichEditorProps> = ({
   /* ── 渲染 ──────────────────────────────────────────────── */
   return (
     <div className="creative-editor-root flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
-        {visibleTaskProgress && (
+      {visibleTaskProgress && (
+        <div
+          data-testid="editor-long-task-status"
+          data-task-id={visibleTaskProgress.taskId}
+          data-task-kind={visibleTaskProgress.kind}
+          data-task-status={visibleTaskProgress.status}
+          role="status"
+          aria-live="polite"
+          aria-busy={isTaskInFlight(visibleTaskProgress.status)}
+          className="absolute right-3 top-2 z-30 flex max-w-[min(30rem,calc(100%-1.5rem))] items-center gap-2 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]/95 px-2 py-1 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
+        >
+          <span>{taskStatusLabel(visibleTaskProgress.status)}</span>
+          {visibleProgress !== undefined && (
+            <>
+              <progress
+                data-testid="editor-long-task-progress"
+                aria-label="任务进度"
+                max={1}
+                value={visibleProgress}
+                className="h-1.5 w-20"
+              />
+              <span>{Math.round(visibleProgress * 100)}%</span>
+            </>
+          )}
+          {visibleTaskProgress.status === 'waiting-user' && (
+            <span data-testid="editor-long-task-waiting">等待人工输入</span>
+          )}
+        </div>
+      )}
+      {/* 左侧分卷/章节目录树（聚焦模式下隐藏） */}
+      {!effectiveZen && model.isSidebarOpen && (
+        <ChapterTree
+          model={model}
+          isConnected={isConnected}
+          isReconnecting={isReconnecting}
+          onReconnect={onReconnect}
+        />
+      )}
+
+      <div className="creative-editor-column flex-1 flex flex-col min-w-0 h-full">
+        <EditorToolbar
+          model={model}
+          editor={editor}
+          onHome={onHome}
+          onToggleFocus={onToggleFocus}
+          focusMode={effectiveZen}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={onToggleFullscreen}
+          onToggleRightPanel={onToggleRightPanel}
+          isRightOpen={isRightOpen}
+          hasAssistant={hasAssistant ?? Boolean(onOpenAssistant)}
+          showReferencesSidebar={showReferencesSidebar}
+          onToggleReferencesSidebar={() => setShowReferencesSidebar((v) => !v)}
+          entityHighlightEnabled={entityHighlightEnabled}
+          onToggleEntityHighlight={() => setEntityHighlightEnabled((v) => !v)}
+        />
+
+        {showFindReplace && !effectiveZen && <FindReplaceBar model={model} editorRef={editorRef} />}
+
+        {/* 字数目标进度条 */}
+        {!effectiveZen && wordTarget > 0 && (
           <div
-            data-testid="editor-long-task-status"
-            data-task-id={visibleTaskProgress.taskId}
-            data-task-kind={visibleTaskProgress.kind}
-            data-task-status={visibleTaskProgress.status}
-            role="status"
-            aria-live="polite"
-            aria-busy={isTaskInFlight(visibleTaskProgress.status)}
-            className="absolute right-3 top-2 z-30 flex max-w-[min(30rem,calc(100%-1.5rem))] items-center gap-2 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]/95 px-2 py-1 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
+            data-testid="chapter-progress"
+            className="shrink-0 h-1 w-full bg-[var(--ink-bg-hover)]"
           >
-            <span>{taskStatusLabel(visibleTaskProgress.status)}</span>
-            {visibleProgress !== undefined && (
-              <>
-                <progress
-                  data-testid="editor-long-task-progress"
-                  aria-label="任务进度"
-                  max={1}
-                  value={visibleProgress}
-                  className="h-1.5 w-20"
-                />
-                <span>{Math.round(visibleProgress * 100)}%</span>
-              </>
-            )}
-            {visibleTaskProgress.status === 'waiting-user' && (
-              <span data-testid="editor-long-task-waiting">等待人工输入</span>
-            )}
+            <div
+              className="h-full bg-[var(--ink-accent)] transition-all duration-300 ease-[var(--ink-ease)]"
+              style={{
+                width: `${Math.min(100, Math.round((chapterWords / wordTarget) * 100))}%`,
+              }}
+            />
           </div>
         )}
-        {/* 左侧分卷/章节目录树（聚焦模式下隐藏） */}
-        {!effectiveZen && model.isSidebarOpen && (
-          <ChapterTree
+
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
+          <EditorCanvas
             model={model}
+            editor={editor}
+            canvasRef={canvasRef}
+            effectiveZen={effectiveZen}
+            effectiveTypewriter={effectiveTypewriter}
+            projectId={projectId}
+            onAiTask={aiTaskHandler}
+            activeChapterRevision={activeChapter?.revision}
+            onOpenAssistant={onOpenAssistant}
+            bgConfig={bgConfig}
+          />
+
+          {/* 本章引用侧栏（角色/设定条目列表，支持点击直达） */}
+          <ChapterReferencesSidebar
+            isOpen={showReferencesSidebar && !effectiveZen}
+            entities={entities}
+            currentText={activeChapterText}
+            onClose={() => setShowReferencesSidebar(false)}
+            onSelectEntity={(ent) => {
+              // 点击词条后，在正文中高亮并直接聚焦查找，亦可通过事件总线打开设定详情
+              actions.setShowFindReplace(true)
+              actions.setFindText(ent.name)
+            }}
+          />
+
+          <DrawerDock projectId={projectId} currentText={activeChapterText} />
+        </div>
+
+        {!effectiveZen && model.showStatsBar && (
+          <StatusFooter
+            model={model}
+            isTypewriter={isTypewriter}
+            onTypewriterChange={onTypewriterChange}
             isConnected={isConnected}
             isReconnecting={isReconnecting}
             onReconnect={onReconnect}
           />
         )}
+      </div>
 
-        <div className="creative-editor-column flex-1 flex flex-col min-w-0 h-full">
-          <EditorToolbar
-            model={model}
-            editor={editor}
-            onHome={onHome}
-            onToggleFocus={onToggleFocus}
-            focusMode={effectiveZen}
-            isFullscreen={isFullscreen}
-            onToggleFullscreen={onToggleFullscreen}
-            onToggleRightPanel={onToggleRightPanel}
-            isRightOpen={isRightOpen}
-            hasAssistant={hasAssistant ?? Boolean(onOpenAssistant)}
-            showReferencesSidebar={showReferencesSidebar}
-            onToggleReferencesSidebar={() => setShowReferencesSidebar((v) => !v)}
-            entityHighlightEnabled={entityHighlightEnabled}
-            onToggleEntityHighlight={() => setEntityHighlightEnabled((v) => !v)}
-          />
+      {showGlobalSearch && <GlobalSearchPopup model={model} />}
 
-          {showFindReplace && !effectiveZen && (
-            <FindReplaceBar model={model} editorRef={editorRef} />
-          )}
-
-          {/* 字数目标进度条 */}
-          {!effectiveZen && wordTarget > 0 && (
-            <div
-              data-testid="chapter-progress"
-              className="shrink-0 h-1 w-full bg-[var(--ink-bg-hover)]"
-            >
-              <div
-                className="h-full bg-[var(--ink-accent)] transition-all duration-300 ease-[var(--ink-ease)]"
-                style={{
-                  width: `${Math.min(100, Math.round((chapterWords / wordTarget) * 100))}%`,
-                }}
-              />
-            </div>
-          )}
-
-          <div className="flex-1 flex min-h-0 overflow-hidden relative">
-            <EditorCanvas
-              model={model}
-              editor={editor}
-              canvasRef={canvasRef}
-              effectiveZen={effectiveZen}
-              effectiveTypewriter={effectiveTypewriter}
-              projectId={projectId}
-              onAiTask={aiTaskHandler}
-              activeChapterRevision={activeChapter?.revision}
-              onOpenAssistant={onOpenAssistant}
-              bgConfig={bgConfig}
-            />
-
-            {/* 本章引用侧栏（角色/设定条目列表，支持点击直达） */}
-            <ChapterReferencesSidebar
-              isOpen={showReferencesSidebar && !effectiveZen}
-              entities={entities}
-              currentText={activeChapterText}
-              onClose={() => setShowReferencesSidebar(false)}
-              onSelectEntity={(ent) => {
-                // 点击词条后，在正文中高亮并直接聚焦查找，亦可通过事件总线打开设定详情
-                actions.setShowFindReplace(true)
-                actions.setFindText(ent.name)
-              }}
-            />
-
-            <DrawerDock projectId={projectId} currentText={activeChapterText} />
-          </div>
-
-          {!effectiveZen && model.showStatsBar && (
-            <StatusFooter
-              model={model}
-              isTypewriter={isTypewriter}
-              onTypewriterChange={onTypewriterChange}
-              isConnected={isConnected}
-              isReconnecting={isReconnecting}
-              onReconnect={onReconnect}
-            />
-          )}
-        </div>
-
-        {showGlobalSearch && <GlobalSearchPopup model={model} />}
-
-        {/* 敏感词即时检测浮层 */}
-        {showSensitiveModal && (
-          <SensitiveModal
-            content={activeChapter?.content || ''}
-            onApply={(newContent) => {
-              if (activeChapter) {
-                void applyContentMutation(editorRef.current, newContent, {
-                  workspaceId: projectId,
-                  chapterId: activeChapter.id,
-                  expectedRevision: activeChapter.revision,
-                  origin: 'sensitive-replace',
-                })
-              }
-            }}
-            onClose={() => actions.setShowSensitiveModal(false)}
-          />
-        )}
-
-        {/* 小黑屋强制码字浮层 */}
-        {showLockModal && (
-          <LockModal
-            currentWordCount={chapterWords}
-            onClose={() => actions.setShowLockModal(false)}
-          />
-        )}
-
-        {/* 时光机历史版本浮层 */}
-        {showHistoryModal && activeChapter && (
-          <HistoryModal
-            chapter={activeChapter}
-            onRestore={(content) => {
-              void applyContentMutation(editorRef.current, content, {
+      {/* 敏感词即时检测浮层 */}
+      {showSensitiveModal && (
+        <SensitiveModal
+          content={activeChapter?.content || ''}
+          onApply={(newContent) => {
+            if (activeChapter) {
+              void applyContentMutation(editorRef.current, newContent, {
                 workspaceId: projectId,
                 chapterId: activeChapter.id,
                 expectedRevision: activeChapter.revision,
-                origin: 'history-restore',
+                origin: 'sensitive-replace',
               })
-            }}
-            onClose={() => actions.setShowHistoryModal(false)}
-          />
-        )}
+            }
+          }}
+          onClose={() => actions.setShowSensitiveModal(false)}
+        />
+      )}
 
-        {/* 高频词与口癖点检浮层 */}
-        {showOveruseModal && activeChapter && (
-          <OveruseWordsModal
-            content={activeChapter.content || ''}
-            chapterTitle={activeChapter.title}
-            onHighlightWord={(word) => {
-              actions.setShowFindReplace(true)
-              actions.setFindText(word)
-            }}
-            onClose={() => actions.setShowOveruseModal(false)}
-          />
-        )}
+      {/* 小黑屋强制码字浮层 */}
+      {showLockModal && (
+        <LockModal
+          currentWordCount={chapterWords}
+          onClose={() => actions.setShowLockModal(false)}
+        />
+      )}
 
-        {/* 字数面板配置弹窗 */}
-        {showWordCountPanelModal && (
-          <WordCountPanelModal
-            onClose={() => actions.setShowWordCountPanelModal(false)}
-            bookTitle={currentProject?.name || '私密作品使用指南'}
-            bookCover={currentProject?.cover}
-            todayTarget={dailyGoalTarget}
-            stats={sessionStats}
-            config={widgetConfig}
-            onConfigChange={setWidgetConfig}
-            onPinAsWidget={() => setShowFloatingWidget(true)}
-            onOpenGoalModal={() => setShowGoalModal(true)}
-          />
-        )}
+      {/* 时光机历史版本浮层 */}
+      {showHistoryModal && activeChapter && (
+        <HistoryModal
+          chapter={activeChapter}
+          onRestore={(content) => {
+            void applyContentMutation(editorRef.current, content, {
+              workspaceId: projectId,
+              chapterId: activeChapter.id,
+              expectedRevision: activeChapter.revision,
+              origin: 'history-restore',
+            })
+          }}
+          onClose={() => actions.setShowHistoryModal(false)}
+        />
+      )}
 
-        {/* 可自由拖动的小组件卡片 */}
-        {showFloatingWidget && (
-          <FloatingWordCountWidget
-            stats={sessionStats}
-            config={widgetConfig}
-            bookTitle={currentProject?.name || '私密作品使用指南'}
-            bookCover={currentProject?.cover}
-            todayTarget={dailyGoalTarget}
-            onOpenSettings={() => actions.setShowWordCountPanelModal(true)}
-            onOpenGoalModal={() => setShowGoalModal(true)}
-            onConfigChange={setWidgetConfig}
-            onClose={() => setShowFloatingWidget(false)}
-          />
-        )}
+      {/* 高频词与口癖点检浮层 */}
+      {showOveruseModal && activeChapter && (
+        <OveruseWordsModal
+          content={activeChapter.content || ''}
+          chapterTitle={activeChapter.title}
+          onHighlightWord={(word) => {
+            actions.setShowFindReplace(true)
+            actions.setFindText(word)
+          }}
+          onClose={() => actions.setShowOveruseModal(false)}
+        />
+      )}
 
-        {/* 每日目标与写作提醒弹窗 */}
-        {showGoalModal && (
-          <DailyGoalModal
-            onClose={() => setShowGoalModal(false)}
-            currentGoal={dailyGoalTarget}
-            onSave={(newGoal) => {
-              setDailyGoalTarget(newGoal)
-              void localStorageKeyValueStore.set(`inkpi-daily-goal-${projectId}`, String(newGoal))
-            }}
-            onDelete={() => {
-              setDailyGoalTarget(4600)
-            }}
-          />
-        )}
+      {/* 字数面板配置弹窗 */}
+      {showWordCountPanelModal && (
+        <WordCountPanelModal
+          onClose={() => actions.setShowWordCountPanelModal(false)}
+          bookTitle={currentProject?.name || '私密作品使用指南'}
+          bookCover={currentProject?.cover}
+          todayTarget={dailyGoalTarget}
+          stats={sessionStats}
+          config={widgetConfig}
+          onConfigChange={setWidgetConfig}
+          onPinAsWidget={() => setShowFloatingWidget(true)}
+          onOpenGoalModal={() => setShowGoalModal(true)}
+        />
+      )}
 
-        {/* 写作背景与网格线设置弹窗 */}
-        {showBackgroundModal && (
-          <BackgroundModal
-            onClose={() => actions.setShowBackgroundModal(false)}
-            config={bgConfig}
-            onChange={setBgConfig}
-          />
-        )}
+      {/* 可自由拖动的小组件卡片 */}
+      {showFloatingWidget && (
+        <FloatingWordCountWidget
+          stats={sessionStats}
+          config={widgetConfig}
+          bookTitle={currentProject?.name || '私密作品使用指南'}
+          bookCover={currentProject?.cover}
+          todayTarget={dailyGoalTarget}
+          onOpenSettings={() => actions.setShowWordCountPanelModal(true)}
+          onOpenGoalModal={() => setShowGoalModal(true)}
+          onConfigChange={setWidgetConfig}
+          onClose={() => setShowFloatingWidget(false)}
+        />
+      )}
 
-        {/* 字体、字号、行高行宽排版综合设置弹窗 */}
-        {showFontFormatModal && (
-          <FontFormatModal
-            onClose={() => actions.setShowFontFormatModal(false)}
-            model={model}
-            editor={editorRef.current}
-          />
-        )}
+      {/* 每日目标与写作提醒弹窗 */}
+      {showGoalModal && (
+        <DailyGoalModal
+          onClose={() => setShowGoalModal(false)}
+          currentGoal={dailyGoalTarget}
+          onSave={(newGoal) => {
+            setDailyGoalTarget(newGoal)
+            void writingGoalService.setGoal(projectId, newGoal)
+          }}
+          onDelete={() => {
+            setDailyGoalTarget(4600)
+          }}
+        />
+      )}
 
-        {chapterContextMenu && <ChapterContextMenu model={model} />}
-        {renamingChapter && <RenameChapterDialog model={model} />}
-        {deletingChapter && <DeleteChapterDialog model={model} />}
-        {volumeContextMenu && <VolumeContextMenu model={model} />}
-        {renamingVolume && <RenameVolumeDialog model={model} />}
-        {deletingVolume && <DeleteVolumeDialog model={model} />}
-      </div>
+      {/* 写作背景与网格线设置弹窗 */}
+      {showBackgroundModal && (
+        <BackgroundModal
+          onClose={() => actions.setShowBackgroundModal(false)}
+          config={bgConfig}
+          onChange={setBgConfig}
+        />
+      )}
+
+      {/* 字体、字号、行高行宽排版综合设置弹窗 */}
+      {showFontFormatModal && (
+        <FontFormatModal
+          onClose={() => actions.setShowFontFormatModal(false)}
+          model={model}
+          editor={editorRef.current}
+        />
+      )}
+
+      {chapterContextMenu && <ChapterContextMenu model={model} />}
+      {renamingChapter && <RenameChapterDialog model={model} />}
+      {deletingChapter && <DeleteChapterDialog model={model} />}
+      {volumeContextMenu && <VolumeContextMenu model={model} />}
+      {renamingVolume && <RenameVolumeDialog model={model} />}
+      {deletingVolume && <DeleteVolumeDialog model={model} />}
+    </div>
   )
 }
 

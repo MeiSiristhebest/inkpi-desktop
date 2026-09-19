@@ -57,7 +57,10 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
   const handleAiGoldAudit = () => {
     if (!chaptersText.trim()) return
     const analysisInput = {
-      openingText: semanticTextFromContent('gold-chapters-eval-ai-input', chaptersText).slice(0, 4000),
+      openingText: semanticTextFromContent('gold-chapters-eval-ai-input', chaptersText).slice(
+        0,
+        4000,
+      ),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
@@ -143,7 +146,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                   : 'bg-rose-950 text-rose-400 border border-rose-800'
               }`}
             >
-              {currentEval.isQualified ? '达到商业签约门槛' : '高危拒签预警'}
+              {currentEval.isQualified ? '达到商业签约门槛' : '当前规则检测未通过签约门槛'}
             </span>
           </div>
 

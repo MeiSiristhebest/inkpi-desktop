@@ -9,24 +9,45 @@ import { SubtextMasterView } from './subtext-compiler/components/SubtextMasterVi
 const pluginRoot = dirname(fileURLToPath(import.meta.url))
 
 const taskBoundaries = [
-  ['chekhov-radar/components/ChekhovRadarMasterView.tsx', /semanticTextFromContent\(c\.id, c\.content/],
+  [
+    'chekhov-radar/components/ChekhovRadarMasterView.tsx',
+    /semanticTextFromContent\(c\.id, c\.content/,
+  ],
   ['clue-weaver/components/ClueWeaverMasterView.tsx', /text:\s*semanticTextFromContent/],
   ['combat-sandbox/components/CombatSandboxMasterView.tsx', /stakes:\s*semanticTextFromContent/],
   ['consistency-sentinel/components/ConsistencyMasterView.tsx', /text:\s*semanticTextFromContent/],
-  ['dialogue-distiller/components/DialogueDistillerMasterView.tsx', /text:\s*semanticTextFromContent/],
+  [
+    'dialogue-distiller/components/DialogueDistillerMasterView.tsx',
+    /text:\s*semanticTextFromContent/,
+  ],
   ['emotion-curve/components/EmotionCurveMasterView.tsx', /content:\s*semanticTextFromContent/],
   ['expectation-engine/components/ExpectationMasterView.tsx', /title:\s*semanticTextFromContent/],
   ['faction-matrix/components/FactionMatrixMasterView.tsx', /reason:\s*semanticTextFromContent/],
-  ['gold-chapters-eval/components/GoldChaptersMasterView.tsx', /openingText:\s*semanticTextFromContent/],
-  ['multi-calendar/components/MultiCalendarMasterView.tsx', /semanticTextFromContent\(c\.id, c\.content/],
+  [
+    'gold-chapters-eval/components/GoldChaptersMasterView.tsx',
+    /openingText:\s*semanticTextFromContent/,
+  ],
+  [
+    'multi-calendar/components/MultiCalendarMasterView.tsx',
+    /semanticTextFromContent\(c\.id, c\.content/,
+  ],
   ['narrative-linter/components/NarrativeLinterMasterView.tsx', /text:\s*semanticTextFromContent/],
-  ['paywall-sentry/components/PaywallSentryMasterView.tsx', /semanticTextFromContent\(c\.id, c\.content/],
+  [
+    'paywall-sentry/components/PaywallSentryMasterView.tsx',
+    /semanticTextFromContent\(c\.id, c\.content/,
+  ],
   ['promise-ledger/components/LedgerMasterView.tsx', /semanticTextFromContent[\s\S]*e\.plantNote/],
   ['reader-hook/components/ReaderHookMasterView.tsx', /endingText:\s*semanticTextFromContent/],
-  ['reader-simulator/components/ReaderSimulatorMasterView.tsx', /semanticTextFromContent\(\s*currentChapter\.id/],
+  [
+    'reader-simulator/components/ReaderSimulatorMasterView.tsx',
+    /semanticTextFromContent\(\s*currentChapter\.id/,
+  ],
   ['safe-gate/components/SafeGateView.tsx', /text:\s*semanticTextFromContent/],
   ['scene-beats/components/SceneBeatsMasterView.tsx', /synopsis:[\s\S]*semanticTextFromContent/],
-  ['sub-plot-braid/components/SubPlotBraidMasterView.tsx', /semanticTextFromContent[\s\S]*s\.summary/],
+  [
+    'sub-plot-braid/components/SubPlotBraidMasterView.tsx',
+    /semanticTextFromContent[\s\S]*s\.summary/,
+  ],
   ['subtext-compiler/components/SubtextMasterView.tsx', /spoken:\s*semanticTextFromContent/],
   ['timeline-grid/components/TimelineGridView.tsx', /semanticTextFromContent\(c\.id, c\.content/],
   ['volume-master/components/VolumeMasterMasterView.tsx', /conflict:\s*semanticTextFromContent/],
@@ -34,11 +55,23 @@ const taskBoundaries = [
 ] as const
 
 const runtimeBoundaries = [
-  ['diff-reviewer/components/DiffReviewerMasterView.tsx', /oldText:\s*semanticSourceText[\s\S]*newText:\s*semanticProposedText/],
+  [
+    'diff-reviewer/components/DiffReviewerMasterView.tsx',
+    /oldText:\s*semanticSourceText[\s\S]*newText:\s*semanticProposedText/,
+  ],
   ['memory-palace/components/MemoryPalaceMasterView.tsx', /content:\s*semanticTextFromContent/],
-  ['multiverse-whatif/components/MultiverseMasterView.tsx', /canonChapters:\s*DEFAULT_CANON_CHAPTERS\.map[\s\S]*divergencePremise:\s*semanticTextFromContent/],
-  ['press-forge/components/PressForgeMasterView.tsx', /semanticTextFromContent[\s\S]*rawContent:\s*currentChapterText/],
-  ['scrapbook-recycler/components/ScrapbookMasterView.tsx', /contextText:\s*semanticTextFromContent[\s\S]*snippet:\s*semanticTextFromContent/],
+  [
+    'multiverse-whatif/components/MultiverseMasterView.tsx',
+    /canonChapters:\s*canonChapters\.map[\s\S]*divergencePremise:\s*semanticTextFromContent/,
+  ],
+  [
+    'press-forge/components/PressForgeMasterView.tsx',
+    /semanticTextFromContent[\s\S]*rawContent:\s*currentChapterText/,
+  ],
+  [
+    'scrapbook-recycler/components/ScrapbookMasterView.tsx',
+    /contextText:\s*semanticTextFromContent[\s\S]*snippet:\s*semanticTextFromContent/,
+  ],
   ['storyboard-gen/components/StoryboardMasterView.tsx', /chapterText:\s*semanticTextFromContent/],
 ] as const
 
@@ -68,8 +101,7 @@ describe('plugin AI input boundaries', () => {
     )
     const runtimeCallCount = allSources.reduce(
       (count, source) =>
-        count +
-        (source.match(/runPluginTool\(|runPluginWorkflow\(/g)?.length ?? 0),
+        count + (source.match(/runPluginTool\(|runPluginWorkflow\(/g)?.length ?? 0),
       0,
     )
 
@@ -107,7 +139,9 @@ describe('plugin AI input boundaries', () => {
       </DesktopPluginHostProvider>,
     )
 
-    const spokenInput = screen.getAllByRole('textbox').find((element) => element.tagName === 'TEXTAREA')
+    const spokenInput = screen
+      .getAllByRole('textbox')
+      .find((element) => element.tagName === 'TEXTAREA')
     expect(spokenInput).toBeDefined()
     fireEvent.change(spokenInput!, { target: { value: '<p>表面台词</p><p>第二句</p>' } })
     fireEvent.click(screen.getByRole('button', { name: 'AI 潜台词与微表情深度编译' }))
