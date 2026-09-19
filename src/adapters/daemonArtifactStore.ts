@@ -44,14 +44,23 @@ export class DaemonArtifactStore implements ArtifactStore {
     if (!Array.isArray(artifacts)) throw new Error('Daemon artifact list returned an invalid list')
     return artifacts.map(fromRuntimeArtifact)
   }
+
+  async listByWorkspace(workspaceId: string): Promise<AiArtifact[]> {
+    const artifacts = await this.client.request<unknown>('artifact.list', { workspaceId })
+    if (!Array.isArray(artifacts)) throw new Error('Daemon artifact list returned an invalid list')
+    return artifacts.map((art) => fromRuntimeArtifact(art, workspaceId))
+  }
 }
 
 function toRuntimeArtifact(artifact: AiArtifact): RuntimeArtifact {
+  const workspaceId =
+    artifact.ownership?.workspaceId ?? (artifact.metadata?.workspaceId as string | undefined)
   return {
     id: artifact.id,
     type: artifact.type,
     version: artifact.version,
     content: artifact.content,
+    ...(workspaceId ? { workspaceId } : {}),
     provenance: {
       ...artifact.provenance,
       [DESKTOP_ARTIFACT_METADATA]: {
@@ -69,10 +78,14 @@ function toRuntimeArtifact(artifact: AiArtifact): RuntimeArtifact {
   }
 }
 
-function fromRuntimeArtifact(artifact: unknown): AiArtifact {
+function fromRuntimeArtifact(artifact: unknown, fallbackWorkspaceId?: string): AiArtifact {
   assertRuntimeArtifact(artifact)
   const metadata = asRecord(artifact.provenance[DESKTOP_ARTIFACT_METADATA])
   const { [DESKTOP_ARTIFACT_METADATA]: _desktopMetadata, ...provenance } = artifact.provenance
+  const workspaceId =
+    (artifact as any).workspaceId ??
+    asRecord(metadata?.ownership)?.workspaceId ??
+    fallbackWorkspaceId
   const normalized = normalizeArtifactForPersistence({
     ...artifact,
     taskId:
@@ -90,7 +103,7 @@ function fromRuntimeArtifact(artifact: unknown): AiArtifact {
     ...(metadata?.metadata && typeof metadata.metadata === 'object'
       ? { metadata: metadata.metadata as Record<string, unknown> }
       : {}),
-    ownership: daemonOwnership(metadata?.ownership),
+    ownership: daemonOwnership(metadata?.ownership, workspaceId),
     provenance,
   })
   assertAiArtifact(normalized)
@@ -118,9 +131,9 @@ function assertRuntimeArtifact(value: unknown): asserts value is RuntimeArtifact
   }
 }
 
-function daemonOwnership(value: unknown): ArtifactOwnership {
+function daemonOwnership(value: unknown, fallbackWorkspaceId?: string): ArtifactOwnership {
   if (value !== undefined) assertArtifactOwnership(value)
-  const workspaceId = asRecord(value)?.workspaceId
+  const workspaceId = asRecord(value)?.workspaceId ?? fallbackWorkspaceId
   return {
     owner: 'daemon',
     authoritative: false,

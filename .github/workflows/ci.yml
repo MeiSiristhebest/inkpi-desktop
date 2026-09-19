@@ -48,11 +48,19 @@ jobs:
         with:
           path: inkpi-desktop
 
+      - name: Resolve Pinned Runtime Commit
+        id: runtime-lock
+        shell: bash
+        run: |
+          PINNED_COMMIT=$(node -p "require('./inkpi-desktop/runtime.lock.json').pinnedCommit")
+          echo "commit=$PINNED_COMMIT" >> $GITHUB_OUTPUT
+
       - name: Checkout Upstream InkPi Monorepo
         uses: actions/checkout@v4
         with:
           repository: MeiSiristhebest/inkpi
           path: inkpi
+          ref: ${{ steps.runtime-lock.outputs.commit }}
 
       - name: Enable Corepack & Setup pnpm
         shell: bash

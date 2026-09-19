@@ -14,6 +14,10 @@ import {
   type WorkspaceManifest,
 } from './workspaceManifest'
 
+export interface ImportWorkspaceOptions {
+  mode?: 'copy' | 'restore'
+}
+
 export interface ImportWorkspaceResult {
   ok: boolean
   workspaceId?: string
@@ -90,7 +94,8 @@ export interface PurgeTombstone {
 
 function loadPurgeTombstones(): PurgeTombstone[] {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PURGE_TOMBSTONES_KEY) : null
+    const raw =
+      typeof localStorage !== 'undefined' ? localStorage.getItem(PURGE_TOMBSTONES_KEY) : null
     return raw ? (JSON.parse(raw) as PurgeTombstone[]) : []
   } catch {
     return []
@@ -254,7 +259,40 @@ export class WorkspaceLifecycleService {
    * Pass 2: 递归重映射所有的 foreign keys (projectId, volumeId, chapterId, lineage, settingsKV 编码 key 等)，杜绝全局 ID 碰撞与跨项目污染。
    * Pass 3: 严格引用完整性校验 (Referential Integrity Check)，若发现任何孤立或断裂的外键，立即抛出异常触发自动回滚。
    */
-  async importWorkspace(archiveRaw: unknown): Promise<ImportWorkspaceResult> {
+  async importWorkspace(
+    archiveRaw: unknown,
+    options: ImportWorkspaceOptions = {},
+  ): Promise<ImportWorkspaceResult> {
+    return this.importWorkspaceAsCopy(archiveRaw, options)
+  }
+
+  /**
+   * 复制克隆模式导入（默认）：
+   * 剥离旧工作区的 domainChangeSets 与活动中 aiProposals，避免跨工作区序号/哈希冲突；重分配全新拓扑图。
+   */
+  async importWorkspaceAsCopy(
+    archiveRaw: unknown,
+    options: ImportWorkspaceOptions = {},
+  ): Promise<ImportWorkspaceResult> {
+    return this.internalImportWorkspace(archiveRaw, { ...options, mode: 'copy' })
+  }
+
+  /**
+   * 备份恢复模式导入：
+   * 尽可能忠实还原工作区归档，保留历史变更集；如果目标是全新工作区同样重新命名空间化。
+   */
+  async restoreWorkspaceBackup(
+    archiveRaw: unknown,
+    options: ImportWorkspaceOptions = {},
+  ): Promise<ImportWorkspaceResult> {
+    return this.internalImportWorkspace(archiveRaw, { ...options, mode: 'restore' })
+  }
+
+  private async internalImportWorkspace(
+    archiveRaw: unknown,
+    options: ImportWorkspaceOptions = {},
+  ): Promise<ImportWorkspaceResult> {
+    const mode = options.mode ?? 'copy'
     if (!archiveRaw || typeof archiveRaw !== 'object') {
       return { ok: false, error: '无效的工作区数据格式' }
     }
@@ -315,7 +353,17 @@ export class WorkspaceLifecycleService {
     const promiseIdMap = new Map<string, string>()
     const artifactIdMap = new Map<string, string>()
     const timelineNodeIdMap = new Map<string, string>()
-    const sourceDomainData = archive.domainData || {}
+    const rawDomainData = archive.domainData || {}
+
+    // In 'copy' mode, strip domainChangeSets and aiProposals to avoid sequence/checksum collisions
+    const sourceDomainData: Record<string, Record<string, unknown>[]> = {}
+    for (const [store, records] of Object.entries(rawDomainData)) {
+      if (!Array.isArray(records)) continue
+      if (mode === 'copy' && (store === 'domainChangeSets' || store === 'aiProposals')) {
+        continue
+      }
+      sourceDomainData[store] = records
+    }
 
     // Pre-allocate deterministic namespaced primary IDs
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
@@ -339,6 +387,54 @@ export class WorkspaceLifecycleService {
       }
     }
 
+    // Pre-allocate IDs for any StoryState items inside settingsKV if not already registered
+    for (const [storeName, records] of Object.entries(sourceDomainData)) {
+      if (storeName === 'settingsKV' && Array.isArray(records)) {
+        for (const rec of records) {
+          if (
+            rec &&
+            typeof rec === 'object' &&
+            typeof (rec as any).key === 'string' &&
+            (rec as any).key.startsWith('storyState::')
+          ) {
+            const val = (rec as any).value
+            if (val && typeof val === 'object') {
+              if (val.events && typeof val.events === 'object') {
+                for (const oldEvtId of Object.keys(val.events)) {
+                  if (!timelineNodeIdMap.has(oldEvtId)) {
+                    timelineNodeIdMap.set(
+                      oldEvtId,
+                      `${oldEvtId}-imported-${this.idGen.generate('sub').slice(-6)}`,
+                    )
+                  }
+                }
+              }
+              if (val.timelines && typeof val.timelines === 'object') {
+                for (const oldTlId of Object.keys(val.timelines)) {
+                  if (!threadIdMap.has(oldTlId)) {
+                    threadIdMap.set(
+                      oldTlId,
+                      `${oldTlId}-imported-${this.idGen.generate('sub').slice(-6)}`,
+                    )
+                  }
+                }
+              }
+              if (val.promises && typeof val.promises === 'object') {
+                for (const oldPromId of Object.keys(val.promises)) {
+                  if (!promiseIdMap.has(oldPromId)) {
+                    promiseIdMap.set(
+                      oldPromId,
+                      `${oldPromId}-imported-${this.idGen.generate('sub').slice(-6)}`,
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // ── PASS 2: SCHEMA-DRIVEN DEEP RECURSIVE TOPOLOGY REMAPPING ──
     const remappedDomainData: Record<string, Record<string, unknown>[]> = {}
     let totalRemappedDomainRecords = 0
@@ -350,7 +446,16 @@ export class WorkspaceLifecycleService {
 
     const remapEntityArray = (ids: unknown): unknown[] | unknown => {
       if (!Array.isArray(ids)) return ids
-      return ids.map((id) => (typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id))
+      return ids.map((id) =>
+        typeof id === 'string' && entityIdMap.has(id) ? entityIdMap.get(id)! : id,
+      )
+    }
+
+    const remapTimelineNodeArray = (ids: unknown): unknown[] | unknown => {
+      if (!Array.isArray(ids)) return ids
+      return ids.map((id) =>
+        typeof id === 'string' && timelineNodeIdMap.has(id) ? timelineNodeIdMap.get(id)! : id,
+      )
     }
 
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
@@ -414,28 +519,55 @@ export class WorkspaceLifecycleService {
                 val.relations = remappedRelations
               }
 
-              // Remap events
+              // Remap events dictionary (keys and IDs remapped to timelineNode namespace)
               if (val.events && typeof val.events === 'object') {
                 const remappedEvents: Record<string, any> = {}
                 for (const [oldEvtId, evtData] of Object.entries(val.events)) {
                   const evt = { ...(evtData as any) }
+                  const newEvtId = timelineNodeIdMap.get(oldEvtId) ?? oldEvtId
+                  evt.id = newEvtId
                   if (Array.isArray(evt.entityIds)) {
                     evt.entityIds = remapEntityArray(evt.entityIds)
                   }
-                  remappedEvents[oldEvtId] = evt
+                  remappedEvents[newEvtId] = evt
                 }
                 val.events = remappedEvents
               }
 
-              // Remap promises
+              // Remap timelines dictionary (keys and IDs remapped to thread namespace)
+              if (val.timelines && typeof val.timelines === 'object') {
+                const remappedTimelines: Record<string, any> = {}
+                for (const [oldTlId, tlData] of Object.entries(val.timelines)) {
+                  const tl = { ...(tlData as any) }
+                  const newTlId = threadIdMap.get(oldTlId) ?? oldTlId
+                  tl.id = newTlId
+                  if (Array.isArray(tl.eventIds)) {
+                    tl.eventIds = remapTimelineNodeArray(tl.eventIds)
+                  }
+                  if (Array.isArray(tl.constraints)) {
+                    tl.constraints = tl.constraints.map((c: any) => ({
+                      ...c,
+                      eventIds: Array.isArray(c?.eventIds)
+                        ? remapTimelineNodeArray(c.eventIds)
+                        : c?.eventIds,
+                    }))
+                  }
+                  remappedTimelines[newTlId] = tl
+                }
+                val.timelines = remappedTimelines
+              }
+
+              // Remap promises dictionary (keys and IDs remapped to promise namespace)
               if (val.promises && typeof val.promises === 'object') {
                 const remappedPromises: Record<string, any> = {}
                 for (const [oldPromId, promData] of Object.entries(val.promises)) {
                   const prom = { ...(promData as any) }
+                  const newPromId = promiseIdMap.get(oldPromId) ?? oldPromId
+                  prom.id = newPromId
                   if (prom.threadId && threadIdMap.has(prom.threadId)) {
                     prom.threadId = threadIdMap.get(prom.threadId)!
                   }
-                  remappedPromises[oldPromId] = prom
+                  remappedPromises[newPromId] = prom
                 }
                 val.promises = remappedPromises
               }
@@ -452,7 +584,10 @@ export class WorkspaceLifecycleService {
           }
           if (item.metadata && typeof item.metadata === 'object') {
             item.metadata = { ...item.metadata, workspaceId: newWorkspaceId }
-            if (item.metadata.parentArtifactId && artifactIdMap.has(item.metadata.parentArtifactId)) {
+            if (
+              item.metadata.parentArtifactId &&
+              artifactIdMap.has(item.metadata.parentArtifactId)
+            ) {
               item.metadata.parentArtifactId = artifactIdMap.get(item.metadata.parentArtifactId)!
             }
           }
@@ -464,8 +599,13 @@ export class WorkspaceLifecycleService {
           }
           if (item.provenance && typeof item.provenance === 'object') {
             item.provenance = { ...item.provenance }
-            if (item.provenance.parentArtifactId && artifactIdMap.has(item.provenance.parentArtifactId)) {
-              item.provenance.parentArtifactId = artifactIdMap.get(item.provenance.parentArtifactId)!
+            if (
+              item.provenance.parentArtifactId &&
+              artifactIdMap.has(item.provenance.parentArtifactId)
+            ) {
+              item.provenance.parentArtifactId = artifactIdMap.get(
+                item.provenance.parentArtifactId,
+              )!
             }
           }
           if (item.documentId && chapterIdMap.has(item.documentId)) {
@@ -529,7 +669,7 @@ export class WorkspaceLifecycleService {
           item.promiseId = promiseIdMap.get(item.promiseId)!
         }
 
-        // 8. Arrays of Entity IDs
+        // 8. Arrays of Entity IDs & Timeline IDs
         if (Array.isArray(item.entityIds)) {
           item.entityIds = remapEntityArray(item.entityIds)
         }
@@ -547,6 +687,14 @@ export class WorkspaceLifecycleService {
         }
         if (Array.isArray(item.references)) {
           item.references = remapEntityArray(item.references)
+        }
+        if (storeName === 'timelineNodes') {
+          if (Array.isArray(item.prerequisites)) {
+            item.prerequisites = remapTimelineNodeArray(item.prerequisites)
+          }
+          if (Array.isArray(item.nextEventIds)) {
+            item.nextEventIds = remapTimelineNodeArray(item.nextEventIds)
+          }
         }
 
         // 9. Nested Codex Entity Relations
@@ -589,6 +737,8 @@ export class WorkspaceLifecycleService {
     const validChapterIds = new Set(newChapters.map((c) => c.id))
     const validEntityIds = new Set(Array.from(entityIdMap.values()))
     const validArtifactIds = new Set(Array.from(artifactIdMap.values()))
+    const validTimelineNodeIds = new Set(Array.from(timelineNodeIdMap.values()))
+    const validThreadIds = new Set(Array.from(threadIdMap.values()))
 
     // 1. Validate chapters reference valid volumes
     for (const ch of newChapters) {
@@ -600,7 +750,7 @@ export class WorkspaceLifecycleService {
       }
     }
 
-    // 2. Validate domain records reference valid chapters, volumes, entities, and artifact lineage
+    // 2. Validate domain records reference valid chapters, volumes, entities, timeline nodes, and artifact lineage
     for (const [storeName, records] of Object.entries(remappedDomainData)) {
       for (const rec of records) {
         if (rec.volumeId && typeof rec.volumeId === 'string' && !validVolumeIds.has(rec.volumeId)) {
@@ -609,28 +759,90 @@ export class WorkspaceLifecycleService {
             error: `Referential integrity violation: ${storeName} record references non-existent volume '${rec.volumeId}'`,
           }
         }
-        if (rec.chapterId && typeof rec.chapterId === 'string' && !validChapterIds.has(rec.chapterId)) {
+        if (
+          rec.chapterId &&
+          typeof rec.chapterId === 'string' &&
+          !validChapterIds.has(rec.chapterId)
+        ) {
           return {
             ok: false,
             error: `Referential integrity violation: ${storeName} record references non-existent chapter '${rec.chapterId}'`,
           }
         }
-        if (rec.sourceEntityId && typeof rec.sourceEntityId === 'string' && !validEntityIds.has(rec.sourceEntityId)) {
+        if (
+          rec.sourceEntityId &&
+          typeof rec.sourceEntityId === 'string' &&
+          !validEntityIds.has(rec.sourceEntityId)
+        ) {
           return {
             ok: false,
             error: `Referential integrity violation: ${storeName} record references non-existent sourceEntityId '${rec.sourceEntityId}'`,
           }
         }
-        if (rec.targetEntityId && typeof rec.targetEntityId === 'string' && !validEntityIds.has(rec.targetEntityId)) {
+        if (
+          rec.targetEntityId &&
+          typeof rec.targetEntityId === 'string' &&
+          !validEntityIds.has(rec.targetEntityId)
+        ) {
           return {
             ok: false,
             error: `Referential integrity violation: ${storeName} record references non-existent targetEntityId '${rec.targetEntityId}'`,
           }
         }
+        // Validate timelineNodes prerequisites and nextEventIds
+        if (storeName === 'timelineNodes') {
+          if (Array.isArray(rec.prerequisites)) {
+            for (const preId of rec.prerequisites) {
+              if (typeof preId === 'string' && !validTimelineNodeIds.has(preId)) {
+                return {
+                  ok: false,
+                  error: `Referential integrity violation: timelineNodes node '${rec.id}' references non-existent prerequisite '${preId}'`,
+                }
+              }
+            }
+          }
+          if (Array.isArray(rec.nextEventIds)) {
+            for (const nextId of rec.nextEventIds) {
+              if (typeof nextId === 'string' && !validTimelineNodeIds.has(nextId)) {
+                return {
+                  ok: false,
+                  error: `Referential integrity violation: timelineNodes node '${rec.id}' references non-existent nextEventId '${nextId}'`,
+                }
+              }
+            }
+          }
+          if (
+            rec.threadId &&
+            typeof rec.threadId === 'string' &&
+            !validThreadIds.has(rec.threadId)
+          ) {
+            return {
+              ok: false,
+              error: `Referential integrity violation: timelineNodes node '${rec.id}' references non-existent threadId '${rec.threadId}'`,
+            }
+          }
+        }
+        // Validate promiseLedger threadId
+        if (
+          storeName === 'promiseLedger' &&
+          rec.threadId &&
+          typeof rec.threadId === 'string' &&
+          !validThreadIds.has(rec.threadId)
+        ) {
+          return {
+            ok: false,
+            error: `Referential integrity violation: promiseLedger record '${rec.id}' references non-existent threadId '${rec.threadId}'`,
+          }
+        }
         // Validate nested codex relations targetId
         if (Array.isArray(rec.relations)) {
           for (const rel of rec.relations) {
-            if (rel && typeof rel === 'object' && typeof rel.targetId === 'string' && !validEntityIds.has(rel.targetId)) {
+            if (
+              rel &&
+              typeof rel === 'object' &&
+              typeof rel.targetId === 'string' &&
+              !validEntityIds.has(rel.targetId)
+            ) {
               return {
                 ok: false,
                 error: `Referential integrity violation: ${storeName} entity contains nested relation pointing to non-existent targetId '${rel.targetId}'`,
@@ -639,7 +851,12 @@ export class WorkspaceLifecycleService {
           }
         }
         // Validate artifact lineage parent
-        if (storeName === 'aiArtifacts' && rec.lineage && typeof rec.lineage === 'object' && rec.lineage.parentArtifactId) {
+        if (
+          storeName === 'aiArtifacts' &&
+          rec.lineage &&
+          typeof rec.lineage === 'object' &&
+          rec.lineage.parentArtifactId
+        ) {
           if (!validArtifactIds.has(rec.lineage.parentArtifactId)) {
             return {
               ok: false,
@@ -648,7 +865,13 @@ export class WorkspaceLifecycleService {
           }
         }
         // Validate nested StoryState relations
-        if (storeName === 'settingsKV' && rec.key && rec.key.startsWith('storyState::') && rec.value && rec.value.relations) {
+        if (
+          storeName === 'settingsKV' &&
+          rec.key &&
+          rec.key.startsWith('storyState::') &&
+          rec.value &&
+          rec.value.relations
+        ) {
           for (const [relId, rel] of Object.entries(rec.value.relations as Record<string, any>)) {
             if (rel.sourceEntityId && !validEntityIds.has(rel.sourceEntityId)) {
               return {
@@ -732,7 +955,10 @@ export class WorkspaceLifecycleService {
         }
         clearPurgeTombstone(tombstone.workspaceId)
       } catch (e) {
-        console.warn(`[WorkspaceLifecycle] Retrying purge tombstone failed for ${tombstone.workspaceId}:`, e)
+        console.warn(
+          `[WorkspaceLifecycle] Retrying purge tombstone failed for ${tombstone.workspaceId}:`,
+          e,
+        )
       }
     }
   }
@@ -766,7 +992,10 @@ export class WorkspaceLifecycleService {
         // Remote succeeded: clear tombstone immediately
         clearPurgeTombstone(workspaceId)
       } catch (e) {
-        console.warn(`Remote workspace.purge failed for ${workspaceId}; durable tombstone retained:`, e)
+        console.warn(
+          `Remote workspace.purge failed for ${workspaceId}; durable tombstone retained:`,
+          e,
+        )
       }
     }
 

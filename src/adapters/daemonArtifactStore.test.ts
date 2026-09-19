@@ -69,6 +69,46 @@ describe('DaemonArtifactStore', () => {
     expect(request).toHaveBeenNthCalledWith(3, 'artifact.get', { id: runtimeArtifact.id })
   })
 
+  it('serializes top-level workspaceId on save and forwards workspaceId in listByWorkspace', async () => {
+    const request = vi
+      .fn<RpcClient['request']>()
+      .mockResolvedValueOnce({ saved: true, id: 'artifact-1' })
+      .mockResolvedValueOnce([
+        {
+          id: 'artifact-1',
+          type: 'creative.story-plan',
+          workspaceId: 'ws-123',
+          version: 1,
+          content: { title: 'Plan' },
+          provenance: {},
+          createdAt: 10,
+          updatedAt: 11,
+        },
+      ])
+    const store = new DaemonArtifactStore({ request, close: vi.fn() })
+    const artifact = {
+      ...createArtifact(),
+      ownership: { owner: 'desktop' as const, authoritative: true, workspaceId: 'ws-123' },
+    }
+
+    await store.save(artifact)
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      'artifact.save',
+      expect.objectContaining({
+        artifact: expect.objectContaining({
+          id: 'artifact-1',
+          workspaceId: 'ws-123',
+        }),
+      }),
+    )
+
+    const list = await store.listByWorkspace('ws-123')
+    expect(request).toHaveBeenNthCalledWith(2, 'artifact.list', { workspaceId: 'ws-123' })
+    expect(list).toHaveLength(1)
+    expect(list[0].ownership?.workspaceId).toBe('ws-123')
+  })
+
   it('rejects malformed save receipts and malformed Runtime artifacts', async () => {
     const request = vi
       .fn<RpcClient['request']>()

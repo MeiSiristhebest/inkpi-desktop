@@ -20,6 +20,7 @@ import {
   type TaskCacheKeyDefaults,
 } from '../cache'
 import {
+  ArtifactConflictError,
   ArtifactRuntime,
   IndexedDbArtifactStore,
   type ArtifactIdGenerator,
@@ -154,7 +155,9 @@ export class CreativeIntelligence {
     const existing = this.inFlightTasks.get(task.id)
     if (existing) {
       if (existing.identityKey !== identityKey) {
-        return Promise.reject(new Error(`Task ${task.id} is already running with a different identity`))
+        return Promise.reject(
+          new Error(`Task ${task.id} is already running with a different identity`),
+        )
       }
       return awaitWithAbort(existing.promise, options.signal)
     }
@@ -278,9 +281,12 @@ export class CreativeIntelligence {
     if (!this.gateway.resumeTask) throw new Error('Task gateway does not support resume')
     const result = await this.gateway.resumeTask(taskId)
     if (result?.taskId !== taskId) {
-      throw new Error(`Task resume identity mismatch: expected ${taskId}, received ${result?.taskId}`)
+      throw new Error(
+        `Task resume identity mismatch: expected ${taskId}, received ${result?.taskId}`,
+      )
     }
-    if (!isTaskStatus(result.status)) throw new Error(`Task ${taskId} returned an invalid resume status`)
+    if (!isTaskStatus(result.status))
+      throw new Error(`Task ${taskId} returned an invalid resume status`)
     return result
   }
 
@@ -404,7 +410,13 @@ export class CreativeIntelligence {
         persistenceOptions,
       )
     } catch (err) {
-      console.warn('[CreativeIntelligence] Persisting artifact failed or storage unconfigured; falling back gracefully:', err)
+      if (err instanceof ArtifactConflictError) {
+        throw err
+      }
+      console.warn(
+        '[CreativeIntelligence] Persisting artifact failed or storage unconfigured; falling back gracefully:',
+        err,
+      )
       return result
     }
     if (!artifact) return result
@@ -819,7 +831,8 @@ function callWithDeadline<T>(
       })
       .then(
         (value) => finish(resolve, value),
-        (error: unknown) => finish(reject, error instanceof Error ? error : new Error(String(error))),
+        (error: unknown) =>
+          finish(reject, error instanceof Error ? error : new Error(String(error))),
       )
   })
 }

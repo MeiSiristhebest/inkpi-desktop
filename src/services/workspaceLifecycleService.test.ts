@@ -285,7 +285,9 @@ describe('WorkspaceLifecycleService', () => {
     expect(remappedRel.targetEntityId).not.toBe('ent-b')
     expect(remappedRel.targetEntityId).toContain('-imported-')
 
-    const codexPut = putCalls.find((call) => call[0] === 'codexEntities' && (call[1] as any).name === 'Hero')
+    const codexPut = putCalls.find(
+      (call) => call[0] === 'codexEntities' && (call[1] as any).name === 'Hero',
+    )
     expect(codexPut).toBeDefined()
     const heroEntity = codexPut![1] as any
     expect(heroEntity.relations[0].targetId).toBe(remappedRel.targetEntityId)
@@ -331,7 +333,9 @@ describe('WorkspaceLifecycleService', () => {
 
     // Now remote client becomes available
     const remoteClient = {
-      purgeWorkspace: vi.fn().mockResolvedValue({ purged: true, workspaceId: 'offline-project-to-purge' }),
+      purgeWorkspace: vi
+        .fn()
+        .mockResolvedValue({ purged: true, workspaceId: 'offline-project-to-purge' }),
     }
 
     await service.processPendingPurgeTombstones(remoteClient)
@@ -355,9 +359,7 @@ describe('WorkspaceLifecycleService', () => {
           { id: 'ent-1', projectId: 'orig-proj', name: 'Lin Fan' },
           { id: 'ent-2', projectId: 'orig-proj', name: 'Elder Wu' },
         ],
-        narrativeThreads: [
-          { id: 'th-1', projectId: 'orig-proj', name: 'Main Quest' },
-        ],
+        narrativeThreads: [{ id: 'th-1', projectId: 'orig-proj', name: 'Main Quest' }],
         settingsKV: [
           {
             key: 'storyState::orig-proj',
@@ -417,11 +419,19 @@ describe('WorkspaceLifecycleService', () => {
     expect(rel.targetEntityId).toBe(remappedState.entities[entityKeys[1]].id)
 
     // Verify events entityIds match new entity IDs
-    const evt = remappedState.events['evt-1']
+    const evtKeys = Object.keys(remappedState.events)
+    expect(evtKeys).toHaveLength(1)
+    expect(evtKeys[0]).not.toBe('evt-1')
+    expect(evtKeys[0]).toContain('-imported-')
+    const evt = remappedState.events[evtKeys[0]]
     expect(evt.entityIds).toEqual(entityKeys)
 
     // Verify promises threadId was remapped with thread namespace
-    const prom = remappedState.promises['prom-1']
+    const promKeys = Object.keys(remappedState.promises)
+    expect(promKeys).toHaveLength(1)
+    expect(promKeys[0]).not.toBe('prom-1')
+    expect(promKeys[0]).toContain('-imported-')
+    const prom = remappedState.promises[promKeys[0]]
     expect(prom.threadId).not.toBe('th-1')
     expect(prom.threadId).toContain('-imported-')
 
@@ -457,7 +467,9 @@ describe('WorkspaceLifecycleService', () => {
     expect(successResult.ok).toBe(true)
 
     const putCalls = putSpy.mock.calls
-    const childPut = putCalls.find((call) => call[0] === 'aiArtifacts' && (call[1] as any).id.startsWith('art-child'))
+    const childPut = putCalls.find(
+      (call) => call[0] === 'aiArtifacts' && (call[1] as any).id.startsWith('art-child'),
+    )
     expect(childPut).toBeDefined()
     const remappedChild = childPut![1] as any
     expect(remappedChild.lineage.parentArtifactId).not.toBe('art-parent')
@@ -483,5 +495,118 @@ describe('WorkspaceLifecycleService', () => {
     expect(failResult.ok).toBe(false)
     expect(failResult.error).toContain('Referential integrity violation')
     expect(failResult.error).toContain('ghost-parent-artifact')
+  })
+
+  it('importWorkspaceAsCopy strips domainChangeSets and aiProposals, while restoreWorkspaceBackup retains them', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const backupWithSyncAndProposals = {
+      ...backup!,
+      domainData: {
+        domainChangeSets: [{ id: 'cs-1', workspaceId: 'orig-proj', sequence: 1 }],
+        aiProposals: [{ id: 'prop-1', workspaceId: 'orig-proj', status: 'pending' }],
+        codexEntities: [{ id: 'ent-1', projectId: 'orig-proj', name: 'Hero' }],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+
+    // 1. Copy mode (importWorkspaceAsCopy)
+    const copyResult = await service.importWorkspaceAsCopy(backupWithSyncAndProposals, 'New Copy')
+    expect(copyResult.ok).toBe(true)
+
+    const copyPutCalls = putSpy.mock.calls
+    const savedDomainStoresInCopy = copyPutCalls.map((c) => c[0])
+    expect(savedDomainStoresInCopy).not.toContain('domainChangeSets')
+    expect(savedDomainStoresInCopy).not.toContain('aiProposals')
+    expect(savedDomainStoresInCopy).toContain('codexEntities')
+
+    putSpy.mockClear()
+
+    // 2. Restore mode (restoreWorkspaceBackup)
+    const restoreResult = await service.restoreWorkspaceBackup(backupWithSyncAndProposals)
+    expect(restoreResult.ok).toBe(true)
+
+    const restorePutCalls = putSpy.mock.calls
+    const savedDomainStoresInRestore = restorePutCalls.map((c) => c[0])
+    expect(savedDomainStoresInRestore).toContain('domainChangeSets')
+    expect(savedDomainStoresInRestore).toContain('aiProposals')
+    expect(savedDomainStoresInRestore).toContain('codexEntities')
+
+    putSpy.mockRestore()
+  })
+
+  it('remaps timelineNodes prerequisites and nextEventIds and validates Pass 3 integrity', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const backupWithTimeline = {
+      ...backup!,
+      domainData: {
+        narrativeThreads: [{ id: 'th-1', projectId: 'orig-proj', name: 'Main Thread' }],
+        timelineNodes: [
+          {
+            id: 'node-1',
+            projectId: 'orig-proj',
+            threadId: 'th-1',
+            prerequisites: [],
+            nextEventIds: ['node-2'],
+          },
+          {
+            id: 'node-2',
+            projectId: 'orig-proj',
+            threadId: 'th-1',
+            prerequisites: ['node-1'],
+            nextEventIds: [],
+          },
+        ],
+      },
+    }
+
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+    const result = await service.importWorkspace(backupWithTimeline)
+    expect(result.ok).toBe(true)
+
+    const putCalls = putSpy.mock.calls
+    const savedNodes = putCalls.filter((c) => c[0] === 'timelineNodes').map((c) => c[1] as any)
+
+    expect(savedNodes).toHaveLength(2)
+    const node1 = savedNodes.find((n) => n.prerequisites.length === 0)
+    const node2 = savedNodes.find((n) => n.prerequisites.length === 1)
+
+    expect(node1).toBeDefined()
+    expect(node2).toBeDefined()
+    expect(node1.nextEventIds).toEqual([node2.id])
+    expect(node2.prerequisites).toEqual([node1.id])
+    expect(node1.id).not.toBe('node-1')
+    expect(node2.id).not.toBe('node-2')
+    expect(node1.threadId).not.toBe('th-1')
+
+    putSpy.mockRestore()
+
+    // Dangling prerequisite fails Pass 3
+    const brokenBackup = {
+      ...backup!,
+      domainData: {
+        narrativeThreads: [{ id: 'th-1', projectId: 'orig-proj' }],
+        timelineNodes: [
+          {
+            id: 'node-1',
+            projectId: 'orig-proj',
+            threadId: 'th-1',
+            prerequisites: ['ghost-prerequisite-node'],
+            nextEventIds: [],
+          },
+        ],
+      },
+    }
+
+    const failResult = await service.importWorkspace(brokenBackup)
+    expect(failResult.ok).toBe(false)
+    expect(failResult.error).toContain('Referential integrity violation')
+    expect(failResult.error).toContain('ghost-prerequisite-node')
   })
 })

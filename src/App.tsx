@@ -22,6 +22,7 @@ import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
 import { IndexedDbArtifactStore, type AiArtifact } from './ai/artifacts/artifactStore'
+import { artifactEvents } from './ports/artifactEvents'
 import { useState, useEffect, useCallback } from 'react'
 
 const ProjectWorkspace: FC<{
@@ -284,6 +285,10 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
   useEffect(() => {
     if (activeProjectId) {
       void loadArtifacts(activeProjectId)
+      const unsubscribe = artifactEvents.subscribe(activeProjectId, () => {
+        void loadArtifacts(activeProjectId)
+      })
+      return unsubscribe
     } else {
       setArtifacts([])
     }

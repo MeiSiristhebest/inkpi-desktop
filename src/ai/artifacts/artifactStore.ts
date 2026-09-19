@@ -1,6 +1,7 @@
 import type { AiTask, TaskResult, TaskOutput } from '@inkpi/protocol'
 import { db } from '../../db/indexedDB'
 import type { IdGenerator } from '../../ports/idGenerator'
+import { artifactEvents } from '../../ports/artifactEvents'
 import { normalizeArtifactForPersistence } from './artifactExport'
 
 export interface ArtifactProvenance {
@@ -180,6 +181,13 @@ export class IndexedDbArtifactStore implements ArtifactStore {
           return
         }
         await db.put('aiArtifacts', serializableArtifact)
+        artifactEvents.publish({
+          artifactId: serializableArtifact.id,
+          workspaceId:
+            serializableArtifact.ownership?.workspaceId ??
+            (serializableArtifact.metadata?.workspaceId as string | undefined),
+          action: 'created',
+        })
       })
     IndexedDbArtifactStore.saveLocks.set(serializableArtifact.id, current)
     try {
@@ -279,6 +287,10 @@ export class ArtifactRuntime {
       options.executionRunId ??
       readLineageString(task, 'executionRunId') ??
       readString(result.provenance, 'executionRunId')
+    const workspaceId =
+      task.scope?.workspaceId ??
+      (task.input?.payload as Record<string, unknown> | undefined)?.workspaceId ??
+      readString(task.metadata, 'workspaceId')
     const createdAt = this.now()
     const artifact = normalizeDesktopArtifact({
       id: resolvedArtifactId,
@@ -314,9 +326,17 @@ export class ArtifactRuntime {
         ...(sourceRevision === undefined ? {} : { sourceRevision }),
         ...(executionRunId ? { executionRunId } : {}),
       },
+      ownership: {
+        owner: 'desktop',
+        authoritative: true,
+        ...(typeof workspaceId === 'string' && workspaceId ? { workspaceId } : {}),
+      },
       createdAt,
       updatedAt: this.now(),
-      metadata: cloneRecord(task.metadata),
+      metadata: {
+        ...cloneRecord(task.metadata),
+        ...(typeof workspaceId === 'string' && workspaceId ? { workspaceId } : {}),
+      },
     })
 
     const pending = this.pendingSaves.get(artifact.id)
