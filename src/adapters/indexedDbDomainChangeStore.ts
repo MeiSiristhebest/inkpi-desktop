@@ -15,6 +15,9 @@ export interface IndexedDbAggregateWrite {
     | 'narrativeThreads'
     | 'timelineNodes'
     | 'promiseLedger'
+    | 'formData'
+    | 'tableRows'
+    | 'cardRecords'
   key: string
   operation: 'upsert' | 'delete'
   value?: unknown
@@ -272,6 +275,9 @@ function assertAggregateWrite(aggregate: IndexedDbAggregateWrite): void {
     'narrativeThreads',
     'timelineNodes',
     'promiseLedger',
+    'formData',
+    'tableRows',
+    'cardRecords',
   ])
   if (!allowedStores.has(aggregate.store)) {
     throw new Error('IndexedDB aggregate store is invalid')

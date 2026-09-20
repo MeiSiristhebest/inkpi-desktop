@@ -4,7 +4,14 @@ import type { TableRecordRepository } from '../ports/tableRecordRepository'
 import type { IdGenerator } from '../ports/idGenerator'
 import type { Clock } from '../ports/clock'
 import { indexedDbTableRecordRepository } from '../adapters/indexedDbTableRecordRepository'
+import { legacyDomainApplicationService } from '../services/domainApplicationServices'
 import { generateNextCodeByRule } from '../domain/rules/codeRule'
+
+/** 台账视图模型实际写入所需的领域服务接口（结构子类型，便于 DI 与测试注入）。*/
+export type TableDomainWriteService = Pick<
+  typeof legacyDomainApplicationService,
+  'saveTableRow' | 'deleteTableRow'
+>
 import { idGenerator } from '../adapters/idGenerator'
 import { clock } from '../adapters/clock'
 
@@ -13,6 +20,7 @@ export interface UseTableViewModelOptions {
   tabId: string
   codeRule?: string
   repository?: TableRecordRepository
+  domainService?: TableDomainWriteService
   idGen?: IdGenerator
   clockPort?: Clock
 }
@@ -22,6 +30,7 @@ export function useTableViewModel({
   tabId,
   codeRule,
   repository = indexedDbTableRecordRepository,
+  domainService = legacyDomainApplicationService,
   idGen = idGenerator,
   clockPort = clock,
 }: UseTableViewModelOptions) {
@@ -69,22 +78,22 @@ export function useTableViewModel({
       ...editingRow,
       updatedAt: clockPort.now(),
     }
-    await repository.saveRow(record)
+    await domainService.saveTableRow(record)
     setEditingRow(null)
     setIsNewRow(false)
     await loadRows()
-  }, [editingRow, repository, loadRows, clockPort])
+  }, [editingRow, domainService, loadRows, clockPort])
 
   const deleteRow = useCallback(
     async (id: string) => {
-      await repository.deleteRow(id)
+      await domainService.deleteTableRow(id, projectId)
       if (editingRow?.id === id) {
         setEditingRow(null)
         setIsNewRow(false)
       }
       await loadRows()
     },
-    [editingRow, repository, loadRows],
+    [editingRow, domainService, loadRows, projectId],
   )
 
   const cancelEditing = useCallback(() => {

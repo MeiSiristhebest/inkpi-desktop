@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { db } from '../db/indexedDB'
 import {
   codexApplicationService,
-  timelineApplicationService,
   promiseApplicationService,
+  legacyDomainApplicationService,
 } from './domainApplicationServices'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { indexedDbStoryStateStore } from '../adapters/indexedDbStoryStateStore'
 import { storyStateMaterializer } from './storyStateMaterializer'
 import type { CodexEntity } from '../plugins/living-codex/types'
@@ -28,7 +29,102 @@ describe('DomainApplicationServices & StoryState Integration', () => {
     for (const p of await db.getAll<PromiseLedgerEntry>('promiseLedger')) {
       if (p.projectId === workspaceId) await db.delete('promiseLedger', p.id)
     }
+    for (const r of await db.getAll('formData')) {
+      if (r.projectId === workspaceId) await db.delete('formData', r.id)
+    }
+    for (const r of await db.getAll('tableRows')) {
+      if (r.projectId === workspaceId) await db.delete('tableRows', r.id)
+    }
+    for (const r of await db.getAll('cardRecords')) {
+      if (r.projectId === workspaceId) await db.delete('cardRecords', r.id)
+    }
     await db.delete('settingsKV', `storyState::${workspaceId}`)
+  })
+
+  it('legacyDomainApplicationService routes Form writes through DomainChangeSet and bumps the workspace revision', async () => {
+    const events: number[] = []
+    const off = domainChangeEvents.subscribe(workspaceId, (event) => {
+      if (event?.revision !== undefined) events.push(event.revision)
+    })
+    try {
+      await legacyDomainApplicationService.saveForm(workspaceId, 'worldview-form', {
+        力量体系: '练气、筑基、金丹',
+      })
+      await legacyDomainApplicationService.saveForm(workspaceId, 'worldview-form', {
+        力量体系: '练气、筑基、金丹、元婴',
+      })
+      await legacyDomainApplicationService.saveTableRow({
+        id: 'row-1',
+        projectId: workspaceId,
+        tabId: 't1',
+        order: 0,
+        data: { 名称: '玄剑宗' },
+        createdAt: 0,
+        updatedAt: 0,
+      })
+      await legacyDomainApplicationService.saveCard({
+        id: 'card-1',
+        projectId: workspaceId,
+        tabId: 'c1',
+        name: '楚云',
+        order: 0,
+        data: {},
+        createdAt: 0,
+        updatedAt: 0,
+      })
+    } finally {
+      off()
+    }
+
+    // 每次写入都应发布单调递增的 workspace revision，驱动 materializeIfStale 实时刷新。
+    expect(events.length).toBeGreaterThanOrEqual(4)
+    for (let i = 1; i < events.length; i++) {
+      expect(events[i]).toBeGreaterThan(events[i - 1])
+    }
+
+    // 持久化断言：Form/Table/Card 记录真实落库。
+    const form = await db.get('formData', `${workspaceId}::worldview-form`)
+    expect(form).toBeDefined()
+    expect((form as any).data['力量体系']).toBe('练气、筑基、金丹、元婴')
+    const row = await db.get('tableRows', 'row-1')
+    expect((row as any).data['名称']).toBe('玄剑宗')
+    const card = await db.get('cardRecords', 'card-1')
+    expect((card as any).name).toBe('楚云')
+
+    // StoryState 重物化后，这些 legacy 记录应投影为 story-state 实体。
+    const state = await indexedDbStoryStateStore.load(workspaceId)
+    expect(state).toBeDefined()
+    const entitiesById = Object.fromEntries(
+      Object.entries(state!.entities).map(([key, value]) => [key, value as any]),
+    )
+    // Card 顶层 name 投影为实体名。
+    expect(entitiesById['legacy:cardRecords:card-1']?.name).toBe('楚云')
+    // TableRow 的原始列宽数据保留在 attributes.data（本例为中文列名 '名称'）。
+    const rowEntity = entitiesById['legacy:tableRows:row-1']
+    expect(rowEntity).toBeDefined()
+    expect(rowEntity.attributes?.data?.['名称']).toBe('玄剑宗')
+  })
+
+  it('legacyDomainApplicationService delete ops publish another revision and remove the record', async () => {
+    await legacyDomainApplicationService.saveTableRow({
+      id: 'del-row',
+      projectId: workspaceId,
+      tabId: 'del-tab',
+      order: 0,
+      data: { 名称: '待删行' },
+      createdAt: 0,
+      updatedAt: 0,
+    })
+    const before = await db.get('tableRows', 'del-row')
+    expect(before).toBeDefined()
+    let state = await indexedDbStoryStateStore.load(workspaceId)
+    expect(state!.entities['legacy:tableRows:del-row']).toBeDefined()
+
+    await legacyDomainApplicationService.deleteTableRow('del-row', workspaceId)
+    const after = await db.get('tableRows', 'del-row')
+    expect(after).toBeUndefined()
+    state = await indexedDbStoryStateStore.load(workspaceId)
+    expect(state!.entities['legacy:tableRows:del-row']).toBeUndefined()
   })
 
   it('codexApplicationService.saveEntity stamps canonical author provenance and materializes story state', async () => {

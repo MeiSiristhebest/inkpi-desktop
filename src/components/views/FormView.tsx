@@ -60,7 +60,7 @@ export const FormView: React.FC<FormViewProps> = ({ projectId, tabId, tabMeta, r
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {mod.fields.map((field: any, fIdx: number) => {
-                  const val = formData[field.name] || ''
+                  const val = String(formData[field.name] ?? '')
                   return (
                     <div key={fIdx} className="space-y-1.5">
                       <label className="text-xs font-medium text-[var(--ink-text)] flex items-center justify-between">

@@ -4,13 +4,21 @@ import type { CardRecordRepository } from '../ports/cardRecordRepository'
 import type { IdGenerator } from '../ports/idGenerator'
 import type { Clock } from '../ports/clock'
 import { indexedDbCardRecordRepository } from '../adapters/indexedDbCardRecordRepository'
+import { legacyDomainApplicationService } from '../services/domainApplicationServices'
 import { idGenerator } from '../adapters/idGenerator'
 import { clock } from '../adapters/clock'
+
+/** 卡片视图模型实际写入所需的领域服务接口（结构子类型，便于 DI 与测试注入）。*/
+export type CardDomainWriteService = Pick<
+  typeof legacyDomainApplicationService,
+  'saveCard' | 'deleteCard'
+>
 
 export interface UseCardViewModelOptions {
   projectId: string
   tabId: string
   repository?: CardRecordRepository
+  domainService?: CardDomainWriteService
   idGen?: IdGenerator
   clockPort?: Clock
 }
@@ -19,6 +27,7 @@ export function useCardViewModel({
   projectId,
   tabId,
   repository = indexedDbCardRecordRepository,
+  domainService = legacyDomainApplicationService,
   idGen = idGenerator,
   clockPort = clock,
 }: UseCardViewModelOptions) {
@@ -65,22 +74,22 @@ export function useCardViewModel({
       name: finalName,
       updatedAt: clockPort.now(),
     }
-    await repository.saveCard(record)
+    await domainService.saveCard(record)
     setEditingCard(null)
     setIsNewCard(false)
     await loadCards()
-  }, [editingCard, repository, loadCards, clockPort])
+  }, [editingCard, domainService, loadCards, clockPort])
 
   const deleteCard = useCallback(
     async (id: string) => {
-      await repository.deleteCard(id)
+      await domainService.deleteCard(id, projectId)
       if (editingCard?.id === id) {
         setEditingCard(null)
         setIsNewCard(false)
       }
       await loadCards()
     },
-    [editingCard, repository, loadCards],
+    [editingCard, domainService, loadCards, projectId],
   )
 
   const cancelEditing = useCallback(() => {
