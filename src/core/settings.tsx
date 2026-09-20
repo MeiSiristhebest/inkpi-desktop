@@ -14,6 +14,7 @@ import { indexedDbSettingsRepository } from '../adapters/indexedDbSettingsReposi
 import { localStorageSettingsRepository } from '../adapters/localStorageSettingsRepository'
 import { withMirror } from '../adapters/mirroringSettingsRepository'
 import { hydrateModelSecrets, persistModelSecrets, withoutModelSecrets } from './modelSecrets'
+import { setRuntimeModelPreference } from './runtimeModelPreference'
 
 // ─────────────────────────────────────────────────────────────
 // 统一应用设置中心
@@ -329,6 +330,11 @@ export const SettingsProvider: FC<{ children: ReactNode }> = ({ children }) => {
   useEffect(() => {
     settingsRef.current = settings
   }, [settings])
+
+  // 把用户选定的模型同步到运行时路由偏好快照，让发往 Daemon 的任务携带 modelRoute。
+  useEffect(() => {
+    setRuntimeModelPreference(settings.aiModel)
+  }, [settings.aiModel])
 
   // mount 后从 IndexedDB 镜像兜底（localStorage 不可用时）
   useEffect(() => {

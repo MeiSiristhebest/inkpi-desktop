@@ -16,6 +16,7 @@ import {
   type CreativeTaskGateway,
 } from '../ai/orchestrator/creativeIntelligence'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
+import { getRuntimeModelPreference } from '../core/runtimeModelPreference'
 import {
   listPluginInstructionDefinitions,
   type DesktopInstructionDefinition,
@@ -63,6 +64,12 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
 
   const runTask = async (task: AiTask, options = {}): Promise<TaskResult | null> => {
     await ensurePluginInstructionsRegistered()
+    // 把用户选定的模型附加到 metadata.modelRoute，让 Runtime 路由精确命中该模型。
+    // 仅当任务未显式携带偏好时注入，保留 pluginId/runtimeTarget 等既有 metadata。
+    const preference = getRuntimeModelPreference()
+    if (preference && !task.metadata?.modelRoute) {
+      task = { ...task, metadata: { ...task.metadata, modelRoute: preference } }
+    }
     return attachProposalSyncRemote(
       await creativeIntelligence.run(task, options),
       proposalSyncRemote,
