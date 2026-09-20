@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   createContext,
+  useRef,
   type FC,
   type ReactNode,
 } from 'react'
@@ -12,6 +13,7 @@ import type { SettingsRepository } from '../ports/settingsRepository'
 import { indexedDbSettingsRepository } from '../adapters/indexedDbSettingsRepository'
 import { localStorageSettingsRepository } from '../adapters/localStorageSettingsRepository'
 import { withMirror } from '../adapters/mirroringSettingsRepository'
+import { hydrateModelSecrets, persistModelSecrets, withoutModelSecrets } from './modelSecrets'
 
 // ─────────────────────────────────────────────────────────────
 // 统一应用设置中心
@@ -286,13 +288,27 @@ const mergeSettings = (partial: Partial<AppSettings> | null): AppSettings => ({
 /** 同步快速路径（useState 初始化器要求同步）：仓储适配器同步读 + 默认回退 */
 export function loadSettings(): AppSettings {
   const loaded = localStorageSettingsRepository.loadSync()
-  if (loaded) return mergeSettings(loaded)
-  return { ...DEFAULT_SETTINGS }
+  if (!loaded) return { ...DEFAULT_SETTINGS }
+
+  const merged = mergeSettings(loaded)
+  const safe = withoutModelSecrets(merged)
+  // One-time migration: scrub legacy plaintext credentials immediately, then
+  // move them to the secure store. Do not defer the scrub until the async
+  // credential operation finishes: a later user update must not be overwritten
+  // by this startup migration's stale snapshot.
+  void settingsRepo.save(safe)
+  void persistModelSecrets(merged).catch(() => undefined)
+  return safe
 }
 
-/** 双写：localStorage 即时写 + IndexedDB 镜像（由 withMirror 装饰器实现，§8.2） */
+/** 双写：设置镜像永远不包含 API 凭证；凭证单独进入 SecretStore。 */
 export function saveSettings(s: AppSettings): void {
-  settingsRepo.save(s).catch(() => {})
+  const safe = withoutModelSecrets(s)
+  void settingsRepo.save(safe)
+  void persistModelSecrets(s).catch(() => {
+    // Do not reintroduce plaintext persistence when the OS credential store is unavailable.
+    console.error('[InkPi] Secure model credential storage is unavailable')
+  })
 }
 
 /** 启动时从镜像（IndexedDB）回读，与主存储（localStorage）对齐（§8.2） */
@@ -306,21 +322,44 @@ const SettingsContext = createContext<SettingsTuple | null>(null)
 
 export const SettingsProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
+  const settingsRef = useRef(settings)
+
+  // Keep a synchronous reference so startup hydration cannot overwrite a user
+  // update that happens while the IndexedDB/credential reads are in flight.
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
 
   // mount 后从 IndexedDB 镜像兜底（localStorage 不可用时）
   useEffect(() => {
-    loadSettingsFromIDB().then((fromIDB) => {
-      if (fromIDB && JSON.stringify(fromIDB) !== JSON.stringify(settings)) {
-        setSettings(fromIDB)
-        saveSettings(fromIDB)
+    let active = true
+    const initialSettings = settings
+    void (async () => {
+      const fromIDB = await loadSettingsFromIDB()
+      const base = fromIDB ?? initialSettings
+      let hydrated = base
+      try {
+        hydrated = await hydrateModelSecrets(base)
+      } catch {
+        // Keep the redacted settings if the OS credential manager is unavailable.
       }
-    })
+      if (!active || settingsRef.current !== initialSettings) return
+      settingsRef.current = hydrated
+      if (JSON.stringify(hydrated) !== JSON.stringify(initialSettings)) {
+        setSettings(hydrated)
+      }
+      saveSettings(hydrated)
+    })()
+    return () => {
+      active = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const update = useCallback((patch: Partial<AppSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...patch }
+      settingsRef.current = next
       saveSettings(next)
       return next
     })

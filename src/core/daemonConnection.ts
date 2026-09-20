@@ -1,4 +1,5 @@
 import type { AiGateway, AiAssistant } from '../ports/aiGateway'
+import { assertRuntimeHandshakeResponse, createRuntimeHandshakeRequest } from './runtimeContract'
 import { createDaemonAiAssistant } from '../adapters/daemonAiAssistant'
 import { createDaemonSkillRuntime } from '../adapters/daemonSkillRuntime'
 import { CONNECT_TIMEOUT_MS, WEB_CONNECT_TIMEOUT_MS } from '../config'
@@ -53,8 +54,17 @@ export async function connectToDaemon(
     if (opts.shouldAbort?.()) return { client: null, connected: false }
     try {
       const raw = await withTimeout(() => gateway.connect(url), timeoutMs)
-      const assistant = createDaemonAiAssistant(raw)
       try {
+        const handshake = await raw.request<unknown>(
+          'runtime.handshake',
+          createRuntimeHandshakeRequest({
+            clientName: 'inkpi-desktop',
+            clientVersion: '0.1.0',
+          }),
+        )
+        assertRuntimeHandshakeResponse(handshake)
+
+        const assistant = createDaemonAiAssistant(raw)
         await createDaemonSkillRuntime(raw).ensureFirstPartySkillsActivated()
         const status = await assistant.status()
         if (!status?.running) throw new Error('daemon not running')

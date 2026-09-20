@@ -1,48 +1,35 @@
-import { localStorageKeyValueStore } from '../adapters/localStorageKeyValueStore'
-import type { KeyValueStore } from '../ports/keyValueStore'
+import { indexedDbWritingGoalStore } from '../adapters/indexedDbWritingGoalStore'
+import type { WritingGoalStore } from '../ports/writingGoalStore'
+
+export const DEFAULT_DAILY_GOAL = 4600
 
 export class WritingGoalService {
-  constructor(private readonly kvStore: KeyValueStore = localStorageKeyValueStore) {}
+  private readonly cache = new Map<string, number | null>()
+  private readonly store: WritingGoalStore
 
-  private getStorageKey(projectId: string): string {
-    return `inkpi-daily-goal-${projectId}`
+  constructor(store: WritingGoalStore = indexedDbWritingGoalStore) {
+    this.store = store
   }
 
   async getGoal(projectId: string): Promise<number | null> {
-    try {
-      const raw = await this.kvStore.get(this.getStorageKey(projectId))
-      if (!raw) return null
-      const parsed = Number.parseInt(raw, 10)
-      return Number.isNaN(parsed) ? null : parsed
-    } catch {
-      return null
-    }
+    const goal = await this.store.get(projectId)
+    this.cache.set(projectId, goal)
+    return goal
   }
 
+  /** Returns the last loaded value without making synchronous storage authoritative. */
   getGoalSync(projectId: string): number | null {
-    try {
-      if (typeof this.kvStore.getSync === 'function') {
-        const raw = this.kvStore.getSync(this.getStorageKey(projectId))
-        if (!raw) return null
-        const parsed = Number.parseInt(raw, 10)
-        return Number.isNaN(parsed) ? null : parsed
-      }
-      return null
-    } catch {
-      return null
-    }
+    return this.cache.get(projectId) ?? null
   }
 
   async setGoal(projectId: string, goal: number): Promise<void> {
-    await this.kvStore.set(this.getStorageKey(projectId), String(goal))
+    await this.store.set(projectId, goal)
+    this.cache.set(projectId, goal)
   }
 
   async removeGoal(projectId: string): Promise<void> {
-    if (typeof this.kvStore.delete === 'function') {
-      await this.kvStore.delete(this.getStorageKey(projectId))
-    } else {
-      await this.kvStore.set(this.getStorageKey(projectId), '')
-    }
+    await this.store.remove(projectId)
+    this.cache.set(projectId, null)
   }
 }
 

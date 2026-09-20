@@ -21,9 +21,9 @@ import type { ReactNode } from 'react'
 import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
-import { IndexedDbArtifactStore, type AiArtifact } from './ai/artifacts/artifactStore'
+import type { AiArtifact } from './ai/artifacts'
 import { artifactEvents } from './ports/artifactEvents'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 
 const ProjectWorkspace: FC<{
   projectId: string
@@ -268,31 +268,38 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     domainSyncState,
     syncConflict,
     syncDomain,
+    listArtifacts,
   } = ai
 
   const [artifacts, setArtifacts] = useState<AiArtifact[]>([])
 
-  const loadArtifacts = useCallback(async (projectId: string) => {
-    try {
-      const store = new IndexedDbArtifactStore()
-      const items = await store.listByWorkspace(projectId)
-      setArtifacts(items)
-    } catch (e) {
-      console.error('Failed to load workspace artifacts:', e)
-    }
-  }, [])
-
   useEffect(() => {
-    if (activeProjectId) {
-      void loadArtifacts(activeProjectId)
-      const unsubscribe = artifactEvents.subscribe(activeProjectId, () => {
-        void loadArtifacts(activeProjectId)
-      })
-      return unsubscribe
-    } else {
-      setArtifacts([])
+    let alive = true
+    const load = async (projectId: string) => {
+      try {
+        const items = await listArtifacts(projectId)
+        if (alive) setArtifacts(items)
+      } catch (error) {
+        if (alive) console.error('Failed to load workspace artifacts:', error)
+      }
     }
-  }, [activeProjectId, loadArtifacts])
+
+    if (activeProjectId) {
+      void load(activeProjectId)
+      const unsubscribe = artifactEvents.subscribe(activeProjectId, () => {
+        void load(activeProjectId)
+      })
+      return () => {
+        alive = false
+        unsubscribe()
+      }
+    }
+
+    setArtifacts([])
+    return () => {
+      alive = false
+    }
+  }, [activeProjectId, listArtifacts])
 
   const content = (
     <AnimatePresence mode="wait">

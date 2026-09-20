@@ -14,6 +14,7 @@ import { spring, gesture } from '../../motion'
 import { useDashboardModel } from '../../hooks/useDashboardModel'
 import { indexedDbSettingsKVRepository } from '../../adapters/indexedDbSettingsKVRepository'
 import { clock } from '../../adapters/clock'
+import { DEFAULT_DAILY_GOAL, writingGoalService } from '../../services/writingGoalService'
 import { HelpTooltip } from '../../ui/molecules/HelpTooltip'
 import type { DashboardModel, WritingGoalPlan } from '../../domain/dashboard'
 
@@ -68,7 +69,7 @@ export const DashboardView: FC<DashboardViewProps> = ({
 
   // 1. 目标与截止日设置持久化
   const [goalPlan, setGoalPlan] = useState<WritingGoalPlan>({
-    daily: 2000,
+    daily: DEFAULT_DAILY_GOAL,
     total: 0,
     deadline: '',
   })
@@ -76,12 +77,12 @@ export const DashboardView: FC<DashboardViewProps> = ({
   useEffect(() => {
     let alive = true
     Promise.all([
-      indexedDbSettingsKVRepository.get(projectId, 'goalDaily', 2000),
+      writingGoalService.getGoal(projectId),
       indexedDbSettingsKVRepository.get(projectId, 'goalTotal', 0),
       indexedDbSettingsKVRepository.get(projectId, 'goalDeadline', ''),
     ]).then(([daily, total, deadline]) => {
       if (!alive) return
-      setGoalPlan({ daily, total, deadline })
+      setGoalPlan({ daily: daily ?? DEFAULT_DAILY_GOAL, total, deadline })
     })
     return () => {
       alive = false
@@ -92,7 +93,7 @@ export const DashboardView: FC<DashboardViewProps> = ({
     const next = { ...goalPlan, ...patch }
     setGoalPlan(next)
     if (patch.daily !== undefined) {
-      await indexedDbSettingsKVRepository.set(projectId, 'goalDaily', patch.daily)
+      await writingGoalService.setGoal(projectId, patch.daily)
     }
     if (patch.total !== undefined) {
       await indexedDbSettingsKVRepository.set(projectId, 'goalTotal', patch.total)

@@ -16,7 +16,14 @@ export interface WorkspaceManifest {
   }
 
   domainStoresIncluded: string[]
+  /** Workspace-scoped browser keys included without global secrets. */
+  localStorageKeysIncluded?: string[]
   totalRecordsCount: number
+}
+
+export interface WorkspaceLocalStorageEntry {
+  key: string
+  value: string
 }
 
 export interface WorkspaceBackupArchive {
@@ -28,6 +35,8 @@ export interface WorkspaceBackupArchive {
    * Domain and plugin stores keyed by store name (e.g. codexEntities, timelineNodes, promiseLedger, etc.)
    */
   domainData: Record<string, Record<string, unknown>[]>
+  /** Legacy/local browser state that is not represented in IndexedDB. */
+  localStorageData?: WorkspaceLocalStorageEntry[]
 }
 
 export interface ManuscriptExportArchive {

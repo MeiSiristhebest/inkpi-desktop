@@ -1,4 +1,3 @@
-<<<<<<< ours
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "InkPi Desktop",
@@ -25,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: https:; connect-src 'self' ws: http: https: ipc:;"
+      "csp": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset:; font-src 'self' data:; connect-src 'self' ipc: ws://127.0.0.1:* http://127.0.0.1:*;"
     }
   },
   "bundle": {
@@ -47,53 +46,3 @@
     ]
   }
 }
-=======
-{
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "InkPi Desktop",
-  "version": "0.1.0",
-  "identifier": "com.inkpi.desktop",
-  "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
-  },
-  "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "InkPi 写作工作台",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 900,
-        "minHeight": 600,
-        "resizable": true,
-        "fullscreen": false,
-        "center": true
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": ["nsis"],
-    "externalBin": ["binaries/inkpi"],
-    "resources": {
-      "binaries/skills": "skills",
-      "dlls/WebView2Loader.dll": "WebView2Loader.dll",
-      "dlls/libgcc_s_seh-1.dll": "libgcc_s_seh-1.dll",
-      "dlls/libwinpthread-1.dll": "libwinpthread-1.dll"
-    },
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
-  }
-}
->>>>>>> theirs

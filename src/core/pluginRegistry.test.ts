@@ -18,13 +18,13 @@ describe('pluginRegistry state persistence & defaults', () => {
     expect(ids.size).toBe(0)
   })
 
-  it('persists and restores enabled plugin set accurately', () => {
+  it('persists and restores enabled plugin set accurately', async () => {
     const custom = new Set(['living-codex', 'custom-plugin'])
     saveEnabledPluginIds(custom)
 
-    const reloaded = loadEnabledPluginIds()
-    expect(reloaded.has('living-codex')).toBe(true)
-    expect(reloaded.has('custom-plugin')).toBe(true)
+    const reloaded = await loadEnabledPluginIdsFromIDB()
+    expect(reloaded?.has('living-codex')).toBe(true)
+    expect(reloaded?.has('custom-plugin')).toBe(true)
   })
 
   it('handles invalid json gracefully in storage', () => {

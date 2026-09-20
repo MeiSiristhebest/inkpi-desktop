@@ -3,8 +3,12 @@
 // 任何需要被多模块共享、且属于「环境 / 部署契约」的常量都应落在这里，而非硬编码在
 // 业务模块中（否则会出现同一魔法串在 3+ 处复制、改一处漏两处的脆弱局面）。
 
+import { getDefaultRuntimeEndpoints } from './core/runtimeContract'
+
+const DEFAULT_RUNTIME_ENDPOINTS = getDefaultRuntimeEndpoints()
+
 /** InkPi Daemon 默认 WebSocket 地址（Tauri sidecar 监听端口） */
-export const DEFAULT_DAEMON_URL = 'ws://127.0.0.1:8849'
+export const DEFAULT_DAEMON_URL = `ws://${DEFAULT_RUNTIME_ENDPOINTS.host}:${DEFAULT_RUNTIME_ENDPOINTS.wsPort}`
 
 /** 旧版本遗留的单项目 ID（首次启动自动迁移为可显式项目） */
 export const LEGACY_PROJECT_ID = 'inkpi-default'

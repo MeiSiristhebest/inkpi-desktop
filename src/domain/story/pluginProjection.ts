@@ -2,7 +2,13 @@ import type { StoryEntity } from './entities'
 import type { StoryRelation } from './relations'
 import type { StoryEvent } from './events'
 import type { NarrativePromise, NarrativePromiseStatus } from './promises'
-import type { Provenance, ProvenanceSourceType, SourceEvidence, StoryFactLevel } from './provenance'
+import {
+  assertProvenance,
+  type Provenance,
+  type ProvenanceSourceType,
+  type SourceEvidence,
+  type StoryFactLevel,
+} from './provenance'
 import type { StoryState } from './storyState'
 import type { StoryTimeline, TimelineConstraint } from './timelines'
 import { assertStoryState, createStoryState } from './storyState'
@@ -54,12 +60,84 @@ export interface StoryPluginCollectionInput {
   records: readonly unknown[]
 }
 
+export interface LegacyStoryProjectionSource {
+  /** Stable legacy store id used in the generated StoryState entity id. */
+  sourceId: 'formData' | 'tableRows' | 'cardRecords'
+  records: readonly unknown[]
+}
+
+export interface LegacyStoryProjectionOptions {
+  provenance?: Provenance
+}
+
+/**
+ * Projects the pre-StoryState Form/Table/Card stores into derived StoryState
+ * entities. This keeps legacy UI data visible to canonical consumers without
+ * promoting untyped records to canonical facts.
+ */
+export function projectLegacyRecordsToStoryEntities(
+  sources: readonly LegacyStoryProjectionSource[],
+  options: LegacyStoryProjectionOptions = {},
+): StoryEntity[] {
+  const fallbackProvenance = options.provenance ?? {
+    sourceType: 'derived' as const,
+    factLevel: 'hypothesis' as const,
+  }
+  assertProvenance(fallbackProvenance, 'Legacy projection provenance')
+  const entities: StoryEntity[] = []
+  const seenIds = new Set<string>()
+
+  for (const source of sources) {
+    for (const [index, rawRecord] of source.records.entries()) {
+      const record = requireRecord(rawRecord, `${source.sourceId}[${index}]`)
+      const sourceRecordId = requiredStringValue(
+        record.id ?? record.tabId,
+        'id or tabId',
+        `${source.sourceId}[${index}]`,
+      )
+      const id = `legacy:${source.sourceId}:${sourceRecordId}`
+      if (seenIds.has(id)) throw new Error(`Duplicate legacy StoryState record id "${id}"`)
+      seenIds.add(id)
+
+      const name = requiredStringValue(
+        record.name ?? record.title ?? record.label ?? record.tabId ?? sourceRecordId,
+        'name, title, label, or tabId',
+        `${source.sourceId}[${index}]`,
+      )
+      const provenanceValue = record.provenance ?? fallbackProvenance
+      assertProvenance(provenanceValue, `Legacy projection ${id} provenance`)
+      const data = isRecord(record.data) ? cloneObject(record.data) : {}
+      const attributes: Record<string, unknown> = {
+        legacySource: source.sourceId,
+        sourceRecordId,
+        ...(typeof record.projectId === 'string' ? { projectId: record.projectId } : {}),
+        ...(typeof record.tabId === 'string' ? { tabId: record.tabId } : {}),
+        data,
+      }
+
+      entities.push({
+        id,
+        kind: `legacy-${source.sourceId}`,
+        name,
+        aliases:
+          stringArray(record.aliases, `${source.sourceId}/${sourceRecordId}`, 'aliases') ?? [],
+        attributes,
+        ...(typeof record.status === 'string' ? { status: record.status } : {}),
+        provenance: clone(provenanceValue),
+      })
+    }
+  }
+
+  return entities.sort((left, right) => compareStrings(left.id, right.id))
+}
+
 export interface StoryPluginProjectionOptions {
   /** Semantic StoryState revision for this complete local projection. */
   revision?: number
 }
 
-type CanonicalStoryRecord = StoryEntity | StoryRelation | StoryEvent | StoryTimeline | NarrativePromise
+type CanonicalStoryRecord =
+  StoryEntity | StoryRelation | StoryEvent | StoryTimeline | NarrativePromise
 
 interface ProjectionRoute {
   targetCollection: StoryStateCollection
@@ -382,6 +460,7 @@ function requireProvenance(value: unknown, context: string): Provenance {
   if (!isStoryFactLevel(value.factLevel)) {
     throw new Error(`Invalid provenance factLevel: ${context}`)
   }
+  // SAFETY: requireProvenance validates the source/fact enums before cloning.
   return cloneObject(value) as unknown as Provenance
 }
 
@@ -523,12 +602,14 @@ function assignCollection(
       state.entities = records as Record<string, StoryEntity>
       break
     case 'relations':
+      // SAFETY: records were produced by the validated relation projection route.
       state.relations = records as unknown as StoryState['relations']
       break
     case 'events':
       state.events = records as Record<string, StoryEvent>
       break
     case 'scenes':
+      // SAFETY: scene records are empty in the current projection routes.
       state.scenes = records as unknown as StoryState['scenes']
       break
     case 'timelines':
@@ -538,6 +619,7 @@ function assignCollection(
       state.promises = records as Record<string, NarrativePromise>
       break
     case 'constraints':
+      // SAFETY: constraint records are empty in the current projection routes.
       state.constraints = records as unknown as StoryState['constraints']
       break
   }

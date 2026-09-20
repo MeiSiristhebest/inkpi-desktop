@@ -43,7 +43,7 @@
     "verify:frontend-parity": "node scripts/verify-frontend-parity.mjs",
     "generate:model-catalog": "node scripts/generate-model-catalog.mjs",
     "daemon": "node scripts/run-daemon.mjs",
-    "tauri:build": "npm run copy-daemon-sidecar && tauri build"
+    "tauri:build": "npm run copy-daemon-sidecar && node scripts/run-tauri-build.mjs"
   },
   "dependencies": {
     "@inkpi/client": "file:../inkpi/packages/client",

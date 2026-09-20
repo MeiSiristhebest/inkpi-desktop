@@ -64,12 +64,14 @@ export const WritingHabitsTab: React.FC<{
           <Switch
             checked={config.autoScrollMode === 'wrap'}
             onChange={() => updateConfig({ autoScrollMode: 'wrap' })}
+            ariaLabel="换行时滚动"
           />
         </Row>
         <Row label="回车时滚动" hint="仅在按下回车换段时触发页面滚动">
           <Switch
             checked={config.autoScrollMode === 'enter'}
             onChange={() => updateConfig({ autoScrollMode: 'enter' })}
+            ariaLabel="回车时滚动"
           />
         </Row>
         <Row
@@ -91,6 +93,7 @@ export const WritingHabitsTab: React.FC<{
           <Switch
             checked={config.scrollCrossChapter}
             onChange={(v) => updateConfig({ scrollCrossChapter: v })}
+            ariaLabel="滚动跨章"
           />
         </Row>
       </Section>
@@ -149,15 +152,21 @@ export const WritingHabitsTab: React.FC<{
           <Switch
             checked={config.autoNumbering}
             onChange={(v) => updateConfig({ autoNumbering: v })}
+            ariaLabel="新建章节时自动生成章节号"
           />
         </Row>
         <Row label="输入“时自动补齐双引号”" hint="并将光标自动置于引号中间">
-          <Switch checked={config.autoQuotes} onChange={(v) => updateConfig({ autoQuotes: v })} />
+          <Switch
+            checked={config.autoQuotes}
+            onChange={(v) => updateConfig({ autoQuotes: v })}
+            ariaLabel="输入引号时自动补齐双引号"
+          />
         </Row>
         <Row label="状态栏显示稿费预估选项">
           <Switch
             checked={config.showRoyaltyEstimate}
             onChange={(v) => updateConfig({ showRoyaltyEstimate: v })}
+            ariaLabel="状态栏显示稿费预估选项"
           />
         </Row>
       </Section>

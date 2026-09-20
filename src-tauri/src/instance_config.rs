@@ -82,6 +82,7 @@ impl InstanceConfig {
         )?;
         let ws_port = match ws_port_raw.as_deref() {
             Some(value) => parse_port("WebSocket", value)?,
+            None if http_port == DEFAULT_HTTP_PORT => DEFAULT_WS_PORT,
             None => http_port.checked_add(1).ok_or_else(|| {
                 "WebSocket port cannot be derived from HTTP port 65535".to_string()
             })?,

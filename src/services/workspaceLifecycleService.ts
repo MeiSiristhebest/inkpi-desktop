@@ -12,6 +12,7 @@ import {
   type WorkspaceBackupArchive,
   type ManuscriptExportArchive,
   type WorkspaceManifest,
+  type WorkspaceLocalStorageEntry,
 } from './workspaceManifest'
 
 export interface ImportWorkspaceOptions {
@@ -30,6 +31,173 @@ export interface ImportWorkspaceResult {
     totalRecordsRemapped: number
   }
   error?: string
+}
+
+type UnknownRecord = Record<string, unknown>
+
+const asRecord = (value: unknown): UnknownRecord | undefined =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as UnknownRecord)
+    : undefined
+
+const isRecord = (value: unknown): value is UnknownRecord => asRecord(value) !== undefined
+
+const WORKSPACE_LOCAL_STORAGE_EXCLUDED_KEYS = new Set([
+  'inkpi-settings',
+  'inkpi-device-id',
+  'inkpi-purge-tombstones',
+  'inkpi_enabled_plugins_v2',
+  'inkpi-ai-catalog-meta',
+])
+const SECRET_LOCAL_STORAGE_KEY = /api[-_]?key|secret|token|password|credential/i
+
+function collectWorkspaceLocalStorage(
+  workspaceId: string,
+  chapterIds: readonly string[],
+): WorkspaceLocalStorageEntry[] {
+  if (typeof localStorage === 'undefined') return []
+  const encodedWorkspaceId = encodeURIComponent(workspaceId)
+  const entries: WorkspaceLocalStorageEntry[] = []
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index)
+      if (!key || !isWorkspaceLocalStorageKey(key, workspaceId, encodedWorkspaceId, chapterIds)) {
+        continue
+      }
+      const value = localStorage.getItem(key)
+      if (value !== null) entries.push({ key, value })
+    }
+  } catch {
+    // A blocked/private localStorage must not make a durable IndexedDB backup fail.
+  }
+  return entries.sort((left, right) => left.key.localeCompare(right.key))
+}
+
+function isWorkspaceLocalStorageKey(
+  key: string,
+  workspaceId: string,
+  encodedWorkspaceId: string,
+  chapterIds: readonly string[],
+): boolean {
+  if (WORKSPACE_LOCAL_STORAGE_EXCLUDED_KEYS.has(key) || SECRET_LOCAL_STORAGE_KEY.test(key)) {
+    return false
+  }
+  if (
+    key.startsWith(`inkpi_draft_journal:${workspaceId}:`) ||
+    key.startsWith(`inkpi_enabled_plugins_${workspaceId}`) ||
+    key.startsWith(`inkpi-scratchpad-${workspaceId}-`) ||
+    key === `inkpi-excluded-nums-${workspaceId}` ||
+    key === `inkpi-daily-goal-${workspaceId}` ||
+    key.includes(workspaceId) ||
+    key.includes(encodedWorkspaceId)
+  ) {
+    return true
+  }
+  return chapterIds.some((chapterId) => key === `chapter-history-${chapterId}`)
+}
+
+function remapWorkspaceLocalStorage(
+  entries: readonly WorkspaceLocalStorageEntry[],
+  oldWorkspaceId: string,
+  newWorkspaceId: string,
+  chapterIdMap: ReadonlyMap<string, string>,
+): WorkspaceLocalStorageEntry[] {
+  const encodedOldWorkspaceId = encodeURIComponent(oldWorkspaceId)
+  const encodedNewWorkspaceId = encodeURIComponent(newWorkspaceId)
+  return entries.flatMap((entry) => {
+    if (!entry || typeof entry.key !== 'string' || typeof entry.value !== 'string') return []
+    let key = entry.key
+    if (key.startsWith('chapter-history-')) {
+      const oldChapterId = key.slice('chapter-history-'.length)
+      key = `chapter-history-${chapterIdMap.get(oldChapterId) ?? oldChapterId}`
+    } else {
+      key = key
+        .replaceAll(encodedOldWorkspaceId, encodedNewWorkspaceId)
+        .replaceAll(oldWorkspaceId, newWorkspaceId)
+      const draftPrefix = `inkpi_draft_journal:${newWorkspaceId}:`
+      if (key.startsWith(draftPrefix)) {
+        const oldChapterId = key.slice(draftPrefix.length)
+        key = `${draftPrefix}${chapterIdMap.get(oldChapterId) ?? oldChapterId}`
+      }
+    }
+
+    let value = entry.value
+    const draftObject = parseJsonRecord(value)
+    if (key.startsWith(`inkpi_draft_journal:${newWorkspaceId}:`) && draftObject) {
+      draftObject.workspaceId = newWorkspaceId
+      if (typeof draftObject.chapterId === 'string') {
+        draftObject.chapterId = chapterIdMap.get(draftObject.chapterId) ?? draftObject.chapterId
+      }
+      value = JSON.stringify(draftObject)
+    } else if (key === `inkpi-excluded-nums-${newWorkspaceId}`) {
+      const excludedIds = parseJsonArray(value)
+      if (excludedIds) {
+        value = JSON.stringify(
+          excludedIds.map((item) =>
+            typeof item === 'string' ? (chapterIdMap.get(item) ?? item) : item,
+          ),
+        )
+      }
+    }
+    return [{ key, value }]
+  })
+}
+
+function parseJsonRecord(value: string): UnknownRecord | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return isRecord(parsed) ? { ...parsed } : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function parseJsonArray(value: string): unknown[] | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function applyWorkspaceLocalStorage(entries: readonly WorkspaceLocalStorageEntry[]): () => void {
+  if (typeof localStorage === 'undefined' || entries.length === 0) return () => undefined
+  const previous = new Map<string, string | null>()
+  try {
+    for (const entry of entries) {
+      previous.set(entry.key, localStorage.getItem(entry.key))
+      localStorage.setItem(entry.key, entry.value)
+    }
+  } catch (error) {
+    restoreWorkspaceLocalStorage(previous)
+    throw error
+  }
+  return () => restoreWorkspaceLocalStorage(previous)
+}
+
+function restoreWorkspaceLocalStorage(previous: ReadonlyMap<string, string | null>): void {
+  if (typeof localStorage === 'undefined') return
+  for (const [key, value] of previous) {
+    try {
+      if (value === null) localStorage.removeItem(key)
+      else localStorage.setItem(key, value)
+    } catch (error) {
+      console.warn(`[WorkspaceLifecycle] Failed to restore localStorage key ${key}`, error)
+    }
+  }
+}
+
+function purgeWorkspaceLocalStorage(workspaceId: string, chapterIds: readonly string[]): void {
+  if (typeof localStorage === 'undefined') return
+  const keys = collectWorkspaceLocalStorage(workspaceId, chapterIds).map((entry) => entry.key)
+  for (const key of keys) {
+    try {
+      localStorage.removeItem(key)
+    } catch (error) {
+      console.warn(`[WorkspaceLifecycle] Failed to purge localStorage key ${key}`, error)
+    }
+  }
 }
 
 // Stores strictly scoped to a project that must be backed up, remapped upon import, or wiped upon purge.
@@ -375,9 +543,13 @@ export class WorkspaceLifecycleService {
     const allChapters = await this.projectRepo.getAllChapters()
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
     const chapters = allChapters.filter((c) => c.projectId === workspaceId)
+    const localStorageData = collectWorkspaceLocalStorage(
+      workspaceId,
+      chapters.map((chapter) => chapter.id),
+    )
 
     const domainData: Record<string, Record<string, unknown>[]> = {}
-    let totalRecordsCount = 1 + volumes.length + chapters.length
+    let totalRecordsCount = 1 + volumes.length + chapters.length + localStorageData.length
     const domainStoresIncluded: string[] = []
 
     for (const storeName of PROJECT_DOMAIN_STORES) {
@@ -428,6 +600,7 @@ export class WorkspaceLifecycleService {
         chaptersCount: chapters.length,
       },
       domainStoresIncluded,
+      localStorageKeysIncluded: localStorageData.map((entry) => entry.key),
       totalRecordsCount,
     }
 
@@ -437,6 +610,7 @@ export class WorkspaceLifecycleService {
       volumes,
       chapters,
       domainData,
+      localStorageData,
     }
   }
 
@@ -533,6 +707,12 @@ export class WorkspaceLifecycleService {
         updatedAt: now,
       }
     })
+    const remappedLocalStorageData = remapWorkspaceLocalStorage(
+      Array.isArray(archive.localStorageData) ? archive.localStorageData : [],
+      oldWorkspaceId,
+      newWorkspaceId,
+      chapterIdMap,
+    )
 
     // Strict namespaced ID maps to prevent cross-store key collisions
     const entityIdMap = new Map<string, string>()
@@ -633,6 +813,10 @@ export class WorkspaceLifecycleService {
     let totalRemappedDomainRecords = 0
     const encodedOldWorkspaceId = encodeURIComponent(oldWorkspaceId)
     const encodedNewWorkspaceId = encodeURIComponent(newWorkspaceId)
+    const remapCompositeProjectKey = (key: string): string =>
+      key.startsWith(`${oldWorkspaceId}::`)
+        ? `${newWorkspaceId}${key.slice(oldWorkspaceId.length)}`
+        : key
 
     const getNamespaceMap = (ns: IdNamespace): Map<string, string> => {
       switch (ns) {
@@ -653,52 +837,54 @@ export class WorkspaceLifecycleService {
       }
     }
 
-    const remapByNamespace = (val: unknown, ns: IdNamespace): unknown => {
-      if (typeof val !== 'string') return val
+    const remapByNamespace = (value: string, ns: IdNamespace): string => {
       const map = getNamespaceMap(ns)
-      return map.get(val) ?? val
+      return map.get(value) ?? value
     }
 
-    const remapArrayByNamespace = (arr: unknown, ns: IdNamespace): unknown => {
-      if (!Array.isArray(arr)) return arr
+    const remapArrayByNamespace = (values: readonly unknown[], ns: IdNamespace): unknown[] => {
       const map = getNamespaceMap(ns)
-      return arr.map((item) => (typeof item === 'string' && map.has(item) ? map.get(item)! : item))
+      return values.map((value) =>
+        typeof value === 'string' && map.has(value) ? map.get(value)! : value,
+      )
     }
 
     const remapDottedPath = (
-      obj: Record<string, any>,
+      obj: Record<string, unknown>,
       path: string,
       kind: 'scalar' | 'array' | 'objectArray',
       ns: IdNamespace,
       objectProp?: string,
     ): void => {
       const parts = path.split('.')
-      let current = obj
+      let current: Record<string, unknown> | undefined = obj
       for (let i = 0; i < parts.length - 1; i++) {
-        if (!current || typeof current !== 'object') return
-        current = current[parts[i]]
+        const next: unknown = current?.[parts[i]]
+        if (!isRecord(next)) return
+        current = next
       }
-      if (!current || typeof current !== 'object') return
+      if (!current) return
       const lastKey = parts[parts.length - 1]
 
       if (kind === 'scalar') {
         if (typeof current[lastKey] === 'string') {
-          current[lastKey] = remapByNamespace(current[lastKey], ns)
+          current[lastKey] = remapByNamespace(current[lastKey] as string, ns)
         }
       } else if (kind === 'array') {
         if (Array.isArray(current[lastKey])) {
-          current[lastKey] = remapArrayByNamespace(current[lastKey], ns)
+          current[lastKey] = remapArrayByNamespace(current[lastKey] as unknown[], ns)
         }
       } else if (kind === 'objectArray' && objectProp) {
         if (Array.isArray(current[lastKey])) {
-          current[lastKey] = current[lastKey].map((elem: any) => {
-            if (elem && typeof elem === 'object' && typeof elem[objectProp] === 'string') {
+          current[lastKey] = (current[lastKey] as unknown[]).map((element) => {
+            const record = asRecord(element)
+            if (record && typeof record[objectProp] === 'string') {
               return {
-                ...elem,
-                [objectProp]: remapByNamespace(elem[objectProp], ns),
+                ...record,
+                [objectProp]: remapByNamespace(record[objectProp] as string, ns),
               }
             }
-            return elem
+            return element
           })
         }
       }
@@ -713,7 +899,7 @@ export class WorkspaceLifecycleService {
 
       for (const rec of records) {
         if (!rec || typeof rec !== 'object') continue
-        const item: Record<string, any> = { ...rec }
+        const item: Record<string, unknown> = { ...rec }
 
         // 1. Workspace / Project Foreign Keys
         if ('projectId' in item && item.projectId === oldWorkspaceId) {
@@ -723,6 +909,13 @@ export class WorkspaceLifecycleService {
           item.workspaceId = newWorkspaceId
         }
 
+        // Composite primary keys encode the old workspace ID and must be
+        // remapped together with the record's projectId.
+        if (storeName === 'dailyStats' || storeName === 'formData') {
+          if (typeof item.key === 'string') item.key = remapCompositeProjectKey(item.key)
+          if (typeof item.id === 'string') item.id = remapCompositeProjectKey(item.id)
+        }
+
         // 2. SettingsKV & Nested StoryState Object Graph Remapping
         if (storeName === 'settingsKV' && 'key' in item && typeof item.key === 'string') {
           item.key = item.key
@@ -730,7 +923,8 @@ export class WorkspaceLifecycleService {
             .replaceAll(oldWorkspaceId, newWorkspaceId)
 
           if (item.value && typeof item.value === 'object') {
-            const val = { ...(item.value as Record<string, any>) }
+            const val = { ...(item.value as Record<string, unknown>) }
+            const settingsKey = typeof item.key === 'string' ? item.key : ''
             if (val.projectId === oldWorkspaceId) val.projectId = newWorkspaceId
             if (val.workspaceId === oldWorkspaceId) val.workspaceId = newWorkspaceId
             if (typeof val.chapterId === 'string' && chapterIdMap.has(val.chapterId)) {
@@ -738,10 +932,10 @@ export class WorkspaceLifecycleService {
             }
 
             // Recursive StoryState Nested Graph Remapping (P0-1)
-            if (item.key.startsWith('storyState::') || val.entities || val.relations) {
+            if (settingsKey.startsWith('storyState::') || val.entities || val.relations) {
               // Remap entities dictionary
               if (val.entities && typeof val.entities === 'object') {
-                const remappedEntities: Record<string, any> = {}
+                const remappedEntities: Record<string, unknown> = {}
                 for (const [oldEntId, entData] of Object.entries(val.entities)) {
                   const newEntId = entityIdMap.get(oldEntId) ?? oldEntId
                   remappedEntities[newEntId] = {
@@ -754,13 +948,23 @@ export class WorkspaceLifecycleService {
 
               // Remap relations dictionary
               if (val.relations && typeof val.relations === 'object') {
-                const remappedRelations: Record<string, any> = {}
+                const remappedRelations: Record<string, unknown> = {}
                 for (const [oldRelId, relData] of Object.entries(val.relations)) {
-                  const rel = { ...(relData as any) }
-                  if (rel.sourceEntityId && entityIdMap.has(rel.sourceEntityId)) {
+                  const rel = asRecord(relData)
+                  if (!rel) {
+                    remappedRelations[oldRelId] = relData
+                    continue
+                  }
+                  if (
+                    typeof rel.sourceEntityId === 'string' &&
+                    entityIdMap.has(rel.sourceEntityId)
+                  ) {
                     rel.sourceEntityId = entityIdMap.get(rel.sourceEntityId)!
                   }
-                  if (rel.targetEntityId && entityIdMap.has(rel.targetEntityId)) {
+                  if (
+                    typeof rel.targetEntityId === 'string' &&
+                    entityIdMap.has(rel.targetEntityId)
+                  ) {
                     rel.targetEntityId = entityIdMap.get(rel.targetEntityId)!
                   }
                   remappedRelations[oldRelId] = rel
@@ -770,7 +974,7 @@ export class WorkspaceLifecycleService {
 
               // Remap events dictionary (keys and IDs remapped to timelineNode namespace)
               if (val.events && typeof val.events === 'object') {
-                const remappedEvents: Record<string, any> = {}
+                const remappedEvents: Record<string, unknown> = {}
                 for (const [oldEvtId, evtData] of Object.entries(val.events)) {
                   const evt = { ...(evtData as any) }
                   const newEvtId = timelineNodeIdMap.get(oldEvtId) ?? oldEvtId
@@ -785,7 +989,7 @@ export class WorkspaceLifecycleService {
 
               // Remap timelines dictionary (keys and IDs remapped to thread namespace)
               if (val.timelines && typeof val.timelines === 'object') {
-                const remappedTimelines: Record<string, any> = {}
+                const remappedTimelines: Record<string, unknown> = {}
                 for (const [oldTlId, tlData] of Object.entries(val.timelines)) {
                   const tl = { ...(tlData as any) }
                   const newTlId = threadIdMap.get(oldTlId) ?? oldTlId
@@ -808,7 +1012,7 @@ export class WorkspaceLifecycleService {
 
               // Remap promises dictionary (keys and IDs remapped to promise namespace)
               if (val.promises && typeof val.promises === 'object') {
-                const remappedPromises: Record<string, any> = {}
+                const remappedPromises: Record<string, unknown> = {}
                 for (const [oldPromId, promData] of Object.entries(val.promises)) {
                   const prom = { ...(promData as any) }
                   const newPromId = promiseIdMap.get(oldPromId) ?? oldPromId
@@ -1030,18 +1234,19 @@ export class WorkspaceLifecycleService {
           typeof rec.key === 'string' &&
           rec.key.startsWith('storyState::') &&
           rec.value &&
-          (rec.value as any).relations
+          isRecord(rec.value) &&
+          isRecord(rec.value.relations)
         ) {
-          for (const [relId, rel] of Object.entries(
-            (rec.value as any).relations as Record<string, any>,
-          )) {
-            if (rel.sourceEntityId && !validEntityIds.has(rel.sourceEntityId)) {
+          for (const [relId, relValue] of Object.entries(rec.value.relations)) {
+            const rel = asRecord(relValue)
+            if (!rel) continue
+            if (typeof rel.sourceEntityId === 'string' && !validEntityIds.has(rel.sourceEntityId)) {
               return {
                 ok: false,
                 error: `Referential integrity violation: StoryState relation '${relId}' references non-existent sourceEntityId '${rel.sourceEntityId}'`,
               }
             }
-            if (rel.targetEntityId && !validEntityIds.has(rel.targetEntityId)) {
+            if (typeof rel.targetEntityId === 'string' && !validEntityIds.has(rel.targetEntityId)) {
               return {
                 ok: false,
                 error: `Referential integrity violation: StoryState relation '${relId}' references non-existent targetEntityId '${rel.targetEntityId}'`,
@@ -1053,7 +1258,9 @@ export class WorkspaceLifecycleService {
     }
 
     // Atomic-style persistence with automatic rollback on failure (P0-1, INV-08)
+    let rollbackLocalStorage: (() => void) | undefined
     try {
+      rollbackLocalStorage = applyWorkspaceLocalStorage(remappedLocalStorageData)
       await this.projectRepo.saveProject(newProject)
       for (const vol of newVolumes) {
         await this.projectRepo.saveVolume(vol)
@@ -1072,10 +1279,11 @@ export class WorkspaceLifecycleService {
     } catch (err) {
       // 导入失败时立刻彻底回滚已写入的半拉子工作区数据，实现 0% 破损残留 (INV-08)
       try {
-        await this.purgeWorkspace(newWorkspaceId)
-      } catch {
-        // ignore rollback errors
+        await this.purgeWorkspace(newWorkspaceId, undefined)
+      } catch (rollbackError) {
+        console.warn('[WorkspaceLifecycle] Workspace import rollback failed', rollbackError)
       }
+      rollbackLocalStorage?.()
       return {
         ok: false,
         error: `导入失败，数据写入异常 (已安全回滚): ${err instanceof Error ? err.message : String(err)}`,
@@ -1092,7 +1300,11 @@ export class WorkspaceLifecycleService {
         chaptersCount: newChapters.length,
         domainStoresCount: Object.keys(remappedDomainData).length,
         totalRecordsRemapped:
-          newVolumes.length + newChapters.length + totalRemappedDomainRecords + 1,
+          newVolumes.length +
+          newChapters.length +
+          totalRemappedDomainRecords +
+          remappedLocalStorageData.length +
+          1,
       },
     }
   }
@@ -1175,6 +1387,10 @@ export class WorkspaceLifecycleService {
     for (const vol of volumes) {
       await this.projectRepo.deleteVolume(vol.id)
     }
+    purgeWorkspaceLocalStorage(
+      workspaceId,
+      chapters.map((chapter) => chapter.id),
+    )
 
     // 2. Delete project metadata
     await this.projectRepo.deleteProject(workspaceId)

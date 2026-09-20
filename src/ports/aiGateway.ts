@@ -16,6 +16,7 @@ import type {
 import type { ContinuityFinding, DeepReasoningResult } from '../ai/results/taskResults'
 import type { DomainSyncResult } from '../domain/sync/domainSyncService'
 import type { ProposalSyncRemote } from '../adapters/daemonDomainSyncRemote'
+import type { AiArtifact } from '../ai/artifacts'
 
 /**
  * AI 网关端口（抽象）。
@@ -83,6 +84,10 @@ export interface AiAssistant {
   steerTask?(taskId: string, input: unknown): Promise<boolean>
   resumeTask?(taskId: string): Promise<void>
   syncDomain?(workspaceId: string): Promise<DomainSyncResult>
+  /** Read workspace artifacts from the connected Runtime authority. */
+  listArtifacts?(workspaceId: string): Promise<AiArtifact[]>
+  /** Permanently purge a workspace from the Runtime projection. */
+  purgeWorkspace?(workspaceId: string): Promise<unknown>
   /** daemon 存活状态 */
   status(): Promise<{ running: boolean }>
   close(): Promise<void>

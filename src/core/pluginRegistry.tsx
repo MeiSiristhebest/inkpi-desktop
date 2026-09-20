@@ -9,7 +9,7 @@ import {
 } from 'react'
 import type { DesktopPlugin, DesktopPluginCategory } from '../types/plugin'
 import { ALL_LAZY_PLUGINS } from './pluginDefinitions'
-import { indexedDbKeyValueStore } from '../adapters/indexedDbKeyValueStore'
+import { indexedDbSettingsKVRepository } from '../adapters/indexedDbSettingsKVRepository'
 import { localStorageKeyValueStore } from '../adapters/localStorageKeyValueStore'
 
 export const STORAGE_KEY_ENABLED_PLUGINS = 'inkpi_enabled_plugins_v2'
@@ -32,60 +32,89 @@ export const PLUGIN_CATEGORIES: { id: DesktopPluginCategory | 'all'; label: stri
   { id: 'tools', label: '辅助与工具' },
 ]
 
-export function loadEnabledPluginIds(workspaceId?: string): Set<string> {
-  const key = getPluginStorageKey(workspaceId)
+export const CANONICAL_PLUGIN_KEY = 'enabledPlugins'
+const GLOBAL_SETTINGS_SCOPE = '__global__'
+
+function canonicalScope(workspaceId?: string): string {
+  return workspaceId || GLOBAL_SETTINGS_SCOPE
+}
+
+function parsePluginIds(raw: unknown): Set<string> | null {
   try {
-    const raw = localStorageKeyValueStore.getSync(key)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return new Set(parsed)
-    }
-    // 若特定工作区尚未存储，可回退查看全局旧配置
-    if (workspaceId) {
-      const fallbackRaw = localStorageKeyValueStore.getSync(STORAGE_KEY_ENABLED_PLUGINS)
-      if (fallbackRaw) {
-        const parsed = JSON.parse(fallbackRaw)
-        if (Array.isArray(parsed)) return new Set(parsed)
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to parse enabled plugins from storage:', e)
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(parsed) && parsed.every((id) => typeof id === 'string')
+      ? new Set(parsed)
+      : null
+  } catch {
+    return null
   }
-  const defaults = ALL_AVAILABLE_PLUGINS.filter((p) => p.enabledByDefault !== false).map(
-    (p) => p.id,
+}
+
+function legacyPluginIds(workspaceId?: string): Set<string> | null {
+  const keys = workspaceId
+    ? [getPluginStorageKey(workspaceId), STORAGE_KEY_ENABLED_PLUGINS]
+    : [STORAGE_KEY_ENABLED_PLUGINS]
+  for (const key of keys) {
+    const ids = parsePluginIds(localStorageKeyValueStore.getSync(key))
+    if (ids) return ids
+  }
+  return null
+}
+
+function defaultPluginIds(): Set<string> {
+  return new Set(
+    ALL_AVAILABLE_PLUGINS.filter((plugin) => plugin.enabledByDefault !== false).map(
+      (plugin) => plugin.id,
+    ),
   )
-  return new Set(defaults)
+}
+
+/** Synchronous read used only for first paint and legacy migration. */
+export function loadEnabledPluginIds(workspaceId?: string): Set<string> {
+  return legacyPluginIds(workspaceId) ?? defaultPluginIds()
 }
 
 export function saveEnabledPluginIds(ids: Set<string>, workspaceId?: string): void {
-  const key = getPluginStorageKey(workspaceId)
-  const list = Array.from(ids)
-  indexedDbKeyValueStore.set(key, JSON.stringify(list)).catch((e) => {
-    console.warn('Failed to persist enabled plugins:', e)
-  })
+  const next = Array.from(ids)
+  void indexedDbSettingsKVRepository
+    .set(canonicalScope(workspaceId), CANONICAL_PLUGIN_KEY, next)
+    .then(async () => {
+      const legacyKey = getPluginStorageKey(workspaceId)
+      await localStorageKeyValueStore.remove?.(legacyKey)
+      if (workspaceId) await localStorageKeyValueStore.remove?.(STORAGE_KEY_ENABLED_PLUGINS)
+    })
+    .catch((error) => {
+      console.warn('Failed to persist enabled plugins:', error)
+    })
 }
 
 export async function loadEnabledPluginIdsFromIDB(
   workspaceId?: string,
 ): Promise<Set<string> | null> {
-  const key = getPluginStorageKey(workspaceId)
   try {
-    const raw = await indexedDbKeyValueStore.get(key)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return new Set(parsed)
-    }
-    if (workspaceId) {
-      const fallbackRaw = await indexedDbKeyValueStore.get(STORAGE_KEY_ENABLED_PLUGINS)
-      if (fallbackRaw) {
-        const parsed = JSON.parse(fallbackRaw)
-        if (Array.isArray(parsed)) return new Set(parsed)
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load enabled plugins from storage:', e)
+    const canonical = await indexedDbSettingsKVRepository.get<unknown>(
+      canonicalScope(workspaceId),
+      CANONICAL_PLUGIN_KEY,
+      null,
+    )
+    const canonicalIds = parsePluginIds(canonical)
+    if (canonicalIds) return canonicalIds
+
+    const legacy = legacyPluginIds(workspaceId)
+    if (!legacy) return null
+
+    await indexedDbSettingsKVRepository.set(
+      canonicalScope(workspaceId),
+      CANONICAL_PLUGIN_KEY,
+      Array.from(legacy),
+    )
+    await localStorageKeyValueStore.remove?.(getPluginStorageKey(workspaceId))
+    if (workspaceId) await localStorageKeyValueStore.remove?.(STORAGE_KEY_ENABLED_PLUGINS)
+    return legacy
+  } catch (error) {
+    console.warn('Failed to load enabled plugins from IndexedDB:', error)
+    return null
   }
-  return null
 }
 
 // ── 共享状态（Context，单一来源、可注入）──
@@ -113,15 +142,7 @@ export const PluginProvider: FC<{ workspaceId?: string; children: ReactNode }> =
     let cancelled = false
     loadEnabledPluginIdsFromIDB(workspaceId).then((fromIDB) => {
       if (cancelled || !fromIDB) return
-      const key = getPluginStorageKey(workspaceId)
-      const hasLocalSaved = localStorageKeyValueStore.hasKeySync(key)
-      setEnabledIds((current) => {
-        if (hasLocalSaved) {
-          const fromLocal = loadEnabledPluginIds(workspaceId)
-          return setsEqual(current, fromLocal) ? current : fromLocal
-        }
-        return setsEqual(current, fromIDB) ? current : fromIDB
-      })
+      setEnabledIds((current) => (setsEqual(current, fromIDB) ? current : fromIDB))
     })
     return () => {
       cancelled = true

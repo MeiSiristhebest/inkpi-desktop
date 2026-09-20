@@ -51,6 +51,12 @@ vi.mock('./components/bookshelf/Bookshelf', () => ({
 }))
 
 import { App } from './App'
+import {
+  DESKTOP_REQUIRED_RUNTIME_CAPABILITIES,
+  RUNTIME_CONTRACT_VERSION,
+  RUNTIME_PROTOCOL_VERSION,
+  RUNTIME_SCHEMA_HASH,
+} from '@inkpi/protocol'
 
 describe('App daemon connection', () => {
   beforeEach(() => {
@@ -86,6 +92,22 @@ describe('App daemon connection', () => {
       Promise.resolve({
         close: vi.fn().mockResolvedValue(undefined),
         request: vi.fn().mockImplementation(async (method: string) => {
+          if (method === 'runtime.handshake') {
+            return {
+              accepted: true,
+              protocolVersion: RUNTIME_PROTOCOL_VERSION,
+              contractVersion: RUNTIME_CONTRACT_VERSION,
+              schemaHash: RUNTIME_SCHEMA_HASH,
+              runtimeVersion: '1.0.0',
+              capabilities: [...DESKTOP_REQUIRED_RUNTIME_CAPABILITIES],
+              missingCapabilities: [],
+            }
+          }
+          if (method === 'artifact.list') return []
+          if (method === 'domain.sync.pull') return []
+          if (method === 'domain.sync.snapshot') {
+            return { workspaceId: 'test-proj', revision: 0, changeSets: [], createdAt: 0 }
+          }
           if (method === 'skill.status') return { activatedSkills: [] }
           if (method === 'skill.activate') {
             return {

@@ -731,6 +731,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                                       },
                                     }))
                                   }
+                                  ariaLabel="图片（视觉）"
                                 />
                               </div>
                               <div className="flex items-center gap-2">
@@ -748,6 +749,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                                       },
                                     }))
                                   }
+                                  ariaLabel="PDF（文档解析）"
                                 />
                               </div>
                               <div className="flex items-center gap-2">
@@ -765,6 +767,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                                       },
                                     }))
                                   }
+                                  ariaLabel="可供 AI 自动调度"
                                 />
                               </div>
                             </div>

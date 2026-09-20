@@ -31,6 +31,31 @@ describe('atomic IndexedDB domain writes', () => {
     expect(await new IndexedDbDomainChangeStore().latestRevision(workspaceId)).toBe(1)
   })
 
+  it('does not mutate daily writing statistics when persisting a chapter directly', async () => {
+    const workspaceId = 'atomic-domain-no-stats-workspace'
+    const chapterId = 'atomic-domain-no-stats-chapter'
+    const statsKey = `${workspaceId}::2026-01-01`
+    await db.delete('chapters', chapterId)
+    await db.delete('dailyStats', statsKey)
+    for (const changeSet of await new IndexedDbDomainChangeStore().list(workspaceId)) {
+      await db.delete('domainChangeSets', changeSet.id)
+    }
+
+    await indexedDbProjectRepository.saveChapter({
+      id: chapterId,
+      projectId: workspaceId,
+      volumeId: 'volume-1',
+      title: '导入或系统写入',
+      content: '正文',
+      order: 0,
+      wordCount: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+
+    expect(await db.get('dailyStats', statsKey)).toBeUndefined()
+  })
+
   it('rejects a stale concurrent aggregate writer without appending a second change', async () => {
     const workspaceId = 'atomic-domain-concurrency-workspace'
     const chapterId = 'atomic-domain-concurrency-chapter'

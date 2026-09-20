@@ -336,6 +336,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   onRequestGhostRef.current = onRequestGhost
   const ghostTextRef = useRef('')
   const ghostTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ghostGeneration = useRef(0)
 
   const kvStoreRef = useRef(kvStore)
   kvStoreRef.current = kvStore
@@ -579,6 +580,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         void autosave.flush().catch(() => {})
       }
       autosave.cancel()
+      ghostGeneration.current += 1
       if (ghostTimer.current) clearTimeout(ghostTimer.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -597,6 +599,11 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
           reportSaveError(err)
           return false
         }
+      }
+      ghostGeneration.current += 1
+      if (ghostTimer.current) {
+        clearTimeout(ghostTimer.current)
+        ghostTimer.current = null
       }
       if (nextChapter) {
         void kvStoreRef.current.set(`inkpi_last_active_chapter:${projectId}`, nextChapter.id)
@@ -818,7 +825,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
           : {}),
       })
     },
-    [patch, runPersistence, autosave, projectId, activateChapter, clock],
+    [patch, runPersistence, autosave, projectId, activateChapter],
   )
 
   const moveChapterToVolume = useCallback(
@@ -1140,18 +1147,31 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       sessionWordDelta: stateRef.current.sessionWordDelta + (diff > 0 ? diff : 0),
     })
 
-    // 行内 Ghost Text 续写：防抖请求
+    // 行内 Ghost Text 续写：防抖请求。每次正文变化、切章或卸载都会推进 generation，
+    // 返回值还必须匹配章节、持久化 revision 与请求时的尾部文本，避免旧请求回写新文档。
+    const requestGeneration = ++ghostGeneration.current
+    if (ghostTimer.current) clearTimeout(ghostTimer.current)
+    setGhostText('')
     if (onRequestGhostRef.current && text.length > 5) {
-      if (ghostTimer.current) clearTimeout(ghostTimer.current)
       const tail = text.slice(-200)
       const chId = cur.id
+      const requestRevision = cur.revision ?? 1
       ghostTimer.current = setTimeout(() => {
         onRequestGhostRef.current!(chId, tail)
           .then((suggestion) => {
-            if (suggestion) {
-              setGhostText(suggestion)
-              showGhostText(ed, suggestion)
+            const current = activeChapterRef.current
+            const currentTail = ed.getText().slice(-tail.length)
+            if (
+              !suggestion ||
+              requestGeneration !== ghostGeneration.current ||
+              current?.id !== chId ||
+              (current.revision ?? 1) !== requestRevision ||
+              currentTail !== tail
+            ) {
+              return
             }
+            setGhostText(suggestion)
+            showGhostText(ed, suggestion)
           })
           .catch(() => {})
       }, 600)

@@ -12,6 +12,7 @@ use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
 mod instance_config;
+mod secret_store;
 
 use instance_config::InstanceConfig;
 
@@ -24,6 +25,10 @@ static DAEMON_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
 ///   2. externalBin sidecar：Tauri 将其放在资源目录，文件名已去掉 target triple 后缀（inkpi.exe）
 ///   3. 与主程序同目录兜底
 fn resolve_daemon_bin(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    // The script override is a development hook only. A packaged build must
+    // never execute a path supplied by the process environment; it may only
+    // launch the bundled sidecar.
+    #[cfg(debug_assertions)]
     if let Ok(p) = std::env::var("INKPI_DAEMON_SCRIPT") {
         let path = std::path::PathBuf::from(p);
         if path.exists() {
@@ -42,6 +47,7 @@ fn resolve_daemon_bin(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
         }
     }
 
+    #[cfg(debug_assertions)]
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let sidecar = dir.join("inkpi.exe");
@@ -152,6 +158,11 @@ fn kill_daemon() {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            secret_store::secret_store_get,
+            secret_store::secret_store_set,
+            secret_store::secret_store_remove,
+        ])
         .setup(|app| {
             spawn_daemon(app.handle()).map_err(|message| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, message)

@@ -28,7 +28,7 @@ import { useWritingSessionStats } from './hooks/useWritingSessionStats'
 import { indexedDbProjectRepository } from '../../adapters/indexedDbProjectRepository'
 import { indexedDbCodexEntityRepository } from '../../adapters/indexedDbCodexEntityRepository'
 import { localStorageKeyValueStore } from '../../adapters/localStorageKeyValueStore'
-import { writingGoalService } from '../../services/writingGoalService'
+import { DEFAULT_DAILY_GOAL, writingGoalService } from '../../services/writingGoalService'
 import type { ProjectRecord } from '../../types'
 import type { CodexEntity } from '../../plugins/living-codex/types'
 import { ChapterReferencesSidebar } from '../../plugins/living-codex/components/ChapterReferencesSidebar'
@@ -188,7 +188,8 @@ export const RichEditor: FC<RichEditorProps> = ({
   // 会话打字统计 hook：作品级当天连续累计、防粘贴虚假增量、空闲持续累加
   const sessionStats = useWritingSessionStats({
     projectId,
-    isActive: !focusMode,
+    // Focus mode is still writing; only the chrome is hidden.
+    isActive: true,
   })
 
   // 记录上一次的正文纯文字长度，用于在用户自然打字输入时派发有效打字字数
@@ -229,10 +230,21 @@ export const RichEditor: FC<RichEditorProps> = ({
   }, [])
 
   const [showGoalModal, setShowGoalModal] = useState(false)
-  const [dailyGoalTarget, setDailyGoalTarget] = useState(() => {
-    const saved = writingGoalService.getGoalSync(projectId)
-    return saved ? Number(saved) || 4600 : 4600
-  })
+  const [dailyGoalTarget, setDailyGoalTarget] = useState(DEFAULT_DAILY_GOAL)
+
+  useEffect(() => {
+    let alive = true
+    setDailyGoalTarget(DEFAULT_DAILY_GOAL)
+    void writingGoalService
+      .getGoal(projectId)
+      .then((goal) => {
+        if (alive && goal !== null) setDailyGoalTarget(goal)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [projectId])
 
   const [widgetConfig, setWidgetConfigState] = useState<WordCountConfig>(() => {
     try {
@@ -784,7 +796,8 @@ export const RichEditor: FC<RichEditorProps> = ({
             void writingGoalService.setGoal(projectId, newGoal)
           }}
           onDelete={() => {
-            setDailyGoalTarget(4600)
+            setDailyGoalTarget(DEFAULT_DAILY_GOAL)
+            void writingGoalService.removeGoal(projectId)
           }}
         />
       )}

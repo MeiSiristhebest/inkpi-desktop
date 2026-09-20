@@ -1,17 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { PluginSettingsView } from './PluginSettingsView'
-import {
-  PluginProvider,
-  usePluginRegistry,
-  STORAGE_KEY_ENABLED_PLUGINS,
-} from '../../core/pluginRegistry'
+import { PluginProvider, usePluginRegistry, CANONICAL_PLUGIN_KEY } from '../../core/pluginRegistry'
+import { indexedDbSettingsKVRepository } from '../../adapters/indexedDbSettingsKVRepository'
 
 const renderWithProviders = (ui: React.ReactNode) => render(<PluginProvider>{ui}</PluginProvider>)
 
 describe('PluginSettingsView UI Component', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear()
+    await indexedDbSettingsKVRepository.remove('__global__', CANONICAL_PLUGIN_KEY)
   })
 
   it('renders installed plugin list and search', () => {
@@ -32,7 +30,7 @@ describe('PluginSettingsView UI Component', () => {
     expect(screen.getByText('暂无已安装的插件')).toBeInTheDocument()
   })
 
-  it('toggles plugin off/on and persists to localStorage', () => {
+  it('toggles plugin off/on and persists to IndexedDB', async () => {
     const Consumer = () => {
       const { isPluginEnabled } = usePluginRegistry()
       return (
@@ -49,20 +47,34 @@ describe('PluginSettingsView UI Component', () => {
 
     // 默认纯粹模式：未启用任何附加插件
     expect(screen.getByTestId('consumer').textContent).toBe('disabled')
-    expect(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS)).toBeNull()
+    // Canonical plugin state lives in IndexedDB; localStorage is only a legacy
+    // migration source and must not be treated as the authority.
+    expect(localStorage.getItem('inkpi_enabled_plugins_v2')).toBeNull()
 
     // 右侧详情抽屉默认选中 living-codex，点击「立即启用此插件」
     fireEvent.click(screen.getByRole('button', { name: '立即启用此插件' }))
 
     expect(screen.getByTestId('consumer').textContent).toBe('enabled')
-    const enabledList = JSON.parse(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS) || '[]')
-    expect(enabledList).toContain('living-codex')
+    await waitFor(async () => {
+      const enabledList = await indexedDbSettingsKVRepository.get<string[]>(
+        '__global__',
+        CANONICAL_PLUGIN_KEY,
+        [],
+      )
+      expect(enabledList).toContain('living-codex')
+    })
 
     // 再次点击「停用此插件」
     fireEvent.click(screen.getByRole('button', { name: '停用此插件' }))
 
     expect(screen.getByTestId('consumer').textContent).toBe('disabled')
-    const disabledList = JSON.parse(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS) || '[]')
-    expect(disabledList).not.toContain('living-codex')
+    await waitFor(async () => {
+      const disabledList = await indexedDbSettingsKVRepository.get<string[]>(
+        '__global__',
+        CANONICAL_PLUGIN_KEY,
+        [],
+      )
+      expect(disabledList).not.toContain('living-codex')
+    })
   })
 })

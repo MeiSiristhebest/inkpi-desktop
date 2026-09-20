@@ -1,5 +1,6 @@
 import { db } from '../db/indexedDB'
 import {
+  projectLegacyRecordsToStoryEntities,
   projectPluginRecordsToStoryState,
   type StoryPluginCollectionInput,
 } from '../domain/story/pluginProjection'
@@ -11,6 +12,7 @@ import { storyStateEvents } from '../ports/storyStateEvents'
 import type { CodexEntity } from '../plugins/living-codex/types'
 import type { NarrativeThread, TimelineNode } from '../plugins/timeline-grid/types'
 import type { PromiseLedgerEntry } from '../plugins/promise-ledger/types'
+import type { CardRecord, FormDataRecord, TableRowRecord } from '../types'
 import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
@@ -68,11 +70,23 @@ export class StoryStateMaterializer {
   private async runMaterialize(workspaceId: string): Promise<StoryState | undefined> {
     // 1. 并发从持久化存储中读取 3 大核心世界观插件的数据
     // 严格 fail-closed：如果任一读取失败，直接抛出，决不降级为 [] 导致冲掉 read model
-    const [allEntities, allThreads, allNodes, allPromises, latestWsRev] = await Promise.all([
+    const [
+      allEntities,
+      allThreads,
+      allNodes,
+      allPromises,
+      allFormData,
+      allTableRows,
+      allCardRecords,
+      latestWsRev,
+    ] = await Promise.all([
       db.getAll<CodexEntity>('codexEntities'),
       db.getAll<NarrativeThread>('narrativeThreads'),
       db.getAll<TimelineNode>('timelineNodes'),
       db.getAll<PromiseLedgerEntry>('promiseLedger'),
+      db.getAll<FormDataRecord>('formData'),
+      db.getAll<TableRowRecord>('tableRows'),
+      db.getAll<CardRecord>('cardRecords'),
       domainChangeStore.latestRevision(workspaceId),
     ])
 
@@ -81,6 +95,9 @@ export class StoryStateMaterializer {
     const threads = allThreads.filter((t) => t.projectId === workspaceId)
     const nodes = allNodes.filter((n) => n.projectId === workspaceId)
     const promises = allPromises.filter((p) => p.projectId === workspaceId)
+    const formData = allFormData.filter((record) => record.projectId === workspaceId)
+    const tableRows = allTableRows.filter((record) => record.projectId === workspaceId)
+    const cardRecords = allCardRecords.filter((record) => record.projectId === workspaceId)
 
     // 2. 遵循 INV-05 fail-closed 溯源保护：
     // 未显式提供可信 provenance 的历史/导入数据，降级标记为 'derived'/'hypothesis'，绝不静默伪造成 'canonical-fact'
@@ -158,15 +175,19 @@ export class StoryStateMaterializer {
 
     // 5. 投影生成新的 plugin 分区数据
     const projectedState = projectPluginRecordsToStoryState(sources, { revision: nextRevision })
+    const legacyEntities = projectLegacyRecordsToStoryEntities([
+      { sourceId: 'formData', records: formData },
+      { sourceId: 'tableRows', records: tableRows },
+      { sourceId: 'cardRecords', records: cardRecords },
+    ])
+    const legacyEntityMap = Object.fromEntries(legacyEntities.map((entity) => [entity.id, entity]))
 
     // 6. 分区物化保护（Partition Merging）：
     // 更新 entities, relations, timelines, events, promises；
     // 严格保留现有 StoryState 中的其他分区（scenes, constraints 等），避免被破坏
     // 对 relations 进行分区清理：过滤掉旧有的 codex-rel:* 关系，防止已删除关系残留幽灵
     const preservedRelations = Object.fromEntries(
-      Object.entries(existingState?.relations ?? {}).filter(
-        ([id]) => !id.startsWith('codex-rel:'),
-      ),
+      Object.entries(existingState?.relations ?? {}).filter(([id]) => !id.startsWith('codex-rel:')),
     )
     const mergedRelations = {
       ...preservedRelations,
@@ -175,7 +196,7 @@ export class StoryStateMaterializer {
 
     const newState: StoryState = {
       revision: nextRevision,
-      entities: projectedState.entities,
+      entities: { ...projectedState.entities, ...legacyEntityMap },
       relations: mergedRelations,
       events: projectedState.events,
       scenes: existingState?.scenes ?? {},
@@ -210,4 +231,3 @@ function isStateContentEqual(a: StoryState, b: StoryState): boolean {
   const cleanB = { ...b, revision: 0 }
   return serializeStoryState(cleanA) === serializeStoryState(cleanB)
 }
-

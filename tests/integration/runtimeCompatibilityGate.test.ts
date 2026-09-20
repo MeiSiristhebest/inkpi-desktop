@@ -1,4 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import {
+  RUNTIME_CONTRACT_VERSION,
+  RUNTIME_PROTOCOL_VERSION,
+  RUNTIME_SCHEMA_HASH,
+} from '@inkpi/protocol'
 import type {
   Artifact,
   ArtifactListParams,
@@ -10,11 +15,17 @@ import type {
 import runtimeLock from '../../runtime.lock.json'
 
 describe('Runtime Compatibility Gate (CI Contract Enforcement)', () => {
-  it('pinned commit in runtime.lock.json corresponds to latest verified runtime', () => {
+  it('runtime.lock.json pins the exact verified Runtime identity and contract', () => {
+    expect(runtimeLock.runtimeRepository).toBe('MeiSiristhebest/inkpi')
     expect(runtimeLock.pinnedCommit).toBeDefined()
-    expect(runtimeLock.pinnedCommit.length).toBe(40)
-    // Pinned commit must match verified upstream commit d7c1334 on MeiSiristhebest/inkpi
-    expect(runtimeLock.pinnedCommit).toBe('d7c1334f9f4328113df83ddfc7863502436fc2b8')
+    expect(runtimeLock.pinnedCommit).toMatch(/^[0-9a-f]{40}$/)
+    // The release lock must move only when this exact Runtime commit has passed
+    // the cross-boundary verification suite; do not replace this with HEAD or a
+    // loose ancestry check.
+    expect(runtimeLock.pinnedCommit).toBe('b375b7a8e77c6369796bba83291359a4c59c29c1')
+    expect(runtimeLock.protocolVersion).toBe(RUNTIME_PROTOCOL_VERSION)
+    expect(runtimeLock.contractVersion).toBe(RUNTIME_CONTRACT_VERSION)
+    expect(runtimeLock.schemaHash).toBe(RUNTIME_SCHEMA_HASH)
   })
 
   it('verifies Artifact protocol contract supports workspace isolation', () => {

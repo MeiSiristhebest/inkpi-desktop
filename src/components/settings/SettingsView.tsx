@@ -858,13 +858,18 @@ const EditorTab: FC<{
         <Switch
           checked={settings.normalizePunctuationOnFormat}
           onChange={(v) => update({ normalizePunctuationOnFormat: v })}
+          ariaLabel="一键排版时顺带标点中文化"
         />
       </Row>
     </Section>
 
     <Section title="自动存盘与持久化" desc="正文输入后防抖自动写入本地存储，无需手动按键。">
       <Row label="自动保存">
-        <Switch checked={settings.autoSave} onChange={(v) => update({ autoSave: v })} />
+        <Switch
+          checked={settings.autoSave}
+          onChange={(v) => update({ autoSave: v })}
+          ariaLabel="自动保存"
+        />
       </Row>
       {settings.autoSave && (
         <Row label={`保存间隔 · ${settings.autoSaveDelay}ms`}>
@@ -889,10 +894,15 @@ const EditorTab: FC<{
         <Switch
           checked={settings.defaultTypewriter}
           onChange={(v) => update({ defaultTypewriter: v })}
+          ariaLabel="默认打字机模式"
         />
       </Row>
       <Row label="底部状态栏" hint="显示本章与全书字数、连接状态、编辑器控制和保存状态。">
-        <Switch checked={settings.showStatsBar} onChange={(v) => update({ showStatsBar: v })} />
+        <Switch
+          checked={settings.showStatsBar}
+          onChange={(v) => update({ showStatsBar: v })}
+          ariaLabel="底部状态栏"
+        />
       </Row>
       <Row
         label={`每章字数目标 · ${settings.wordTarget.toLocaleString()} 字`}
@@ -1300,7 +1310,11 @@ const AiTab: FC<{
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <Switch checked={isEnabled} onChange={() => handleToggleEnabled(m)} />
+                    <Switch
+                      checked={isEnabled}
+                      onChange={() => handleToggleEnabled(m)}
+                      ariaLabel={`${m.name || m.id} 服务开关`}
+                    />
                   </div>
                 </div>
               )

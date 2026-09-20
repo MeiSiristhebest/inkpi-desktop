@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react'
 import { useId, type ReactNode } from 'react'
-import { spring, gesture, variants, tween } from '../../motion'
+import { spring, gesture, variants } from '../../motion'
 
 // ── 排版常量（所有设置页共用，不得私造）─────────────────────────────────────
 export const fieldLabel = 'text-[11.5px] font-medium text-[var(--ink-text-faint)] mb-1.5'
@@ -123,17 +123,18 @@ export const Slider = ({ min, max, step = 1, value, onChange }: SliderProps) => 
 export interface SwitchProps {
   checked: boolean
   onChange: (v: boolean) => void
+  ariaLabel?: string
 }
 
-export const Switch = ({ checked, onChange }: SwitchProps) => (
+export const Switch = ({ checked, onChange, ariaLabel }: SwitchProps) => (
   <motion.button
+    type="button"
     role="switch"
     aria-checked={checked}
+    aria-label={ariaLabel}
     onClick={() => onChange(!checked)}
-    animate={{ backgroundColor: checked ? 'var(--ink-accent)' : 'var(--ink-border-strong)' }}
-    transition={tween.color}
     {...gesture.button}
-    className="relative w-10 h-5.5 rounded-full cursor-pointer select-none flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-accent)]"
+    className={`relative w-10 h-5.5 rounded-full cursor-pointer select-none flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-accent)] ${checked ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'}`}
     style={{ WebkitTapHighlightColor: 'transparent' }}
   >
     <motion.span

@@ -19,6 +19,10 @@ export class IndexedDbSettingsKVRepository {
       value,
     })
   }
+
+  async remove(projectId: string, keyName: string): Promise<void> {
+    await db.delete('settingsKV', `${projectId}::${keyName}`)
+  }
 }
 
 export const indexedDbSettingsKVRepository = new IndexedDbSettingsKVRepository()

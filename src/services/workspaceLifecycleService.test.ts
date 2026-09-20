@@ -108,6 +108,48 @@ describe('WorkspaceLifecycleService', () => {
     }
   })
 
+  it('backs up and remaps workspace-scoped localStorage without exporting credentials', async () => {
+    localStorage.clear()
+    localStorage.setItem(
+      'inkpi_draft_journal:orig-proj:orig-ch-1',
+      JSON.stringify({
+        workspaceId: 'orig-proj',
+        chapterId: 'orig-ch-1',
+        baseRevision: 1,
+        editorContent: '<p>未落盘草稿</p>',
+        updatedAt: 2000,
+      }),
+    )
+    localStorage.setItem('chapter-history-orig-ch-1', JSON.stringify([{ content: '历史版本' }]))
+    localStorage.setItem('inkpi-settings', JSON.stringify({ aiModel: { apiKey: 'do-not-export' } }))
+
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+
+    expect(backup?.localStorageData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'inkpi_draft_journal:orig-proj:orig-ch-1' }),
+        expect.objectContaining({ key: 'chapter-history-orig-ch-1' }),
+      ]),
+    )
+    expect(backup?.localStorageData?.some(({ value }) => value.includes('do-not-export'))).toBe(
+      false,
+    )
+
+    const result = await service.importWorkspace(backup)
+    expect(result.ok).toBe(true)
+    expect(
+      localStorage.getItem(`inkpi_draft_journal:${result.workspaceId}:ch_generated_3`),
+    ).toContain('未落盘草稿')
+    expect(localStorage.getItem('inkpi_draft_journal:orig-proj:orig-ch-1')).toContain('未落盘草稿')
+
+    await service.purgeWorkspace(result.workspaceId!)
+    expect(
+      localStorage.getItem(`inkpi_draft_journal:${result.workspaceId}:ch_generated_3`),
+    ).toBeNull()
+    localStorage.clear()
+  })
+
   it('imports workspace and completely remaps object graph to avoid collision (INV-03, INV-04)', async () => {
     const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
     const backup = await service.exportWorkspaceBackup('orig-proj')
@@ -173,6 +215,58 @@ describe('WorkspaceLifecycleService', () => {
       expect.objectContaining({
         projectId: result.workspaceId,
         chapterId: expect.stringMatching(/^ch_generated_/),
+      }),
+    )
+
+    putSpy.mockRestore()
+  })
+
+  it('remaps composite project keys for dailyStats and formData during import', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue('ok' as any)
+
+    const result = await service.importWorkspace({
+      manifest: {
+        schemaVersion: 2,
+        archiveType: 'inkpi-workspace-backup',
+        workspaceId: 'orig-proj',
+        name: '原版修仙录',
+        exportedAt: 1000,
+        core: { project: true, volumesCount: 1, chaptersCount: 1 },
+        domainStoresIncluded: ['dailyStats', 'formData'],
+        totalRecordsCount: 4,
+      },
+      project: mockProject,
+      volumes: [mockVolume],
+      chapters: [mockChapter],
+      domainData: {
+        dailyStats: [
+          { key: 'orig-proj::2026-01-01', projectId: 'orig-proj', date: '2026-01-01', words: 12 },
+        ],
+        formData: [
+          {
+            id: 'orig-proj::positioning',
+            projectId: 'orig-proj',
+            tabId: 'positioning',
+            data: { protagonist: '林凡' },
+          },
+        ],
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(putSpy).toHaveBeenCalledWith(
+      'dailyStats',
+      expect.objectContaining({
+        key: `${result.workspaceId}::2026-01-01`,
+        projectId: result.workspaceId,
+      }),
+    )
+    expect(putSpy).toHaveBeenCalledWith(
+      'formData',
+      expect.objectContaining({
+        id: `${result.workspaceId}::positioning`,
+        projectId: result.workspaceId,
       }),
     )
 

@@ -7,6 +7,7 @@ import {
   normalizeDesktopArtifact,
 } from '../ai/artifacts'
 import type { AiArtifact, ArtifactOwnership, ArtifactStore } from '../ai/artifacts'
+import { artifactEvents } from '../ports/artifactEvents'
 
 const DESKTOP_ARTIFACT_METADATA = '__inkpiDesktopArtifact'
 
@@ -26,6 +27,13 @@ export class DaemonArtifactStore implements ArtifactStore {
     if (!isRecord(result) || result.saved !== true || result.id !== normalized.id) {
       throw new Error(`Daemon artifact save returned an invalid receipt for ${normalized.id}`)
     }
+    artifactEvents.publish({
+      artifactId: normalized.id,
+      workspaceId:
+        normalized.ownership?.workspaceId ??
+        (normalized.metadata?.workspaceId as string | undefined),
+      action: 'updated',
+    })
   }
 
   async get(id: string): Promise<AiArtifact | undefined> {
@@ -36,13 +44,13 @@ export class DaemonArtifactStore implements ArtifactStore {
   async list(taskId?: string): Promise<AiArtifact[]> {
     const artifacts = await this.client.request<unknown>('artifact.list', { taskId })
     if (!Array.isArray(artifacts)) throw new Error('Daemon artifact list returned an invalid list')
-    return artifacts.map(fromRuntimeArtifact)
+    return artifacts.map((artifact) => fromRuntimeArtifact(artifact))
   }
 
   async listByType(type: string): Promise<AiArtifact[]> {
     const artifacts = await this.client.request<unknown>('artifact.list', { type })
     if (!Array.isArray(artifacts)) throw new Error('Daemon artifact list returned an invalid list')
-    return artifacts.map(fromRuntimeArtifact)
+    return artifacts.map((artifact) => fromRuntimeArtifact(artifact))
   }
 
   async listByWorkspace(workspaceId: string): Promise<AiArtifact[]> {
@@ -112,13 +120,15 @@ function fromRuntimeArtifact(artifact: unknown, fallbackWorkspaceId?: string): A
 
 function assertRuntimeArtifact(value: unknown): asserts value is RuntimeArtifact {
   if (!isRecord(value)) throw new Error('Daemon artifact is not an object')
+  const version = value.version
   if (
     typeof value.id !== 'string' ||
     !value.id.trim() ||
     typeof value.type !== 'string' ||
     !value.type.trim() ||
-    !Number.isSafeInteger(value.version) ||
-    value.version < 1 ||
+    typeof version !== 'number' ||
+    !Number.isSafeInteger(version) ||
+    version < 1 ||
     !isRecord(value.provenance) ||
     typeof value.createdAt !== 'number' ||
     !Number.isFinite(value.createdAt) ||
@@ -151,6 +161,6 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

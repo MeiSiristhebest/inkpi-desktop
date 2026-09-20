@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  projectLegacyRecordsToStoryEntities,
   projectPluginRecordsToStoryState,
   STORY_PLUGIN_COLLECTION_MAP,
   type StoryPluginCollectionInput,
@@ -201,6 +202,49 @@ describe('canonical StoryState plugin projection', () => {
     expect(reverse.entities['entity:b'].attributes.nested).toEqual({ count: 1 })
     expect(first.aliases).toEqual(['changed'])
     expect(forward.entities['entity:b'].aliases).toEqual(['z'])
+  })
+
+  it('projects legacy Form/Table/Card records as derived, namespaced entities', () => {
+    const entities = projectLegacyRecordsToStoryEntities([
+      {
+        sourceId: 'formData',
+        records: [
+          {
+            id: 'project-1::characters',
+            projectId: 'project-1',
+            tabId: 'characters',
+            data: { name: '阿青' },
+          },
+        ],
+      },
+      {
+        sourceId: 'tableRows',
+        records: [
+          { id: 'row-1', projectId: 'project-1', tabId: 'characters', data: { role: 'ally' } },
+        ],
+      },
+      {
+        sourceId: 'cardRecords',
+        records: [
+          { id: 'card-1', projectId: 'project-1', tabId: 'locations', name: '城门', data: {} },
+        ],
+      },
+    ])
+
+    expect(entities.map(({ id }) => id)).toEqual([
+      'legacy:cardRecords:card-1',
+      'legacy:formData:project-1::characters',
+      'legacy:tableRows:row-1',
+    ])
+    expect(entities[0]).toMatchObject({
+      kind: 'legacy-cardRecords',
+      name: '城门',
+      provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+    })
+    expect(entities[1].attributes).toMatchObject({
+      projectId: 'project-1',
+      data: { name: '阿青' },
+    })
   })
 
   it('exposes only explicit plugin/source collection routes', () => {
