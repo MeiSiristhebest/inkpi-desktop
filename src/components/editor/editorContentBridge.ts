@@ -19,7 +19,7 @@ export interface ApplyMutationOptions {
  */
 export function loadContentIntoEditor(editor: Editor | null, content: string): void {
   if (!editor || editor.isDestroyed) return
-  editor.commands.setContent(content || '', false)
+  editor.commands.setContent(content || '', { emitUpdate: false })
 }
 
 /**
@@ -48,7 +48,7 @@ export async function applyContentMutation(
   }
 
   if (editor && !editor.isDestroyed) {
-    editor.commands.setContent(result.chapter.content || '', false)
+    editor.commands.setContent(result.chapter.content || '', { emitUpdate: false })
   }
 
   return result.chapter

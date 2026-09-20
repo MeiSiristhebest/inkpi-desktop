@@ -316,9 +316,9 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         eventScope: proposalScopeRef.current,
       })
 
-      // 3. 落盘彻底成功后，通过 setContent(..., false) 同步视口，绝不触发 editor onUpdate / autosave (INV-02)
+      // 3. 落盘彻底成功后同步视口，绝不触发 editor onUpdate / autosave (INV-02)
       if (editor.commands?.setContent) {
-        editor.commands.setContent(updatedHtml, false)
+        editor.commands.setContent(updatedHtml, { emitUpdate: false })
       }
 
       await proposalLedger.reload().catch(() => {})
@@ -400,9 +400,9 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         eventScope: proposalScopeRef.current,
       })
 
-      // 3. 落盘彻底成功后，通过 setContent(..., false) 同步视口，不触发 editor onUpdate / autosave (INV-02)
+      // 3. 落盘彻底成功后同步视口，不触发 editor onUpdate / autosave (INV-02)
       if (editor.commands?.setContent) {
-        editor.commands.setContent(restoredHtml, false)
+        editor.commands.setContent(restoredHtml, { emitUpdate: false })
       }
 
       await proposalLedger.reload().catch(() => {})

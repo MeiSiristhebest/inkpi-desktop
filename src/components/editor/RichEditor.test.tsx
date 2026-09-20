@@ -216,7 +216,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith(
         '<p>　　第一行</p><p>　　第二行</p>',
-        false,
+        { emitUpdate: false },
       )
     })
   })
@@ -227,10 +227,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     h.getText = () => 'hi, there?'
     fireEvent.click(screen.getByTitle('标点规整'))
     await waitFor(() => {
-      expect(editorInstance.commands.setContent).toHaveBeenCalledWith(
-        '<p>　　hi， there？</p>',
-        false,
-      )
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　hi， there？</p>', {
+        emitUpdate: false,
+      })
     })
   })
 
@@ -244,7 +243,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     fireEvent.change(screen.getByPlaceholderText('替换为（可选）'), { target: { value: 'X' } })
     fireEvent.click(screen.getByText('全部替换'))
     await waitFor(() => {
-      expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>Xbc</p>', false)
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>Xbc</p>', {
+        emitUpdate: false,
+      })
     })
   })
 
@@ -369,7 +370,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     h.getText = () => '独行'
     fireEvent.click(screen.getByTitle('一键首行缩进排版'))
     await waitFor(() => {
-      expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　独行</p>', false)
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　独行</p>', {
+        emitUpdate: false,
+      })
     })
   })
 

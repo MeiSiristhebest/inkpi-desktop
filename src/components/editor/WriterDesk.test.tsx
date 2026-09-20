@@ -210,7 +210,7 @@ describe('WriterDesk — 卷章树导航', () => {
     await waitFor(() => expect(mocked.getAll).toHaveBeenCalled())
     fireEvent.click(screen.getByTitle('新建章节'))
     await waitFor(() => expect(screen.getByText('第一卷')).toBeInTheDocument())
-    expect(screen.getAllByText('第001章 未命名').length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.getAllByText('第001章 未命名').length).toBeGreaterThan(0))
     const entityWrites = mocked.put.mock.calls.filter(
       ([store]) => store === 'volumes' || store === 'chapters',
     )

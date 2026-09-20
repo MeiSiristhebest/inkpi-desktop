@@ -275,7 +275,7 @@ describe('SelectionToolbar', () => {
 
   it('preserves HTML formatting when proposing and committing rewrites without emitting autosave update', async () => {
     let rawHtml = '<p>Hello <strong>world</strong></p>'
-    const setContentSpy = vi.fn((html: string, emitUpdate?: boolean) => {
+    const setContentSpy = vi.fn((html: string, _options?: { emitUpdate?: boolean }) => {
       rawHtml = html
     })
 
@@ -349,7 +349,9 @@ describe('SelectionToolbar', () => {
     )
 
     // 验证：调用了 setContent 并显式传入 emitUpdate: false，杜绝二次触发 autosave
-    expect(setContentSpy).toHaveBeenCalledWith('<p>Hello <strong>universe</strong></p>', false)
+    expect(setContentSpy).toHaveBeenCalledWith('<p>Hello <strong>universe</strong></p>', {
+      emitUpdate: false,
+    })
 
     // 验证持久化层已更新
     const persistedChapter = await db.get('chapters', 'chapter-rich')
