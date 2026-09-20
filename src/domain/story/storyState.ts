@@ -227,7 +227,10 @@ function assertStringArray(value: unknown, context: string): asserts value is st
   }
 }
 
-function assertPlainObject(value: unknown, context: string): asserts value is Record<string, unknown> {
+function assertPlainObject(
+  value: unknown,
+  context: string,
+): asserts value is Record<string, unknown> {
   if (!isPlainRecord(value)) throw new Error(`${context} must be an object`)
 }
 
@@ -271,26 +274,18 @@ function assertEvidenceArray(value: unknown, context: string): asserts value is 
     const semanticFrom = item.semanticFrom
     if (
       semanticFrom !== undefined &&
-      (typeof semanticFrom !== 'number' ||
-        !Number.isSafeInteger(semanticFrom) ||
-        semanticFrom < 0)
+      (typeof semanticFrom !== 'number' || !Number.isSafeInteger(semanticFrom) || semanticFrom < 0)
     ) {
       throw new Error(`${itemContext}.semanticFrom must be a non-negative integer`)
     }
     const semanticTo = item.semanticTo
     if (
       semanticTo !== undefined &&
-      (typeof semanticTo !== 'number' ||
-        !Number.isSafeInteger(semanticTo) ||
-        semanticTo < 0)
+      (typeof semanticTo !== 'number' || !Number.isSafeInteger(semanticTo) || semanticTo < 0)
     ) {
       throw new Error(`${itemContext}.semanticTo must be a non-negative integer`)
     }
-    if (
-      semanticFrom !== undefined &&
-      semanticTo !== undefined &&
-      semanticTo < semanticFrom
-    ) {
+    if (semanticFrom !== undefined && semanticTo !== undefined && semanticTo < semanticFrom) {
       throw new Error(`${itemContext} has a reversed semantic range`)
     }
   })

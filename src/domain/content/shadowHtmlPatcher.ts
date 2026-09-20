@@ -1,8 +1,5 @@
-import type { TextPatch } from "../../ai/proposals/proposalLedger"
-import {
-  semanticDocumentFromHtml,
-  type SemanticDocument,
-} from "./semanticDocument"
+import type { TextPatch } from '../../ai/proposals/proposalLedger'
+import { semanticDocumentFromHtml, type SemanticDocument } from './semanticDocument'
 
 /**
  * Applies semantic text patches to an HTML string using the source map of a SemanticDocument
@@ -31,7 +28,7 @@ export function applySemanticPatchesToHtml(
 
   const isHtml = /<\s*[a-z][^>]*>/i.test(html)
   const mappingDoc =
-    semanticDoc.representation === "html"
+    semanticDoc.representation === 'html'
       ? semanticDoc
       : isHtml
         ? semanticDocumentFromHtml(semanticDoc.documentId, html, semanticDoc.revision)

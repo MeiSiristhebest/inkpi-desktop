@@ -329,4 +329,3 @@ describe('useChapterAutosave Single-Writer Coalescing Queue', () => {
     expect(result.current.hasPending()).toBe(false)
   })
 })
-

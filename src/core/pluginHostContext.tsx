@@ -127,7 +127,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           const taskResult = await runTask(task)
           const textOutput = taskResultText(taskResult)
           // Canonical artifactId persisted by CreativeIntelligence / ArtifactRuntime
-          const artifactId = taskResult?.artifactIds?.[0] ?? (taskResult?.provenance as any)?.artifactId
+          const artifactId =
+            taskResult?.artifactIds?.[0] ?? (taskResult?.provenance as any)?.artifactId
 
           return {
             taskId: task.id,

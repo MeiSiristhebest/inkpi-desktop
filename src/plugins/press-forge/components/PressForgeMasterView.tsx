@@ -54,7 +54,11 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
   const currentChapter = chapters.find((c) => c.id === selectedChapterId)
   const currentChapterText = currentChapter
-    ? semanticTextFromContent(currentChapter.id, currentChapter.content || '', currentChapter.revision)
+    ? semanticTextFromContent(
+        currentChapter.id,
+        currentChapter.content || '',
+        currentChapter.revision,
+      )
     : ''
 
   const localFormattedResult = PressForgeEngine.formatText(currentChapterText, options)

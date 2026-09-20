@@ -88,7 +88,9 @@ function assertProseMirrorNode(node: unknown, path: string): asserts node is Pro
   if (candidate.attrs !== undefined && !isPlainRecord(candidate.attrs)) {
     throw new TypeError(`ProseMirror node attrs must be an object: ${path}`)
   }
-  candidate.content?.forEach((child, index) => assertProseMirrorNode(child, `${path}.content[${index}]`))
+  candidate.content?.forEach((child, index) =>
+    assertProseMirrorNode(child, `${path}.content[${index}]`),
+  )
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

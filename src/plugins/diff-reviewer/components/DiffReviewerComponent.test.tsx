@@ -53,7 +53,9 @@ describe('DiffReviewer UI Components', () => {
     fireEvent.click(screen.getByRole('button', { name: /全部采纳/ }))
     fireEvent.click(screen.getByRole('button', { name: /写回正文章节/ }))
 
-    await waitFor(() => expect(screen.getByRole('button', { name: '撤销写回' })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '撤销写回' })).toBeInTheDocument(),
+    )
     expect(saveChapter).toHaveBeenCalledTimes(1)
     expect(saveChapter.mock.calls[0][0]).toMatchObject({
       id: chapter.id,
@@ -116,7 +118,9 @@ describe('DiffReviewer UI Components', () => {
     fireEvent.click(screen.getByRole('button', { name: /全部采纳/ }))
     fireEvent.click(screen.getByRole('button', { name: /写回正文章节/ }))
 
-    await waitFor(() => expect(screen.getByRole('button', { name: '撤销写回' })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '撤销写回' })).toBeInTheDocument(),
+    )
     expect(saveChapter).toHaveBeenCalledTimes(1)
     expect(saveChapter.mock.calls[0][0]).toMatchObject({
       id: chapter.id,

@@ -351,10 +351,7 @@ function assertValidChangeSet(
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     const category = detail.toLowerCase().includes('checksum') ? 'checksum mismatch' : 'invalid'
-    throw new Error(
-      `${source} ${category}: ${detail}`,
-      { cause: error },
-    )
+    throw new Error(`${source} ${category}: ${detail}`, { cause: error })
   }
   if (value.workspaceId !== workspaceId) {
     throw new Error(

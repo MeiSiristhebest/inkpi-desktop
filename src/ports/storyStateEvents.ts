@@ -23,10 +23,7 @@ export const storyStateEvents = {
     }
   },
 
-  subscribe(
-    workspaceId: string,
-    listener: (event: StoryStateChangedEvent) => void,
-  ): () => void {
+  subscribe(workspaceId: string, listener: (event: StoryStateChangedEvent) => void): () => void {
     const wrapped = (event: StoryStateChangedEvent) => {
       if (event.workspaceId === workspaceId) listener(event)
     }

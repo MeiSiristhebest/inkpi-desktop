@@ -92,10 +92,11 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
       chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: semanticTextFromContent(`narrative-linter-${selectedChapterId}`, text, chap?.revision).slice(
-        0,
-        2500,
-      ),
+      text: semanticTextFromContent(
+        `narrative-linter-${selectedChapterId}`,
+        text,
+        chap?.revision,
+      ).slice(0, 2500),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

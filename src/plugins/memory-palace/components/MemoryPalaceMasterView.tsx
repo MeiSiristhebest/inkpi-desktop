@@ -53,7 +53,9 @@ export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       })),
     [chapters],
   )
-  const [runtimeSearchResults, setRuntimeSearchResults] = useState<EntitySearchResult[] | null>(null)
+  const [runtimeSearchResults, setRuntimeSearchResults] = useState<EntitySearchResult[] | null>(
+    null,
+  )
 
   useEffect(() => {
     const runtimeAssistant = host?.aiAssistant

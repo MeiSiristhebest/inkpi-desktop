@@ -113,7 +113,11 @@ export function useChapterAutosave(
       isSaving.current = false
       checkWaiters()
       // 关键状态机规则：仅在非 blockedError 且存在更新输入时才自旋触发下一轮保存
-      if (!blockedError.current && generation.current > savedGeneration.current && latestDraft.current) {
+      if (
+        !blockedError.current &&
+        generation.current > savedGeneration.current &&
+        latestDraft.current
+      ) {
         void processQueue()
       }
     }
@@ -130,7 +134,11 @@ export function useChapterAutosave(
       return Promise.reject(blockedError.current)
     }
 
-    if (!isSaving.current && !blockedError.current && (savedGeneration.current >= targetGen || !latestDraft.current)) {
+    if (
+      !isSaving.current &&
+      !blockedError.current &&
+      (savedGeneration.current >= targetGen || !latestDraft.current)
+    ) {
       return Promise.resolve()
     }
 

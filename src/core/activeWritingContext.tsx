@@ -76,7 +76,8 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
     try {
       const store = new IndexedDbDomainChangeStore()
       if (workspaceId.trim()) {
-        store.latestRevision(workspaceId)
+        store
+          .latestRevision(workspaceId)
           .then((latest) => {
             if (!cancelled) setWorkspaceRevision(Math.max(initialRevision, latest))
           })
@@ -103,9 +104,12 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
         setWorkspaceRevision((prev) => Math.max(prev, evt.revision!))
       } else {
         const store = new IndexedDbDomainChangeStore()
-        store.latestRevision(workspaceId).then((rev) => {
-          setWorkspaceRevision((prev) => Math.max(prev, rev))
-        }).catch(() => {})
+        store
+          .latestRevision(workspaceId)
+          .then((rev) => {
+            setWorkspaceRevision((prev) => Math.max(prev, rev))
+          })
+          .catch(() => {})
       }
     })
     return unsubscribe

@@ -138,7 +138,8 @@ export class DomainProposalLedger {
   create(proposal: DomainProposal, createdAt = this.now()): DomainProposalRecord {
     validateDomainProposal(proposal)
     assertTimestamp(createdAt, 'Domain proposal createdAt')
-    if (this.proposals.has(proposal.id)) throw new Error(`Domain proposal already exists: ${proposal.id}`)
+    if (this.proposals.has(proposal.id))
+      throw new Error(`Domain proposal already exists: ${proposal.id}`)
     const record: DomainProposalRecord = {
       ...cloneProposal(proposal),
       status: 'pending',
@@ -162,7 +163,8 @@ export class DomainProposalLedger {
 
   accept(proposalId: string): DomainProposalRecord {
     const proposal = this.require(proposalId)
-    if (proposal.status !== 'pending') throw new Error(`Domain proposal ${proposalId} is not pending`)
+    if (proposal.status !== 'pending')
+      throw new Error(`Domain proposal ${proposalId} is not pending`)
     proposal.status = 'accepted'
     proposal.updatedAt = this.now()
     proposal.conflict = undefined
@@ -173,7 +175,8 @@ export class DomainProposalLedger {
 
   reject(proposalId: string): DomainProposalRecord {
     const proposal = this.require(proposalId)
-    if (proposal.status !== 'pending') throw new Error(`Domain proposal ${proposalId} is not pending`)
+    if (proposal.status !== 'pending')
+      throw new Error(`Domain proposal ${proposalId} is not pending`)
     proposal.status = 'rejected'
     proposal.updatedAt = this.now()
     proposal.conflict = undefined
@@ -285,11 +288,7 @@ export class DomainProposalLedger {
       } catch (error) {
         const actualRevision = await this.markStaleAfterWriteRace(expected)
         if (actualRevision !== undefined) {
-          throw new DomainProposalConflictError(
-            expected.id,
-            expected.baseRevision,
-            actualRevision,
-          )
+          throw new DomainProposalConflictError(expected.id, expected.baseRevision, actualRevision)
         }
         throw error
       }
@@ -340,19 +339,10 @@ export class DomainProposalLedger {
     try {
       const currentState = await this.requireCurrentState()
       if (currentState.revision !== committedRevision) {
-        const conflict = markConflict(
-          proposal,
-          currentState.revision,
-          this.now(),
-          'revision',
-        )
+        const conflict = markConflict(proposal, currentState.revision, this.now(), 'revision')
         this.replace(proposal, conflict)
         await this.persistAndWait(conflict, 'conflict')
-        throw new DomainProposalConflictError(
-          proposal.id,
-          committedRevision,
-          currentState.revision,
-        )
+        throw new DomainProposalConflictError(proposal.id, committedRevision, currentState.revision)
       }
       const nextRevision = currentState.revision + 1
       const undoProposal: DomainProposalRecord = {
@@ -610,7 +600,9 @@ export class InMemoryDomainProposalStore implements DomainProposalRecordStore {
   }
 }
 
-export function validateDomainProposalRecord(value: unknown): asserts value is DomainProposalRecord {
+export function validateDomainProposalRecord(
+  value: unknown,
+): asserts value is DomainProposalRecord {
   if (!isRecord(value)) throw new Error('Domain proposal record must be an object')
   validateDomainProposal(value as unknown as DomainProposal)
   if (!isDomainProposalStatus(value.status)) throw new Error('Domain proposal status is invalid')
@@ -669,7 +661,11 @@ function assertConflict(value: unknown): asserts value is DomainProposalConflict
   assertRevision(value.expectedRevision, 'Domain proposal conflict expected revision')
   assertRevision(value.actualRevision, 'Domain proposal conflict actual revision')
   assertTimestamp(value.at, 'Domain proposal conflict timestamp')
-  if (value.reason !== 'revision' && value.reason !== 'source-hash' && value.reason !== 'unsafe-rebase') {
+  if (
+    value.reason !== 'revision' &&
+    value.reason !== 'source-hash' &&
+    value.reason !== 'unsafe-rebase'
+  ) {
     throw new Error('Domain proposal conflict reason is invalid')
   }
 }
@@ -757,7 +753,9 @@ function cloneRecord(record: DomainProposalRecord): DomainProposalRecord {
     status: record.status,
     createdAt: record.createdAt,
     ...(record.updatedAt === undefined ? {} : { updatedAt: record.updatedAt }),
-    ...(record.inversePatch === undefined ? {} : { inversePatch: cloneJsonValue(record.inversePatch) }),
+    ...(record.inversePatch === undefined
+      ? {}
+      : { inversePatch: cloneJsonValue(record.inversePatch) }),
     ...(record.committedRevision === undefined
       ? {}
       : { committedRevision: record.committedRevision }),

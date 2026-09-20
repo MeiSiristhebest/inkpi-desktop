@@ -71,10 +71,12 @@ describe('IndexedDbStoryStateStore', () => {
       payload: next,
     })
     expect(
-      (await db.get<{ value: unknown }>(
-        'settingsKV',
-        `storyState::${encodeURIComponent(workspaceId)}`,
-      ))?.value,
+      (
+        await db.get<{ value: unknown }>(
+          'settingsKV',
+          `storyState::${encodeURIComponent(workspaceId)}`,
+        )
+      )?.value,
     ).toBe(serializeStoryState(next))
   })
 

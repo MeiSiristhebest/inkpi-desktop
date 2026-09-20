@@ -1,5 +1,13 @@
 import { useState, useEffect, type FC } from 'react'
-import { Sparkles, X, RefreshCw, Activity, AlertTriangle, CheckCircle2, CloudOff } from 'lucide-react'
+import {
+  Sparkles,
+  X,
+  RefreshCw,
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  CloudOff,
+} from 'lucide-react'
 import { AiActivityCenter } from './AiActivityCenter'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
 import type { AiArtifact } from '../../ai/artifacts/artifactStore'
@@ -270,21 +278,25 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
                 </div>
               </div>
 
-              {syncConflict?.conflictingAggregates && syncConflict.conflictingAggregates.length > 0 && (
-                <div>
-                  <div className="text-[11px] font-medium text-[var(--ink-text-muted)] mb-1">
-                    冲突聚合实体 ({syncConflict.conflictingAggregates.length}):
+              {syncConflict?.conflictingAggregates &&
+                syncConflict.conflictingAggregates.length > 0 && (
+                  <div>
+                    <div className="text-[11px] font-medium text-[var(--ink-text-muted)] mb-1">
+                      冲突聚合实体 ({syncConflict.conflictingAggregates.length}):
+                    </div>
+                    <div className="max-h-36 overflow-y-auto space-y-1 p-2 rounded bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] font-mono text-[11px]">
+                      {syncConflict.conflictingAggregates.map((agg, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-[var(--ink-text-muted)]"
+                        >
+                          <span>{agg.aggregateType}</span>
+                          <span className="text-[var(--ink-text-faint)]">{agg.aggregateId}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="max-h-36 overflow-y-auto space-y-1 p-2 rounded bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] font-mono text-[11px]">
-                    {syncConflict.conflictingAggregates.map((agg, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-[var(--ink-text-muted)]">
-                        <span>{agg.aggregateType}</span>
-                        <span className="text-[var(--ink-text-faint)]">{agg.aggregateId}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
             </div>
 
             <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">

@@ -25,9 +25,12 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
   const activeChapter = host?.activeChapter
   const initialText =
     (activeChapter
-      ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
-      : '') ||
-    FALLBACK_CHAPTER_TEXT
+      ? semanticTextFromContent(
+          activeChapter.id,
+          activeChapter.content || '',
+          activeChapter.revision,
+        )
+      : '') || FALLBACK_CHAPTER_TEXT
   const [chapterText, setChapterText] = useState(initialText)
   const [activeChapterId, setActiveChapterId] = useState(activeChapter?.id || 'ch_01')
   const [historyDanmakus, setHistoryDanmakus] = useState<ShadowDanmakuRecord[]>([])

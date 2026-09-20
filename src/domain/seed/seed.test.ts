@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  buildSeedVolumes,
-  buildSeedChapters,
-  buildBlankVolumes,
-  buildBlankChapters,
-} from '../seed'
+import { buildSeedVolumes, buildSeedChapters, buildBlankVolumes, buildBlankChapters } from '../seed'
 
 describe('seed builders — 首次启动卷章种子', () => {
   it('buildSeedVolumes returns two project-scoped volumes with unique dynamic ids', () => {
@@ -46,4 +41,3 @@ describe('seed builders — 首次启动卷章种子', () => {
     expect(chs[0].volumeId).toBe('vol-b')
   })
 })
-

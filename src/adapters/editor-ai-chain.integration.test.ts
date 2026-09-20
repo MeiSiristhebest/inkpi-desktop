@@ -48,7 +48,9 @@ describe('Desktop editor AI chain integration', () => {
     // jsdom's WebSocket and Node's Event use different realms. Use the client's
     // real Node `ws` fallback while the hook establishes its connection.
     testGlobal.WebSocket = undefined
-    const hook = renderHook(() => useAiConversation(`ws://127.0.0.1:${daemon.wsPort}`, null, 'test-ws'))
+    const hook = renderHook(() =>
+      useAiConversation(`ws://127.0.0.1:${daemon.wsPort}`, null, 'test-ws'),
+    )
     const editor = new Editor({
       element: document.createElement('div'),
       extensions: [StarterKit, GhostText],

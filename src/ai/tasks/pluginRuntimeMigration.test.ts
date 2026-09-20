@@ -13,8 +13,7 @@ import {
   type PluginRuntimeTarget,
 } from './pluginRuntimeCatalog'
 
-type MigrationDisposition =
-  'migrated-to-runtime' | 'desktop-local-by-design'
+type MigrationDisposition = 'migrated-to-runtime' | 'desktop-local-by-design'
 
 interface BoundaryExpectation {
   runtimeClass: PluginRuntimeClass
@@ -420,7 +419,9 @@ describe('Phase 20 first-party plugin migration matrix', () => {
     expect(indexSource).toMatch(new RegExp(`\\bid\\s*:\\s*['"]${pluginId}['"]`))
     expect(definitionSource).toContain(`../plugins/${pluginId}`)
 
-    expect(evidence.runtimeInvocations).toEqual(expectedRuntimeInvocation(pluginId) ? [pluginId] : [])
+    expect(evidence.runtimeInvocations).toEqual(
+      expectedRuntimeInvocation(pluginId) ? [pluginId] : [],
+    )
     expect(evidence.runtimeInvocationCount).toBe(expectedRuntimeInvocation(pluginId) ? 1 : 0)
     expect(evidence.hasContextProviderFile).toBe(expectedContextProvider(pluginId))
     expect(Boolean(definition?.contextProvider)).toBe(expectedContextProvider(pluginId))
@@ -431,7 +432,9 @@ describe('Phase 20 first-party plugin migration matrix', () => {
       expect(entry.toolName).toBeUndefined()
     } else if (expected.runtimeClass === 'tool') {
       expect(entry.taskKind).toBeUndefined()
-      expect(entry.toolName).toBe(`plugin.${pluginId}.${pluginId === 'memory-palace' ? 'search' : pluginId === 'press-forge' ? 'format' : pluginId === 'scrapbook-recycler' ? 'recommend' : 'compute'}`)
+      expect(entry.toolName).toBe(
+        `plugin.${pluginId}.${pluginId === 'memory-palace' ? 'search' : pluginId === 'press-forge' ? 'format' : pluginId === 'scrapbook-recycler' ? 'recommend' : 'compute'}`,
+      )
       expect(instructionIds).not.toContain(`plugin.${pluginId}.analysis`)
     } else if (expected.runtimeClass === 'workflow') {
       expect(entry.taskKind).toBe(`plugin.${pluginId}.workflow`)
@@ -457,7 +460,9 @@ describe('Phase 20 first-party plugin migration matrix', () => {
     const contextProviderIds = FIRST_PARTY_PLUGIN_IDS.filter(
       (pluginId) => EVIDENCE[pluginId].hasContextProviderFile,
     )
-    const expectedRuntimeIds = FIRST_PARTY_PLUGIN_IDS.filter((pluginId) => expectedRuntimeInvocation(pluginId))
+    const expectedRuntimeIds = FIRST_PARTY_PLUGIN_IDS.filter((pluginId) =>
+      expectedRuntimeInvocation(pluginId),
+    )
     const expectedContextProviderIds = FIRST_PARTY_PLUGIN_IDS.filter((pluginId) =>
       expectedContextProvider(pluginId),
     )
@@ -466,7 +471,11 @@ describe('Phase 20 first-party plugin migration matrix', () => {
     expect(contextProviderIds).toEqual(expectedContextProviderIds)
     expect(
       Object.values(PLUGIN_RUNTIME_CATALOG)
-        .filter((entry) => entry.taskKind && entry.runtimeClass === 'ai-task' || entry.taskKind && entry.runtimeClass === 'hybrid')
+        .filter(
+          (entry) =>
+            (entry.taskKind && entry.runtimeClass === 'ai-task') ||
+            (entry.taskKind && entry.runtimeClass === 'hybrid'),
+        )
         .map((entry) => entry.pluginId),
     ).toEqual(FIRST_PARTY_PLUGIN_IDS.filter((pluginId) => expectedTask(pluginId)))
   })

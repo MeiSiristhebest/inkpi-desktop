@@ -181,9 +181,7 @@ describe('createDaemonAiAssistant instruction registration', () => {
       pollIntervalMs: 50,
       signal: controller.signal,
     })
-    await vi.waitFor(() =>
-      expect(calls.map((call) => call.method)).toContain('task.submit'),
-    )
+    await vi.waitFor(() => expect(calls.map((call) => call.method)).toContain('task.submit'))
     controller.abort()
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
@@ -366,7 +364,9 @@ describe('createDaemonAiAssistant instruction registration', () => {
     }
     const assistant = createDaemonAiAssistant(client)
 
-    await expect(assistant.runPluginTool?.('diff-reviewer', { oldText: 'a', newText: 'b' })).resolves.toEqual({
+    await expect(
+      assistant.runPluginTool?.('diff-reviewer', { oldText: 'a', newText: 'b' }),
+    ).resolves.toEqual({
       stats: { additions: 1 },
     })
     await expect(
@@ -382,7 +382,12 @@ describe('createDaemonAiAssistant instruction registration', () => {
     })
     const workflowSubmit = calls.find((call) => call.method === 'task.submit')
     expect(workflowSubmit).toMatchObject({
-      params: { task: { kind: 'plugin.multiverse-whatif.workflow', outputContract: { format: 'structured' } } },
+      params: {
+        task: {
+          kind: 'plugin.multiverse-whatif.workflow',
+          outputContract: { format: 'structured' },
+        },
+      },
     })
   })
 })

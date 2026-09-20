@@ -1,17 +1,17 @@
-import { db } from "../../db/indexedDB"
-import type { ChapterRecord } from "../../types"
+import { db } from '../../db/indexedDB'
+import type { ChapterRecord } from '../../types'
 import {
   type AiProposal,
   type CommitReceipt,
   type TextPatch,
   ProposalConflictError,
-} from "./proposalLedger"
-import { createDomainChangeSet } from "../../domain/sync/domainChangeSet"
-import { domainChangeEvents } from "../../ports/domainChangeEvents"
-import { chapterSaveEvents } from "../../ports/chapterSaveEvents"
-import { proposalStateEvents, type ProposalEventScope } from "../../ports/proposalStateEvents"
-import { draftJournal } from "../../services/draftJournal"
-import { indexedDbDailyStatsRepository } from "../../adapters/indexedDbDailyStatsRepository"
+} from './proposalLedger'
+import { createDomainChangeSet } from '../../domain/sync/domainChangeSet'
+import { domainChangeEvents } from '../../ports/domainChangeEvents'
+import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
+import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
+import { draftJournal } from '../../services/draftJournal'
+import { indexedDbDailyStatsRepository } from '../../adapters/indexedDbDailyStatsRepository'
 
 export interface AtomicCommitProposalInput {
   workspaceId: string
@@ -37,11 +37,11 @@ export interface AtomicUndoProposalInput {
   eventScope?: ProposalEventScope
 }
 
-const OPERATION_LOCK_PREFIX = "op-lock:"
+const OPERATION_LOCK_PREFIX = 'op-lock:'
 
 function countWords(content: string): number {
   if (!content) return 0
-  const text = content.replace(/<[^>]+>/g, " ").trim()
+  const text = content.replace(/<[^>]+>/g, ' ').trim()
   return text ? text.length : 0
 }
 
@@ -55,9 +55,7 @@ export class ProposalChapterUnitOfWork {
    * spanning ["chapters", "aiProposals", "domainChangeSets"].
    * If any precondition or write fails, the entire transaction aborts with zero partial state.
    */
-  static async commitProposalWithChapter(
-    input: AtomicCommitProposalInput,
-  ): Promise<CommitReceipt> {
+  static async commitProposalWithChapter(input: AtomicCommitProposalInput): Promise<CommitReceipt> {
     const {
       workspaceId,
       chapterId,
@@ -77,11 +75,11 @@ export class ProposalChapterUnitOfWork {
     let wordDelta = 0
 
     await db.runTransaction(
-      ["chapters", "aiProposals", "domainChangeSets"],
+      ['chapters', 'aiProposals', 'domainChangeSets'],
       (transaction, fail) => {
-        const chapterStore = transaction.objectStore("chapters")
-        const proposalStore = transaction.objectStore("aiProposals")
-        const domainStore = transaction.objectStore("domainChangeSets")
+        const chapterStore = transaction.objectStore('chapters')
+        const proposalStore = transaction.objectStore('aiProposals')
+        const domainStore = transaction.objectStore('domainChangeSets')
 
         const chapterReq = chapterStore.get(chapterId)
         const proposalReq = proposalStore.get(proposalId)
@@ -104,23 +102,35 @@ export class ProposalChapterUnitOfWork {
           try {
             // 1. Validate Proposal state
             if (!currentProposal) {
-              throw new Error("Proposal " + proposalId + " not found")
+              throw new Error('Proposal ' + proposalId + ' not found')
             }
             if (currentLock) {
-              throw new Error("Proposal " + proposalId + " is locked by another operation")
+              throw new Error('Proposal ' + proposalId + ' is locked by another operation')
             }
-            if (currentProposal.status !== "accepted") {
-              throw new Error("Proposal " + proposalId + " must be accepted before commit (status: " + currentProposal.status + ")")
+            if (currentProposal.status !== 'accepted') {
+              throw new Error(
+                'Proposal ' +
+                  proposalId +
+                  ' must be accepted before commit (status: ' +
+                  currentProposal.status +
+                  ')',
+              )
             }
             if (currentProposal.baseRevision !== expectedRevision) {
-              throw new ProposalConflictError(proposalId, currentProposal.baseRevision, expectedRevision)
+              throw new ProposalConflictError(
+                proposalId,
+                currentProposal.baseRevision,
+                expectedRevision,
+              )
             }
             if (
               sourceHash !== undefined &&
               currentProposal.sourceHash !== undefined &&
               sourceHash !== currentProposal.sourceHash
             ) {
-              throw new Error("Proposal " + proposalId + " source hash does not match current document")
+              throw new Error(
+                'Proposal ' + proposalId + ' source hash does not match current document',
+              )
             }
 
             // 2. Validate Chapter state — fail-closed: chapter MUST exist in DB
@@ -152,7 +162,7 @@ export class ProposalChapterUnitOfWork {
 
             committedProposal = {
               ...clone(currentProposal),
-              status: "committed",
+              status: 'committed',
               committedRevision: nextRevision,
               inversePatches: inversePatches?.map((p) => ({ ...p })),
               updatedAt: now,
@@ -165,21 +175,22 @@ export class ProposalChapterUnitOfWork {
             const currentWorkspaceRev = workspaceChanges.at(-1)?.revision ?? 0
             committedWorkspaceRevision = currentWorkspaceRev + 1
 
-            const sourceDeviceId = typeof localStorage !== "undefined"
-              ? localStorage.getItem("inkpi-device-id") || "desktop"
-              : "desktop"
+            const sourceDeviceId =
+              typeof localStorage !== 'undefined'
+                ? localStorage.getItem('inkpi-device-id') || 'desktop'
+                : 'desktop'
 
             const changeSet = createDomainChangeSet({
-              id: "chapter-" + chapterId + "-" + nextRevision + "-" + now,
+              id: 'chapter-' + chapterId + '-' + nextRevision + '-' + now,
               workspaceId,
               sourceDeviceId,
               baseRevision: currentWorkspaceRev,
               changes: [
                 {
-                  id: "chapter-change-" + chapterId + "-" + nextRevision + "-" + now,
-                  aggregateType: "chapter",
+                  id: 'chapter-change-' + chapterId + '-' + nextRevision + '-' + now,
+                  aggregateType: 'chapter',
                   aggregateId: chapterId,
-                  operation: "upsert",
+                  operation: 'upsert',
                   revision: nextRevision,
                   payload: committedChapter,
                   occurredAt: now,
@@ -235,8 +246,8 @@ export class ProposalChapterUnitOfWork {
       proposalStateEvents.publish({
         ...eventScope,
         proposalId,
-        status: "committed",
-        kind: "updated",
+        status: 'committed',
+        kind: 'updated',
         updatedAt: now,
       })
     }
@@ -257,9 +268,7 @@ export class ProposalChapterUnitOfWork {
    * Executes an atomic undo of both the chapter and proposal in a single IndexedDB transaction
    * spanning ["chapters", "aiProposals", "domainChangeSets"].
    */
-  static async undoProposalWithChapter(
-    input: AtomicUndoProposalInput,
-  ): Promise<CommitReceipt> {
+  static async undoProposalWithChapter(input: AtomicUndoProposalInput): Promise<CommitReceipt> {
     const {
       workspaceId,
       chapterId,
@@ -277,11 +286,11 @@ export class ProposalChapterUnitOfWork {
     let wordDelta = 0
 
     await db.runTransaction(
-      ["chapters", "aiProposals", "domainChangeSets"],
+      ['chapters', 'aiProposals', 'domainChangeSets'],
       (transaction, fail) => {
-        const chapterStore = transaction.objectStore("chapters")
-        const proposalStore = transaction.objectStore("aiProposals")
-        const domainStore = transaction.objectStore("domainChangeSets")
+        const chapterStore = transaction.objectStore('chapters')
+        const proposalStore = transaction.objectStore('aiProposals')
+        const domainStore = transaction.objectStore('domainChangeSets')
 
         const chapterReq = chapterStore.get(chapterId)
         const proposalReq = proposalStore.get(proposalId)
@@ -304,13 +313,19 @@ export class ProposalChapterUnitOfWork {
           try {
             // 1. Validate Proposal state
             if (!currentProposal) {
-              throw new Error("Proposal " + proposalId + " not found")
+              throw new Error('Proposal ' + proposalId + ' not found')
             }
             if (currentLock) {
-              throw new Error("Proposal " + proposalId + " is locked by another operation")
+              throw new Error('Proposal ' + proposalId + ' is locked by another operation')
             }
-            if (currentProposal.status !== "committed") {
-              throw new Error("Proposal " + proposalId + " must be committed before undo (status: " + currentProposal.status + ")")
+            if (currentProposal.status !== 'committed') {
+              throw new Error(
+                'Proposal ' +
+                  proposalId +
+                  ' must be committed before undo (status: ' +
+                  currentProposal.status +
+                  ')',
+              )
             }
 
             // 2. Validate Chapter state — fail-closed: chapter MUST exist in DB
@@ -342,7 +357,7 @@ export class ProposalChapterUnitOfWork {
 
             undoneProposal = {
               ...clone(currentProposal),
-              status: "undone",
+              status: 'undone',
               updatedAt: now,
             }
 
@@ -353,21 +368,22 @@ export class ProposalChapterUnitOfWork {
             const currentWorkspaceRev = workspaceChanges.at(-1)?.revision ?? 0
             committedWorkspaceRevision = currentWorkspaceRev + 1
 
-            const sourceDeviceId = typeof localStorage !== "undefined"
-              ? localStorage.getItem("inkpi-device-id") || "desktop"
-              : "desktop"
+            const sourceDeviceId =
+              typeof localStorage !== 'undefined'
+                ? localStorage.getItem('inkpi-device-id') || 'desktop'
+                : 'desktop'
 
             const changeSet = createDomainChangeSet({
-              id: "chapter-" + chapterId + "-" + nextRevision + "-" + now,
+              id: 'chapter-' + chapterId + '-' + nextRevision + '-' + now,
               workspaceId,
               sourceDeviceId,
               baseRevision: currentWorkspaceRev,
               changes: [
                 {
-                  id: "chapter-change-" + chapterId + "-" + nextRevision + "-" + now,
-                  aggregateType: "chapter",
+                  id: 'chapter-change-' + chapterId + '-' + nextRevision + '-' + now,
+                  aggregateType: 'chapter',
                   aggregateId: chapterId,
-                  operation: "upsert",
+                  operation: 'upsert',
                   revision: nextRevision,
                   payload: restoredChapter,
                   occurredAt: now,
@@ -423,8 +439,8 @@ export class ProposalChapterUnitOfWork {
       proposalStateEvents.publish({
         ...eventScope,
         proposalId,
-        status: "undone",
-        kind: "updated",
+        status: 'undone',
+        kind: 'updated',
         updatedAt: now,
       })
     }

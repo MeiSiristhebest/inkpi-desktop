@@ -136,9 +136,7 @@ export function projectionStateToDomainProposalRecord(
 }
 
 /** JSON-RPC adapter for generic proposals; the daemon remains projection-only. */
-export function createDaemonDomainProposalSyncRemote(
-  client: RpcClient,
-): DomainProposalSyncRemote {
+export function createDaemonDomainProposalSyncRemote(client: RpcClient): DomainProposalSyncRemote {
   return {
     pushDomainProposalState: (workspaceId, proposal, expectedRevision) => {
       const state = domainProposalRecordToProjectionState(proposal)

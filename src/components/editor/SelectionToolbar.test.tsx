@@ -266,7 +266,9 @@ describe('SelectionToolbar', () => {
     // 验证：由于落库版本冲突，UoW 事务阻断，状态转为 stale 且展示冲突错误，编辑器内容保持不变
     await waitFor(() => {
       expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('stale')
-      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('expected revision 4, received 99')
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent(
+        'expected revision 4, received 99',
+      )
     })
     expect(getContent()).toBe('选中文本')
   })
@@ -355,5 +357,3 @@ describe('SelectionToolbar', () => {
     expect(persistedChapter?.revision).toBe(2)
   })
 })
-
-

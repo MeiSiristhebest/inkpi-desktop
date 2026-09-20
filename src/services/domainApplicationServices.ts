@@ -8,11 +8,7 @@ import { appendIndexedDbDomainChange } from '../adapters/indexedDbDomainChangeAp
 import type { Provenance } from '../domain/story/provenance'
 
 export type DomainWriteIntent =
-  | 'author-confirmed'
-  | 'ai-accepted'
-  | 'ai-proposed'
-  | 'demo'
-  | 'imported-unknown'
+  'author-confirmed' | 'ai-accepted' | 'ai-proposed' | 'demo' | 'imported-unknown'
 
 function stripUndefined<T>(value: T): T {
   if (value === null || typeof value !== 'object') return value
@@ -84,13 +80,12 @@ export function resolveProvenance(
  * Living Codex 领域应用服务
  */
 export const codexApplicationService = {
-  async saveEntity(
-    entity: CodexEntity,
-    intent: DomainWriteIntent,
-  ): Promise<void> {
+  async saveEntity(entity: CodexEntity, intent: DomainWriteIntent): Promise<void> {
     const workspaceId = entity.projectId
     if (!workspaceId || !workspaceId.trim()) {
-      throw new Error(`[codexApplicationService.saveEntity] Missing required workspaceId for entity ${entity.id}`)
+      throw new Error(
+        `[codexApplicationService.saveEntity] Missing required workspaceId for entity ${entity.id}`,
+      )
     }
     const existing = await db.get<CodexEntity>('codexEntities', entity.id)
     const existingProv = (entity as any).provenance ?? (existing as any)?.provenance
@@ -148,13 +143,12 @@ export const codexApplicationService = {
  * Timeline Grid 领域应用服务
  */
 export const timelineApplicationService = {
-  async saveThread(
-    thread: NarrativeThread,
-    intent: DomainWriteIntent,
-  ): Promise<void> {
+  async saveThread(thread: NarrativeThread, intent: DomainWriteIntent): Promise<void> {
     const workspaceId = thread.projectId
     if (!workspaceId || !workspaceId.trim()) {
-      throw new Error(`[timelineApplicationService.saveThread] Missing required workspaceId for thread ${thread.id}`)
+      throw new Error(
+        `[timelineApplicationService.saveThread] Missing required workspaceId for thread ${thread.id}`,
+      )
     }
     const existing = await db.get<NarrativeThread>('narrativeThreads', thread.id)
     const existingProv = (thread as any).provenance ?? (existing as any)?.provenance
@@ -206,13 +200,12 @@ export const timelineApplicationService = {
     }
   },
 
-  async saveNode(
-    node: TimelineNode,
-    intent: DomainWriteIntent,
-  ): Promise<void> {
+  async saveNode(node: TimelineNode, intent: DomainWriteIntent): Promise<void> {
     const workspaceId = node.projectId
     if (!workspaceId || !workspaceId.trim()) {
-      throw new Error(`[timelineApplicationService.saveNode] Missing required workspaceId for node ${node.id}`)
+      throw new Error(
+        `[timelineApplicationService.saveNode] Missing required workspaceId for node ${node.id}`,
+      )
     }
     const existing = await db.get<TimelineNode>('timelineNodes', node.id)
     const existingProv = (node as any).provenance ?? (existing as any)?.provenance
@@ -270,13 +263,12 @@ export const timelineApplicationService = {
  * Promise Ledger 领域应用服务
  */
 export const promiseApplicationService = {
-  async savePromise(
-    entry: PromiseLedgerEntry,
-    intent: DomainWriteIntent,
-  ): Promise<void> {
+  async savePromise(entry: PromiseLedgerEntry, intent: DomainWriteIntent): Promise<void> {
     const workspaceId = entry.projectId
     if (!workspaceId || !workspaceId.trim()) {
-      throw new Error(`[promiseApplicationService.savePromise] Missing required workspaceId for promise ${entry.id}`)
+      throw new Error(
+        `[promiseApplicationService.savePromise] Missing required workspaceId for promise ${entry.id}`,
+      )
     }
     const existing = await db.get<PromiseLedgerEntry>('promiseLedger', entry.id)
     const existingProv = (entry as any).provenance ?? (existing as any)?.provenance

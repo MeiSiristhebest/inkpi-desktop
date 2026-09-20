@@ -1,12 +1,6 @@
-import {
-  type DomainProjectionSnapshot,
-  type DomainChangeSet,
-} from '@inkpi/protocol'
+import { type DomainProjectionSnapshot, type DomainChangeSet } from '@inkpi/protocol'
 import { db } from '../db/indexedDB'
-import {
-  assertDomainChangeSet,
-  cloneDomainChangeSet,
-} from '../domain/sync/domainChangeSet'
+import { assertDomainChangeSet, cloneDomainChangeSet } from '../domain/sync/domainChangeSet'
 import type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'
 
 export type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'

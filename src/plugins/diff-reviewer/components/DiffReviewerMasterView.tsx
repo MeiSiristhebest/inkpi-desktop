@@ -17,14 +17,13 @@ import { formatByPreset } from '../../../domain/text'
 
 export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const host = useOptionalPluginHostContext()
-  const initialSource =
-    host?.activeChapter
-      ? semanticTextFromContent(
-          host.activeChapter.id,
-          host.activeChapter.content || '',
-          host.activeChapter.revision,
-        )
-      : '风雨如晦，夜幕笼罩着古老残破的城池。\n远处传来急促而沉重的脚步声。'
+  const initialSource = host?.activeChapter
+    ? semanticTextFromContent(
+        host.activeChapter.id,
+        host.activeChapter.content || '',
+        host.activeChapter.revision,
+      )
+    : '风雨如晦，夜幕笼罩着古老残破的城池。\n远处传来急促而沉重的脚步声。'
   const [sourceText, setSourceText] = useState(initialSource)
   const [proposedText, setProposedText] = useState(
     '骤雨如瀑，阴冷夜幕笼罩着风雨飘摇的废弃古城。\n寂静长街深处传来急促而沉重的破空脚步声。',
@@ -43,10 +42,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
     sourceText,
     host?.activeChapter?.revision,
   )
-  const semanticProposedText = semanticTextFromContent(
-    'diff-reviewer-proposed',
-    proposedText,
-  )
+  const semanticProposedText = semanticTextFromContent('diff-reviewer-proposed', proposedText)
 
   useEffect(() => {
     onStats?.({
@@ -167,27 +163,24 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
   }
 
   const handleUndo = async () => {
-    if (!host?.activeChapter || !writebackProposal || writebackProposal.status !== 'committed') return
+    if (!host?.activeChapter || !writebackProposal || writebackProposal.status !== 'committed')
+      return
 
     setWritebackBusy(true)
     setWritebackError(null)
     try {
-      await proposalLedger.undo(
-        writebackProposal.id,
-        host.revision,
-        async (patches) => {
-          const patch = patches[0]
-          const result = await host.mutateActiveChapter({
-            chapterId: host.activeChapter!.id,
-            expectedRevision: host.revision,
-            type: 'full_replace',
-            content: toStoredChapterContent(patch.text, host.activeChapter?.content || ''),
-          })
-          if (!result.success) {
-            throw new Error(result.error || '撤销章节写回失败')
-          }
-        },
-      )
+      await proposalLedger.undo(writebackProposal.id, host.revision, async (patches) => {
+        const patch = patches[0]
+        const result = await host.mutateActiveChapter({
+          chapterId: host.activeChapter!.id,
+          expectedRevision: host.revision,
+          type: 'full_replace',
+          content: toStoredChapterContent(patch.text, host.activeChapter?.content || ''),
+        })
+        if (!result.success) {
+          throw new Error(result.error || '撤销章节写回失败')
+        }
+      })
       setWritebackProposal(proposalLedger.get(writebackProposal.id) || null)
     } catch (error) {
       setWritebackError(
@@ -284,7 +277,9 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
         </button>
       </div>
 
-      {writebackError && <p className="text-xs text-rose-600 dark:text-rose-400">{writebackError}</p>}
+      {writebackError && (
+        <p className="text-xs text-rose-600 dark:text-rose-400">{writebackError}</p>
+      )}
 
       {hunks.length > 0 && (
         <div className="space-y-4">

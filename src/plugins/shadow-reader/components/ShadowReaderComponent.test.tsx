@@ -4,8 +4,8 @@ import { ShadowReaderMasterView } from './ShadowReaderMasterView'
 import { ShadowReaderDrawer } from './ShadowReaderDrawer'
 import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
 
-describe("ShadowReader UI Components", () => {
-  it("ShadowReaderMasterView renders correctly", () => {
+describe('ShadowReader UI Components', () => {
+  it('ShadowReaderMasterView renders correctly', () => {
     render(<ShadowReaderMasterView projectId="p1" />)
     expect(screen.getByText(/读者弹幕与毒点预判模拟器/)).toBeDefined()
   })

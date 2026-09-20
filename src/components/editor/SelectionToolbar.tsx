@@ -395,7 +395,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         workspaceId: targetWorkspaceId,
         chapterId: targetChapterId,
         proposalId: rewriteProposal.proposal.id,
-        expectedRevision: currentRev ?? (rewriteProposal.proposal.committedRevision ?? 1),
+        expectedRevision: currentRev ?? rewriteProposal.proposal.committedRevision ?? 1,
         restoredContent: restoredHtml,
         eventScope: proposalScopeRef.current,
       })

@@ -70,7 +70,9 @@ describe('DomainProposalLedger', () => {
     ledger.accept('proposal-stale')
     await story.save(workspaceId, withStoryRevision(createStoryState(), 1))
 
-    await expect(ledger.commit('proposal-stale')).rejects.toBeInstanceOf(DomainProposalConflictError)
+    await expect(ledger.commit('proposal-stale')).rejects.toBeInstanceOf(
+      DomainProposalConflictError,
+    )
     expect(ledger.get('proposal-stale')).toMatchObject({
       status: 'stale',
       conflict: { expectedRevision: 0, actualRevision: 1 },
@@ -88,7 +90,10 @@ async function applyEntityProposal(
   const patch = context.proposal.patch as { name?: string; remove?: boolean }
   if (context.undo || patch.remove) {
     return {
-      state: withStoryRevision(removeEntity(context.currentState, context.proposal.target.id), context.nextRevision),
+      state: withStoryRevision(
+        removeEntity(context.currentState, context.proposal.target.id),
+        context.nextRevision,
+      ),
       inversePatch: { name: 'Hero' },
     }
   }

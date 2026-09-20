@@ -124,16 +124,20 @@ describe('daemon proposal sync adapter', () => {
 
   it('rejects a snapshot whose declared hash does not match its proposals', async () => {
     const state = proposalToProjectionState(proposal)
-    const request = vi.fn(async <T>(): Promise<T> =>
-      ({
-        workspaceId: 'workspace-1',
-        revision: 1,
-        proposals: [state],
-        hash: 'wrong-hash',
-        updatedAt: 20,
-      }) as T,
+    const request = vi.fn(
+      async <T>(): Promise<T> =>
+        ({
+          workspaceId: 'workspace-1',
+          revision: 1,
+          proposals: [state],
+          hash: 'wrong-hash',
+          updatedAt: 20,
+        }) as T,
     )
-    const remote = createDaemonProposalSyncRemote({ request, close: vi.fn() } as unknown as RpcClient)
+    const remote = createDaemonProposalSyncRemote({
+      request,
+      close: vi.fn(),
+    } as unknown as RpcClient)
 
     await expect(remote.snapshotProposals('workspace-1')).rejects.toThrow(/hash mismatch/i)
   })

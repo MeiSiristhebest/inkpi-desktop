@@ -96,7 +96,11 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
       chapter: { id: chap?.id, order: newChapterNum, title: chap?.title || '未命名' },
-      endingText: semanticTextFromContent(`reader-hook-${selectedChapterId || 'manual'}`, testText, chap?.revision),
+      endingText: semanticTextFromContent(
+        `reader-hook-${selectedChapterId || 'manual'}`,
+        testText,
+        chap?.revision,
+      ),
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {

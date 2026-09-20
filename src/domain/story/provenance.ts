@@ -55,7 +55,10 @@ export function createProvenance(input: ProvenanceInput): Provenance {
   return provenance
 }
 
-export function assertProvenance(value: unknown, context = 'Provenance'): asserts value is Provenance {
+export function assertProvenance(
+  value: unknown,
+  context = 'Provenance',
+): asserts value is Provenance {
   if (!isPlainRecord(value)) throw new Error(`${context} must be an object`)
   if (!PROVENANCE_SOURCE_TYPES.has(value.sourceType as ProvenanceSourceType)) {
     throw new Error(`${context} has an invalid sourceType`)
@@ -105,26 +108,18 @@ function assertSourceEvidence(value: unknown, context: string): asserts value is
   const semanticFrom = value.semanticFrom
   if (
     semanticFrom !== undefined &&
-    (typeof semanticFrom !== 'number' ||
-      !Number.isSafeInteger(semanticFrom) ||
-      semanticFrom < 0)
+    (typeof semanticFrom !== 'number' || !Number.isSafeInteger(semanticFrom) || semanticFrom < 0)
   ) {
     throw new Error(`${context} has an invalid semanticFrom`)
   }
   const semanticTo = value.semanticTo
   if (
     semanticTo !== undefined &&
-    (typeof semanticTo !== 'number' ||
-      !Number.isSafeInteger(semanticTo) ||
-      semanticTo < 0)
+    (typeof semanticTo !== 'number' || !Number.isSafeInteger(semanticTo) || semanticTo < 0)
   ) {
     throw new Error(`${context} has an invalid semanticTo`)
   }
-  if (
-    semanticFrom !== undefined &&
-    semanticTo !== undefined &&
-    semanticTo < semanticFrom
-  ) {
+  if (semanticFrom !== undefined && semanticTo !== undefined && semanticTo < semanticFrom) {
     throw new Error(`${context} has a reversed semantic range`)
   }
 }

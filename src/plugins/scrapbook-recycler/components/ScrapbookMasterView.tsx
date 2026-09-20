@@ -83,7 +83,11 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
   )
   const rank = runtimeRankedIds ? new Map(runtimeRankedIds.map((id, index) => [id, index])) : null
   const filtered = rank
-    ? [...locallyFiltered].sort((left, right) => (rank.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right.id) ?? Number.MAX_SAFE_INTEGER))
+    ? [...locallyFiltered].sort(
+        (left, right) =>
+          (rank.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+          (rank.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+      )
     : locallyFiltered
 
   return (

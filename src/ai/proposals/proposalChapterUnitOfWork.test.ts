@@ -47,7 +47,9 @@ vi.mock('../../db/indexedDB', () => {
           put: (value: unknown) => {
             if (!mockStores[name]) mockStores[name] = {}
             const record = value as Record<string, unknown>
-            mockStores[name][String(record.id ?? record.proposalId ?? Object.keys(mockStores[name]).length)] = value
+            mockStores[name][
+              String(record.id ?? record.proposalId ?? Object.keys(mockStores[name]).length)
+            ] = value
           },
           delete: (key: string) => {
             delete mockStores[name]?.[key]
@@ -178,7 +180,10 @@ describe('ProposalChapterUnitOfWork', () => {
     })
 
     expect(receipt.revision).toBe(6)
-    expect(mockStores.chapters['chapter-1']).toMatchObject({ revision: 6, content: '<p>New content</p>' })
+    expect(mockStores.chapters['chapter-1']).toMatchObject({
+      revision: 6,
+      content: '<p>New content</p>',
+    })
     expect(mockStores.aiProposals['proposal-1']).toMatchObject({ status: 'committed' })
 
     const publishSpy = domainChangeEvents.publish as ReturnType<typeof vi.fn>
@@ -192,7 +197,9 @@ describe('ProposalChapterUnitOfWork', () => {
   it('undo: happy path restores chapter, sets proposal status to undone, publishes incremental revision', async () => {
     mockStores = {
       chapters: { 'chapter-1': makeChapter({ revision: 6 }) },
-      aiProposals: { 'proposal-1': makeProposal({ status: 'committed', baseRevision: 5, committedRevision: 6 }) },
+      aiProposals: {
+        'proposal-1': makeProposal({ status: 'committed', baseRevision: 5, committedRevision: 6 }),
+      },
       domainChangeSets: {},
     }
 
@@ -205,7 +212,10 @@ describe('ProposalChapterUnitOfWork', () => {
     })
 
     expect(receipt.revision).toBe(7)
-    expect(mockStores.chapters['chapter-1']).toMatchObject({ revision: 7, content: '<p>Original</p>' })
+    expect(mockStores.chapters['chapter-1']).toMatchObject({
+      revision: 7,
+      content: '<p>Original</p>',
+    })
     expect(mockStores.aiProposals['proposal-1']).toMatchObject({ status: 'undone' })
 
     const publishSpy = domainChangeEvents.publish as ReturnType<typeof vi.fn>

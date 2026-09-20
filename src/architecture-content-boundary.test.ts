@@ -285,8 +285,7 @@ function isTaintedExpression(
 
   if (ts.isBinaryExpression(node)) {
     return (
-      isTaintedExpression(node.left, environment) ||
-      isTaintedExpression(node.right, environment)
+      isTaintedExpression(node.left, environment) || isTaintedExpression(node.right, environment)
     )
   }
 
@@ -310,10 +309,7 @@ function bindParameters(
   }
 }
 
-function functionReturnTaint(
-  node: ts.FunctionLikeDeclaration,
-  parent: TaintEnvironment,
-): boolean {
+function functionReturnTaint(node: ts.FunctionLikeDeclaration, parent: TaintEnvironment): boolean {
   const environment = newEnvironment(parent)
   bindParameters(node.parameters, environment)
 
@@ -462,8 +458,9 @@ function isTaskRpcMethod(value: string): boolean {
 
 function auditLegacyPaths(parsed: ParsedSource): string[] {
   const violations = new Set<string>()
-  const isComponent = parsed.relativeFile.startsWith('src/components/') ||
-    parsed.relativeFile.includes('/plugins/') && parsed.relativeFile.includes('/components/')
+  const isComponent =
+    parsed.relativeFile.startsWith('src/components/') ||
+    (parsed.relativeFile.includes('/plugins/') && parsed.relativeFile.includes('/components/'))
 
   const report = (node: ts.Node, reason: string): void => {
     const line = parsed.ast.getLineAndCharacterOfPosition(node.getStart(parsed.ast)).line + 1
@@ -537,10 +534,7 @@ function collectCalls(
   return calls
 }
 
-function variableInitializer(
-  ast: ts.SourceFile,
-  name: string,
-): ts.Expression | undefined {
+function variableInitializer(ast: ts.SourceFile, name: string): ts.Expression | undefined {
   let initializer: ts.Expression | undefined
   const visit = (node: ts.Node): void => {
     if (initializer) return
@@ -646,8 +640,12 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
   const sources = implementationSources()
 
   it('projects both central editor entry points before dispatching drawer/sidebar text', () => {
-    const writer = sources.find((source) => source.relativeFile === 'src/components/editor/WriterDesk.tsx')
-    const rich = sources.find((source) => source.relativeFile === 'src/components/editor/RichEditor.tsx')
+    const writer = sources.find(
+      (source) => source.relativeFile === 'src/components/editor/WriterDesk.tsx',
+    )
+    const rich = sources.find(
+      (source) => source.relativeFile === 'src/components/editor/RichEditor.tsx',
+    )
     expect(writer).toBeDefined()
     expect(rich).toBeDefined()
 
@@ -656,23 +654,47 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
       expect(hasProjectorCall(variableInitializer(source.ast, 'activeChapterText'))).toBe(true)
       expect(jsxPropExpressions(source.ast, 'currentText')).not.toContain('activeChapter?.content')
       expect(jsxPropExpressions(source.ast, 'currentText')).not.toContain('activeChapter.content')
-      expect(jsxPropExpressions(source.ast, 'currentText').every((value) => value === 'activeChapterText')).toBe(true)
+      expect(
+        jsxPropExpressions(source.ast, 'currentText').every(
+          (value) => value === 'activeChapterText',
+        ),
+      ).toBe(true)
     }
 
-    expect(hasJsxAttributeOnComponent(rich!.ast, 'ChapterReferencesSidebar', 'currentText', 'activeChapterText')).toBe(true)
-    expect(hasJsxAttributeOnComponent(rich!.ast, 'DrawerDock', 'currentText', 'activeChapterText')).toBe(true)
-    expect(hasJsxAttributeOnComponent(writer!.ast, 'DrawerComponent', 'currentText', 'activeChapterText')).toBe(true)
+    expect(
+      hasJsxAttributeOnComponent(
+        rich!.ast,
+        'ChapterReferencesSidebar',
+        'currentText',
+        'activeChapterText',
+      ),
+    ).toBe(true)
+    expect(
+      hasJsxAttributeOnComponent(rich!.ast, 'DrawerDock', 'currentText', 'activeChapterText'),
+    ).toBe(true)
+    expect(
+      hasJsxAttributeOnComponent(
+        writer!.ast,
+        'DrawerComponent',
+        'currentText',
+        'activeChapterText',
+      ),
+    ).toBe(true)
   })
 
   it('keeps CheckTools rule/search input on the canonical semantic projection', () => {
-    const checkTools = sources.find((source) => source.relativeFile === 'src/components/tools/CheckTools.tsx')
+    const checkTools = sources.find(
+      (source) => source.relativeFile === 'src/components/tools/CheckTools.tsx',
+    )
     expect(checkTools).toBeDefined()
     const scanCalls = collectCalls(
       checkTools!.ast,
       (call) => functionName(call.expression) === 'scan',
     )
     expect(scanCalls.length).toBeGreaterThan(0)
-    expect(scanCalls.every((call) => call.arguments[0]?.getText(checkTools!.ast) === 'content')).toBe(true)
+    expect(
+      scanCalls.every((call) => call.arguments[0]?.getText(checkTools!.ast) === 'content'),
+    ).toBe(true)
     expect(hasProjectorCall(variableInitializer(checkTools!.ast, 'content'))).toBe(true)
   })
 
@@ -681,8 +703,7 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
     const violations = audits.flatMap((audit) => audit.violations)
     const pluginBoundaryFiles = audits.filter(
       (audit, index) =>
-        audit.boundaryCalls > 0 &&
-        sources[index].relativeFile.startsWith('src/plugins/'),
+        audit.boundaryCalls > 0 && sources[index].relativeFile.startsWith('src/plugins/'),
     )
 
     expect(pluginBoundaryFiles.length).toBeGreaterThan(0)
