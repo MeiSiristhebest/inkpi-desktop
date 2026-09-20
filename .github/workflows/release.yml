@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: MeiSiristhebest/inkpi
-          ref: ${{ steps.runtime-pin.outputs.pinned_ref || 'master' }}
+          ref: ${{ steps.runtime-pin.outputs.pinned_ref }}
           path: inkpi
 
       - name: Setup Bun Runtime
