@@ -1,5 +1,5 @@
 import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useState, useEffect, useMemo, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ChekhovRadarEngine } from '../engine/ChekhovRadarEngine'
 import type { ChekhovGunRecord, GunStatus } from '../../../ports/chekhovGunRepository'
@@ -35,7 +35,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const [formSnippet, setFormSnippet] = useState('')
   const [formNotes, setFormNotes] = useState('')
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [allGuns, allChapters] = await Promise.all([
       indexedDbChekhovGunRepository.getAll(projectId),
       indexedDbProjectRepository.getChaptersByProject(projectId),
@@ -60,11 +60,11 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     })
 
     setGuns(updatedGuns)
-  }
+  }, [projectId])
 
   useEffect(() => {
-    loadData()
-  }, [projectId])
+    void loadData()
+  }, [loadData])
 
   // 核心：基于已写章节正文，让 AI 自动扫描前文埋下的道具/伏线
   const handleAiScanGuns = () => {

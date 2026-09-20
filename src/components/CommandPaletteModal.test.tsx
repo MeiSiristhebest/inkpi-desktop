@@ -44,6 +44,15 @@ describe('CommandPaletteModal Component', () => {
     expect(screen.getByText('启动连续性审计')).toBeInTheDocument()
   })
 
+  it('exposes dialog/listbox semantics and focuses the search field', () => {
+    render(<CommandPaletteModal isOpen={true} onClose={vi.fn()} />)
+
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true')
+    expect(screen.getByRole('listbox')).toHaveAttribute('aria-label', '命令候选列表')
+    expect(screen.getByRole('textbox', { name: '搜索命令' })).toHaveFocus()
+    expect(screen.getAllByRole('option')).toHaveLength(2)
+  })
+
   it('handles keyboard navigation and execution on Enter', () => {
     const onClose = vi.fn()
     render(<CommandPaletteModal isOpen={true} onClose={onClose} />)

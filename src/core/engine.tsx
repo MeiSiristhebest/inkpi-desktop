@@ -21,6 +21,7 @@ import { CheckTools } from '../components/tools/CheckTools'
 import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
+import { commandRegistry } from './commandRegistry'
 import { CommandPaletteModal } from '../components/CommandPaletteModal'
 import {
   type InspectorState,
@@ -178,11 +179,18 @@ export const Engine: FC<EngineProps> = ({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setCommandPaletteOpen((prev) => !prev)
+        return
       }
+
+      const commandContext = activeWritingCtx ?? undefined
+      const command = commandRegistry.findByShortcut(e, commandContext)
+      if (!command) return
+      e.preventDefault()
+      void command.execute(commandContext)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [activeWritingCtx])
 
   useEffect(() => {
     const handleViewportResize = () => {

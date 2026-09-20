@@ -479,6 +479,189 @@ function clearPurgeTombstone(workspaceId: string): void {
   savePurgeTombstones(current)
 }
 
+interface StoryStateRemapMaps {
+  entity: Map<string, string>
+  relation: Map<string, string>
+  event: Map<string, string>
+  scene: Map<string, string>
+  timeline: Map<string, string>
+  promise: Map<string, string>
+  constraint: Map<string, string>
+}
+
+interface ParsedSettingsValue {
+  record: UnknownRecord
+  serialized: boolean
+}
+
+function parseSettingsValue(value: unknown): ParsedSettingsValue | undefined {
+  if (typeof value === 'string') {
+    const record = parseJsonRecord(value)
+    return record ? { record, serialized: true } : undefined
+  }
+  return isRecord(value) ? { record: { ...value }, serialized: false } : undefined
+}
+
+function allocateStoryStateIds(
+  value: UnknownRecord,
+  maps: StoryStateRemapMaps,
+  allocate: (map: Map<string, string>, id: string, prefix: string) => void,
+): void {
+  const collections: Array<[keyof StoryStateRemapMaps, string]> = [
+    ['entity', 'entities'],
+    ['relation', 'relations'],
+    ['event', 'events'],
+    ['scene', 'scenes'],
+    ['timeline', 'timelines'],
+    ['promise', 'promises'],
+    ['constraint', 'constraints'],
+  ]
+  for (const [mapName, collectionName] of collections) {
+    const collection = asRecord(value[collectionName])
+    if (!collection) continue
+    for (const id of Object.keys(collection)) {
+      allocate(maps[mapName], id, `story-${mapName}`)
+    }
+  }
+}
+
+function remapStoryStateRecord(
+  value: UnknownRecord,
+  maps: StoryStateRemapMaps,
+  chapterIdMap: ReadonlyMap<string, string>,
+): UnknownRecord {
+  const remap = (id: string, map: ReadonlyMap<string, string>): string => map.get(id) ?? id
+  const remapArray = (values: unknown[], map: ReadonlyMap<string, string>): unknown[] =>
+    values.map((value) => (typeof value === 'string' ? remap(value, map) : value))
+  const remapAnyId = (id: string): string => {
+    const mapsInOrder: ReadonlyMap<string, string>[] = [
+      chapterIdMap,
+      maps.entity,
+      maps.relation,
+      maps.event,
+      maps.scene,
+      maps.timeline,
+      maps.promise,
+      maps.constraint,
+    ]
+    for (const candidate of mapsInOrder) {
+      const mapped = candidate.get(id)
+      if (mapped) return mapped
+    }
+    return id
+  }
+  const remapProvenance = (provenance: UnknownRecord): UnknownRecord => {
+    const next = { ...provenance }
+    if (typeof next.sourceDocumentId === 'string') {
+      next.sourceDocumentId = remap(next.sourceDocumentId, chapterIdMap)
+    }
+    if (Array.isArray(next.evidence)) {
+      next.evidence = next.evidence.map((evidence) => {
+        const item = asRecord(evidence)
+        if (!item) return evidence
+        return {
+          ...item,
+          ...(typeof item.documentId === 'string'
+            ? { documentId: remap(item.documentId, chapterIdMap) }
+            : {}),
+        }
+      })
+    }
+    return next
+  }
+  const remapRecord = (
+    raw: unknown,
+    id: string,
+    idMap: ReadonlyMap<string, string>,
+    update: (record: UnknownRecord) => void,
+  ): UnknownRecord | unknown => {
+    const record = asRecord(raw)
+    if (!record) return raw
+    const next: UnknownRecord = { ...record, id: remap(id, idMap) }
+    if (isRecord(next.provenance)) next.provenance = remapProvenance(next.provenance)
+    update(next)
+    return next
+  }
+  const remapCollection = (
+    collectionName: string,
+    idMap: ReadonlyMap<string, string>,
+    update: (record: UnknownRecord) => void,
+  ): void => {
+    const collection = asRecord(value[collectionName])
+    if (!collection) return
+    const next: UnknownRecord = {}
+    for (const [id, raw] of Object.entries(collection)) {
+      const remapped = remapRecord(raw, id, idMap, update)
+      next[
+        typeof remapped === 'object' && remapped !== null && 'id' in remapped
+          ? String((remapped as UnknownRecord).id)
+          : remap(id, idMap)
+      ] = remapped
+    }
+    value[collectionName] = next
+  }
+
+  remapCollection('entities', maps.entity, () => undefined)
+  remapCollection('relations', maps.relation, (record) => {
+    if (typeof record.sourceEntityId === 'string') {
+      record.sourceEntityId = remap(record.sourceEntityId, maps.entity)
+    }
+    if (typeof record.targetEntityId === 'string') {
+      record.targetEntityId = remap(record.targetEntityId, maps.entity)
+    }
+  })
+  remapCollection('events', maps.event, (record) => {
+    if (typeof record.sceneId === 'string') record.sceneId = remap(record.sceneId, maps.scene)
+    if (Array.isArray(record.entityIds)) {
+      record.entityIds = remapArray(record.entityIds, maps.entity)
+    }
+  })
+  remapCollection('scenes', maps.scene, (record) => {
+    if (typeof record.documentId === 'string') {
+      record.documentId = remap(record.documentId, chapterIdMap)
+    }
+    if (Array.isArray(record.entityIds)) {
+      record.entityIds = remapArray(record.entityIds, maps.entity)
+    }
+    if (Array.isArray(record.eventIds)) {
+      record.eventIds = remapArray(record.eventIds, maps.event)
+    }
+  })
+  remapCollection('timelines', maps.timeline, (record) => {
+    if (Array.isArray(record.eventIds)) {
+      record.eventIds = remapArray(record.eventIds, maps.event)
+    }
+    if (Array.isArray(record.constraints)) {
+      record.constraints = record.constraints.map((constraint) => {
+        const item = asRecord(constraint)
+        if (!item || !Array.isArray(item.eventIds)) return constraint
+        return { ...item, eventIds: remapArray(item.eventIds, maps.event) }
+      })
+    }
+  })
+  remapCollection('promises', maps.promise, (record) => {
+    if (typeof record.threadId === 'string') {
+      record.threadId = remap(record.threadId, maps.timeline)
+    }
+    if (Array.isArray(record.evidence)) {
+      record.evidence = record.evidence.map((evidence) => {
+        const item = asRecord(evidence)
+        if (!item || typeof item.documentId !== 'string') return evidence
+        return { ...item, documentId: remap(item.documentId, chapterIdMap) }
+      })
+    }
+  })
+  remapCollection('constraints', maps.constraint, (record) => {
+    if (Array.isArray(record.subjectIds)) {
+      record.subjectIds = record.subjectIds.map((id) =>
+        typeof id === 'string' ? remapAnyId(id) : id,
+      )
+    }
+  })
+
+  return value
+}
+
 export class WorkspaceLifecycleService {
   readonly projectRepo: ProjectRepository
   readonly idGen: IdGenerator
@@ -721,6 +904,15 @@ export class WorkspaceLifecycleService {
     const promiseIdMap = new Map<string, string>()
     const artifactIdMap = new Map<string, string>()
     const timelineNodeIdMap = new Map<string, string>()
+    const storyStateMaps: StoryStateRemapMaps = {
+      entity: entityIdMap,
+      relation: new Map<string, string>(),
+      event: timelineNodeIdMap,
+      scene: new Map<string, string>(),
+      timeline: threadIdMap,
+      promise: promiseIdMap,
+      constraint: new Map<string, string>(),
+    }
     const rawDomainData = archive.domainData || {}
 
     // In 'copy' mode, strip domainChangeSets and aiProposals to avoid sequence/checksum collisions
@@ -761,51 +953,21 @@ export class WorkspaceLifecycleService {
       }
     }
 
-    // Pre-allocate IDs for any StoryState items inside settingsKV if not already registered
+    // Pre-allocate IDs for any StoryState items inside settingsKV if not already registered.
+    // StoryState is stored as deterministic JSON by IndexedDbStoryStateStore, so both
+    // legacy object records and current serialized records must be handled here.
+    const allocateImportedId = (map: Map<string, string>, oldId: string, prefix: string): void => {
+      if (!map.has(oldId)) {
+        map.set(oldId, `${oldId}-imported-${this.idGen.generate(prefix).slice(-6)}`)
+      }
+    }
     for (const [storeName, records] of Object.entries(sourceDomainData)) {
-      if (storeName === 'settingsKV' && Array.isArray(records)) {
-        for (const rec of records) {
-          if (
-            rec &&
-            typeof rec === 'object' &&
-            typeof (rec as any).key === 'string' &&
-            (rec as any).key.startsWith('storyState::')
-          ) {
-            const val = (rec as any).value
-            if (val && typeof val === 'object') {
-              if (val.events && typeof val.events === 'object') {
-                for (const oldEvtId of Object.keys(val.events)) {
-                  if (!timelineNodeIdMap.has(oldEvtId)) {
-                    timelineNodeIdMap.set(
-                      oldEvtId,
-                      `${oldEvtId}-imported-${this.idGen.generate('sub').slice(-6)}`,
-                    )
-                  }
-                }
-              }
-              if (val.timelines && typeof val.timelines === 'object') {
-                for (const oldTlId of Object.keys(val.timelines)) {
-                  if (!threadIdMap.has(oldTlId)) {
-                    threadIdMap.set(
-                      oldTlId,
-                      `${oldTlId}-imported-${this.idGen.generate('sub').slice(-6)}`,
-                    )
-                  }
-                }
-              }
-              if (val.promises && typeof val.promises === 'object') {
-                for (const oldPromId of Object.keys(val.promises)) {
-                  if (!promiseIdMap.has(oldPromId)) {
-                    promiseIdMap.set(
-                      oldPromId,
-                      `${oldPromId}-imported-${this.idGen.generate('sub').slice(-6)}`,
-                    )
-                  }
-                }
-              }
-            }
-          }
-        }
+      if (storeName !== 'settingsKV' || !Array.isArray(records)) continue
+      for (const rec of records) {
+        if (!rec || typeof rec !== 'object' || typeof (rec as any).key !== 'string') continue
+        if (!(rec as any).key.startsWith('storyState::')) continue
+        const parsed = parseSettingsValue((rec as any).value)
+        if (parsed) allocateStoryStateIds(parsed.record, storyStateMaps, allocateImportedId)
       }
     }
 
@@ -923,111 +1085,31 @@ export class WorkspaceLifecycleService {
             .replaceAll(encodedOldWorkspaceId, encodedNewWorkspaceId)
             .replaceAll(oldWorkspaceId, newWorkspaceId)
 
-          if (item.value && typeof item.value === 'object') {
-            const val = { ...(item.value as Record<string, unknown>) }
-            const settingsKey = typeof item.key === 'string' ? item.key : ''
+          const parsedValue = parseSettingsValue(item.value)
+          if (parsedValue) {
+            const { record: val, serialized } = parsedValue
             if (val.projectId === oldWorkspaceId) val.projectId = newWorkspaceId
             if (val.workspaceId === oldWorkspaceId) val.workspaceId = newWorkspaceId
             if (typeof val.chapterId === 'string' && chapterIdMap.has(val.chapterId)) {
               val.chapterId = chapterIdMap.get(val.chapterId)!
             }
 
-            // Recursive StoryState Nested Graph Remapping (P0-1)
-            if (settingsKey.startsWith('storyState::') || val.entities || val.relations) {
-              // Remap entities dictionary
-              if (val.entities && typeof val.entities === 'object') {
-                const remappedEntities: Record<string, unknown> = {}
-                for (const [oldEntId, entData] of Object.entries(val.entities)) {
-                  const newEntId = entityIdMap.get(oldEntId) ?? oldEntId
-                  remappedEntities[newEntId] = {
-                    ...(entData as any),
-                    id: newEntId,
-                  }
-                }
-                val.entities = remappedEntities
-              }
-
-              // Remap relations dictionary
-              if (val.relations && typeof val.relations === 'object') {
-                const remappedRelations: Record<string, unknown> = {}
-                for (const [oldRelId, relData] of Object.entries(val.relations)) {
-                  const rel = asRecord(relData)
-                  if (!rel) {
-                    remappedRelations[oldRelId] = relData
-                    continue
-                  }
-                  if (
-                    typeof rel.sourceEntityId === 'string' &&
-                    entityIdMap.has(rel.sourceEntityId)
-                  ) {
-                    rel.sourceEntityId = entityIdMap.get(rel.sourceEntityId)!
-                  }
-                  if (
-                    typeof rel.targetEntityId === 'string' &&
-                    entityIdMap.has(rel.targetEntityId)
-                  ) {
-                    rel.targetEntityId = entityIdMap.get(rel.targetEntityId)!
-                  }
-                  remappedRelations[oldRelId] = rel
-                }
-                val.relations = remappedRelations
-              }
-
-              // Remap events dictionary (keys and IDs remapped to timelineNode namespace)
-              if (val.events && typeof val.events === 'object') {
-                const remappedEvents: Record<string, unknown> = {}
-                for (const [oldEvtId, evtData] of Object.entries(val.events)) {
-                  const evt = { ...(evtData as any) }
-                  const newEvtId = timelineNodeIdMap.get(oldEvtId) ?? oldEvtId
-                  evt.id = newEvtId
-                  if (Array.isArray(evt.entityIds)) {
-                    evt.entityIds = remapArrayByNamespace(evt.entityIds, 'entity')
-                  }
-                  remappedEvents[newEvtId] = evt
-                }
-                val.events = remappedEvents
-              }
-
-              // Remap timelines dictionary (keys and IDs remapped to thread namespace)
-              if (val.timelines && typeof val.timelines === 'object') {
-                const remappedTimelines: Record<string, unknown> = {}
-                for (const [oldTlId, tlData] of Object.entries(val.timelines)) {
-                  const tl = { ...(tlData as any) }
-                  const newTlId = threadIdMap.get(oldTlId) ?? oldTlId
-                  tl.id = newTlId
-                  if (Array.isArray(tl.eventIds)) {
-                    tl.eventIds = remapArrayByNamespace(tl.eventIds, 'timelineNode')
-                  }
-                  if (Array.isArray(tl.constraints)) {
-                    tl.constraints = tl.constraints.map((c: any) => ({
-                      ...c,
-                      eventIds: Array.isArray(c?.eventIds)
-                        ? remapArrayByNamespace(c.eventIds, 'timelineNode')
-                        : c?.eventIds,
-                    }))
-                  }
-                  remappedTimelines[newTlId] = tl
-                }
-                val.timelines = remappedTimelines
-              }
-
-              // Remap promises dictionary (keys and IDs remapped to promise namespace)
-              if (val.promises && typeof val.promises === 'object') {
-                const remappedPromises: Record<string, unknown> = {}
-                for (const [oldPromId, promData] of Object.entries(val.promises)) {
-                  const prom = { ...(promData as any) }
-                  const newPromId = promiseIdMap.get(oldPromId) ?? oldPromId
-                  prom.id = newPromId
-                  if (prom.threadId && threadIdMap.has(prom.threadId)) {
-                    prom.threadId = threadIdMap.get(prom.threadId)!
-                  }
-                  remappedPromises[newPromId] = prom
-                }
-                val.promises = remappedPromises
-              }
-            }
-
-            item.value = val
+            const settingsKey = String(item.key)
+            const isStoryState =
+              settingsKey.startsWith('storyState::') ||
+              [
+                'entities',
+                'relations',
+                'events',
+                'scenes',
+                'timelines',
+                'promises',
+                'constraints',
+              ].some((collection) => collection in val)
+            const remappedValue = isStoryState
+              ? remapStoryStateRecord(val, storyStateMaps, chapterIdMap)
+              : val
+            item.value = serialized ? JSON.stringify(remappedValue) : remappedValue
           }
         }
 

@@ -514,8 +514,12 @@ describe('WorkspaceLifecycleService', () => {
     expect(entityKeys[0]).toContain('-imported-')
     expect(remappedState.entities[entityKeys[0]].id).toBe(entityKeys[0])
 
-    // Verify relations sourceEntityId & targetEntityId match new entity IDs
-    const rel = remappedState.relations['rel-1']
+    // Verify relation IDs and source/target references were remapped together.
+    const relationKeys = Object.keys(remappedState.relations)
+    expect(relationKeys).toHaveLength(1)
+    expect(relationKeys[0]).not.toBe('rel-1')
+    const rel = remappedState.relations[relationKeys[0]]
+    expect(rel.id).toBe(relationKeys[0])
     expect(rel.sourceEntityId).toBe(remappedState.entities[entityKeys[0]].id)
     expect(rel.targetEntityId).toBe(remappedState.entities[entityKeys[1]].id)
 
@@ -535,6 +539,116 @@ describe('WorkspaceLifecycleService', () => {
     const prom = remappedState.promises[promKeys[0]]
     expect(prom.threadId).not.toBe('th-1')
     expect(prom.threadId).toContain('-imported-')
+
+    putSpy.mockRestore()
+  })
+
+  it('remaps serialized StoryState collections, chapter evidence, and cross-collection references', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
+    const serializedState = {
+      revision: 4,
+      entities: {
+        'ent-1': { id: 'ent-1', name: 'Hero', provenance: { sourceDocumentId: 'orig-ch-1' } },
+      },
+      relations: {
+        'rel-1': {
+          id: 'rel-1',
+          sourceEntityId: 'ent-1',
+          targetEntityId: 'ent-1',
+          provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+        },
+      },
+      events: {
+        'evt-1': {
+          id: 'evt-1',
+          sceneId: 'scene-1',
+          entityIds: ['ent-1'],
+          provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+        },
+      },
+      scenes: {
+        'scene-1': {
+          id: 'scene-1',
+          documentId: 'orig-ch-1',
+          entityIds: ['ent-1'],
+          eventIds: ['evt-1'],
+          provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+        },
+      },
+      timelines: {
+        'thread-1': {
+          id: 'thread-1',
+          eventIds: ['evt-1'],
+          constraints: [{ type: 'before', description: 'event order', eventIds: ['evt-1'] }],
+          provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+        },
+      },
+      promises: {
+        'promise-1': {
+          id: 'promise-1',
+          threadId: 'thread-1',
+          evidence: [{ documentId: 'orig-ch-1' }],
+          provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+        },
+      },
+      constraints: {
+        'constraint-1': {
+          id: 'constraint-1',
+          subjectIds: ['ent-1', 'evt-1'],
+          provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+        },
+      },
+    }
+
+    const result = await service.importWorkspace({
+      manifest: {
+        schemaVersion: 2,
+        archiveType: 'inkpi-workspace-backup',
+        workspaceId: 'orig-proj',
+        name: '原版修仙录',
+        exportedAt: 1000,
+        core: { project: true, volumesCount: 1, chaptersCount: 1 },
+        domainStoresIncluded: ['settingsKV'],
+        totalRecordsCount: 2,
+      },
+      project: mockProject,
+      volumes: [mockVolume],
+      chapters: [mockChapter],
+      domainData: {
+        settingsKV: [{ key: 'storyState::orig-proj', value: JSON.stringify(serializedState) }],
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    const storyStatePut = putSpy.mock.calls.find(
+      (call) => call[0] === 'settingsKV' && (call[1] as any).key.startsWith('storyState::'),
+    )
+    expect(storyStatePut).toBeDefined()
+    expect(typeof (storyStatePut![1] as any).value).toBe('string')
+
+    const remappedState = JSON.parse((storyStatePut![1] as any).value)
+    const entityId = Object.keys(remappedState.entities)[0]
+    const relationId = Object.keys(remappedState.relations)[0]
+    const eventId = Object.keys(remappedState.events)[0]
+    const sceneId = Object.keys(remappedState.scenes)[0]
+    const timelineId = Object.keys(remappedState.timelines)[0]
+    const promiseId = Object.keys(remappedState.promises)[0]
+    const constraintId = Object.keys(remappedState.constraints)[0]
+
+    expect(entityId).not.toBe('ent-1')
+    expect(relationId).not.toBe('rel-1')
+    expect(eventId).not.toBe('evt-1')
+    expect(sceneId).not.toBe('scene-1')
+    expect(timelineId).not.toBe('thread-1')
+    expect(promiseId).not.toBe('promise-1')
+    expect(constraintId).not.toBe('constraint-1')
+    expect(remappedState.events[eventId].sceneId).toBe(sceneId)
+    expect(remappedState.scenes[sceneId].eventIds).toEqual([eventId])
+    expect(remappedState.timelines[timelineId].eventIds).toEqual([eventId])
+    expect(remappedState.promises[promiseId].threadId).toBe(timelineId)
+    expect(remappedState.promises[promiseId].evidence[0].documentId).not.toBe('orig-ch-1')
+    expect(remappedState.constraints[constraintId].subjectIds).toEqual([entityId, eventId])
 
     putSpy.mockRestore()
   })

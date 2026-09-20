@@ -38,6 +38,18 @@ describe('CommandRegistry & InspectorState (P3.3, P3.5)', () => {
     expect(commandRegistry.get('cmd-continuity-check')).toBeDefined()
     expect(commandRegistry.search('连续性', mockContext)).toHaveLength(1)
     expect(commandRegistry.search('non-existent', mockContext)).toHaveLength(0)
+    expect(
+      commandRegistry.findByShortcut(
+        {
+          key: 'c',
+          ctrlKey: true,
+          metaKey: false,
+          shiftKey: true,
+          altKey: false,
+        },
+        mockContext,
+      ),
+    ).toBe(cmd)
 
     unreg()
     expect(commandRegistry.get('cmd-continuity-check')).toBeUndefined()

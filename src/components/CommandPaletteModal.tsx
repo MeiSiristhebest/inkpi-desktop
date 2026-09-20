@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useState, useEffect, useMemo, useRef, type FC } from 'react'
 import { Search, Command as CmdIcon, CornerDownLeft, X } from 'lucide-react'
 import { commandRegistry, type Command } from '../core/commandRegistry'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
@@ -12,16 +12,53 @@ export interface CommandPaletteModalProps {
 export const CommandPaletteModal: FC<CommandPaletteModalProps> = ({ isOpen, onClose, context }) => {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null)
 
   // 动态检索匹配命令
   const commands = useMemo(() => {
     return commandRegistry.search(query, context)
   }, [query, context])
 
-  // 保证选中索引不越界
+  // 打开时把焦点交给搜索框，关闭后恢复触发控件，并把 Tab 限制在对话框内。
   useEffect(() => {
-    setSelectedIndex(0)
-  }, [query])
+    if (!isOpen) return
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    inputRef.current?.focus()
+
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [role="option"]',
+        ) ?? [],
+      )
+      if (focusable.length === 0) {
+        event.preventDefault()
+        inputRef.current?.focus()
+        return
+      }
+      const currentIndex = focusable.indexOf(document.activeElement as HTMLElement)
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? focusable.length - 1
+          : currentIndex - 1
+        : currentIndex === focusable.length - 1
+          ? 0
+          : currentIndex + 1
+      event.preventDefault()
+      focusable[nextIndex]?.focus()
+    }
+
+    window.addEventListener('keydown', trapFocus)
+    return () => {
+      window.removeEventListener('keydown', trapFocus)
+      previouslyFocusedRef.current?.focus()
+      previouslyFocusedRef.current = null
+    }
+  }, [isOpen])
 
   // 键盘快捷键监听：上下键切换，回车触发，Esc 关闭
   useEffect(() => {
@@ -64,7 +101,11 @@ export const CommandPaletteModal: FC<CommandPaletteModalProps> = ({ isOpen, onCl
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         data-testid="command-palette-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="命令面板"
         className="w-full max-w-xl flex flex-col bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -72,15 +113,27 @@ export const CommandPaletteModal: FC<CommandPaletteModalProps> = ({ isOpen, onCl
         <div className="flex items-center px-4 py-3 border-b border-[var(--ink-border)] gap-2.5">
           <Search className="w-4 h-4 text-[var(--ink-text-muted)] shrink-0" />
           <input
-            autoFocus
+            ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setSelectedIndex(0)
+            }}
             placeholder="搜索命令、视图、能力、插件或快捷操作…"
+            aria-label="搜索命令"
+            aria-controls="command-palette-listbox"
+            aria-activedescendant={
+              commands[selectedIndex]
+                ? `command-palette-item-${commands[selectedIndex].id}`
+                : undefined
+            }
             className="flex-1 text-[13px] bg-transparent border-none focus:outline-none text-[var(--ink-text)] placeholder-[var(--ink-text-faint)]"
           />
           {query && (
             <button
+              type="button"
+              aria-label="清除搜索"
               onClick={() => setQuery('')}
               className="p-1 text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
             >
@@ -93,7 +146,12 @@ export const CommandPaletteModal: FC<CommandPaletteModalProps> = ({ isOpen, onCl
         </div>
 
         {/* 命令候选列表 */}
-        <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+        <div
+          id="command-palette-listbox"
+          role="listbox"
+          aria-label="命令候选列表"
+          className="max-h-80 overflow-y-auto p-2 space-y-1"
+        >
           {commands.length === 0 ? (
             <div className="py-12 text-center text-[12px] text-[var(--ink-text-faint)]">
               未找到匹配的命令或能力
@@ -102,12 +160,17 @@ export const CommandPaletteModal: FC<CommandPaletteModalProps> = ({ isOpen, onCl
             commands.map((cmd, idx) => {
               const isSelected = idx === selectedIndex
               return (
-                <div
+                <button
+                  type="button"
                   key={cmd.id}
+                  id={`command-palette-item-${cmd.id}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  tabIndex={-1}
                   data-testid={`command-item-${cmd.id}`}
                   onClick={() => handleExecute(cmd)}
                   onMouseEnter={() => setSelectedIndex(idx)}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors text-[13px] ${
+                  className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors text-[13px] ${
                     isSelected
                       ? 'bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] font-medium'
                       : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
@@ -132,7 +195,7 @@ export const CommandPaletteModal: FC<CommandPaletteModalProps> = ({ isOpen, onCl
                       <CornerDownLeft className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
                     )}
                   </div>
-                </div>
+                </button>
               )
             })
           )}

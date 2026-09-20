@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type {
   FactionNode,
@@ -29,7 +29,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const [rippleDelta, setRippleDelta] = useState(-30)
   const [rippleResult, setRippleResult] = useState<EventRippleResult | null>(null)
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     try {
       const [allCodex, allDips] = await Promise.all([
         indexedDbCodexEntityRepository.getAll(),
@@ -49,17 +49,17 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
       setFactions(codexFactions)
       setDiplomacies(allDips)
-      if (codexFactions.length > 0 && !rippleTargetId) {
-        setRippleTargetId(codexFactions[0].id)
+      if (codexFactions.length > 0) {
+        setRippleTargetId((current) => current || codexFactions[0].id)
       }
     } catch (e) {
       console.error('Failed to load faction data:', e)
     }
-  }
+  }, [projectId])
 
   useEffect(() => {
-    loadAll()
-  }, [projectId])
+    void loadAll()
+  }, [loadAll])
 
   // 支持直接在矩阵中新增宗门并持久化到 Codex 百科
   const handleCreateFaction = async () => {
@@ -110,10 +110,6 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       void hostContext.aiAssistant.runPluginTask('faction-matrix', analysisInput)
     }
   }
-
-  useEffect(() => {
-    loadAll()
-  }, [projectId])
 
   const getStance = (idA: string, idB: string): FactionStance => {
     const d = diplomacies.find(
