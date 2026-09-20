@@ -936,8 +936,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const autoFormat = useCallback(() => {
     const ed = editorRef.current
-    const cur = activeChapterRef.current
+    const cur = activeChapterRef.current ?? stateRef.current.activeChapter
     if (!ed || ed.isDestroyed || !cur) return
+    activeChapterRef.current = cur
     const text = ed.getText()
     const { normalizePunctuationOnFormat: norm, paragraphIndent: indent } = settingsRef.current
     const formatted = norm ? fixPunctuation(text, indent) : formatChineseParagraphs(text, indent)
@@ -961,8 +962,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const formatWithPreset = useCallback(
     (preset: TypographyPreset) => {
       const ed = editorRef.current
-      const cur = activeChapterRef.current
+      const cur = activeChapterRef.current ?? stateRef.current.activeChapter
       if (!ed || ed.isDestroyed || !cur) return
+      activeChapterRef.current = cur
       const formatted = formatByPreset(ed.getHTML() || ed.getText(), preset)
       void applyContentMutation(ed, formatted, {
         workspaceId: projectId,

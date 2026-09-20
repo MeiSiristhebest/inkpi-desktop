@@ -211,6 +211,11 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('auto-format applies full-width indent via editor.setContent', async () => {
     render(<RichEditor projectId="p-fmt" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith(expect.any(String), {
+        emitUpdate: false,
+      })
+    })
     h.getText = () => '第一行\n第二行'
     fireEvent.click(screen.getByTitle('一键首行缩进排版'))
     await waitFor(() => {
@@ -224,6 +229,11 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('punctuation fix converts ASCII punctuation', async () => {
     render(<RichEditor projectId="p-punc" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith(expect.any(String), {
+        emitUpdate: false,
+      })
+    })
     h.getText = () => 'hi, there?'
     fireEvent.click(screen.getByTitle('标点规整'))
     await waitFor(() => {
@@ -236,6 +246,11 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('find & replace rewrites the editor content', async () => {
     render(<RichEditor projectId="p-fr" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith(expect.any(String), {
+        emitUpdate: false,
+      })
+    })
     h.getText = () => 'abc'
     h.getHTML = () => '<p>abc</p>'
     fireEvent.click(screen.getByTitle('查找替换 / 全文检索 (⌘F)'))

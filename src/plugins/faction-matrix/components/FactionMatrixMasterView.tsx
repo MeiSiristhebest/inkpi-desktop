@@ -58,7 +58,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }, [projectId])
 
   useEffect(() => {
-    void loadAll()
+    loadAll().catch(() => undefined)
   }, [loadAll])
 
   // 支持直接在矩阵中新增宗门并持久化到 Codex 百科
