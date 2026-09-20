@@ -195,7 +195,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
     act(() => {
-      h.capturedOnUpdate && h.capturedOnUpdate()
+      if (h.capturedOnUpdate) h.capturedOnUpdate()
     })
 
     await waitFor(
@@ -366,6 +366,12 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     expect(screen.getByTitle('一键首行缩进排版')).toBeInTheDocument()
     expect(screen.getByTitle('标点规整')).toBeInTheDocument()
+    // 等待编辑器完成首章灌入，避免慢速 CI 上点击发生在 editorRef 建立之前。
+    await waitFor(() => {
+      expect(editorInstance.commands.setContent).toHaveBeenCalledWith(expect.any(String), {
+        emitUpdate: false,
+      })
+    })
     // 首行缩进走与工具栏相同的格式化逻辑
     h.getText = () => '独行'
     fireEvent.click(screen.getByTitle('一键首行缩进排版'))
@@ -468,7 +474,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     act(() => {
-      h.capturedOnUpdate && h.capturedOnUpdate()
+      if (h.capturedOnUpdate) h.capturedOnUpdate()
     })
     // 等待防抖（600ms）后 daemon 返回建议，状态栏出现「采纳续写」
     await waitFor(() => expect(screen.getByText('Tab 采纳续写')).toBeInTheDocument(), {
@@ -829,7 +835,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     h.getText = () => '未存盘的脏数据'
     h.getHTML = () => '<p>未存盘的脏数据</p>'
     act(() => {
-      h.capturedOnUpdate && h.capturedOnUpdate()
+      if (h.capturedOnUpdate) h.capturedOnUpdate()
     })
 
     // 立即删除当前活动章节
