@@ -14,6 +14,9 @@ describe('ProposalChapterUnitOfWork - Real IndexedDB Atomic Rollback', () => {
     vi.restoreAllMocks()
     await db.delete('chapters', chapterId)
     await db.delete('aiProposals', proposalId)
+    for (const s of await db.getAll('dailyStats')) {
+      if (s.projectId === workspaceId) await db.delete('dailyStats', s.key)
+    }
   })
 
   it('atomically rolls back all IndexedDB changes when conflict occurs', async () => {
@@ -119,5 +122,49 @@ describe('ProposalChapterUnitOfWork - Real IndexedDB Atomic Rollback', () => {
 
     const proposalAfter = await db.get('aiProposals', proposalId)
     expect(proposalAfter?.status).toBe('accepted')
+  })
+
+  it('committing an AI proposal does NOT count as author-written words in dailyStats', async () => {
+    const initialChapter: ChapterRecord = {
+      id: chapterId,
+      projectId: workspaceId,
+      volumeId: 'vol-1',
+      title: 'Stats Policy Chapter',
+      content: '<p>短</p>',
+      wordCount: 3,
+      order: 0,
+      status: 'draft',
+      createdAt: 1000,
+      updatedAt: 1000,
+      revision: 1,
+    }
+    const initialProposal: AiProposal = {
+      id: proposalId,
+      documentId: chapterId,
+      workspaceId,
+      status: 'accepted',
+      patches: [{ from: 0, to: 11, text: "<p>'Hundreds of new AI-written words'</p>" }],
+      inversePatches: [{ from: 0, to: 3, text: '<p>短</p>' }],
+      baseRevision: 1,
+      createdAt: 1000,
+      updatedAt: 1000,
+    }
+    await db.put('chapters', initialChapter)
+    await db.put('aiProposals', initialProposal)
+
+    await ProposalChapterUnitOfWork.commitProposalWithChapter({
+      workspaceId,
+      chapterId,
+      proposalId,
+      expectedRevision: 1,
+      nextContent: "<p>'Hundreds of new AI-written words'</p>",
+    })
+
+    // AI 接受后为避免作者字数虚增，绝不应写入 dailyStats。
+    const stats = (await db.getAll('dailyStats')).filter((s) => s.projectId === workspaceId)
+    expect(stats).toHaveLength(0)
+    const chapterAfter = await db.get('chapters', chapterId)
+    expect(chapterAfter?.revision).toBe(2)
+    expect(chapterAfter?.content).toContain('Hundreds of new AI-written words')
   })
 })

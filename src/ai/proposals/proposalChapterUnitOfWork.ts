@@ -11,7 +11,6 @@ import { domainChangeEvents } from '../../ports/domainChangeEvents'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
 import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
 import { draftJournal } from '../../services/draftJournal'
-import { indexedDbDailyStatsRepository } from '../../adapters/indexedDbDailyStatsRepository'
 
 export interface AtomicCommitProposalInput {
   workspaceId: string
@@ -46,7 +45,14 @@ function countWords(content: string): number {
 }
 
 function clone<T>(val: T): T {
-  return JSON.parse(JSON.stringify(val))
+  const serialized = JSON.stringify(val)
+  // SAFETY: clone is only ever called on proposal/chapter records which are plain
+  // JSON-able objects, so JSON.parse of their own JSON.stringify output cannot throw.
+  try {
+    return JSON.parse(serialized)
+  } catch {
+    return val
+  }
 }
 
 export class ProposalChapterUnitOfWork {
@@ -72,7 +78,6 @@ export class ProposalChapterUnitOfWork {
     let committedProposal!: AiProposal
     let nextRevision = expectedRevision + 1
     let committedWorkspaceRevision = 0
-    let wordDelta = 0
 
     await db.runTransaction(
       ['chapters', 'aiProposals', 'domainChangeSets'],
@@ -150,7 +155,6 @@ export class ProposalChapterUnitOfWork {
 
             nextRevision = expectedRevision + 1
             const newWordCount = countWords(nextContent)
-            wordDelta = newWordCount - (currentChapter.wordCount || 0)
 
             committedChapter = {
               ...currentChapter,
@@ -251,9 +255,6 @@ export class ProposalChapterUnitOfWork {
         updatedAt: now,
       })
     }
-    if (wordDelta !== 0) {
-      void indexedDbDailyStatsRepository.recordDailyWords(workspaceId, wordDelta).catch(() => {})
-    }
 
     return {
       proposalId: committedProposal.id,
@@ -283,7 +284,6 @@ export class ProposalChapterUnitOfWork {
     let undoneProposal!: AiProposal
     let nextRevision = expectedRevision + 1
     let committedWorkspaceRevision = 0
-    let wordDelta = 0
 
     await db.runTransaction(
       ['chapters', 'aiProposals', 'domainChangeSets'],
@@ -345,7 +345,6 @@ export class ProposalChapterUnitOfWork {
 
             nextRevision = expectedRevision + 1
             const newWordCount = countWords(restoredContent)
-            wordDelta = newWordCount - (currentChapter.wordCount || 0)
 
             restoredChapter = {
               ...currentChapter,
@@ -443,9 +442,6 @@ export class ProposalChapterUnitOfWork {
         kind: 'updated',
         updatedAt: now,
       })
-    }
-    if (wordDelta !== 0) {
-      void indexedDbDailyStatsRepository.recordDailyWords(workspaceId, wordDelta).catch(() => {})
     }
 
     return {
