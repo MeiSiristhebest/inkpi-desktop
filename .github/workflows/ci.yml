@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           corepack enable
-          corepack prepare pnpm@latest --activate
+          corepack prepare pnpm@11.22.0 --activate
 
       - name: Setup Node.js ${{ matrix.node-version }} with Cache
         uses: actions/setup-node@v4
@@ -79,7 +79,7 @@ jobs:
       - name: Build InkPi Monorepo Packages
         working-directory: inkpi
         run: |
-          pnpm install --no-frozen-lockfile --ignore-scripts
+          pnpm install --frozen-lockfile --ignore-scripts
           pnpm run build
 
       - name: Install Desktop Dependencies

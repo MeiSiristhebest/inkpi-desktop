@@ -55,12 +55,12 @@ jobs:
         shell: bash
         run: |
           corepack enable
-          corepack prepare pnpm@latest --activate
+          corepack prepare pnpm@11.22.0 --activate
 
       - name: Compile InkPi Daemon Standalone Binary
         working-directory: inkpi
         run: |
-          pnpm install --no-frozen-lockfile --ignore-scripts
+          pnpm install --frozen-lockfile --ignore-scripts
           pnpm run build
           pnpm run build:binaries
 
