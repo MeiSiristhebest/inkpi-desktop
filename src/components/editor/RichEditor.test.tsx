@@ -282,7 +282,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     // 默认展开：不显示面包屑
     expect(screen.queryByText(/第\d+卷 · 第\d+章/)).not.toBeInTheDocument()
     // 折叠目录：树完全隐藏，左上角显示「第X卷 · 第X章」
-    fireEvent.click(screen.getByTitle('折叠目录 (⌘B)'))
+    fireEvent.click(screen.getByTitle('折叠目录 (⌘\\)'))
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     expect(screen.getByText(/第\d+卷 · 第\d+章/)).toBeInTheDocument()
   })
@@ -464,18 +464,18 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('collapses and restores the chapter tree via the sidebar toggle', async () => {
     render(<RichEditor projectId="p-side" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('折叠目录 (⌘B)'))
+    fireEvent.click(screen.getByTitle('折叠目录 (⌘\\)'))
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('展开目录 (⌘B)'))
+    fireEvent.click(screen.getByTitle('展开目录 (⌘\\)'))
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
-  it('responds to global shortcuts (⌘B folds tree, ⌘F opens find, Esc closes)', async () => {
+  it('responds to global shortcuts (⌘\ folds tree, ⌘F opens find, Esc closes)', async () => {
     render(<RichEditor projectId="p-keys" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.keyDown(window, { key: 'b', ctrlKey: true })
+    fireEvent.keyDown(window, { key: '\\', ctrlKey: true })
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
-    fireEvent.keyDown(window, { key: 'b', ctrlKey: true })
+    fireEvent.keyDown(window, { key: '\\', ctrlKey: true })
     expect(screen.getByText('章节目录')).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'f', ctrlKey: true })
     expect(screen.getByPlaceholderText('检索（文档内全文）')).toBeInTheDocument()

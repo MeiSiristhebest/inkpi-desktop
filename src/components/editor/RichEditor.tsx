@@ -494,7 +494,7 @@ export const RichEditor: FC<RichEditorProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, activeChapterId, chapters])
 
-  /* ── 全局快捷键：⌘S 保存 / ⌘F 查找 / ⌘B 折叠目录 / ⌘N 新建章节 / ⌘H 时光机 / Alt+↑/↓ 切章 / Esc 关闭 ── */
+  /* ── 全局快捷键：⌘S 保存 / ⌘F 查找 / ⌘\ 折叠目录（⌘B 归还给 Bold）/ ⌘N 新建章节 / ⌘H 时光机 / Alt+↑/↓ 切章 / Esc 关闭 ── */
   const uiRef = useRef({
     showFindReplace,
     isSidebarOpen: model.isSidebarOpen,
@@ -551,7 +551,7 @@ export const RichEditor: FC<RichEditorProps> = ({
       } else if (k === 'f') {
         e.preventDefault()
         actions.setShowFindReplace(!uiRef.current.showFindReplace)
-      } else if (k === 'b') {
+      } else if (k === '\\') {
         e.preventDefault()
         actions.setSidebar(!uiRef.current.isSidebarOpen)
       } else if (k === 'n' && !e.shiftKey) {

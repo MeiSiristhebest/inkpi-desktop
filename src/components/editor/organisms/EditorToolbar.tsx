@@ -145,7 +145,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         {!isSidebarOpen && (
           <IconButton
             onClick={() => actions.setSidebar(true)}
-            title="展开目录 (⌘B)"
+            title="展开目录 (⌘\)"
             className="text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]"
           >
             <PanelLeftOpen className="w-4 h-4" />

@@ -7,7 +7,7 @@ const EDITOR_SHORTCUT_ITEMS = [
   { action: '保存章节', key: 'Mod + S' },
   { action: '新建章节', key: 'Mod + N' },
   { action: '查找替换', key: 'Mod + F' },
-  { action: '切换章节树', key: 'Mod + B' },
+  { action: '切换章节树', key: 'Mod + \\' },
   { action: '打开历史记录', key: 'Mod + H' },
   { action: '重命名当前章节', key: 'F2' },
   { action: '上一章 / 下一章', key: 'Alt + ↑ / ↓' },

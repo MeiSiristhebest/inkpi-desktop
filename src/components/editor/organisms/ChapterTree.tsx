@@ -83,7 +83,7 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
             {...gesture.iconButton}
             transition={spring.snappy}
             onClick={() => actions.setSidebar(false)}
-            title="折叠目录 (⌘B)"
+            title="折叠目录 (⌘\)"
             className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
           >
             <PanelLeftClose className="w-3.5 h-3.5" />
