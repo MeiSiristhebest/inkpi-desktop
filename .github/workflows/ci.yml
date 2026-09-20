@@ -52,7 +52,8 @@ jobs:
         id: runtime-lock
         shell: bash
         run: |
-          PINNED_COMMIT=$(node -p "require('./inkpi-desktop/runtime.lock.json').pinnedCommit")
+          PINNED_COMMIT=$(node -p \
+            "require('./inkpi-desktop/runtime.lock.json').pinnedCommit")
           echo "commit=$PINNED_COMMIT" >> $GITHUB_OUTPUT
 
       - name: Checkout Upstream InkPi Monorepo
@@ -83,7 +84,7 @@ jobs:
 
       - name: Install Desktop Dependencies
         working-directory: inkpi-desktop
-        run: npm install --ignore-scripts
+        run: npm ci --ignore-scripts
 
       - name: Lint Check (Oxlint)
         working-directory: inkpi-desktop

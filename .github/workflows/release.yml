@@ -67,7 +67,7 @@ jobs:
       - name: Install Desktop Dependencies & Sync Sidecar
         working-directory: inkpi-desktop
         run: |
-          npm install --ignore-scripts
+          npm ci --ignore-scripts
           node scripts/copy-daemon-sidecar.mjs
 
       - name: Build Web Application
