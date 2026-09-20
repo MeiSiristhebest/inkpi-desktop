@@ -242,6 +242,7 @@ export const PROJECT_DOMAIN_STORES: string[] = [
   'aftermathPatches',
   'subtextDialogues',
   'rhythmRadarReports',
+  'narrativeArchetypes',
   'goldChapterEvals',
   'shadowDanmakus',
   'authorOpsProfiles',

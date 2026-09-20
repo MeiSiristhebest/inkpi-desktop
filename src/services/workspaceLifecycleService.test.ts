@@ -4,7 +4,8 @@ import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
 import type { IdGenerator } from '../ports/idGenerator'
 import type { Clock } from '../ports/clock'
-import { db } from '../db/indexedDB'
+import { db, STORES } from '../db/indexedDB'
+import { PROJECT_DOMAIN_STORES } from './workspaceLifecycleService'
 
 describe('WorkspaceLifecycleService', () => {
   let projectRepo: ProjectRepository
@@ -90,6 +91,12 @@ describe('WorkspaceLifecycleService', () => {
         if (idx >= 0) chapters.splice(idx, 1)
       }),
     }
+  })
+
+  it('keeps every project-scoped IndexedDB store in the backup/purge manifest', () => {
+    const coreStores = new Set(['projects', 'volumes', 'chapters', 'pluginSettings', 'settings'])
+    const projectStores = STORES.filter((store) => !coreStores.has(store))
+    expect(PROJECT_DOMAIN_STORES).toEqual(expect.arrayContaining(projectStores))
   })
 
   it('exports full workspace backup with valid manifest and metadata (INV-04)', async () => {
