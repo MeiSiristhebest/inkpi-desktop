@@ -1042,7 +1042,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       ed.commands.insertContent(stateRef.current.ghostText)
       setGhostText('')
     }
-  }, [editorRef, patch, setGhostText])
+  }, [editorRef, setGhostText])
 
   const findMatchesInDoc = useCallback(
     (query: string): { from: number; to: number }[] => {
@@ -1190,7 +1190,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     if (settingsRef.current.autoSave) {
       autosave.schedule(updated, settingsRef.current.autoSaveDelay)
     }
-  }, [editorRef, patch, setGhostText, autosave])
+  }, [editorRef, patch, setGhostText, autosave, projectId])
 
   const save = useCallback(() => {
     void flushSave().catch(reportSaveError)

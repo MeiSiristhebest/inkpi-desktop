@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useCallback, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { FactionNode } from '../types'
 import { factionMatrixEngine } from '../engine/FactionMatrixEngine'
@@ -32,7 +32,7 @@ const DEFAULT_DEMO_FACTIONS: FactionNode[] = [
 export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
   const [factions, setFactions] = useState<FactionNode[]>(DEFAULT_DEMO_FACTIONS)
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const allCodex = await indexedDbCodexEntityRepository.getAll()
       const codexFactions = allCodex
@@ -51,11 +51,11 @@ export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId })
     } catch (e) {
       console.error('Failed to load drawer factions:', e)
     }
-  }
+  }, [projectId])
 
   useEffect(() => {
-    loadData()
-  }, [projectId])
+    void loadData()
+  }, [loadData])
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">

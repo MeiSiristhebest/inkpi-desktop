@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { VolumeArcRecord, VolumeStat, TotalBookMetrics, ActStage } from '../types'
 import { volumeMasterEngine } from '../engine/VolumeMasterEngine'
@@ -26,7 +26,33 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const [editReward, setEditReward] = useState('')
   const [editCliffhanger, setEditCliffhanger] = useState('')
 
-  const loadAll = async () => {
+  const syncFormWithArc = useCallback(
+    (
+      volId: string,
+      _volList: Array<{ id: string; title: string; order: number }>,
+      arcList: VolumeArcRecord[],
+    ) => {
+      const existing = arcList.find((a) => a.volumeId === volId)
+      if (existing) {
+        setEditTargetWords(existing.targetWordCount || 200000)
+        setEditActStage(existing.actStage || 'act1_intro')
+        setEditConflict(existing.coreConflict || '')
+        setEditClimax(existing.climaxNode || '')
+        setEditReward(existing.rewardOutcome || '')
+        setEditCliffhanger(existing.crossVolumeCliffhanger || '')
+      } else {
+        setEditTargetWords(200000)
+        setEditActStage('act1_intro')
+        setEditConflict('')
+        setEditClimax('')
+        setEditReward('')
+        setEditCliffhanger('')
+      }
+    },
+    [],
+  )
+
+  const loadAll = useCallback(async () => {
     try {
       const [allVols, allChaps, allArcs] = await Promise.all([
         indexedDbProjectRepository.getVolumesByProject(projectId),
@@ -47,7 +73,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     } catch (e) {
       console.error('Failed to load volume master data:', e)
     }
-  }
+  }, [projectId, selectedVolId, syncFormWithArc])
 
   // 真实 AI 辅助分卷弧线与卷末大悬念推演
   const handleAiVolumeArcRecommend = () => {
@@ -72,32 +98,9 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     }
   }
 
-  const syncFormWithArc = (
-    volId: string,
-    _volList: Array<{ id: string; title: string; order: number }>,
-    arcList: VolumeArcRecord[],
-  ) => {
-    const existing = arcList.find((a) => a.volumeId === volId)
-    if (existing) {
-      setEditTargetWords(existing.targetWordCount || 200000)
-      setEditActStage(existing.actStage || 'act1_intro')
-      setEditConflict(existing.coreConflict || '')
-      setEditClimax(existing.climaxNode || '')
-      setEditReward(existing.rewardOutcome || '')
-      setEditCliffhanger(existing.crossVolumeCliffhanger || '')
-    } else {
-      setEditTargetWords(200000)
-      setEditActStage('act1_intro')
-      setEditConflict('')
-      setEditClimax('')
-      setEditReward('')
-      setEditCliffhanger('')
-    }
-  }
-
   useEffect(() => {
-    loadAll()
-  }, [projectId])
+    void loadAll()
+  }, [loadAll])
 
   const handleSelectVolume = (volId: string) => {
     setSelectedVolId(volId)
