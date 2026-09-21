@@ -12,6 +12,6 @@ describe('FactionMatrixDrawer', () => {
   it('renders drawer title and default factions', () => {
     render(<FactionMatrixDrawer projectId="p1" currentText="" />)
     expect(screen.getByText('宗门势力声望')).toBeDefined()
-    expect(screen.getByText('玄剑宗')).toBeDefined()
+    expect(screen.getByText('未命名势力')).toBeDefined()
   })
 })

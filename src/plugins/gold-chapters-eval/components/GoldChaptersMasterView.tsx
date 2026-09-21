@@ -96,7 +96,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
             <span>黄金三章与签约过稿诊断器 (GoldChaptersEval)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            直连全书前三章正文，量化主角动机、金手指筹码与主要矛盾，消除开篇被拒签风险
+            直连全书前三章正文，量化主角动机、金手指筹码与主要矛盾，输出规则信号参考
           </p>
         </div>
 
@@ -137,7 +137,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
         <div className="border rounded-xl p-5 bg-slate-900 text-slate-100 border-amber-900/60 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-amber-400 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" /> 商业签约评测结论
+              <Sparkles className="w-4 h-4" /> 签约潜力规则信号
             </span>
             <span
               className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
@@ -146,7 +146,10 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                   : 'bg-rose-950 text-rose-400 border border-rose-800'
               }`}
             >
-              {currentEval.isQualified ? '达到商业签约门槛' : '当前规则检测未通过签约门槛'}
+              {currentEval.isQualified
+                ? '经验指标：具备签约潜力参考值'
+                : '规则信号：建议进一步优化开篇'}
+              {/* 基于规则模型的参考指标，不代表实际签约结果 */}
             </span>
           </div>
 

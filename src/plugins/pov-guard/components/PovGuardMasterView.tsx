@@ -8,7 +8,7 @@ import { clock } from '../../../adapters/clock'
 
 export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [currentText, setCurrentText] = useState('')
-  const [povChar, setPovChar] = useState('林凡')
+  const [povChar, setPovChar] = useState('未指定 POV 角色')
   const [povMode, setPovMode] = useState<
     'first_person' | 'third_limited' | 'third_objective' | 'omniscient'
   >('third_limited')

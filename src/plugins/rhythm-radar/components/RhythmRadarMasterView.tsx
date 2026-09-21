@@ -9,7 +9,7 @@ import { idGenerator } from '../../../adapters/idGenerator'
 
 export const RhythmRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [chapterText, setChapterText] = useState(
-    '林凡凌空踏步，长剑撕裂苍穹！雷霆万钧轰然落下，地面寸寸爆裂崩塌，那黑衣刺客冷笑一声摘下面具道：原来我才是真正的执剑人。',
+    '【示例文本】输入章节正文，运行节奏分析以检测节奏张弛与情绪曲线波动。',
   )
 
   const loadReports = async () => {

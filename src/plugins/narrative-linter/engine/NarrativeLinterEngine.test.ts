@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { NarrativeLinterEngine } from './NarrativeLinterEngine'
 
-describe('NarrativeLinterEngine (360+文学质量与人设门禁)', () => {
+describe('NarrativeLinterEngine (规则模型门禁)', () => {
   const engine = new NarrativeLinterEngine()
 
   it('当单句密集堆叠 3 个以上副词时，触发副词堆叠警告并提供 QuickFix', () => {

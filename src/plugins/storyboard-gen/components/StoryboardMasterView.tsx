@@ -11,10 +11,9 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
 
 const DEFAULT_CHAPTER_CLIMAX = `乌云翻滚，整座演武场狂风大作。
-赵家长老狞笑一声，赤焰战刀化作漫天火海朝林凡当头劈落！
-林凡不避不闪，深吸一口气，体内的万古修罗诀疯狂运转，双眸爆发出璀璨的金红神芒！
-“一剑——断苍穹！”
-惊天动地的剑气撕裂了火海，千丈演武石台在一瞬间化作两半！全场陷入死一般的寂静！`
+一名修士拔剑出鞘，剑气纵横十里，周遭风云为之变色！
+“今日一战，注定载入史册！”
+惊天动地的声势席卷全场，千丈演武石台在一瞬间被剑气撕裂！全场陷入死一般的寂静！`
 
 export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()

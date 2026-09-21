@@ -8,23 +8,23 @@ import { Shield } from 'lucide-react'
 const DEFAULT_DEMO_FACTIONS: FactionNode[] = [
   {
     id: 'f-xuanjian',
-    name: '玄剑宗',
+    name: '未命名势力',
     type: 'righteous',
-    powerTier: '正道七大派',
+    powerTier: '未指定',
     protagonistReputation: 35,
   },
   {
     id: 'f-zixia',
-    name: '紫霞派',
+    name: '未命名势力B',
     type: 'righteous',
-    powerTier: '名门宗派',
+    powerTier: '未指定',
     protagonistReputation: 15,
   },
   {
     id: 'f-xuesha',
-    name: '血煞门',
+    name: '未命名势力C',
     type: 'demonic',
-    powerTier: '魔道巨擘',
+    powerTier: '未指定',
     protagonistReputation: -45,
   },
 ]

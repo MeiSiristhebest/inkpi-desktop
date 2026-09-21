@@ -13,7 +13,7 @@ import { idGenerator } from '../../../adapters/idGenerator'
 export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [patches, setPatches] = useState<AftermathPatchRecord[]>([])
   const [chapterText, setChapterText] = useState(
-    '林凡在洞府闭关七七四十九日，轰然一声巨响，林凡一举迈入金丹初期！随后他在废墟中搜寻，伸手夺得九幽魔印。',
+    '【示例文本】输入章节正文，系统将扫描章后设定回写机会并生成补丁记录。',
   )
 
   const loadPatches = async () => {
@@ -35,8 +35,8 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
 
   const handleScan = async () => {
     const res = AftermathEngine.analyzeChapter(chapterText, 'ch-manual', 1, [
-      { id: 'c1', name: '林凡', category: 'character', currentTier: '筑基大圆满' },
-      { id: 'i1', name: '九幽魔印', category: 'item', currentOwner: '神秘魔修' },
+      { id: 'c1', name: '未指定角色', category: 'character', currentTier: '筑基大圆满' },
+      { id: 'i1', name: '未命名物品', category: 'item', currentOwner: '神秘角色' },
     ])
 
     for (const p of res.patches) {

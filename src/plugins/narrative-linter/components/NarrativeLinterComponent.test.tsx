@@ -38,12 +38,12 @@ describe('NarrativeLinter UI Components', () => {
 
   it('NarrativeLinterMasterView renders correctly', () => {
     render(<NarrativeLinterMasterView projectId="p1" />)
-    expect(screen.getByText(/360\+ 文学质量与人设门禁/)).toBeDefined()
+    expect(screen.getByText(/规则模型门禁/)).toBeDefined()
   })
 
   it('NarrativeLinterDrawer renders correctly with score', () => {
     render(<NarrativeLinterDrawer projectId="p1" currentText="林凡拔出了长剑。" />)
-    expect(screen.getByText(/文学质量门禁巡检/)).toBeDefined()
+    expect(screen.getByText(/规则信号门禁巡检/)).toBeDefined()
   })
 
   it('projects selected chapter HTML into semantic text before rules and AI', async () => {

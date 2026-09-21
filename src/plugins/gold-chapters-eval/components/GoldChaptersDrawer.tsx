@@ -21,7 +21,7 @@ export const GoldChaptersDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
         <div className="flex justify-between text-[11px]">
           <span className="text-slate-500">状态:</span>
           <span className={`font-bold ${res.isQualified ? 'text-emerald-600' : 'text-rose-600'}`}>
-            {res.isQualified ? '通过签约及格线' : '存在拒签风险'}
+            {res.isQualified ? '经验指标：具备签约参考值' : '规则信号：建议优化开篇结构'}
           </span>
         </div>
         <div className="text-[10px] text-slate-500">

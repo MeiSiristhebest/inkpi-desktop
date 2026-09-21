@@ -74,7 +74,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
 
   useEffect(() => {
     onStats?.({
-      title: '360+文学质量与人设门禁',
+      title: '规则模型门禁 (NarrativeLinter)',
       wordCount: text.length,
       updatedAt: clock.now(),
     })
@@ -123,7 +123,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-            <span>360+ 文学质量与人设门禁 (NarrativeLinter)</span>
+            <span>规则模型门禁 (NarrativeLinter)</span>
           </h2>
           <p className="text-sm text-[var(--ink-text-muted)] mt-1">
             ESLint
@@ -240,7 +240,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
           <div className="h-96 overflow-y-auto border rounded-xl p-2.5 space-y-2 bg-[var(--ink-bg-panel)] border-[var(--ink-border)] text-xs">
             {issues.length === 0 ? (
               <div className="h-full flex items-center justify-center text-[var(--ink-text-muted)]">
-                暂无违规项，文本符合工业级门禁标准
+                暂无违规项，文本通过基础规则信号检测
               </div>
             ) : (
               issues.map((issue) => (

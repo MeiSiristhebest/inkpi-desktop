@@ -7,10 +7,7 @@ import { Volume2, Play, Square, Mic, Sliders, Users, Sparkles } from 'lucide-rea
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 
-const DEFAULT_CHAPTER_TEXT = `林凡冷笑道：“三十年河东，三十年河西，莫欺少年穷！今日退婚之耻，林某记下了。”
-赵家长老厉声喝道：“放肆！区区经脉尽断的废人，安敢在老夫面前狂妄自大，给我受死！”
-苏清月低声耳语：“林凡哥哥，莫要冲动，先吞服此枚九转还魂丹养好内息。”
-林凡大笑道：“哈哈哈哈！何须养伤，老狗，看我一剑破你烈阳神功！”`
+const DEFAULT_CHAPTER_TEXT = `【示例文本】请在此粘贴章节正文，系统将基于台词结构生成拟真配音脚本。`
 
 export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [chapterText, setChapterText] = useState(DEFAULT_CHAPTER_TEXT)

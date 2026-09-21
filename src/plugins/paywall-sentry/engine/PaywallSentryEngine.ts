@@ -64,10 +64,12 @@ export class PaywallSentryEngine {
 
     if (ppiScore >= 70) {
       recommendation = 'prime_paywall'
-      suggestions.push('🔥 黄金卡点：悬念情绪处于巅峰高位，极度适合作为首订收费卡点，转化率极高。')
+      suggestions.push(
+        '🔥 黄金卡点：悬念情绪处于巅峰高位，检测到较强付费卡点特征，规则信号强度较高。',
+      )
     } else if (ppiScore >= 50) {
       recommendation = 'acceptable'
-      suggestions.push('⚖️ 合格卡点：具备一定的情绪惯性与钩子，能够平稳承接付费转化。')
+      suggestions.push('⚖️ 合格卡点：具备一定的情绪惯性与钩子，规则信号显示可平稳承接付费转化。')
     } else if (fatigueRiskScore >= 60) {
       recommendation = 'toxic_drop'
       suggestions.push(

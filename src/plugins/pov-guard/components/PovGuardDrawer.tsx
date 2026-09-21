@@ -19,7 +19,7 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
       const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
       if (disposed) return
       const latestSnapshot = snapshots[0]
-      const povChar = latestSnapshot?.povCharacterName || '林凡'
+      const povChar = latestSnapshot?.povCharacterName || '未指定 POV 角色'
       const povMode = latestSnapshot?.povMode || 'third_limited'
 
       const auditRes = PovGuardEngine.analyze(currentText, {

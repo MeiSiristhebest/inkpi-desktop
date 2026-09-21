@@ -21,7 +21,7 @@ export const NarrativeLinterDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
     <div className="p-3.5 space-y-3 text-xs bg-[var(--ink-bg-panel)] text-[var(--ink-text)]">
       <div className="flex items-center justify-between pb-2 border-b border-[var(--ink-border)]">
         <span className="font-bold flex items-center gap-1.5 text-[var(--ink-accent)]">
-          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> 文学质量门禁巡检
+          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> 规则信号门禁巡检
         </span>
         {summary && (
           <span
@@ -34,7 +34,7 @@ export const NarrativeLinterDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
 
       {!summary || summary.totalIssues === 0 ? (
         <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-center text-xs">
-          ✓ 文笔流畅无瑕疵，符合360+工业门禁标准
+          ✓ 文笔流畅，基础规则信号未触发异常
         </div>
       ) : (
         <div className="space-y-2">
