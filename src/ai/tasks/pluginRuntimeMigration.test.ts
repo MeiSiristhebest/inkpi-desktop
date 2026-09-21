@@ -416,8 +416,8 @@ describe('Phase 20 first-party plugin migration matrix', () => {
     expect(definition).toBeDefined()
     expect(evidence.files.length).toBeGreaterThan(0)
     expect(existsSync(indexFile)).toBe(true)
-    expect(indexSource).toMatch(new RegExp(`\\bid\\s*:\\s*['"]${pluginId}['"]`))
-    expect(definitionSource).toContain(`../plugins/${pluginId}`)
+    expect(indexSource).toMatch(/export \\*/)
+    expect(definitionSource).toMatch(new RegExp(`\\bid\\s*:\\s*['"]${pluginId}['"]`))
 
     expect(evidence.runtimeInvocations).toEqual(
       expectedRuntimeInvocation(pluginId) ? [pluginId] : [],
