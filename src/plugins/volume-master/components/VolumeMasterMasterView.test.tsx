@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { VolumeMasterMasterView } from './VolumeMasterMasterView'
 import { indexedDbVolumeArcRepository } from '../../../adapters/indexedDbVolumeArcRepository'
-import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 
 vi.mock('../../../adapters/indexedDbVolumeArcRepository', () => ({
   indexedDbVolumeArcRepository: {
