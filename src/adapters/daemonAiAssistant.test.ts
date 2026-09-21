@@ -5,11 +5,12 @@ import type {
   TaskExecutionSnapshot,
   TaskResult,
 } from '@inkpi/protocol'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import type { RpcClient } from '../ports/aiGateway'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 import { createDaemonAiAssistant } from './daemonAiAssistant'
+import { setRuntimeModelRoutes } from '../core/runtimeModelPreference'
 
 function task(id: string): AiTask {
   return {
@@ -39,6 +40,13 @@ function makeClient(onRegister?: () => Promise<void>): {
   const client: RpcClient = {
     request: async <T>(method: string, params?: unknown): Promise<T> => {
       calls.push({ method, params })
+      if (method === 'model.routes.configure') {
+        return {
+          configured: [],
+          removed: [],
+          routes: [],
+        } as T
+      }
       if (method === 'instruction.register') {
         registerCalls += 1
         await onRegister?.()
@@ -70,6 +78,49 @@ function makeClient(onRegister?: () => Promise<void>): {
 }
 
 describe('createDaemonAiAssistant instruction registration', () => {
+  afterEach(() => {
+    setRuntimeModelRoutes([], null)
+  })
+
+  it('synchronizes Runtime model routes before the first task', async () => {
+    setRuntimeModelRoutes(
+      [
+        {
+          id: 'writer',
+          name: 'Writer',
+          provider: 'openai',
+          apiKey: 'sk-secret',
+        },
+      ],
+      {
+        id: 'writer',
+        name: 'Writer',
+        provider: 'openai',
+        apiKey: 'sk-secret',
+      },
+    )
+    const harness = makeClient()
+    const assistant = createDaemonAiAssistant(harness.client)
+
+    await expect(
+      assistant.runTask(task('route-sync'), { pollIntervalMs: 0 }),
+    ).resolves.toMatchObject({
+      output: { text: 'done:route-sync' },
+    })
+
+    expect(harness.calls[0]).toMatchObject({ method: 'model.routes.configure' })
+    expect(harness.calls[0].params).toMatchObject({
+      routes: [
+        {
+          model: { id: 'writer', provider: 'openai', apiKey: 'sk-secret' },
+          priority: 100,
+        },
+      ],
+    })
+    const submitted = harness.calls.find((call) => call.method === 'task.submit')
+    expect(JSON.stringify(submitted?.params)).not.toContain('sk-secret')
+  })
+
   it('registers stable plugin instructions once before the first task', async () => {
     const harness = makeClient()
     const assistant = createDaemonAiAssistant(harness.client)

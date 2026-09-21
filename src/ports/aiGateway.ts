@@ -7,6 +7,14 @@ import type {
   TaskResult,
   TaskStatusSnapshot,
 } from '@inkpi/protocol'
+import type {
+  RuntimeModelRouteHealthResult,
+  RuntimeModelRouteHealthState,
+  RuntimeModelRouteRegistration,
+  RuntimeModelRouteRemoveResult,
+  RuntimeModelRouteSummary,
+  RuntimeModelRoutesConfigureResult,
+} from './runtimeModelRoutes'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tasks/taskFactories'
 import type {
   ProjectDistillationInput,
@@ -51,6 +59,16 @@ export interface AiAssistant {
   /** Cross-process Runtime cache counters and invalidation boundary. */
   getCacheStatus?(): Promise<CacheStatus>
   invalidateCache?(params: CacheInvalidateParams): Promise<CacheInvalidateResult>
+  /** Configure the Runtime-owned model route table without returning credentials. */
+  configureModelRoutes?(
+    routes: readonly RuntimeModelRouteRegistration[],
+  ): Promise<RuntimeModelRoutesConfigureResult>
+  listModelRoutes?(): Promise<RuntimeModelRouteSummary[]>
+  removeModelRoute?(routeId: string): Promise<RuntimeModelRouteRemoveResult>
+  getModelRouteHealth?(
+    routeId: string,
+    state?: RuntimeModelRouteHealthState,
+  ): Promise<RuntimeModelRouteHealthResult>
   /** Optional daemon projection capability for proposal review state. */
   proposalSyncRemote?: ProposalSyncRemote
   runContinuityAudit?(

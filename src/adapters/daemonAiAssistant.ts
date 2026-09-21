@@ -10,13 +10,21 @@ import type {
   TaskSubmitResult,
   ToolResultMessage,
 } from '@inkpi/protocol'
+import type {
+  RuntimeModelRouteHealthResult,
+  RuntimeModelRouteHealthState,
+  RuntimeModelRouteRegistration,
+  RuntimeModelRouteRemoveResult,
+  RuntimeModelRouteSummary,
+  RuntimeModelRoutesConfigureResult,
+} from '../ports/runtimeModelRoutes'
 import type { AiAssistant, RpcClient } from '../ports/aiGateway'
 import {
   CreativeIntelligence,
   type CreativeTaskGateway,
 } from '../ai/orchestrator/creativeIntelligence'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
-import { getRuntimeModelPreference } from '../core/runtimeModelPreference'
+import { getRuntimeModelPreference, getRuntimeModelRoutes } from '../core/runtimeModelPreference'
 import {
   listPluginInstructionDefinitions,
   type DesktopInstructionDefinition,
@@ -61,8 +69,41 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   })
   const continuityScheduler = new ContinuityAuditScheduler(creativeIntelligence)
   const distillationWorkflow = new ProjectDistillationWorkflow(creativeIntelligence)
+  let configuredRoutesFingerprint: string | undefined
+  let configuredRoutes = false
+  let routeConfiguration: Promise<void> | undefined
+
+  const sendModelRoutes = async (
+    routes: readonly RuntimeModelRouteRegistration[],
+  ): Promise<RuntimeModelRoutesConfigureResult> => {
+    const result = await client.request<RuntimeModelRoutesConfigureResult>(
+      'model.routes.configure',
+      { routes },
+    )
+    configuredRoutesFingerprint = JSON.stringify(routes)
+    configuredRoutes = true
+    return result
+  }
+
+  const syncRuntimeModelRoutes = async (): Promise<void> => {
+    const routes = [...getRuntimeModelRoutes()]
+    const fingerprint = JSON.stringify(routes)
+    if (!routes.length && !configuredRoutes) return
+    if (fingerprint === configuredRoutesFingerprint) return
+    if (routeConfiguration) {
+      await routeConfiguration
+      return syncRuntimeModelRoutes()
+    }
+    routeConfiguration = sendModelRoutes(routes)
+      .then(() => undefined)
+      .finally(() => {
+        routeConfiguration = undefined
+      })
+    await routeConfiguration
+  }
 
   const runTask = async (task: AiTask, options = {}): Promise<TaskResult | null> => {
+    await syncRuntimeModelRoutes()
     await ensurePluginInstructionsRegistered()
     // 把用户选定的模型附加到 metadata.modelRoute，让 Runtime 路由精确命中该模型。
     // 仅当任务未显式携带偏好时注入，保留 pluginId/runtimeTarget 等既有 metadata。
@@ -153,6 +194,16 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
     getCacheStatus: () => client.request<CacheStatus>('cache.status'),
     invalidateCache: (params: CacheInvalidateParams) =>
       client.request<CacheInvalidateResult>('cache.invalidate', params),
+    configureModelRoutes: (routes: readonly RuntimeModelRouteRegistration[]) =>
+      sendModelRoutes(routes),
+    listModelRoutes: () => client.request<RuntimeModelRouteSummary[]>('model.routes.list'),
+    removeModelRoute: (routeId: string) =>
+      client.request<RuntimeModelRouteRemoveResult>('model.routes.remove', { routeId }),
+    getModelRouteHealth: (routeId: string, state?: RuntimeModelRouteHealthState) =>
+      client.request<RuntimeModelRouteHealthResult>('model.routes.health', {
+        routeId,
+        ...(state ? { state } : {}),
+      }),
 
     runContinuityAudit: async (input, options = {}) => {
       await ensurePluginInstructionsRegistered()
