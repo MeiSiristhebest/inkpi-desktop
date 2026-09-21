@@ -122,7 +122,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const activeSnap = activeDiffIndex !== null ? snapshots[activeDiffIndex] : null
 
   return (
-    <Modal onClose={onClose} widthClass="max-w-4xl">
+    <Modal onClose={onClose} title="历史版本" widthClass="max-w-4xl">
       {/* 标题栏 */}
       <div className="px-5 py-3.5 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex items-center justify-between">
         <div className="flex items-center gap-2">

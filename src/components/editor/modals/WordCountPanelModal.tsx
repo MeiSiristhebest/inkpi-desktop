@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { motion } from 'motion/react'
 import { X, Feather, SlidersHorizontal } from 'lucide-react'
 import { spring, gesture } from '../../../motion'
+import { Modal } from '../../../ui/molecules/Modal'
 import type { WritingSessionStats } from '../hooks/useWritingSessionStats'
 import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource } from '../../../adapters/randomSource'
@@ -114,8 +115,13 @@ export const WordCountPanelModal: React.FC<
   const isLayout2 = layout === 'layout2'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 select-none">
-      <div className="w-full max-w-4xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-[var(--ink-shadow-lg)] flex flex-col max-h-[90vh] overflow-hidden text-[var(--ink-text)] font-sans">
+    <Modal
+      onClose={onClose}
+      title="字数面板"
+      widthClass="max-w-4xl"
+      panelClassName="bg-transparent border-0 shadow-none p-0 overflow-visible max-h-[90vh]"
+    >
+      <div className="w-full bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-[var(--ink-shadow-lg)] flex flex-col max-h-[90vh] overflow-hidden text-[var(--ink-text)] font-sans">
         {/* 弹窗头部 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--ink-border)]">
           <h2 className="text-[16px] font-bold text-[var(--ink-text)] tracking-tight">字数面板</h2>
@@ -591,6 +597,6 @@ export const WordCountPanelModal: React.FC<
           </motion.button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

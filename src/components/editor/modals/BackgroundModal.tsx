@@ -155,6 +155,7 @@ export const BackgroundModal: React.FC<BackgroundModalProps> = ({ onClose, confi
   return (
     <Modal
       onClose={onClose}
+      title="背景与主题"
       widthClass="max-w-[340px]"
       overlayClassName="bg-black/30 backdrop-blur-xs"
       panelClassName="bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-2xl p-5 text-[var(--ink-text)] font-sans select-none flex flex-col gap-4"

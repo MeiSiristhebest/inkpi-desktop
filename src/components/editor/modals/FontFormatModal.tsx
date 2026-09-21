@@ -39,6 +39,7 @@ export const FontFormatModal: React.FC<FontFormatModalProps> = ({ onClose, model
   return (
     <Modal
       onClose={onClose}
+      title="字体与排版"
       widthClass="max-w-[340px]"
       overlayClassName="bg-black/25 backdrop-blur-2xs"
       panelClassName="bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-2xl p-5 text-[var(--ink-text)] font-sans select-none flex flex-col gap-4"

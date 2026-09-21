@@ -1,4 +1,3 @@
-import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { DrawerDock } from './DrawerDock'
@@ -17,7 +16,7 @@ const PluginIcon = () => null
 describe('DrawerDock', () => {
   beforeEach(() => {
     useOptionalPluginRegistry.mockReturnValue({
-      allPlugins: [
+      activePlugins: [
         {
           id: 'test-plugin',
           name: 'Test plugin',
@@ -38,5 +37,23 @@ describe('DrawerDock', () => {
     const dock = screen.getByTestId('editor-plugin-drawer-dock')
     expect(dock).toHaveClass('editor-plugin-drawer-dock')
     expect(dock).toHaveAttribute('data-testid', 'editor-plugin-drawer-dock')
+  })
+
+  it('does not open a drawer for a disabled plugin', () => {
+    useOptionalPluginRegistry.mockReturnValue({
+      activePlugins: [],
+      allPlugins: [
+        {
+          id: 'test-plugin',
+          name: 'Test plugin',
+          icon: PluginIcon,
+          drawerSnippetView: DrawerView,
+        },
+      ],
+    })
+
+    render(<DrawerDock projectId="project-1" currentText="Current text" />)
+
+    expect(screen.queryByTestId('editor-plugin-drawer-dock')).not.toBeInTheDocument()
   })
 })

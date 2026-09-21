@@ -42,6 +42,7 @@ export const LockModal: React.FC<LockModalProps> = ({ currentWordCount, onClose 
   return (
     <Modal
       onClose={onClose}
+      title="小黑屋 · 强制专注码字"
       widthClass="max-w-md"
       overlayClassName="bg-black/60 backdrop-blur-sm"
       panelClassName="bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-2xl p-6 text-[var(--ink-text)] text-center space-y-5"

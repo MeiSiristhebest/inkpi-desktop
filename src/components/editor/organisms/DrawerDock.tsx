@@ -17,7 +17,7 @@ export const DrawerDock: FC<DrawerDockProps> = ({ projectId, currentText }) => {
     return null
   }
 
-  const activePlugin = registry.allPlugins.find((p) => p.id === host.activeDrawerPluginId)
+  const activePlugin = registry.activePlugins.find((p) => p.id === host.activeDrawerPluginId)
   if (!activePlugin || !activePlugin.drawerSnippetView) {
     return null
   }

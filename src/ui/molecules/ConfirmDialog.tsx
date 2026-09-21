@@ -32,18 +32,15 @@ export const ConfirmDialog = ({
 }: ConfirmDialogProps) => {
   if (!open) return null
   return (
-    <Modal onClose={onCancel} widthClass="max-w-[400px]">
-      <div
-        className="px-5 py-3.5 border-b border-[var(--ink-border)] flex items-center justify-between bg-[var(--ink-bg-panel)]"
-        role="alertdialog"
-        aria-modal="true"
-      >
+    <Modal onClose={onCancel} title={title} widthClass="max-w-[400px]">
+      <div className="px-5 py-3.5 border-b border-[var(--ink-border)] flex items-center justify-between bg-[var(--ink-bg-panel)]">
         <h2 className="text-[14px] font-medium text-[var(--ink-text)] flex items-center gap-2">
           {danger && <AlertTriangle className="w-4 h-4 text-[var(--ink-danger)]" />}
           {title}
         </h2>
         <button
           onClick={onCancel}
+          aria-label="关闭"
           className="text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] text-xs cursor-pointer p-1"
         >
           <svg

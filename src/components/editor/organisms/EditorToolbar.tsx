@@ -795,7 +795,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                       host.closeDrawer()
                     } else {
                       // 默认打开活体世界书或第一个具备抽屉的插件
-                      const firstDrawer = registry?.allPlugins.find((p) =>
+                      const firstDrawer = registry?.activePlugins.find((p) =>
                         Boolean(p.drawerSnippetView),
                       )
                       if (firstDrawer) host.openDrawer(firstDrawer.id)

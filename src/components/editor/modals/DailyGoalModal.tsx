@@ -32,6 +32,7 @@ export const DailyGoalModal: React.FC<DailyGoalModalProps> = ({
   return (
     <Modal
       onClose={onClose}
+      title="每日码字目标"
       widthClass="max-w-md"
       overlayClassName="bg-black/40 backdrop-blur-sm"
       panelClassName="bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-[20px] shadow-[var(--ink-shadow-lg)] p-6 text-[var(--ink-text)] flex flex-col gap-5 font-sans"

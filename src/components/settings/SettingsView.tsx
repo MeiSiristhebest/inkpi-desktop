@@ -712,6 +712,7 @@ const AppearanceTab: FC<{
               step={1}
               value={settings.uiFontSize || 13}
               onChange={(v) => update({ uiFontSize: v })}
+              ariaLabel="界面字号"
             />
             <span className="text-[13px] font-mono text-[var(--ink-accent)] font-semibold w-12 text-right shrink-0">
               {settings.uiFontSize || 13}px
@@ -788,6 +789,7 @@ const EditorTab: FC<{
             max={FONT_MAX}
             value={settings.fontSize}
             onChange={(v) => update({ fontSize: v })}
+            ariaLabel="正文字号"
           />
           <button
             type="button"
@@ -811,6 +813,7 @@ const EditorTab: FC<{
               step={0.05}
               value={Number.parseFloat(settings.lineHeight) || 1.8}
               onChange={(v) => update({ lineHeight: String(Math.round(v * 100) / 100) })}
+              ariaLabel="正文行距"
             />
             <span className="text-[12px] font-mono w-10 text-right text-[var(--ink-text-faint)]">
               {settings.lineHeight}
@@ -820,6 +823,7 @@ const EditorTab: FC<{
             value={settings.lineHeight}
             options={LINE_HEIGHTS.map((v) => ({ v, label: v }))}
             onChange={(v) => update({ lineHeight: v })}
+            ariaLabel="正文行距预设"
           />
         </div>
       </Row>
@@ -835,6 +839,7 @@ const EditorTab: FC<{
             step={0.05}
             value={settings.paragraphSpacing ?? 0.25}
             onChange={(v) => update({ paragraphSpacing: Math.round(v * 100) / 100 })}
+            ariaLabel="段落间距"
           />
           <span className="text-[13px] font-mono text-[var(--ink-accent)] font-semibold w-14 text-right">
             {settings.paragraphSpacing ?? 0.25}em
@@ -852,6 +857,7 @@ const EditorTab: FC<{
           value={settings.paragraphIndent}
           options={INDENT_OPTIONS}
           onChange={(v) => update({ paragraphIndent: v })}
+          ariaLabel="首行缩进方式"
         />
       </Row>
       <Row label="一键排版时顺带标点中文化" hint="英文标点自动转换为中文全角规范标点。">
@@ -880,6 +886,7 @@ const EditorTab: FC<{
               step={100}
               value={settings.autoSaveDelay}
               onChange={(v) => update({ autoSaveDelay: v })}
+              ariaLabel="自动保存间隔"
             />
             <span className="text-[13px] font-mono text-[var(--ink-accent)] font-semibold w-16 text-right">
               {settings.autoSaveDelay}ms
@@ -915,6 +922,7 @@ const EditorTab: FC<{
             step={500}
             value={settings.wordTarget}
             onChange={(v) => update({ wordTarget: v })}
+            ariaLabel="每章字数目标"
           />
           <span className="text-[13px] font-mono text-[var(--ink-accent)] font-semibold w-20 text-right">
             {settings.wordTarget}字

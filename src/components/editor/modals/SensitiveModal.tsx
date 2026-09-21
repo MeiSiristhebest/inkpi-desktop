@@ -60,7 +60,7 @@ export const SensitiveModal: React.FC<SensitiveModalProps> = ({ content, onApply
   }
 
   return (
-    <Modal onClose={onClose} widthClass="max-w-lg">
+    <Modal onClose={onClose} title="本章敏感词即时检测" widthClass="max-w-lg">
       {/* 标题栏 */}
       <div className="px-5 py-3.5 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex items-center justify-between">
         <div className="flex items-center gap-2">
