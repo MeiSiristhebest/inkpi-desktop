@@ -15,30 +15,41 @@ export const VolumeMasterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) 
   const [arc, setArc] = useState<VolumeArcRecord | null>(null)
   const [stat, setStat] = useState<VolumeStat | null>(null)
 
-  const loadData = async () => {
-    try {
-      const [vols, chaps, arcs] = await Promise.all([
-        indexedDbProjectRepository.getVolumesByProject(projectId),
-        indexedDbProjectRepository.getChaptersByProject(projectId),
-        indexedDbVolumeArcRepository.getAll(projectId),
-      ])
-
-      if (vols && vols.length > 0) {
-        const firstVol = vols[0]
-        setActiveVolume(firstVol)
-        const matchingArc = (arcs || []).find((a) => a.volumeId === firstVol.id) || null
-        setArc(matchingArc)
-        setStat(
-          volumeMasterEngine.calculateVolumeStat(firstVol, chaps || [], matchingArc || undefined),
-        )
-      }
-    } catch (e) {
-      console.error('Failed to load volume drawer data:', e)
-    }
-  }
-
   useEffect(() => {
-    loadData()
+    let cancelled = false
+
+    const loadData = async () => {
+      try {
+        const [vols, chaps, arcs] = await Promise.all([
+          indexedDbProjectRepository.getVolumesByProject(projectId),
+          indexedDbProjectRepository.getChaptersByProject(projectId),
+          indexedDbVolumeArcRepository.getAll(projectId),
+        ])
+
+        if (cancelled) return
+
+        if (vols && vols.length > 0) {
+          const firstVol = vols[0]
+          setActiveVolume(firstVol)
+          const matchingArc = (arcs || []).find((a) => a.volumeId === firstVol.id) || null
+          setArc(matchingArc)
+          setStat(
+            volumeMasterEngine.calculateVolumeStat(firstVol, chaps || [], matchingArc || undefined),
+          )
+        } else {
+          setActiveVolume(null)
+          setArc(null)
+          setStat(null)
+        }
+      } catch (e) {
+        if (!cancelled) console.error('Failed to load volume drawer data:', e)
+      }
+    }
+
+    void loadData()
+    return () => {
+      cancelled = true
+    }
   }, [projectId])
 
   if (!activeVolume || !stat) {

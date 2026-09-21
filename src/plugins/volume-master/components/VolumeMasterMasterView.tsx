@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FC } from 'react'
+import { useState, useEffect, useCallback, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { VolumeArcRecord, VolumeStat, TotalBookMetrics, ActStage } from '../types'
 import { volumeMasterEngine } from '../engine/VolumeMasterEngine'
@@ -16,6 +16,8 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const [chapters, setChapters] = useState<Array<{ volumeId?: string; wordCount?: number }>>([])
   const [arcs, setArcs] = useState<VolumeArcRecord[]>([])
   const [selectedVolId, setSelectedVolId] = useState<string>('')
+  const selectedVolIdRef = useRef('')
+  const [reloadVersion, setReloadVersion] = useState(0)
   const [savedSuccess, setSavedSuccess] = useState(false)
 
   // 当前选中卷的编辑草稿
@@ -52,28 +54,40 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     [],
   )
 
-  const loadAll = useCallback(async () => {
-    try {
-      const [allVols, allChaps, allArcs] = await Promise.all([
-        indexedDbProjectRepository.getVolumesByProject(projectId),
-        indexedDbProjectRepository.getChaptersByProject(projectId),
-        indexedDbVolumeArcRepository.getAll(projectId),
-      ])
+  useEffect(() => {
+    let cancelled = false
 
-      const sortedVols = (allVols || []).sort((a, b) => a.order - b.order)
-      setVolumes(sortedVols)
-      setChapters(allChaps || [])
-      setArcs(allArcs || [])
+    const loadAll = async () => {
+      try {
+        const [allVols, allChaps, allArcs] = await Promise.all([
+          indexedDbProjectRepository.getVolumesByProject(projectId),
+          indexedDbProjectRepository.getChaptersByProject(projectId),
+          indexedDbVolumeArcRepository.getAll(projectId),
+        ])
 
-      if (sortedVols.length > 0) {
-        const initVolId = selectedVolId || sortedVols[0].id
-        setSelectedVolId(initVolId)
-        syncFormWithArc(initVolId, sortedVols, allArcs)
+        if (cancelled) return
+
+        const sortedVols = (allVols || []).sort((a, b) => a.order - b.order)
+        const selectedVolume =
+          sortedVols.find((volume) => volume.id === selectedVolIdRef.current) ?? sortedVols[0]
+        const nextSelectedVolId = selectedVolume?.id ?? ''
+
+        setVolumes(sortedVols)
+        setChapters(allChaps || [])
+        setArcs(allArcs || [])
+        selectedVolIdRef.current = nextSelectedVolId
+        setSelectedVolId(nextSelectedVolId)
+        syncFormWithArc(nextSelectedVolId, sortedVols, allArcs || [])
+      } catch (e) {
+        if (!cancelled) console.error('Failed to load volume master data:', e)
       }
-    } catch (e) {
-      console.error('Failed to load volume master data:', e)
     }
-  }, [projectId, selectedVolId, syncFormWithArc])
+
+    void loadAll()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, reloadVersion, syncFormWithArc])
 
   // 真实 AI 辅助分卷弧线与卷末大悬念推演
   const handleAiVolumeArcRecommend = () => {
@@ -98,11 +112,8 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     }
   }
 
-  useEffect(() => {
-    void loadAll()
-  }, [loadAll])
-
   const handleSelectVolume = (volId: string) => {
+    selectedVolIdRef.current = volId
     setSelectedVolId(volId)
     syncFormWithArc(volId, volumes, arcs)
   }
@@ -131,7 +142,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     await indexedDbVolumeArcRepository.save(record)
     setSavedSuccess(true)
     setTimeout(() => setSavedSuccess(false), 1500)
-    await loadAll()
+    setReloadVersion((version) => version + 1)
   }
 
   const metrics: TotalBookMetrics = volumeMasterEngine.aggregateBookMetrics(volumes, chapters, arcs)
