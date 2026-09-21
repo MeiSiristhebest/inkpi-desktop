@@ -118,13 +118,19 @@ export const WordCountPanelModal: React.FC<
     <Modal
       onClose={onClose}
       title="字数面板"
+      ariaLabelledBy="word-count-modal-title"
       widthClass="max-w-4xl"
       panelClassName="bg-transparent border-0 shadow-none p-0 overflow-visible max-h-[90vh]"
     >
       <div className="w-full bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-[var(--ink-shadow-lg)] flex flex-col max-h-[90vh] overflow-hidden text-[var(--ink-text)] font-sans">
         {/* 弹窗头部 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--ink-border)]">
-          <h2 className="text-[16px] font-bold text-[var(--ink-text)] tracking-tight">字数面板</h2>
+          <h2
+            id="word-count-modal-title"
+            className="text-[16px] font-bold text-[var(--ink-text)] tracking-tight"
+          >
+            字数面板
+          </h2>
           <button
             type="button"
             onClick={onClose}

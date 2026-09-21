@@ -32,9 +32,17 @@ export const ConfirmDialog = ({
 }: ConfirmDialogProps) => {
   if (!open) return null
   return (
-    <Modal onClose={onCancel} title={title} widthClass="max-w-[400px]">
+    <Modal
+      onClose={onCancel}
+      title={title}
+      ariaLabelledBy="confirm-dialog-title"
+      widthClass="max-w-[400px]"
+    >
       <div className="px-5 py-3.5 border-b border-[var(--ink-border)] flex items-center justify-between bg-[var(--ink-bg-panel)]">
-        <h2 className="text-[14px] font-medium text-[var(--ink-text)] flex items-center gap-2">
+        <h2
+          id="confirm-dialog-title"
+          className="text-[14px] font-medium text-[var(--ink-text)] flex items-center gap-2"
+        >
           {danger && <AlertTriangle className="w-4 h-4 text-[var(--ink-danger)]" />}
           {title}
         </h2>

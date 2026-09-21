@@ -20,12 +20,20 @@ export const OveruseWordsModal: React.FC<OveruseWordsModalProps> = ({
   const analysis = useMemo(() => analyzeWordFrequency(plainText, 20), [plainText])
 
   return (
-    <Modal onClose={onClose} title={`高频词与口癖点检 · ${chapterTitle}`} widthClass="max-w-xl">
+    <Modal
+      onClose={onClose}
+      title={`高频词与口癖点检 · ${chapterTitle}`}
+      ariaLabelledBy="overuse-words-modal-title"
+      widthClass="max-w-xl"
+    >
       {/* 顶部标题 */}
       <div className="px-5 py-3.5 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BarChart3 className="w-4 h-4 text-[var(--ink-accent)]" />
-          <h3 className="text-sm font-semibold text-[var(--ink-text)]">
+          <h3
+            id="overuse-words-modal-title"
+            className="text-sm font-semibold text-[var(--ink-text)]"
+          >
             高频词与口癖点检 · {chapterTitle}
           </h3>
         </div>

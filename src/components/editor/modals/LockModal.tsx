@@ -43,6 +43,7 @@ export const LockModal: React.FC<LockModalProps> = ({ currentWordCount, onClose 
     <Modal
       onClose={onClose}
       title="小黑屋 · 强制专注码字"
+      ariaLabelledBy="lock-modal-title"
       widthClass="max-w-md"
       overlayClassName="bg-black/60 backdrop-blur-sm"
       panelClassName="bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-2xl p-6 text-[var(--ink-text)] text-center space-y-5"
@@ -54,7 +55,9 @@ export const LockModal: React.FC<LockModalProps> = ({ currentWordCount, onClose 
       </div>
 
       <div>
-        <h3 className="text-lg font-bold">小黑屋 · 强制专注码字</h3>
+        <h3 id="lock-modal-title" className="text-lg font-bold">
+          小黑屋 · 强制专注码字
+        </h3>
         <p className="text-xs text-[var(--ink-text-muted)] mt-1">
           {isLocked
             ? '已进入锁定状态！完成目标前请专注打字，不可分心。'

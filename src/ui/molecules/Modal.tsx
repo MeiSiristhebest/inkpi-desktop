@@ -15,6 +15,8 @@ interface ModalProps {
   closeOnBackdrop?: boolean
   /** 面板标题文本（自动关联 aria-labelledby） */
   title?: string
+  /** Use a visible heading supplied by the child content as the dialog label. */
+  ariaLabelledBy?: string
 }
 
 /**
@@ -36,9 +38,11 @@ export const Modal: React.FC<ModalProps> = ({
   panelClassName = 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden text-[var(--ink-text)]',
   closeOnBackdrop = true,
   title,
+  ariaLabelledBy,
 }) => {
   const id = useId()
   const titleId = title ? `modal-title-${id}` : undefined
+  const labelledBy = ariaLabelledBy ?? titleId
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
 
@@ -115,11 +119,11 @@ export const Modal: React.FC<ModalProps> = ({
           ref={panelRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={titleId}
+          aria-labelledby={labelledBy}
           className={`w-full ${widthClass} ${panelClassName}`}
           onClick={(e) => e.stopPropagation()}
         >
-          {title && (
+          {title && !ariaLabelledBy && (
             <div className="sr-only">
               <span id={titleId}>{title}</span>
             </div>
