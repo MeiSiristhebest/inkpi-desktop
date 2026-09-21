@@ -1,4 +1,4 @@
-import { useState, type FC } from 'react'
+import { useState, type FC, useEffect } from 'react'
 import { Check, X, Edit2, AlertCircle, Quote, HelpCircle, GitMerge } from 'lucide-react'
 import type { DistillationItem } from '../../ai/proposals/distillationReviewInbox'
 
@@ -23,6 +23,15 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
   const [editName, setEditName] = useState('')
   const [editSummary, setEditSummary] = useState('')
   const [processingId, setProcessingId] = useState<string | null>(null)
+
+  // Esc closes the dialog
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [onClose])
 
   const handleStartEdit = (item: DistillationItem) => {
     setEditingId(item.id)
@@ -83,12 +92,19 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
   return (
     <div
       data-testid="distillation-inbox-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="distillation-inbox-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
     >
       <div
         data-testid="distillation-inbox-modal"
         className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden"
       >
+        {/* Screen-reader only title for aria-labelledby */}
+        <h2 id="distillation-inbox-title" className="sr-only">
+          AI 事实提炼审查箱 (Distillation Review Inbox)
+        </h2>
         {/* Modal Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--ink-border)]">
           <div>

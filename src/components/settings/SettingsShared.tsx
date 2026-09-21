@@ -56,11 +56,14 @@ export const Row = ({ label, hint, children }: RowProps) => (
 
 // ── Segmented ─────────────────────────────────────────────────────────────────
 // 使用 motion 的 layoutId 实现选中指示器的平滑滑动（自动隔离实例，避免跨组件乱飞）
+// ARIA: role="radiogroup" + role="radio" + ArrowLeft/ArrowRight navigation
 export interface SegmentedProps<T extends string | number> {
   value: T
   options: { v: T; label: string }[]
   onChange: (v: T) => void
   layoutId?: string
+  /** Accessible label for the radiogroup */
+  ariaLabel?: string
 }
 
 export const Segmented = <T extends string | number>({
@@ -68,45 +71,92 @@ export const Segmented = <T extends string | number>({
   options,
   onChange,
   layoutId,
+  ariaLabel,
 }: SegmentedProps<T>) => {
   const autoId = useId()
   const activeLayoutId = layoutId || `segmented-active-${autoId}`
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = options.findIndex((o) => o.v === value)
+    if (currentIndex === -1) return
+    let nextIndex = currentIndex
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      nextIndex = (currentIndex + 1) % options.length
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      nextIndex = (currentIndex - 1 + options.length) % options.length
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      nextIndex = 0
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      nextIndex = options.length - 1
+    }
+    if (nextIndex !== currentIndex) {
+      onChange(options[nextIndex].v)
+    }
+  }
+
   return (
-    <div className="relative flex flex-wrap gap-0 p-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] max-w-full">
-      {options.map((o) => (
-        <button
-          key={String(o.v)}
-          type="button"
-          onClick={() => onChange(o.v)}
-          className={`relative z-10 ${segBase} ${value === o.v ? 'text-white font-medium' : segIdle}`}
-        >
-          {/* 滑动背景块：使用唯一的 layoutId，杜绝不同分段控制器之间的 layout 飞跃 */}
-          {value === o.v && (
-            <motion.span
-              layoutId={activeLayoutId}
-              className="absolute inset-0 rounded-lg bg-[var(--ink-accent)] shadow-2xs"
-              style={{ zIndex: -1 }}
-              transition={spring.snappy}
-            />
-          )}
-          {o.label}
-        </button>
-      ))}
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="relative flex flex-wrap gap-0 p-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] max-w-full"
+      onKeyDown={handleKeyDown}
+    >
+      {options.map((o) => {
+        const isActive = value === o.v
+        return (
+          <button
+            key={String(o.v)}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            onClick={() => onChange(o.v)}
+            className={`relative z-10 ${segBase} ${isActive ? 'text-white font-medium' : segIdle}`}
+          >
+            {/* 滑动背景块：使用唯一的 layoutId，杜绝不同分段控制器之间的 layout 飞跃 */}
+            {isActive && (
+              <motion.span
+                layoutId={activeLayoutId}
+                className="absolute inset-0 rounded-lg bg-[var(--ink-accent)] shadow-2xs"
+                style={{ zIndex: -1 }}
+                transition={spring.snappy}
+              />
+            )}
+            {o.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
 
 // ── Slider ────────────────────────────────────────────────────────────────────
+// ARIA: native <input type="range"> already provides role="slider" + arrow-key support.
+// We add explicit aria-label and aria-valuetext for screen-reader clarity.
 export interface SliderProps {
   min: number
   max: number
   step?: number
   value: number
   onChange: (v: number) => void
+  /** Accessible label for the slider */
+  ariaLabel?: string
+  /** Custom value text (e.g. "50%") shown to screen readers */
+  ariaValueText?: string
 }
 
-export const Slider = ({ min, max, step = 1, value, onChange }: SliderProps) => (
+export const Slider = ({
+  min,
+  max,
+  step = 1,
+  value,
+  onChange,
+  ariaLabel,
+  ariaValueText,
+}: SliderProps) => (
   <input
     type="range"
     min={min}
@@ -114,35 +164,44 @@ export const Slider = ({ min, max, step = 1, value, onChange }: SliderProps) => 
     step={step}
     value={value}
     onChange={(e) => onChange(Number(e.target.value))}
+    aria-label={ariaLabel}
+    aria-valuetext={ariaValueText ?? String(value)}
     className="w-48 sm:w-56 accent-[var(--ink-accent)] cursor-pointer"
   />
 )
 
 // ── Switch ────────────────────────────────────────────────────────────────────
 // 真正的 motion 弹簧驱动：底座颜色 + 圆形滑块位移均有物理弹簧
+// ARIA: role="switch" + aria-checked toggled by Space/Enter (native button behavior)
 export interface SwitchProps {
   checked: boolean
   onChange: (v: boolean) => void
+  /** Accessible label for the switch */
   ariaLabel?: string
+  /** Visible label text rendered next to the switch */
+  label?: string
 }
 
-export const Switch = ({ checked, onChange, ariaLabel }: SwitchProps) => (
-  <motion.button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    aria-label={ariaLabel}
-    onClick={() => onChange(!checked)}
-    {...gesture.button}
-    className={`relative w-10 h-5.5 rounded-full cursor-pointer select-none flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-accent)] ${checked ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'}`}
-    style={{ WebkitTapHighlightColor: 'transparent' }}
-  >
-    <motion.span
-      animate={{ x: checked ? 18 : 0 }}
-      transition={spring.snappy}
-      className="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-xs"
-    />
-  </motion.button>
+export const Switch = ({ checked, onChange, ariaLabel, label }: SwitchProps) => (
+  <div className="inline-flex items-center gap-2">
+    <motion.button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      {...gesture.button}
+      className={`relative w-10 h-5.5 rounded-full cursor-pointer select-none flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-accent)] ${checked ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'}`}
+      style={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <motion.span
+        animate={{ x: checked ? 18 : 0 }}
+        transition={spring.snappy}
+        className="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-xs"
+      />
+    </motion.button>
+    {label && <span className="text-[12.5px] text-[var(--ink-text)] select-none">{label}</span>}
+  </div>
 )
 
 // ── PrimaryButton ─────────────────────────────────────────────────────────────

@@ -67,5 +67,5 @@ export const ProjectContextMenu = ({
       },
     })
   }
-  return <ContextMenu items={items} />
+  return <ContextMenu items={items} onClose={onClose} />
 }

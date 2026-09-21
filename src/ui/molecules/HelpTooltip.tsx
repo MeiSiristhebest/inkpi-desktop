@@ -4,6 +4,7 @@ import {
   useEffect,
   useCallback,
   useLayoutEffect,
+  useId,
   type FC,
   type ReactNode,
 } from 'react'
@@ -32,11 +33,14 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
   width = '18rem',
   side = 'left',
 }) => {
+  const id = useId()
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ left: number; top: number; w: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const popoverId = `help-popover-${id}`
+  const describedById = `help-description-${id}`
 
   const handleMouseEnter = () => {
     clearTimeout(leaveTimerRef.current)
@@ -144,6 +148,10 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
       {open && (
         <div
           ref={popoverRef}
+          id={popoverId}
+          role="dialog"
+          aria-labelledby={popoverId}
+          aria-describedby={describedById}
           style={{
             position: 'fixed',
             left: coords?.left ?? 0,
@@ -155,7 +163,7 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
         >
           <div className="flex items-center gap-1.5 font-bold text-[12.5px] text-[var(--ink-text)] border-b border-[var(--ink-border)] pb-2 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--ink-accent)] shrink-0" />
-            <span>{title}</span>
+            <span id={describedById}>{title}</span>
           </div>
           <div className="text-[11.5px] text-[var(--ink-text-muted)] whitespace-pre-line leading-relaxed">
             {children}
