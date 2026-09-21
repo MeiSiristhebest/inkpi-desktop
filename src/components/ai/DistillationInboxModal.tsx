@@ -101,16 +101,12 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
         data-testid="distillation-inbox-modal"
         className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden"
       >
-        {/* Screen-reader only title for aria-labelledby */}
-        <h2 id="distillation-inbox-title" className="sr-only">
-          AI 事实提炼审查箱 (Distillation Review Inbox)
-        </h2>
         {/* Modal Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--ink-border)]">
           <div>
-            <h3 className="text-[15px] font-semibold text-[var(--ink-text)]">
+            <h2 id="distillation-inbox-title" className="text-[15px] font-semibold text-[var(--ink-text)]">
               AI 事实提炼审查箱 (Distillation Review Inbox)
-            </h3>
+            </h2>
             <p className="text-[12px] text-[var(--ink-text-muted)] mt-0.5">
               审查从章节中提取的新事实、时空事件与伏笔。采纳后将作为权威事实落库并升级正史溯源。
             </p>
