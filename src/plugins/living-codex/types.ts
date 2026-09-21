@@ -1,5 +1,7 @@
 // 活体世界观实体图谱 (living-codex) 领域模型
 
+import type { Provenance } from '../../domain/story/provenance'
+
 export type CodexCategory =
   | 'character' // 角色卡 (主要/次要/NPC)
   | 'faction' // 国家势力 (王朝/宗门/世家/商会/魔道)
@@ -38,6 +40,7 @@ export interface CodexEntity {
 
   createdAt: number
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface ScanHit {

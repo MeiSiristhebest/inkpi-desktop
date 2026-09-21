@@ -1,6 +1,8 @@
 import type { StoryEntity } from './entities'
 import type { StoryRelation } from './relations'
 import type { StoryEvent } from './events'
+import type { StoryScene } from './scenes'
+import type { StoryConstraint, StoryConstraintSeverity } from './constraints'
 import type { NarrativePromise, NarrativePromiseStatus } from './promises'
 import {
   assertProvenance,
@@ -17,7 +19,16 @@ import { assertStoryState, createStoryState } from './storyState'
 export type StoryStateCollection = Exclude<keyof StoryState, 'revision'>
 
 /** Plugin ids that currently have an explicit local StoryState projection route. */
-export type StoryPluginSourceId = 'living-codex' | 'timeline-grid' | 'promise-ledger'
+export type StoryPluginSourceId =
+  | 'living-codex'
+  | 'timeline-grid'
+  | 'promise-ledger'
+  | 'multi-calendar'
+  | 'geography-map'
+  | 'faction-matrix'
+  | 'power-system'
+  | 'scene-beats'
+  | 'expectation-engine'
 
 /**
  * Explicit source-plugin collection to canonical StoryState collection mapping.
@@ -48,6 +59,31 @@ export const STORY_PLUGIN_COLLECTION_MAP = {
     entries: 'promises',
     promise: 'promises',
     promises: 'promises',
+  },
+  'multi-calendar': {
+    calendar: 'entities',
+    calendars: 'entities',
+    chronology: 'events',
+    event: 'events',
+  },
+  'geography-map': {
+    map: 'entities',
+    maps: 'entities',
+  },
+  'faction-matrix': {
+    diplomacy: 'relations',
+    diplomacies: 'relations',
+  },
+  'power-system': {
+    system: 'entities',
+  },
+  'scene-beats': {
+    plan: 'scenes',
+    plans: 'scenes',
+  },
+  'expectation-engine': {
+    contract: 'constraints',
+    contracts: 'constraints',
   },
 } as const satisfies Record<StoryPluginSourceId, Readonly<Record<string, StoryStateCollection>>>
 
@@ -137,7 +173,13 @@ export interface StoryPluginProjectionOptions {
 }
 
 type CanonicalStoryRecord =
-  StoryEntity | StoryRelation | StoryEvent | StoryTimeline | NarrativePromise
+  | StoryEntity
+  | StoryRelation
+  | StoryEvent
+  | StoryScene
+  | StoryConstraint
+  | StoryTimeline
+  | NarrativePromise
 
 interface ProjectionRoute {
   targetCollection: StoryStateCollection
@@ -168,6 +210,31 @@ const PROJECTION_ROUTES: ProjectionRoutes = {
     entries: { targetCollection: 'promises', project: projectPromiseLedgerEntry },
     promise: { targetCollection: 'promises', project: projectPromiseLedgerEntry },
     promises: { targetCollection: 'promises', project: projectPromiseLedgerEntry },
+  },
+  'multi-calendar': {
+    calendar: { targetCollection: 'entities', project: projectCalendarDefinition },
+    calendars: { targetCollection: 'entities', project: projectCalendarDefinition },
+    chronology: { targetCollection: 'events', project: projectChronologyEvent },
+    event: { targetCollection: 'events', project: projectChronologyEvent },
+  },
+  'geography-map': {
+    map: { targetCollection: 'entities', project: projectGeoMap },
+    maps: { targetCollection: 'entities', project: projectGeoMap },
+  },
+  'faction-matrix': {
+    diplomacy: { targetCollection: 'relations', project: projectFactionDiplomacy },
+    diplomacies: { targetCollection: 'relations', project: projectFactionDiplomacy },
+  },
+  'power-system': {
+    system: { targetCollection: 'entities', project: projectPowerSystem },
+  },
+  'scene-beats': {
+    plan: { targetCollection: 'scenes', project: projectSceneBeatPlan },
+    plans: { targetCollection: 'scenes', project: projectSceneBeatPlan },
+  },
+  'expectation-engine': {
+    contract: { targetCollection: 'constraints', project: projectExpectationConstraint },
+    contracts: { targetCollection: 'constraints', project: projectExpectationConstraint },
   },
 }
 
@@ -253,6 +320,175 @@ export function projectPluginRecordsToStoryState(
 
   assertStoryState(state)
   return state
+}
+
+function projectSceneBeatPlan(record: Record<string, unknown>, provenance: Provenance): StoryScene {
+  const id = requiredStringValue(record.id, 'id', 'scene-beats/plan')
+  const title = optionalString(record.title, `scene-beats/plan/${id}`, 'title')
+  const documentId = optionalString(
+    record.documentId ?? record.chapterId,
+    `scene-beats/plan/${id}`,
+    'documentId or chapterId',
+  )
+  const order = record.order
+  if (order !== undefined && (typeof order !== 'number' || !Number.isFinite(order))) {
+    throw new TypeError(`Invalid order: scene-beats/plan/${id}`)
+  }
+  const summary = optionalString(record.summary, `scene-beats/plan/${id}`, 'summary')
+  return {
+    id,
+    ...(title === undefined ? {} : { title }),
+    ...(documentId === undefined ? {} : { documentId }),
+    blockIds: sortStrings(
+      stringArray(record.blockIds ?? record.beatIds, `scene-beats/plan/${id}`, 'blockIds') ?? [],
+    ),
+    entityIds: sortStrings(
+      stringArray(record.entityIds, `scene-beats/plan/${id}`, 'entityIds') ?? [],
+    ),
+    eventIds: sortStrings(stringArray(record.eventIds, `scene-beats/plan/${id}`, 'eventIds') ?? []),
+    ...(order === undefined ? {} : { order }),
+    ...(summary === undefined ? {} : { summary }),
+    provenance: clone(provenance),
+  }
+}
+
+function projectExpectationConstraint(
+  record: Record<string, unknown>,
+  provenance: Provenance,
+): StoryConstraint {
+  const id = requiredStringValue(record.id, 'id', 'expectation-engine/contract')
+  const type = requiredStringValue(record.type, 'type', `expectation-engine/contract/${id}`)
+  const description = requiredStringValue(
+    record.description,
+    'description',
+    `expectation-engine/contract/${id}`,
+  )
+  const severity = record.severity
+  if (!isConstraintSeverity(severity)) {
+    throw new Error(`Invalid constraint severity: expectation-engine/contract/${id}`)
+  }
+  return {
+    id,
+    type,
+    description,
+    subjectIds: sortStrings(
+      stringArray(record.subjectIds, `expectation-engine/contract/${id}`, 'subjectIds') ?? [],
+    ),
+    severity,
+    provenance: clone(provenance),
+  }
+}
+
+function isConstraintSeverity(value: unknown): value is StoryConstraintSeverity {
+  return value === 'info' || value === 'warning' || value === 'error'
+}
+
+function projectCalendarDefinition(
+  record: Record<string, unknown>,
+  provenance: Provenance,
+): StoryEntity {
+  const id = requiredStringValue(record.id, 'id', 'multi-calendar/calendar')
+  const name = requiredStringValue(record.name, 'name', `multi-calendar/calendar/${id}`)
+  const attributes = objectValue(record.attributes, `multi-calendar/calendar/${id}`, 'attributes')
+  return {
+    id,
+    kind: 'calendar',
+    name,
+    aliases: [],
+    attributes: cloneObject(attributes ?? {}),
+    provenance: clone(provenance),
+  }
+}
+
+function projectChronologyEvent(
+  record: Record<string, unknown>,
+  provenance: Provenance,
+): StoryEvent {
+  const id = requiredStringValue(record.id, 'id', 'multi-calendar/chronology')
+  const title = requiredStringValue(
+    record.eventSummary ?? record.title ?? record.name,
+    'eventSummary, title, or name',
+    `multi-calendar/chronology/${id}`,
+  )
+  const occurredAt = temporalValue(
+    record.absoluteDayIndex ?? record.occurredAt,
+    `multi-calendar/chronology/${id}`,
+    'absoluteDayIndex or occurredAt',
+  )
+  const entityIds = stringArray(
+    record.entityIds ?? record.relatedEntityIds,
+    `multi-calendar/chronology/${id}`,
+    'entityIds',
+  )
+  const attributes = objectValue(record.attributes, `multi-calendar/chronology/${id}`, 'attributes')
+  return {
+    id,
+    type: 'chronology-event',
+    title,
+    ...(occurredAt === undefined ? {} : { occurredAt }),
+    entityIds: sortStrings(entityIds ?? []),
+    attributes: cloneObject(attributes ?? {}),
+    provenance: clone(provenance),
+  }
+}
+
+function projectGeoMap(record: Record<string, unknown>, provenance: Provenance): StoryEntity {
+  const id = requiredStringValue(record.id, 'id', 'geography-map/map')
+  const name = requiredStringValue(
+    record.name ?? record.locationId,
+    'name or locationId',
+    `geography-map/map/${id}`,
+  )
+  const attributes = objectValue(record.attributes, `geography-map/map/${id}`, 'attributes')
+  return {
+    id,
+    kind: 'geography-map',
+    name,
+    aliases: [],
+    attributes: cloneObject(attributes ?? {}),
+    provenance: clone(provenance),
+  }
+}
+
+function projectFactionDiplomacy(
+  record: Record<string, unknown>,
+  provenance: Provenance,
+): StoryRelation {
+  const id = requiredStringValue(record.id, 'id', 'faction-matrix/diplomacy')
+  const sourceEntityId = requiredStringValue(
+    record.factionAId,
+    'factionAId',
+    `faction-matrix/diplomacy/${id}`,
+  )
+  const targetEntityId = requiredStringValue(
+    record.factionBId,
+    'factionBId',
+    `faction-matrix/diplomacy/${id}`,
+  )
+  const stance = requiredStringValue(record.stance, 'stance', `faction-matrix/diplomacy/${id}`)
+  const attributes = objectValue(record.attributes, `faction-matrix/diplomacy/${id}`, 'attributes')
+  return {
+    id,
+    sourceEntityId,
+    targetEntityId,
+    type: `diplomacy:${stance}`,
+    attributes: cloneObject(attributes ?? {}),
+    provenance: clone(provenance),
+  }
+}
+
+function projectPowerSystem(record: Record<string, unknown>, provenance: Provenance): StoryEntity {
+  const id = requiredStringValue(record.id, 'id', 'power-system/system')
+  const name = requiredStringValue(record.systemName ?? record.name, 'systemName or name', id)
+  const attributes = objectValue(record.attributes, `power-system/system/${id}`, 'attributes')
+  return {
+    id,
+    kind: 'power-system',
+    name,
+    aliases: [],
+    attributes: cloneObject(attributes ?? {}),
+    provenance: clone(provenance),
+  }
 }
 
 function projectCodexEntity(record: Record<string, unknown>, provenance: Provenance): StoryEntity {
@@ -609,7 +845,7 @@ function assignCollection(
       state.events = records as Record<string, StoryEvent>
       break
     case 'scenes':
-      // SAFETY: scene records are empty in the current projection routes.
+      // SAFETY: scene records are produced only by the validated scene-beats route.
       state.scenes = records as unknown as StoryState['scenes']
       break
     case 'timelines':
@@ -619,9 +855,11 @@ function assignCollection(
       state.promises = records as Record<string, NarrativePromise>
       break
     case 'constraints':
-      // SAFETY: constraint records are empty in the current projection routes.
+      // SAFETY: constraint records are produced only by the validated expectation route.
       state.constraints = records as unknown as StoryState['constraints']
       break
+    default:
+      throw new Error(`Unsupported StoryState collection: ${collection}`)
   }
 }
 

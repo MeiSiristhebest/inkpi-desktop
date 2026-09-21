@@ -119,6 +119,105 @@ describe('canonical StoryState plugin projection', () => {
     })
   })
 
+  it('projects calendar, geography, faction, power, scene, and constraint records into canonical collections', () => {
+    const state = projectPluginRecordsToStoryState([
+      source('multi-calendar', 'calendar', [
+        {
+          id: 'calendar:project-1:ancient',
+          name: '上古灵历',
+          attributes: { projectId: 'project-1', monthsPerYear: 12 },
+          provenance: authorFact,
+        },
+      ]),
+      source('multi-calendar', 'chronology', [
+        {
+          id: 'calendar-event:project-1:chapter-1',
+          eventSummary: '抵达城门',
+          absoluteDayIndex: 42,
+          attributes: { projectId: 'project-1', chapterId: 'chapter-1' },
+          provenance: authorFact,
+        },
+      ]),
+      source('geography-map', 'map', [
+        {
+          id: 'geography-map:map-1',
+          locationId: 'loc-world',
+          attributes: { projectId: 'project-1', scaleKmPerCell: 10 },
+          provenance: authorFact,
+        },
+      ]),
+      source('faction-matrix', 'diplomacy', [
+        {
+          id: 'faction-diplomacy:dip-1',
+          factionAId: 'faction-a',
+          factionBId: 'faction-b',
+          stance: 'hostile',
+          attributes: { projectId: 'project-1', reputationScore: -40 },
+          provenance: authorFact,
+        },
+      ]),
+      source('power-system', 'system', [
+        {
+          id: 'power-system:project-1',
+          systemName: '九境体系',
+          attributes: { projectId: 'project-1', tiers: ['炼气', '筑基'] },
+          provenance: authorFact,
+        },
+      ]),
+      source('scene-beats', 'plan', [
+        {
+          id: 'scene:plan-1',
+          title: '第一章场景节拍',
+          documentId: 'chapter-1',
+          blockIds: ['beat-1'],
+          entityIds: [],
+          eventIds: [],
+          provenance: authorFact,
+        },
+      ]),
+      source('expectation-engine', 'contract', [
+        {
+          id: 'constraint:expectation:contract-1',
+          type: 'expectation:broken',
+          description: '主角必须偿还代价',
+          subjectIds: ['chapter-1'],
+          severity: 'error',
+          provenance: authorFact,
+        },
+      ]),
+    ])
+
+    expect(state.entities['calendar:project-1:ancient']).toMatchObject({
+      kind: 'calendar',
+      name: '上古灵历',
+    })
+    expect(state.events['calendar-event:project-1:chapter-1']).toMatchObject({
+      type: 'chronology-event',
+      title: '抵达城门',
+      occurredAt: 42,
+    })
+    expect(state.entities['geography-map:map-1']).toMatchObject({ kind: 'geography-map' })
+    expect(state.relations['faction-diplomacy:dip-1']).toMatchObject({
+      sourceEntityId: 'faction-a',
+      targetEntityId: 'faction-b',
+      type: 'diplomacy:hostile',
+    })
+    expect(state.entities['power-system:project-1']).toMatchObject({
+      kind: 'power-system',
+      name: '九境体系',
+    })
+    expect(state.scenes['scene:plan-1']).toMatchObject({
+      title: '第一章场景节拍',
+      documentId: 'chapter-1',
+      blockIds: ['beat-1'],
+    })
+    expect(state.constraints['constraint:expectation:contract-1']).toMatchObject({
+      type: 'expectation:broken',
+      severity: 'error',
+      subjectIds: ['chapter-1'],
+    })
+  })
+
   it('requires every record to carry a valid id and complete provenance', () => {
     const base = {
       id: 'entity:one',
@@ -270,6 +369,31 @@ describe('canonical StoryState plugin projection', () => {
         entries: 'promises',
         promise: 'promises',
         promises: 'promises',
+      },
+      'multi-calendar': {
+        calendar: 'entities',
+        calendars: 'entities',
+        chronology: 'events',
+        event: 'events',
+      },
+      'geography-map': {
+        map: 'entities',
+        maps: 'entities',
+      },
+      'faction-matrix': {
+        diplomacy: 'relations',
+        diplomacies: 'relations',
+      },
+      'power-system': {
+        system: 'entities',
+      },
+      'scene-beats': {
+        plan: 'scenes',
+        plans: 'scenes',
+      },
+      'expectation-engine': {
+        contract: 'constraints',
+        contracts: 'constraints',
       },
     })
   })

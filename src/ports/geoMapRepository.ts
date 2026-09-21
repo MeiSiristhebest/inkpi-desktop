@@ -1,3 +1,5 @@
+import type { Provenance } from '../domain/story/provenance'
+
 export type TerrainType = 'land' | 'mountain' | 'water' | 'city' | 'barrier'
 
 export interface GeoMapCell {
@@ -21,6 +23,7 @@ export interface GeoMapGridRecord {
     timelineEventIds: string[] // 关联历史事件
   }
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface GeoMapRepository {

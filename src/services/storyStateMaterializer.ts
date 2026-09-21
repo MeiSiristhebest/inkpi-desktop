@@ -13,6 +13,12 @@ import type { CodexEntity } from '../plugins/living-codex/types'
 import type { NarrativeThread, TimelineNode } from '../plugins/timeline-grid/types'
 import type { PromiseLedgerEntry } from '../plugins/promise-ledger/types'
 import type { CardRecord, FormDataRecord, TableRowRecord } from '../types'
+import type { GeoMapGridRecord } from '../ports/geoMapRepository'
+import type { FactionDiplomacyRecord } from '../ports/factionDiplomacyRepository'
+import type { MultiCalendarProjectRecord } from '../ports/multiCalendarRepository'
+import type { PowerTierSystem } from '../ports/powerTierRepository'
+import type { ChapterBeatPlan } from '../plugins/scene-beats/types'
+import type { ExpectationContract } from '../ports/expectationRepository'
 import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
@@ -20,7 +26,7 @@ const domainChangeStore = new IndexedDbDomainChangeStore()
 /**
  * 生产级 StoryState 物化器（StoryState Production Materializer）
  * 职责：
- * 1. 从 IndexedDB（living-codex, timeline-grid, promise-ledger）读取指定 workspaceId 的全部领域数据；
+ * 1. 从 IndexedDB 读取指定 workspaceId 的全部 canonical 插件领域数据；
  *    严格 fail-closed：数据库读取出错时不降级为空数组，避免清空读模型；
  * 2. 自动补充或规范化 provenance 字段（遵循 INV-05：事实源合规）；
  * 3. 提取 Codex 实体中的 relations 关系，分配确定性 ID 并投影入 StoryState.relations；
@@ -68,7 +74,7 @@ export class StoryStateMaterializer {
   }
 
   private async runMaterialize(workspaceId: string): Promise<StoryState | undefined> {
-    // 1. 并发从持久化存储中读取 3 大核心世界观插件的数据
+    // 1. 并发从持久化存储中读取 canonical 插件与 legacy 领域数据
     // 严格 fail-closed：如果任一读取失败，直接抛出，决不降级为 [] 导致冲掉 read model
     const [
       allEntities,
@@ -78,6 +84,12 @@ export class StoryStateMaterializer {
       allFormData,
       allTableRows,
       allCardRecords,
+      allCalendarProjects,
+      allGeoMaps,
+      allFactionDiplomacies,
+      allPowerTierSystems,
+      allSceneBeatPlans,
+      allExpectationContracts,
       latestWsRev,
     ] = await Promise.all([
       db.getAll<CodexEntity>('codexEntities'),
@@ -87,6 +99,12 @@ export class StoryStateMaterializer {
       db.getAll<FormDataRecord>('formData'),
       db.getAll<TableRowRecord>('tableRows'),
       db.getAll<CardRecord>('cardRecords'),
+      db.getAll<MultiCalendarProjectRecord>('multiCalendars'),
+      db.getAll<GeoMapGridRecord>('geoMapGrids'),
+      db.getAll<FactionDiplomacyRecord>('factionDiplomacies'),
+      db.getAll<PowerTierSystem>('powerTierSystems'),
+      db.getAll<ChapterBeatPlan>('sceneBeats'),
+      db.getAll<ExpectationContract>('expectationContracts'),
       domainChangeStore.latestRevision(workspaceId),
     ])
 
@@ -98,6 +116,20 @@ export class StoryStateMaterializer {
     const formData = allFormData.filter((record) => record.projectId === workspaceId)
     const tableRows = allTableRows.filter((record) => record.projectId === workspaceId)
     const cardRecords = allCardRecords.filter((record) => record.projectId === workspaceId)
+    const calendarProjects = allCalendarProjects.filter(
+      (record) => record.projectId === workspaceId,
+    )
+    const geoMaps = allGeoMaps.filter((record) => record.projectId === workspaceId)
+    const factionDiplomacies = allFactionDiplomacies.filter(
+      (record) => record.projectId === workspaceId,
+    )
+    const powerTierSystems = allPowerTierSystems.filter(
+      (record) => record.projectId === workspaceId,
+    )
+    const sceneBeatPlans = allSceneBeatPlans.filter((record) => record.projectId === workspaceId)
+    const expectationContracts = allExpectationContracts.filter(
+      (record) => record.projectId === workspaceId,
+    )
 
     // 2. 遵循 INV-05 fail-closed 溯源保护：
     // 未显式提供可信 provenance 的历史/导入数据，降级标记为 'derived'/'hypothesis'，绝不静默伪造成 'canonical-fact'
@@ -139,6 +171,114 @@ export class StoryStateMaterializer {
       provenance: (p as any).provenance ?? fallbackProvenance,
     }))
 
+    const calendarRecords = calendarProjects.flatMap((project) =>
+      project.calendars.map((calendar) => ({
+        id: `calendar:${project.id}:${calendar.id}`,
+        name: calendar.name,
+        projectId: project.projectId,
+        calendarId: calendar.id,
+        attributes: {
+          projectId: project.projectId,
+          calendarId: calendar.id,
+          epochOffsetDays: calendar.epochOffsetDays,
+          monthsPerYear: calendar.monthsPerYear,
+          daysPerMonth: [...calendar.daysPerMonth],
+          ...(calendar.leapRules === undefined ? {} : { leapRules: calendar.leapRules }),
+        },
+        provenance: calendar.provenance ?? project.provenance ?? fallbackProvenance,
+      })),
+    )
+
+    const chronologyRecords = calendarProjects.flatMap((project) =>
+      project.chronologyEvents.map((event) => ({
+        id: `calendar-event:${project.id}:${event.chapterId}`,
+        eventSummary: event.eventSummary,
+        chapterId: event.chapterId,
+        chapterOrder: event.chapterOrder,
+        chapterTitle: event.chapterTitle,
+        calendarId: event.timePoint.calendarId,
+        year: event.timePoint.year,
+        month: event.timePoint.month,
+        day: event.timePoint.day,
+        absoluteDayIndex: event.timePoint.absoluteDayIndex,
+        attributes: {
+          projectId: project.projectId,
+          chapterId: event.chapterId,
+          chapterOrder: event.chapterOrder,
+          chapterTitle: event.chapterTitle,
+          calendarId: event.timePoint.calendarId,
+          year: event.timePoint.year,
+          month: event.timePoint.month,
+          day: event.timePoint.day,
+        },
+        provenance: event.provenance ?? project.provenance ?? fallbackProvenance,
+      })),
+    )
+
+    const geoMapRecords = geoMaps.map((map) => ({
+      id: `geography-map:${map.id}`,
+      name: map.locationId,
+      attributes: {
+        projectId: map.projectId,
+        locationId: map.locationId,
+        ...(map.parentLocationId === undefined ? {} : { parentLocationId: map.parentLocationId }),
+        scaleKmPerCell: map.scaleKmPerCell,
+        bounds: map.bounds,
+        occupiedCells: map.occupiedCells,
+        fillColor: map.fillColor,
+        linkedOverlays: map.linkedOverlays,
+      },
+      provenance: map.provenance ?? fallbackProvenance,
+    }))
+
+    const diplomacyRecords = factionDiplomacies.map((diplomacy) => ({
+      id: `faction-diplomacy:${diplomacy.id}`,
+      factionAId: diplomacy.factionAId,
+      factionBId: diplomacy.factionBId,
+      attributes: {
+        projectId: diplomacy.projectId,
+        factionAName: diplomacy.factionAName,
+        factionBName: diplomacy.factionBName,
+        stance: diplomacy.stance,
+        reputationScore: diplomacy.reputationScore,
+        ...(diplomacy.notes === undefined ? {} : { notes: diplomacy.notes }),
+      },
+      stance: diplomacy.stance,
+      provenance: diplomacy.provenance ?? fallbackProvenance,
+    }))
+
+    const powerSystemRecords = powerTierSystems.map((system) => ({
+      id: `power-system:${system.projectId}`,
+      systemName: system.systemName,
+      attributes: {
+        projectId: system.projectId,
+        systemName: system.systemName,
+        tiers: [...system.tiers],
+        specialModifiers: [...system.specialModifiers],
+      },
+      provenance: system.provenance ?? fallbackProvenance,
+    }))
+
+    const sceneRecords = sceneBeatPlans.map((plan) => ({
+      id: `scene:${plan.id}`,
+      title: `场景节拍：${plan.chapterId}`,
+      documentId: plan.chapterId,
+      blockIds: plan.beats.map((beat) => beat.id),
+      entityIds: [],
+      eventIds: [],
+      summary: plan.beats.map((beat) => beat.title).join('；'),
+      provenance: plan.provenance ?? fallbackProvenance,
+    }))
+
+    const constraintRecords = expectationContracts.map((contract) => ({
+      id: `constraint:expectation:${contract.id}`,
+      type: `expectation:${contract.status}`,
+      description: contract.notes ? `${contract.title}：${contract.notes}` : contract.title,
+      subjectIds: contract.chapterId ? [contract.chapterId] : [],
+      severity: expectationConstraintSeverity(contract.status),
+      provenance: contract.provenance ?? fallbackProvenance,
+    }))
+
     // 3. 构建投影输入集合
     const sources: StoryPluginCollectionInput[] = [
       {
@@ -166,6 +306,41 @@ export class StoryStateMaterializer {
         collection: 'entry',
         records: promiseRecords,
       },
+      {
+        sourceId: 'multi-calendar',
+        collection: 'calendar',
+        records: calendarRecords,
+      },
+      {
+        sourceId: 'multi-calendar',
+        collection: 'chronology',
+        records: chronologyRecords,
+      },
+      {
+        sourceId: 'geography-map',
+        collection: 'map',
+        records: geoMapRecords,
+      },
+      {
+        sourceId: 'faction-matrix',
+        collection: 'diplomacy',
+        records: diplomacyRecords,
+      },
+      {
+        sourceId: 'power-system',
+        collection: 'system',
+        records: powerSystemRecords,
+      },
+      {
+        sourceId: 'scene-beats',
+        collection: 'plan',
+        records: sceneRecords,
+      },
+      {
+        sourceId: 'expectation-engine',
+        collection: 'contract',
+        records: constraintRecords,
+      },
     ]
 
     // 4. 读取当前已存的 StoryState 获取当前 revision
@@ -183,8 +358,8 @@ export class StoryStateMaterializer {
     const legacyEntityMap = Object.fromEntries(legacyEntities.map((entity) => [entity.id, entity]))
 
     // 6. 分区物化保护（Partition Merging）：
-    // 更新 entities, relations, timelines, events, promises；
-    // 严格保留现有 StoryState 中的其他分区（scenes, constraints 等），避免被破坏
+    // 更新所有 canonical plugin 分区；scenes/constraints 仅替换本物化器拥有的命名空间，
+    // 严格保留其他 StoryState 记录，避免破坏外部来源的数据。
     // 对 relations 进行分区清理：过滤掉旧有的 codex-rel:* 关系，防止已删除关系残留幽灵
     const preservedRelations = Object.fromEntries(
       Object.entries(existingState?.relations ?? {}).filter(([id]) => !id.startsWith('codex-rel:')),
@@ -193,16 +368,24 @@ export class StoryStateMaterializer {
       ...preservedRelations,
       ...projectedState.relations,
     }
+    const preservedScenes = Object.fromEntries(
+      Object.entries(existingState?.scenes ?? {}).filter(([id]) => !id.startsWith('scene:')),
+    )
+    const preservedConstraints = Object.fromEntries(
+      Object.entries(existingState?.constraints ?? {}).filter(
+        ([id]) => !id.startsWith('constraint:expectation:'),
+      ),
+    )
 
     const newState: StoryState = {
       revision: nextRevision,
       entities: { ...projectedState.entities, ...legacyEntityMap },
       relations: mergedRelations,
       events: projectedState.events,
-      scenes: existingState?.scenes ?? {},
+      scenes: { ...preservedScenes, ...projectedState.scenes },
       timelines: projectedState.timelines,
       promises: projectedState.promises,
-      constraints: existingState?.constraints ?? {},
+      constraints: { ...preservedConstraints, ...projectedState.constraints },
     }
 
     // 比较内容是否产生实质变化（忽略 revision 本身）
@@ -225,6 +408,14 @@ export class StoryStateMaterializer {
 }
 
 export const storyStateMaterializer = new StoryStateMaterializer()
+
+function expectationConstraintSeverity(
+  status: ExpectationContract['status'],
+): 'info' | 'warning' | 'error' {
+  if (status === 'broken') return 'error'
+  if (status === 'building' || status === 'climax') return 'warning'
+  return 'info'
+}
 
 function isStateContentEqual(a: StoryState, b: StoryState): boolean {
   const cleanA = { ...a, revision: 0 }

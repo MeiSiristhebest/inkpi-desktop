@@ -1,5 +1,7 @@
 // 时空因果大纲网格 (timeline-grid) 领域模型与类型定义
 
+import type { Provenance } from '../../domain/story/provenance'
+
 export interface NarrativeThread {
   id: string
   projectId: string
@@ -7,6 +9,7 @@ export interface NarrativeThread {
   color: string // 叙事线标识色彩 (HEX / CSS)
   characterIds: string[]
   order: number
+  provenance?: Provenance
 }
 
 export type NodeStatus = 'planned' | 'drafted' | 'completed' | 'cut'
@@ -26,6 +29,7 @@ export interface TimelineNode {
   emotionalPolarity: number // -1.0 (悲/绝境) ~ +1.0 (喜/爆点/爽)
   createdAt: number
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface NarrativeConflict {

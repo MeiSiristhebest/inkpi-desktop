@@ -1,6 +1,10 @@
 import { db } from '../db/indexedDB'
 import type { TableRowRecord } from '../types'
 import type { TableRecordRepository } from '../ports/tableRecordRepository'
+import {
+  appendAuthoritativePluginDelete,
+  appendAuthoritativePluginUpsert,
+} from '../services/authoritativePluginWrite'
 
 export class IndexedDbTableRecordRepository implements TableRecordRepository {
   async getRows(projectId: string, tabId: string): Promise<TableRowRecord[]> {
@@ -9,11 +13,25 @@ export class IndexedDbTableRecordRepository implements TableRecordRepository {
   }
 
   async saveRow(row: TableRowRecord): Promise<void> {
-    await db.put('tableRows', row)
+    const existing = await db.get<TableRowRecord>('tableRows', row.id)
+    await appendAuthoritativePluginUpsert({
+      aggregateType: 'table-row',
+      aggregateId: row.id,
+      workspaceId: row.projectId,
+      store: 'tableRows',
+      record: row,
+      existing,
+    })
   }
 
   async deleteRow(id: string): Promise<void> {
-    await db.delete('tableRows', id)
+    const existing = await db.get<TableRowRecord>('tableRows', id)
+    await appendAuthoritativePluginDelete({
+      aggregateType: 'table-row',
+      aggregateId: id,
+      store: 'tableRows',
+      existing,
+    })
   }
 }
 

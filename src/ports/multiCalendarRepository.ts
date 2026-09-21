@@ -1,3 +1,5 @@
+import type { Provenance } from '../domain/story/provenance'
+
 export interface CalendarDefinition {
   id: string
   name: string // 如 "上古灵历" / "大炎皇统历"
@@ -5,6 +7,7 @@ export interface CalendarDefinition {
   monthsPerYear: number
   daysPerMonth: number[] // 各月天数
   leapRules?: string // 闰月/闰日规则
+  provenance?: Provenance
 }
 
 export interface StoryTimePoint {
@@ -21,6 +24,7 @@ export interface ChapterChronologyEvent {
   chapterTitle: string
   timePoint: StoryTimePoint
   eventSummary: string
+  provenance?: Provenance
 }
 
 export interface MultiCalendarProjectRecord {
@@ -29,6 +33,7 @@ export interface MultiCalendarProjectRecord {
   calendars: CalendarDefinition[]
   chronologyEvents: ChapterChronologyEvent[]
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface MultiCalendarRepository {

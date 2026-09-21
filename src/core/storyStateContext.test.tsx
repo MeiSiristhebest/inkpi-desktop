@@ -8,6 +8,7 @@ import {
   type StoryState,
 } from '../domain/story'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
+import { storyStateEvents } from '../ports/storyStateEvents'
 import { StoryStateProvider, useStoryState } from './storyStateContext'
 
 interface Deferred<T> {
@@ -250,6 +251,24 @@ describe('StoryStateProvider', () => {
     )
     expect(screen.getByTestId('revision')).toHaveTextContent('empty')
     expect(screen.getByTestId('loading')).toHaveTextContent('idle')
+  })
+
+  it('reloads the materialized state after a StoryState event', async () => {
+    let current = createStoryState(1)
+    const store = createStore(async () => current)
+
+    render(
+      <StoryStateProvider workspaceId="project-story-event" store={store}>
+        <StateProbe />
+      </StoryStateProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('revision')).toHaveTextContent('1'))
+    current = createStoryState(2)
+    act(() => storyStateEvents.publish('project-story-event', 2))
+
+    await waitFor(() => expect(screen.getByTestId('revision')).toHaveTextContent('2'))
+    expect(store.load).toHaveBeenCalledWith('project-story-event')
   })
 
   it('reloads the authoritative state after a domain change event', async () => {

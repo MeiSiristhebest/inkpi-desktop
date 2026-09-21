@@ -2,6 +2,7 @@ import { db } from '../db/indexedDB'
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
 import {
+  enqueueIndexedDbDomainChange,
   IndexedDbDomainChangeStore,
   type IndexedDbAggregateWrite,
 } from './indexedDbDomainChangeStore'
@@ -13,7 +14,6 @@ const domainChangeStore = new IndexedDbDomainChangeStore()
 // DomainChangeSet revisions are allocated by reading the current workspace
 // revision. Serialize that read-and-append pair so Promise.all callers cannot
 // all observe the same base revision.
-let domainAppendQueue: Promise<void> = Promise.resolve()
 const sourceDeviceId =
   typeof localStorage === 'undefined'
     ? 'desktop'
@@ -334,7 +334,7 @@ async function appendDomainChange(
   aggregateRevision = 0,
   aggregate?: IndexedDbAggregateWrite,
 ): Promise<void> {
-  const operationPromise = domainAppendQueue.then(async () => {
+  const operationPromise = enqueueIndexedDbDomainChange(async () => {
     const baseRevision = await domainChangeStore.latestRevision(workspaceId)
     const changeId = `${aggregateType}-change-${aggregateId}-${aggregateRevision}-${occurredAt}`
     const changeSet = createDomainChangeSet({
@@ -359,6 +359,5 @@ async function appendDomainChange(
     else await domainChangeStore.append(changeSet)
     domainChangeEvents.publish(workspaceId, changeSet.baseRevision + 1)
   })
-  domainAppendQueue = operationPromise.catch(() => undefined)
   await operationPromise
 }

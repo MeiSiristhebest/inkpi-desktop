@@ -1,3 +1,5 @@
+import type { Provenance } from '../domain/story/provenance'
+
 export interface ExpectationContract {
   id: string
   projectId: string
@@ -11,6 +13,7 @@ export interface ExpectationContract {
   notes?: string
   createdAt: number
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface ExpectationRepository {

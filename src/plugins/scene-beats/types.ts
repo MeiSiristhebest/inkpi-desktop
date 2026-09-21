@@ -1,5 +1,7 @@
 // 细纲节拍导演器 (scene-beats) 领域模型与类型定义
 
+import type { Provenance } from '../../domain/story/provenance'
+
 export type BeatType =
   | 'goal' // 目标动机（角色想要什么）
   | 'conflict' // 阻碍交锋（遇到的物理/人际阻力）
@@ -29,6 +31,7 @@ export interface ChapterBeatPlan {
   beats: SceneBeatItem[]
   createdAt: number
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface BeatProgressReport {

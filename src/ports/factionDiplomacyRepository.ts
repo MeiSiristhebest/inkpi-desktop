@@ -1,3 +1,5 @@
+import type { Provenance } from '../domain/story/provenance'
+
 export type FactionStance =
   'allied' | 'friendly' | 'neutral' | 'hostile' | 'mortal_enemy' | 'vassal'
 
@@ -12,6 +14,7 @@ export interface FactionDiplomacyRecord {
   reputationScore: number // -100 到 +100
   notes?: string
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface FactionDiplomacyRepository {

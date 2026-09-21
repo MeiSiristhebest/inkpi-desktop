@@ -1,5 +1,7 @@
 // 3P 伏笔与债务账本 (promise-ledger) 领域模型与类型定义
 
+import type { Provenance } from '../../domain/story/provenance'
+
 export type PromiseStatus = 'planted' | 'progressing' | 'paid_off' | 'abandoned'
 export type PromiseTier = 'main_plot' | 'romance' | 'power_system' | 'side_arc' | 'atmosphere'
 
@@ -28,6 +30,7 @@ export interface PromiseLedgerEntry {
   relatedChapterIds: string[]
   createdAt: number
   updatedAt: number
+  provenance?: Provenance
 }
 
 export interface DebtSnapshot {

@@ -7,6 +7,7 @@ import { indexedDbProjectRepository } from '../adapters/indexedDbProjectReposito
 import { idGenerator } from '../adapters/idGenerator'
 import { clock } from '../adapters/clock'
 import { draftJournal } from './draftJournal'
+import { storyStateMaterializer } from './storyStateMaterializer'
 import {
   WORKSPACE_ARCHIVE_SCHEMA_VERSION,
   type WorkspaceBackupArchive,
@@ -342,6 +343,11 @@ export const WORKSPACE_STORE_DESCRIPTORS: WorkspaceReferenceDescriptor[] = [
       { targetNamespace: 'entity', path: 'characterIds', kind: 'array' },
       { targetNamespace: 'entity', path: 'locationId', kind: 'scalar' },
     ],
+  },
+  {
+    storeName: 'expectationContracts',
+    idNamespace: 'entity',
+    references: [{ targetNamespace: 'chapter', path: 'chapterId', kind: 'scalar' }],
   },
   {
     storeName: 'clueMatrices',
@@ -1359,6 +1365,7 @@ export class WorkspaceLifecycleService {
           }
         }
       }
+      await storyStateMaterializer.materialize(newWorkspaceId)
     } catch (err) {
       // 导入失败时立刻彻底回滚已写入的半拉子工作区数据，实现 0% 破损残留 (INV-08)
       try {

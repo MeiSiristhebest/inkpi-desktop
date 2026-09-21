@@ -3,6 +3,10 @@ import type {
   FactionDiplomacyRecord,
   FactionDiplomacyRepository,
 } from '../ports/factionDiplomacyRepository'
+import {
+  appendAuthoritativePluginDelete,
+  appendAuthoritativePluginUpsert,
+} from '../services/authoritativePluginWrite'
 
 export const indexedDbFactionDiplomacyRepository: FactionDiplomacyRepository = {
   async getAll(projectId: string): Promise<FactionDiplomacyRecord[]> {
@@ -10,10 +14,24 @@ export const indexedDbFactionDiplomacyRepository: FactionDiplomacyRepository = {
   },
 
   async save(record: FactionDiplomacyRecord): Promise<void> {
-    await db.put('factionDiplomacies', record)
+    const existing = await db.get<FactionDiplomacyRecord>('factionDiplomacies', record.id)
+    await appendAuthoritativePluginUpsert({
+      aggregateType: 'faction-diplomacy',
+      aggregateId: record.id,
+      workspaceId: record.projectId,
+      store: 'factionDiplomacies',
+      record,
+      existing,
+    })
   },
 
   async delete(id: string): Promise<void> {
-    await db.delete('factionDiplomacies', id)
+    const existing = await db.get<FactionDiplomacyRecord>('factionDiplomacies', id)
+    await appendAuthoritativePluginDelete({
+      aggregateType: 'faction-diplomacy',
+      aggregateId: id,
+      store: 'factionDiplomacies',
+      existing,
+    })
   },
 }

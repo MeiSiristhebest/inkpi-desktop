@@ -104,7 +104,10 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--ink-border)]">
           <div>
-            <h2 id="distillation-inbox-title" className="text-[15px] font-semibold text-[var(--ink-text)]">
+            <h2
+              id="distillation-inbox-title"
+              className="text-[15px] font-semibold text-[var(--ink-text)]"
+            >
               AI 事实提炼审查箱 (Distillation Review Inbox)
             </h2>
             <p className="text-[12px] text-[var(--ink-text-muted)] mt-0.5">

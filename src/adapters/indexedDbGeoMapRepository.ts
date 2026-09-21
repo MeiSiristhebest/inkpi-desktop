@@ -1,5 +1,9 @@
 import { db } from '../db/indexedDB'
 import type { GeoMapGridRecord, GeoMapRepository } from '../ports/geoMapRepository'
+import {
+  appendAuthoritativePluginDelete,
+  appendAuthoritativePluginUpsert,
+} from '../services/authoritativePluginWrite'
 
 export const indexedDbGeoMapRepository: GeoMapRepository = {
   async getAll(projectId: string): Promise<GeoMapGridRecord[]> {
@@ -16,10 +20,24 @@ export const indexedDbGeoMapRepository: GeoMapRepository = {
   },
 
   async save(record: GeoMapGridRecord): Promise<void> {
-    await db.put('geoMapGrids', record)
+    const existing = await db.get<GeoMapGridRecord>('geoMapGrids', record.id)
+    await appendAuthoritativePluginUpsert({
+      aggregateType: 'geo-map-grid',
+      aggregateId: record.id,
+      workspaceId: record.projectId,
+      store: 'geoMapGrids',
+      record,
+      existing,
+    })
   },
 
   async delete(id: string): Promise<void> {
-    await db.delete('geoMapGrids', id)
+    const existing = await db.get<GeoMapGridRecord>('geoMapGrids', id)
+    await appendAuthoritativePluginDelete({
+      aggregateType: 'geo-map-grid',
+      aggregateId: id,
+      store: 'geoMapGrids',
+      existing,
+    })
   },
 }

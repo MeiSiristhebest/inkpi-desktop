@@ -2,6 +2,7 @@ import type { DomainChangeSet } from '@inkpi/protocol'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import {
+  enqueueIndexedDbDomainChange,
   IndexedDbDomainChangeStore,
   type IndexedDbAggregateWrite,
 } from './indexedDbDomainChangeStore'
@@ -20,13 +21,12 @@ export interface AppendIndexedDbDomainChangeInput {
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
 const sourceDeviceId = resolveSourceDeviceId()
-let domainAppendQueue: Promise<void> = Promise.resolve()
 
 /** Allocates and appends a local change set with one shared revision queue. */
 export async function appendIndexedDbDomainChange(
   input: AppendIndexedDbDomainChangeInput,
 ): Promise<DomainChangeSet> {
-  const operationPromise = domainAppendQueue.then(async () => {
+  const operationPromise = enqueueIndexedDbDomainChange(async () => {
     assertInput(input)
     const aggregateRevision = input.aggregateRevision ?? 0
     const baseRevision = await domainChangeStore.latestRevision(input.workspaceId)
@@ -54,10 +54,6 @@ export async function appendIndexedDbDomainChange(
     domainChangeEvents.publish(input.workspaceId, changeSet.baseRevision + 1)
     return changeSet
   })
-  domainAppendQueue = operationPromise.then(
-    () => undefined,
-    () => undefined,
-  )
   return operationPromise
 }
 

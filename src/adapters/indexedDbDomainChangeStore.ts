@@ -18,17 +18,34 @@ export interface IndexedDbAggregateWrite {
     | 'formData'
     | 'tableRows'
     | 'cardRecords'
+    | 'multiCalendars'
+    | 'geoMapGrids'
+    | 'factionDiplomacies'
+    | 'powerTierSystems'
+    | 'sceneBeats'
+    | 'expectationContracts'
   key: string
   operation: 'upsert' | 'delete'
   value?: unknown
   expected: unknown
 }
 
-export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStore {
-  private appendQueue: Promise<void> = Promise.resolve()
+let domainAppendQueue: Promise<void> = Promise.resolve()
+let domainAllocationQueue: Promise<void> = Promise.resolve()
 
+/** Serializes revision allocation across the project and plugin adapters. */
+export function enqueueIndexedDbDomainChange<T>(operation: () => Promise<T>): Promise<T> {
+  const queuedOperation = domainAllocationQueue.then(operation)
+  domainAllocationQueue = queuedOperation.then(
+    () => undefined,
+    () => undefined,
+  )
+  return queuedOperation
+}
+
+export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStore {
   async append(changeSet: DomainChangeSet): Promise<void> {
-    const operation = this.appendQueue.then(async () => {
+    const operation = domainAppendQueue.then(async () => {
       assertValidChangeSet(changeSet)
       await db.runTransaction(['domainChangeSets'], (transaction, fail) => {
         const store = transaction.objectStore('domainChangeSets')
@@ -79,7 +96,7 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
         }
       })
     })
-    this.appendQueue = operation.catch(() => undefined)
+    domainAppendQueue = operation.catch(() => undefined)
     return operation
   }
 
@@ -88,7 +105,7 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
     changeSet: DomainChangeSet,
     aggregate: IndexedDbAggregateWrite,
   ): Promise<void> {
-    const operation = this.appendQueue.then(async () => {
+    const operation = domainAppendQueue.then(async () => {
       assertValidChangeSet(changeSet)
       assertAggregateWrite(aggregate)
       await db.runTransaction(['domainChangeSets', aggregate.store], (transaction, fail) => {
@@ -166,7 +183,7 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
         }
       })
     })
-    this.appendQueue = operation.catch(() => undefined)
+    domainAppendQueue = operation.catch(() => undefined)
     return operation
   }
 
@@ -205,7 +222,7 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
     validateOrderedChangeSets(snapshot.changeSets, snapshot.workspaceId)
     if ((snapshot.changeSets.at(-1)?.revision ?? 0) !== snapshot.revision)
       throw new Error('Domain projection snapshot cursor mismatch')
-    const operation = this.appendQueue.then(() =>
+    const operation = domainAppendQueue.then(() =>
       db.runTransaction(['domainChangeSets'], (transaction, fail) => {
         const store = transaction.objectStore('domainChangeSets')
         const request = store.getAll()
@@ -226,7 +243,7 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
         }
       }),
     )
-    this.appendQueue = operation.catch(() => undefined)
+    domainAppendQueue = operation.catch(() => undefined)
     await operation
   }
 
@@ -278,6 +295,12 @@ function assertAggregateWrite(aggregate: IndexedDbAggregateWrite): void {
     'formData',
     'tableRows',
     'cardRecords',
+    'multiCalendars',
+    'geoMapGrids',
+    'factionDiplomacies',
+    'powerTierSystems',
+    'sceneBeats',
+    'expectationContracts',
   ])
   if (!allowedStores.has(aggregate.store)) {
     throw new Error('IndexedDB aggregate store is invalid')
