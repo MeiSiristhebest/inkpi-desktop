@@ -32,13 +32,7 @@ import {
   type AiProposal,
   type ProposalStore,
 } from '../src/ai/proposals'
-import {
-  createContinueTask,
-  createContinuityAuditTask,
-  createDeepReasoningTask,
-  createDistillationTask,
-  createRewriteTask,
-} from '../src/ai/tasks/taskFactories'
+import { createContinueTask, createRewriteTask } from '../src/ai/tasks/taskFactories'
 import { inkpiDaemonGateway } from '../src/adapters/inkpiDaemonGateway'
 import { IndexedDbDomainChangeStore } from '../src/adapters/indexedDbDomainChangeStore'
 import { IndexedDbTaskRecoveryStore } from '../src/db/taskRecoveryStore'
@@ -559,7 +553,9 @@ async function assertPackagedRuntimeRegistrations(client: RpcClient): Promise<vo
       arguments: {
         query: 'Mira',
         entities: [{ id: 'packaged-hero', name: 'Mira', aliases: ['M'] }],
-        chapters: [{ id: 'packaged-chapter', order: 1, title: 'Arrival', content: 'Mira arrives.' }],
+        chapters: [
+          { id: 'packaged-chapter', order: 1, title: 'Arrival', content: 'Mira arrives.' },
+        ],
       },
     },
     {
@@ -570,7 +566,9 @@ async function assertPackagedRuntimeRegistrations(client: RpcClient): Promise<vo
       toolName: 'plugin.scrapbook-recycler.recommend',
       arguments: {
         contextText: 'storm ally returns',
-        fragments: [{ id: 'packaged-fragment', snippet: 'The storm ally returns.', isReused: false }],
+        fragments: [
+          { id: 'packaged-fragment', snippet: 'The storm ally returns.', isReused: false },
+        ],
         topK: 1,
       },
     },
@@ -673,7 +671,9 @@ async function assertPackagedProjectionSync(
   await authoritativeStore.append(changeSet)
 
   await expect(
-    new DomainSyncService(authoritativeStore, createDaemonDomainSyncRemote(sourceClient)).sync(workspaceId),
+    new DomainSyncService(authoritativeStore, createDaemonDomainSyncRemote(sourceClient)).sync(
+      workspaceId,
+    ),
   ).resolves.toMatchObject({
     workspaceId,
     pushed: 1,
@@ -682,7 +682,9 @@ async function assertPackagedProjectionSync(
     recovered: false,
   })
   await expect(
-    new DomainSyncService(authoritativeStore, createDaemonDomainSyncRemote(targetClient)).sync(workspaceId),
+    new DomainSyncService(authoritativeStore, createDaemonDomainSyncRemote(targetClient)).sync(
+      workspaceId,
+    ),
   ).resolves.toMatchObject({
     workspaceId,
     pushed: 1,
@@ -722,7 +724,9 @@ async function assertPackagedProjectionSync(
     ],
     createdAt: suffix + 1,
   })
-  await expect(targetClient.request('domain.sync.push', { changeSet: outOfOrder })).resolves.toMatchObject({
+  await expect(
+    targetClient.request('domain.sync.push', { changeSet: outOfOrder }),
+  ).resolves.toMatchObject({
     accepted: false,
     duplicate: false,
     workspaceId,
@@ -765,10 +769,12 @@ async function assertPackagedProposalCas(client: RpcClient): Promise<void> {
 
   const undoable = makeProposal(`packaged-undoable-${suffix}`)
   expect(ledger.create(undoable)).toMatchObject({ status: 'pending' })
-  expect(ledger.modify(undoable.id, {
-    patches: [{ documentId, from: 0, to: 1, text: '改' }],
-    explanation: 'packaged acceptance modification',
-  })).toMatchObject({ status: 'pending', explanation: 'packaged acceptance modification' })
+  expect(
+    ledger.modify(undoable.id, {
+      patches: [{ documentId, from: 0, to: 1, text: '改' }],
+      explanation: 'packaged acceptance modification',
+    }),
+  ).toMatchObject({ status: 'pending', explanation: 'packaged acceptance modification' })
   expect(ledger.accept(undoable.id)).toMatchObject({ status: 'accepted' })
   const commitReceipt = await ledger.commit(undoable.id, 0, () => ({
     inversePatches: [{ documentId, from: 0, to: 1, text: '原' }],
@@ -794,9 +800,11 @@ async function assertPackagedProposalCas(client: RpcClient): Promise<void> {
     baseRevision: 5,
   })
   ledger.accept(stale.id)
-  await expect(ledger.commit(stale.id, 5, () => ({
-    inversePatches: [{ documentId, from: 0, to: 1, text: '原' }],
-  }))).resolves.toMatchObject({ proposalId: stale.id, revision: 6 })
+  await expect(
+    ledger.commit(stale.id, 5, () => ({
+      inversePatches: [{ documentId, from: 0, to: 1, text: '原' }],
+    })),
+  ).resolves.toMatchObject({ proposalId: stale.id, revision: 6 })
 
   await ledger.flush()
   const snapshot = await createDaemonProposalSyncRemote(client).snapshotProposals(workspaceId)
@@ -811,21 +819,25 @@ async function assertPackagedProposalCas(client: RpcClient): Promise<void> {
 
 function assertPackagedCanonicalBoundaries(): void {
   const documentId = `packaged-canonical-document-${Date.now()}`
-  const proseMirror = semanticDocumentFromProseMirror(documentId, {
-    type: 'doc',
-    content: [
-      {
-        type: 'paragraph',
-        attrs: { id: 'packaged-paragraph' },
-        content: [
-          { type: 'text', text: '甲' },
-          { type: 'text', text: '乙', marks: [{ type: 'bold' }] },
-          { type: 'hardBreak' },
-          { type: 'text', text: '丙' },
-        ],
-      },
-    ],
-  }, 4)
+  const proseMirror = semanticDocumentFromProseMirror(
+    documentId,
+    {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { id: 'packaged-paragraph' },
+          content: [
+            { type: 'text', text: '甲' },
+            { type: 'text', text: '乙', marks: [{ type: 'bold' }] },
+            { type: 'hardBreak' },
+            { type: 'text', text: '丙' },
+          ],
+        },
+      ],
+    },
+    4,
+  )
   expect(proseMirror).toMatchObject({
     documentId,
     revision: 4,
@@ -947,6 +959,7 @@ async function assertPackagedCapabilityRouting(client: RpcClient): Promise<void>
 
 async function assertPackagedVerticalSlices(client: RpcClient): Promise<void> {
   const suffix = Date.now()
+  const workspaceId = 'final-freeze-packaged-workspace'
   const document = semanticDocumentFromText(
     `packaged-vertical-slices-document-${suffix}`,
     '雨停后，门外只剩一盏冷灯。她没有回头。',
@@ -956,6 +969,7 @@ async function assertPackagedVerticalSlices(client: RpcClient): Promise<void> {
 
   const continueTask = createContinueTask({
     taskId: `packaged-vs1-continue-${suffix}`,
+    workspaceId,
     document,
     selection: { from: document.text.length, to: document.text.length },
     instruction: '返回续写文本。',
@@ -970,6 +984,7 @@ async function assertPackagedVerticalSlices(client: RpcClient): Promise<void> {
 
   const rewriteTask = createRewriteTask({
     taskId: `packaged-vs2-rewrite-${suffix}`,
+    workspaceId,
     document,
     selection: { from: 0, to: 6 },
     goal: '收紧句子。',
@@ -994,6 +1009,7 @@ async function assertPackagedVerticalSlices(client: RpcClient): Promise<void> {
   const continuityFindings = await assistant.runContinuityAudit(
     {
       taskId: `packaged-vs3-continuity-${suffix}`,
+      workspaceId,
       document,
       scope: 'document',
       instruction: '检查当前章节的连续性。',
@@ -1014,6 +1030,7 @@ async function assertPackagedVerticalSlices(client: RpcClient): Promise<void> {
   const reasoning = await assistant.runDeepReasoning(
     {
       taskId: `packaged-vs4-reasoning-${suffix}`,
+      workspaceId,
       document,
       question: '下一场应该保留哪些叙事约束？',
       depth: 'focused',
@@ -1033,10 +1050,12 @@ async function assertPackagedVerticalSlices(client: RpcClient): Promise<void> {
     '她走过桥，远处传来钟声。',
     14,
   )
-  const progress: Array<{ completedChunks: number; totalChunks: number; failedChunks: string[] }> = []
+  const progress: Array<{ completedChunks: number; totalChunks: number; failedChunks: string[] }> =
+    []
   const distillation = await assistant.runDistillationWorkflow(
     {
       taskId: `packaged-vs5-distillation-${suffix}`,
+      workspaceId,
       documents: [document, secondDocument],
       target: 'project',
       fields: ['entities', 'events', 'promises'],
@@ -1159,7 +1178,9 @@ async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
     id: artifact.id,
   })
   await expect(client.request('artifact.get', { id: artifact.id })).resolves.toEqual(artifact)
-  await expect(client.request('artifact.list', { taskId: artifact.provenance.taskId })).resolves.toEqual([artifact])
+  await expect(
+    client.request('artifact.list', { taskId: artifact.provenance.taskId }),
+  ).resolves.toEqual([artifact])
 
   const contextTask: AiTask = {
     id: `packaged-context-task-${suffix}`,
@@ -1193,8 +1214,9 @@ async function assertPackagedStateBoundaries(client: RpcClient): Promise<void> {
       outputFormat: 'text',
     },
   })
-  const contextTokenCount = (contextExecution.snapshot.result?.provenance as Record<string, unknown> | undefined)
-    ?.contextTokenCount
+  const contextTokenCount = (
+    contextExecution.snapshot.result?.provenance as Record<string, unknown> | undefined
+  )?.contextTokenCount
   expect(contextTokenCount).toBeLessThanOrEqual(512)
 
   const retrievalHitTask: AiTask = {
