@@ -1,11 +1,8 @@
 import React from 'react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import {
-  FloatingWordCountWidget,
-  STORAGE_KEY_WIDGET_POS,
-  getInitialWidgetPosition,
-} from './FloatingWordCountWidget'
+import { FloatingWordCountWidget } from './FloatingWordCountWidget'
+import { STORAGE_KEY_WIDGET_POS, getInitialWidgetPosition } from './floatingWordCountWidgetPosition'
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
 import type { WordCountConfig } from '../modals/WordCountPanelModal'
 import type { WritingSessionStats } from '../hooks/useWritingSessionStats'

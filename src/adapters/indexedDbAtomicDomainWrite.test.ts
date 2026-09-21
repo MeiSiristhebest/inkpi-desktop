@@ -86,6 +86,36 @@ describe('atomic IndexedDB domain writes', () => {
     expect(await db.get<ChapterRecord>('chapters', chapterId)).toEqual(first)
   })
 
+  it('treats identical concurrent seed writes as an idempotent success', async () => {
+    const workspaceId = 'atomic-domain-idempotent-race-workspace'
+    const chapterId = 'atomic-domain-idempotent-race-chapter'
+    await db.delete('chapters', chapterId)
+    const store = new IndexedDbDomainChangeStore()
+    for (const changeSet of await store.list(workspaceId)) {
+      await db.delete('domainChangeSets', changeSet.id)
+    }
+
+    const chapter: ChapterRecord = {
+      id: chapterId,
+      projectId: workspaceId,
+      volumeId: 'volume-1',
+      title: '并发种子',
+      content: '同一份初始内容',
+      order: 0,
+      wordCount: 6,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const results = await Promise.allSettled([
+      indexedDbProjectRepository.saveChapter(chapter),
+      indexedDbProjectRepository.saveChapter(chapter),
+    ])
+
+    expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
+    expect(await db.get('chapters', chapterId)).toEqual(chapter)
+    expect(await store.latestRevision(workspaceId)).toBe(1)
+  })
+
   it('rolls back the domain append when the aggregate cannot be cloned', async () => {
     const workspaceId = 'atomic-domain-rollback-workspace'
     const store = new IndexedDbDomainChangeStore()

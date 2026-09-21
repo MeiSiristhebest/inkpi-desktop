@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useState, useEffect, useMemo, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { GeoMapEngine } from '../engine/GeoMapEngine'
 import type { GeoMapGridRecord, TerrainType } from '../types'
@@ -17,6 +17,8 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 
+const EMPTY_CELLS: GeoMapGridRecord['occupiedCells'] = []
+
 export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const [mapRecord, setMapRecord] = useState<GeoMapGridRecord | null>(null)
   const [selectedTerrain, setSelectedTerrain] = useState<TerrainType>('mountain')
@@ -29,7 +31,7 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
-  const loadMap = async () => {
+  const loadMap = useCallback(async () => {
     const all = await indexedDbGeoMapRepository.getAll(projectId)
     if (all.length > 0) {
       setMapRecord(all[0])
@@ -52,13 +54,13 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       }
       setMapRecord(initial)
     }
-  }
-
-  useEffect(() => {
-    loadMap()
   }, [projectId])
 
-  const cells = mapRecord?.occupiedCells || []
+  useEffect(() => {
+    void loadMap()
+  }, [loadMap])
+
+  const cells = mapRecord?.occupiedCells ?? EMPTY_CELLS
 
   const topologyReport = useMemo(() => {
     return GeoMapEngine.validateContiguity(cells)

@@ -16,15 +16,22 @@ export const InspireTools: React.FC = () => {
     Array.from({ length: 12 }, () => generateInspiration('人名', '仙侠')),
   )
   const [copiedText, setCopiedText] = useState<string | null>(null)
+  const [copyError, setCopyError] = useState(false)
 
   const handleRefresh = () => {
     setResults(Array.from({ length: 12 }, () => generateInspiration(activeCat, activeStyle)))
   }
 
   const handleCopy = async (text: string) => {
-    await clipboardWriter.writeText(text)
-    setCopiedText(text)
-    setTimeout(() => setCopiedText(null), 1200)
+    setCopyError(false)
+    try {
+      await clipboardWriter.writeText(text)
+      setCopiedText(text)
+      setTimeout(() => setCopiedText(null), 1200)
+    } catch {
+      setCopiedText(null)
+      setCopyError(true)
+    }
   }
 
   return (
@@ -91,6 +98,11 @@ export const InspireTools: React.FC = () => {
         {/* 刷新动作 */}
         <div className="flex items-center justify-between pt-2 border-t border-[var(--ink-border)]/50">
           <span className="text-xs text-[var(--ink-text-muted)]">点击词卡即可直接复制到剪贴板</span>
+          {copyError && (
+            <span role="status" className="text-xs text-amber-500">
+              复制失败，请检查剪贴板权限
+            </span>
+          )}
           <button
             onClick={handleRefresh}
             className="px-4 py-2 bg-[var(--ink-accent)] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow hover:opacity-90 transition-opacity"
@@ -103,22 +115,27 @@ export const InspireTools: React.FC = () => {
         {/* 结果卡片网格 */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           {results.map((item, idx) => (
-            <div
-              key={idx}
-              onClick={() => handleCopy(item)}
-              className="p-3.5 rounded-xl bg-[var(--ink-bg)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] transition-all cursor-pointer flex items-center justify-between group shadow-2xs"
+            <button
+              type="button"
+              key={`${item}-${idx}`}
+              onClick={() => void handleCopy(item)}
+              aria-label={`复制${item}`}
+              className="p-3.5 rounded-xl bg-[var(--ink-bg)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] transition-all cursor-pointer flex items-center justify-between group shadow-2xs text-left"
             >
               <span className="text-xs font-bold text-[var(--ink-text)] group-hover:text-[var(--ink-accent)] transition-colors">
                 {item}
               </span>
-              <button className="text-[var(--ink-text-muted)] group-hover:text-[var(--ink-accent)]">
+              <span
+                aria-hidden="true"
+                className="text-[var(--ink-text-muted)] group-hover:text-[var(--ink-accent)]"
+              >
                 {copiedText === item ? (
                   <Check className="w-3.5 h-3.5 text-emerald-500" />
                 ) : (
                   <Copy className="w-3.5 h-3.5" />
                 )}
-              </button>
-            </div>
+              </span>
+            </button>
           ))}
         </div>
       </div>

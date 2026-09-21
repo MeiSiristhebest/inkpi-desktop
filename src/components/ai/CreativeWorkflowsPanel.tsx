@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { Activity, Brain, Database, RefreshCw, Square } from 'lucide-react'
 import { spring, gesture } from '../../motion'
@@ -181,49 +181,55 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     return () => continuityDiagnosticsStore.clear(projectId, chapterId)
   }, [auditMarkers, projectId, selectedChapter?.id])
 
-  const runAudit = async (chapterOverride?: ChapterRecord) => {
-    const chapter = chapterOverride ?? selectedChapter
-    if (!chapter || !connected || busy) return
-    activeController.current?.abort()
-    const controller = new AbortController()
-    activeController.current = controller
-    const token = ++runToken.current
-    busyRef.current = true
-    setBusy(true)
-    setError(null)
-    setProgress(null)
-    setAuditDocument(documentForAudit(chapter))
-    setAuditFindings([])
-    try {
-      const document = documentForAudit(chapter)
-      const result = await onContinuityAudit(
-        {
-          taskId: idGenerator.generate(`continuity-${chapter.id}`),
-          workspaceId: projectId,
-          document,
-          scope: 'document',
-        },
-        { signal: controller.signal, onProgress: setProgress },
-      )
-      if (token === runToken.current) {
-        setAuditDocument(document)
-        setAuditFindings(result ?? [])
+  const runAudit = useCallback(
+    async (chapterOverride?: ChapterRecord) => {
+      const chapter = chapterOverride ?? selectedChapter
+      if (!chapter || !connected || busy) return
+      activeController.current?.abort()
+      const controller = new AbortController()
+      activeController.current = controller
+      const token = ++runToken.current
+      busyRef.current = true
+      setBusy(true)
+      setError(null)
+      setProgress(null)
+      setAuditDocument(documentForAudit(chapter))
+      setAuditFindings([])
+      try {
+        const document = documentForAudit(chapter)
+        const result = await onContinuityAudit(
+          {
+            taskId: idGenerator.generate(`continuity-${chapter.id}`),
+            workspaceId: projectId,
+            document,
+            scope: 'document',
+          },
+          { signal: controller.signal, onProgress: setProgress },
+        )
+        if (token === runToken.current) {
+          setAuditDocument(document)
+          setAuditFindings(result ?? [])
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted && token === runToken.current) {
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
+      } finally {
+        if (token === runToken.current) {
+          busyRef.current = false
+          setBusy(false)
+          if (activeController.current === controller) activeController.current = null
+        }
       }
-    } catch (cause) {
-      if (!controller.signal.aborted && token === runToken.current) {
-        setError(cause instanceof Error ? cause.message : String(cause))
-      }
-    } finally {
-      if (token === runToken.current) {
-        busyRef.current = false
-        setBusy(false)
-        if (activeController.current === controller) activeController.current = null
-      }
-    }
-  }
+    },
+    [busy, connected, onContinuityAudit, projectId, selectedChapter],
+  )
 
   const runAuditRef = useRef<(chapter?: ChapterRecord) => Promise<void>>(async () => {})
-  runAuditRef.current = runAudit
+
+  useEffect(() => {
+    runAuditRef.current = runAudit
+  }, [runAudit])
 
   useEffect(() => {
     const unsubscribe = chapterSaveEvents.subscribe(({ chapter }) => {

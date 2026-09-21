@@ -1,24 +1,18 @@
 import type { FC } from 'react'
 import { commandRegistry } from '../../core/commandRegistry'
+import { EDITOR_SHORTCUTS } from '../../core/editorShortcuts'
 import { Section } from './SettingsShared'
-
-const EDITOR_SHORTCUT_ITEMS = [
-  { action: '命令面板', key: 'Mod + K' },
-  { action: '保存章节', key: 'Mod + S' },
-  { action: '新建章节', key: 'Mod + N' },
-  { action: '查找替换', key: 'Mod + F' },
-  { action: '切换章节树', key: 'Mod + \\' },
-  { action: '打开历史记录', key: 'Mod + H' },
-  { action: '重命名当前章节', key: 'F2' },
-  { action: '上一章 / 下一章', key: 'Alt + ↑ / ↓' },
-]
 
 export const ShortcutsTab: FC = () => {
   const commandItems = commandRegistry
     .getAll()
     .filter((command) => command.shortcut)
     .map((command) => ({ action: command.title, key: command.shortcut! }))
-  const shortcutItems = [...EDITOR_SHORTCUT_ITEMS, ...commandItems]
+  const editorShortcutItems = EDITOR_SHORTCUTS.map(({ action, display }) => ({
+    action,
+    key: display,
+  }))
+  const shortcutItems = [...editorShortcutItems, ...commandItems]
 
   return (
     <Section title="快捷键速查" desc="以下列表只展示当前编辑器与命令注册表实际监听的快捷键。">

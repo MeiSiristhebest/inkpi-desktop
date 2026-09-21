@@ -636,7 +636,7 @@ export function useAiConversation(
         return null
       }
     },
-    [aiModel?.id, isConnected, runTrackedTask, storyState],
+    [activeWritingContext?.workspaceRevision, aiModel?.id, isConnected, runTrackedTask, storyState],
   )
 
   const sendAiPrompt = useCallback(
@@ -744,7 +744,7 @@ export function useAiConversation(
         }
       }
     },
-    [aiModel?.id, isConnected, runTrackedTask, storyState],
+    [activeWritingContext, aiMessages, aiModel?.id, isConnected, runTrackedTask, storyState],
   )
 
   const isCurrentRecoveryRecord = useCallback(

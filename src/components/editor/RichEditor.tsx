@@ -48,6 +48,7 @@ import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
 import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
+import { matchesEditorShortcut } from '../../core/editorShortcuts'
 import { hashText } from '../../ai/proposals'
 import {
   semanticTextFromContent,
@@ -522,7 +523,7 @@ export const RichEditor: FC<RichEditorProps> = ({
         setShowReferencesSidebar(false)
         return
       }
-      if (e.key === 'F2') {
+      if (matchesEditorShortcut('renameChapter', e)) {
         e.preventDefault()
         if (uiRef.current.activeChapter) {
           actions.setRenamingChapter(uiRef.current.activeChapter)
@@ -530,34 +531,29 @@ export const RichEditor: FC<RichEditorProps> = ({
         }
         return
       }
-      if (e.altKey && !e.ctrlKey && !e.metaKey) {
-        if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          uiRef.current.prevChapter()
-          return
-        }
-        if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          uiRef.current.nextChapter()
-          return
-        }
+      if (matchesEditorShortcut('previousChapter', e)) {
+        e.preventDefault()
+        uiRef.current.prevChapter()
+        return
       }
-      const mod = e.metaKey || e.ctrlKey
-      if (!mod) return
-      const k = e.key.toLowerCase()
-      if (k === 's') {
+      if (matchesEditorShortcut('nextChapter', e)) {
+        e.preventDefault()
+        uiRef.current.nextChapter()
+        return
+      }
+      if (matchesEditorShortcut('saveChapter', e)) {
         e.preventDefault()
         actions.save()
-      } else if (k === 'f') {
+      } else if (matchesEditorShortcut('findReplace', e)) {
         e.preventDefault()
         actions.setShowFindReplace(!uiRef.current.showFindReplace)
-      } else if (k === '\\') {
+      } else if (matchesEditorShortcut('toggleChapterTree', e)) {
         e.preventDefault()
         actions.setSidebar(!uiRef.current.isSidebarOpen)
-      } else if (k === 'n' && !e.shiftKey) {
+      } else if (matchesEditorShortcut('newChapter', e)) {
         e.preventDefault()
         uiRef.current.newChapter()
-      } else if (k === 'h') {
+      } else if (matchesEditorShortcut('history', e)) {
         e.preventDefault()
         actions.setShowHistoryModal(true)
       }

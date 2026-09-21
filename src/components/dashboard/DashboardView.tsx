@@ -150,7 +150,7 @@ export const DashboardView: FC<DashboardViewProps> = ({
       val: `${data.unresolvedForeshadowsCount}`,
       unit: ' 条',
       label: '未回收伏笔',
-      sub: data.unresolvedForeshadowsCount > 5 ? '注意防烂尾' : '健康范围',
+      sub: data.unresolvedForeshadowsCount > 5 ? '注意防烂尾' : '稳定区间',
       subWarn: data.unresolvedForeshadowsCount > 5,
       tip: '来自《伏笔追踪》中状态为「未回收」的条目。超过 5 条红色预警。',
     },
@@ -552,11 +552,11 @@ export const DashboardView: FC<DashboardViewProps> = ({
             </div>
           </section>
 
-          {/* 创作健康提醒（彻底移除花哨的听诊器与AI假诊断，改为客观连载指标排查） */}
+          {/* 创作状态提醒：只展示客观连载指标，不做医疗化或拟人化判断。 */}
           <section className="space-y-2.5">
             <div className="flex items-center justify-between px-1">
-              <h3 className="text-[14px] font-semibold text-[var(--ink-text)]">创作健康提醒</h3>
-              <span className="text-[12px] text-[var(--ink-text-faint)]">客观连载指标排查</span>
+              <h3 className="text-[14px] font-semibold text-[var(--ink-text)]">创作状态提醒</h3>
+              <span className="text-[12px] text-[var(--ink-text-faint)]">连载指标概览</span>
             </div>
 
             <div className="rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shadow-2xs divide-y divide-[var(--ink-border)] text-[12px]">

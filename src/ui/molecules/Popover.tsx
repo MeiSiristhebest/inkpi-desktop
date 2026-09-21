@@ -2,6 +2,7 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useCallback,
   useId,
   type ReactNode,
   type FC,
@@ -63,7 +64,7 @@ export const Popover: FC<PopoverProps> = ({
   // Position tracking
   const [position, setPosition] = useState<{ left: number; top: number }>({ left: 0, top: 0 })
 
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     const trigger = triggerRef.current
     if (!trigger) return
     const rect = trigger.getBoundingClientRect()
@@ -82,20 +83,20 @@ export const Popover: FC<PopoverProps> = ({
     }
 
     setPosition({ left, top })
-  }
+  }, [align, offset])
 
   // Open handler
-  const handleOpen = () => {
+  const handleOpen = useCallback(() => {
     setOpen(true)
     // Need next frame to measure panel size
     requestAnimationFrame(() => {
       requestAnimationFrame(updatePosition)
     })
-  }
+  }, [updatePosition])
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setOpen(false)
-  }
+  }, [])
 
   // Focus management: on open, focus first focusable; on close, restore trigger
   useEffect(() => {
@@ -146,12 +147,13 @@ export const Popover: FC<PopoverProps> = ({
 
     window.addEventListener('keydown', trapFocus)
     window.addEventListener('keydown', handleEsc)
+    const trigger = triggerRef.current
     return () => {
       window.removeEventListener('keydown', trapFocus)
       window.removeEventListener('keydown', handleEsc)
-      triggerRef.current?.focus()
+      trigger?.focus()
     }
-  }, [open])
+  }, [open, handleClose])
 
   // Reposition on scroll/resize
   useEffect(() => {
@@ -163,7 +165,7 @@ export const Popover: FC<PopoverProps> = ({
       window.removeEventListener('scroll', handler, true)
       window.removeEventListener('resize', handler)
     }
-  }, [open])
+  }, [open, updatePosition])
 
   // Clone trigger and attach open handler + ref + ARIA attrs
   const cloneTrigger = (node: ReactNode): ReactNode => {
@@ -191,6 +193,7 @@ export const Popover: FC<PopoverProps> = ({
     }
     // Fallback: wrap non-element nodes in a button
     return (
+      // SAFETY: this fallback branch renders a button, so the HTMLElement ref is a compatible button ref.
       <button
         ref={triggerRef as unknown as React.Ref<HTMLButtonElement>}
         type="button"

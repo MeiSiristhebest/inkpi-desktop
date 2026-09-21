@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useState, useEffect, useMemo, useCallback, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { ChapterBeatPlan } from '../types'
 import { sceneBeatsEngine } from '../engine/SceneBeatsEngine'
@@ -16,7 +16,7 @@ export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curr
     [currentText],
   )
 
-  const loadPlans = async () => {
+  const loadPlans = useCallback(async () => {
     try {
       const all = await indexedDbSceneBeatRepository.getAll()
       const projectPlans = all.filter((p) => p.projectId === projectId)
@@ -27,11 +27,11 @@ export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curr
     } catch (e) {
       console.error('Failed to load scene beats in drawer:', e)
     }
-  }
+  }, [projectId, selectedPlanId])
 
   useEffect(() => {
-    loadPlans()
-  }, [projectId])
+    void loadPlans()
+  }, [loadPlans])
 
   const currentPlan = useMemo(
     () => plans.find((p) => p.id === selectedPlanId) || plans[0],

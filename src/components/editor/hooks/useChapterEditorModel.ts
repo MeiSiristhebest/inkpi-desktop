@@ -332,6 +332,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   settingsRef.current = settings
 
   const activeChapterRef = useRef<ChapterRecord | null>(null)
+  const mountedRef = useRef(false)
   const onRequestGhostRef = useRef(onRequestGhost)
   onRequestGhostRef.current = onRequestGhost
   const ghostTextRef = useRef('')
@@ -371,6 +372,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const reportSaveError = useCallback(
     (error: unknown) => {
+      if (!mountedRef.current) return
       console.warn('[InkPi Desktop] Chapter save failed:', error)
       patch({ isSaved: false })
     },
@@ -535,6 +537,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   }, [projectId, patch, runPersistence])
 
   useEffect(() => {
+    mountedRef.current = true
     void loadData().catch(reportSaveError)
 
     const handleBeforeUnload = () => {
@@ -571,15 +574,21 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     }
 
     return () => {
+      mountedRef.current = false
       window.removeEventListener('beforeunload', handleBeforeUnload)
       if (unlistenTauriClose) {
         unlistenTauriClose()
       }
-      // 组件卸载时强制原子 flush 而非仅仅 cancel
+      // 组件卸载时必须先完成原子 flush，再取消队列；不能在 in-flight
+      // 写入尚未结束时立即清空 autosave 状态，否则下一次挂载可能与旧写入竞态。
       if (autosave.hasPending()) {
-        void autosave.flush().catch(() => {})
+        void autosave
+          .flush()
+          .catch((error) => reportSaveError(error))
+          .finally(() => autosave.cancel())
+      } else {
+        autosave.cancel()
       }
-      autosave.cancel()
       ghostGeneration.current += 1
       if (ghostTimer.current) clearTimeout(ghostTimer.current)
     }

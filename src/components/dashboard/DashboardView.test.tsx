@@ -45,7 +45,7 @@ describe('DashboardView', () => {
     expect(screen.getByText('码字活动')).toBeInTheDocument()
     expect(screen.getByText('快捷入口')).toBeInTheDocument()
     expect(screen.getByText('分卷进度')).toBeInTheDocument()
-    expect(screen.getByText('创作健康提醒')).toBeInTheDocument()
+    expect(screen.getByText('创作状态提醒')).toBeInTheDocument()
 
     // 真实快捷入口 6 大高频页签
     expect(screen.getByText('正文编辑')).toBeInTheDocument()

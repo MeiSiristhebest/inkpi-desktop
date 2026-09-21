@@ -22,6 +22,7 @@ import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
 import { commandRegistry } from './commandRegistry'
+import { matchesEditorShortcut } from './editorShortcuts'
 import { CommandPaletteModal } from '../components/CommandPaletteModal'
 import {
   type InspectorState,
@@ -176,7 +177,7 @@ export const Engine: FC<EngineProps> = ({
   // 全局快捷键监听：Cmd/Ctrl+K 打开全局指令面板
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if (matchesEditorShortcut('commandPalette', e)) {
         e.preventDefault()
         setCommandPaletteOpen((prev) => !prev)
         return

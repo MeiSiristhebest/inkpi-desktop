@@ -1,5 +1,5 @@
 import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useState, useEffect, useMemo, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { MultiCalendarEngine } from '../engine/MultiCalendarEngine'
 import type {
@@ -51,7 +51,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const [eventDay, setEventDay] = useState<number>(1)
   const [eventSummary, setEventSummary] = useState<string>('')
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [existing, allChapters] = await Promise.all([
       indexedDbMultiCalendarRepository.get(projectId),
       indexedDbProjectRepository.getChaptersByProject(projectId),
@@ -78,11 +78,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       setRecord(initial)
       setCalendars(initial.calendars)
     }
-  }
+  }, [projectId, eventChapterId])
 
   useEffect(() => {
-    loadData()
-  }, [projectId])
+    void loadData()
+  }, [loadData])
 
   // AI 逆向扫描各章时间标注，防时间倒流
   const handleAiChronologyScan = () => {

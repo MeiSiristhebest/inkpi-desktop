@@ -54,7 +54,7 @@ class CommandRegistry {
   }
 }
 
-function matchesShortcut(
+export function matchesShortcut(
   shortcut: string,
   event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>,
 ): boolean {

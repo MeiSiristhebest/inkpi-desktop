@@ -80,28 +80,24 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   const [state, setState] = useState<ToolbarState>({ show: false, top: 0, left: 0 })
   const [rewriteProposal, setRewriteProposal] = useState<RewriteProposalState | null>(null)
   const rewriteProposalRef = useRef<RewriteProposalState | null>(null)
-  rewriteProposalRef.current = rewriteProposal
   const [rewriteBusy, setRewriteBusy] = useState(false)
   const explicitProposalSyncRemoteRef = useRef(proposalSyncRemote)
   const taskProposalSyncRemoteRef = useRef<ProposalSyncRemote | undefined>(undefined)
   const initialWorkspaceId = normalizeScopeId(workspaceId) ?? normalizeScopeId(host?.projectId)
   const initialProjectId = normalizeScopeId(host?.projectId) ?? initialWorkspaceId
-  const proposalScopeRef = useRef<ProposalEventScope | undefined>(
-    initialWorkspaceId
-      ? {
-          workspaceId: initialWorkspaceId,
-          ...(initialProjectId === undefined ? {} : { projectId: initialProjectId }),
-        }
-      : undefined,
-  )
-  const proposalWorkspaceIdRef = useRef(proposalScopeRef.current?.workspaceId)
-  explicitProposalSyncRemoteRef.current = proposalSyncRemote
+  const proposalScope: ProposalEventScope | undefined = initialWorkspaceId
+    ? {
+        workspaceId: initialWorkspaceId,
+        ...(initialProjectId === undefined ? {} : { projectId: initialProjectId }),
+      }
+    : undefined
+  const proposalScopeRef = useRef<ProposalEventScope | undefined>(proposalScope)
+  const scopedWorkspaceId = proposalScope?.workspaceId.trim()
   const [proposalLedger] = useState(() => {
     const localStore = new IndexedDbProposalStore()
-    const scopedWorkspaceId = proposalWorkspaceIdRef.current?.trim()
     if (!scopedWorkspaceId) return new ProposalLedger({ store: localStore })
     return new ProposalLedger({
-      eventScope: proposalScopeRef.current,
+      eventScope: proposalScope,
       store: new RemoteProposalStore({
         local: localStore,
         workspaceId: scopedWorkspaceId,
@@ -109,6 +105,11 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       }),
     })
   })
+
+  useEffect(() => {
+    rewriteProposalRef.current = rewriteProposal
+    explicitProposalSyncRemoteRef.current = proposalSyncRemote
+  }, [proposalSyncRemote, rewriteProposal])
 
   useEffect(() => {
     if (

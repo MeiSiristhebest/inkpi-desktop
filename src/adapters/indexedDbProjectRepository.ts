@@ -248,7 +248,61 @@ export const indexedDbProjectRepository: ProjectRepository = {
     if (typeof db.get === 'function') {
       existing = await db.get<ChapterRecord>('chapters', chapter.id).catch(() => undefined)
     }
-    if (!existing || JSON.stringify(existing) !== JSON.stringify(chapter)) {
+    if (!existing || !sameRecord(existing, chapter)) {
+      try {
+        await appendDomainChange(
+          'chapter',
+          chapter.id,
+          chapter.projectId,
+          'upsert',
+          chapter,
+          chapter.updatedAt,
+          chapter.revision ?? 0,
+          {
+            store: 'chapters',
+            key: chapter.id,
+            operation: 'upsert',
+            value: chapter,
+            expected: existing,
+          },
+        )
+      } catch (error) {
+        // React StrictMode or two initial loaders can race on the same seed
+        // record. If the winning transaction committed the exact same value,
+        // the losing write is an idempotent no-op rather than a persistence error.
+        const saved = await readChapter(chapter.id)
+        if (isIdempotentChapterRace(error) && saved && sameRecord(saved, chapter)) {
+          return
+        }
+        throw error
+      }
+    }
+  },
+
+  saveChapterCAS: async ({ chapter, expectedRevision }) => {
+    let current: ChapterRecord | undefined
+    if (typeof db.get === 'function') {
+      current = await db.get<ChapterRecord>('chapters', chapter.id).catch(() => undefined)
+    }
+
+    const currentRev = current?.revision ?? 1
+    if (current && sameRecord(current, chapter)) {
+      return {
+        success: true,
+        conflict: false,
+        currentRevision: currentRev,
+      }
+    }
+    if (current && currentRev !== expectedRevision) {
+      return {
+        success: false,
+        conflict: true,
+        currentRevision: currentRev,
+        error: `CAS Conflict: Expected revision ${expectedRevision}, but current database revision is ${currentRev}`,
+      }
+    }
+
+    try {
       await appendDomainChange(
         'chapter',
         chapter.id,
@@ -262,44 +316,20 @@ export const indexedDbProjectRepository: ProjectRepository = {
           key: chapter.id,
           operation: 'upsert',
           value: chapter,
-          expected: existing,
+          expected: current,
         },
       )
-    }
-  },
-
-  saveChapterCAS: async ({ chapter, expectedRevision }) => {
-    let current: ChapterRecord | undefined
-    if (typeof db.get === 'function') {
-      current = await db.get<ChapterRecord>('chapters', chapter.id).catch(() => undefined)
-    }
-
-    const currentRev = current?.revision ?? 1
-    if (current && currentRev !== expectedRevision) {
-      return {
-        success: false,
-        conflict: true,
-        currentRevision: currentRev,
-        error: `CAS Conflict: Expected revision ${expectedRevision}, but current database revision is ${currentRev}`,
+    } catch (error) {
+      const saved = await readChapter(chapter.id)
+      if (isIdempotentChapterRace(error) && saved && sameRecord(saved, chapter)) {
+        return {
+          success: true,
+          conflict: false,
+          currentRevision: chapter.revision,
+        }
       }
+      throw error
     }
-
-    await appendDomainChange(
-      'chapter',
-      chapter.id,
-      chapter.projectId,
-      'upsert',
-      chapter,
-      chapter.updatedAt,
-      chapter.revision ?? 0,
-      {
-        store: 'chapters',
-        key: chapter.id,
-        operation: 'upsert',
-        value: chapter,
-        expected: current,
-      },
-    )
 
     return {
       success: true,
@@ -322,6 +352,22 @@ export const indexedDbProjectRepository: ProjectRepository = {
       )
     }
   },
+}
+
+function sameRecord(left: ChapterRecord, right: ChapterRecord): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+async function readChapter(chapterId: string): Promise<ChapterRecord | undefined> {
+  return db.get<ChapterRecord>('chapters', chapterId).catch(() => undefined)
+}
+
+function isIdempotentChapterRace(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (/^Aggregate chapters\/[^/]+ changed during the write$/.test(error.message) ||
+      /^Domain change set id collision: chapter-/.test(error.message))
+  )
 }
 
 async function appendDomainChange(
