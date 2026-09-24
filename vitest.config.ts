@@ -16,6 +16,9 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/db/**/*.ts',
+        'src/domain/**/*.ts',
+        'src/services/**/*.ts',
+        'src/ai/**/*.ts',
         'src/components/editor/RichEditor.tsx',
         'src/components/editor/richEditorUtils.ts',
         'src/components/ai/**/*.tsx',
