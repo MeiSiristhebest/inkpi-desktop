@@ -46,6 +46,7 @@
     "tauri:build": "npm run copy-daemon-sidecar && node scripts/run-tauri-build.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
     "@inkpi/client": "file:../inkpi/packages/client",
     "@inkpi/protocol": "file:../inkpi/packages/protocol",
     "@tauri-apps/api": "^2.5.0",
@@ -76,6 +77,7 @@
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
     "lucide-react": "^1.38.0",
+    "lxgw-wenkai-screen-webfont": "^1.7.0",
     "oxlint": "^1.79.0",
     "prettier": "^3.9.6",
     "tailwind-merge": "^3.6.0",

@@ -3,6 +3,54 @@ import type { CodexEntity } from '../../living-codex/types'
 import type { ChapterRecord } from '../../../types'
 import { semanticTextFromContent } from '../../../domain/content'
 
+/**
+ * Workspace-local chapter index used by the Memory Palace JIT search path.
+ * Runtime remains the execution authority; this index only provides a
+ * deterministic local projection and avoids rebuilding unchanged chapters.
+ */
+export class MemoryPalaceWorkspaceIndex {
+  private readonly chapters = new Map<string, ChapterRecord>()
+
+  readonly workspaceId: string
+
+  constructor(workspaceId: string) {
+    this.workspaceId = workspaceId
+  }
+
+  update(chapter: ChapterRecord): void {
+    if (chapter.projectId !== this.workspaceId) return
+    this.chapters.set(chapter.id, chapter)
+  }
+
+  updateMany(chapters: readonly ChapterRecord[]): void {
+    for (const chapter of chapters) this.update(chapter)
+  }
+
+  remove(chapterId: string): void {
+    this.chapters.delete(chapterId)
+  }
+
+  clear(): void {
+    this.chapters.clear()
+  }
+
+  get size(): number {
+    return this.chapters.size
+  }
+
+  snapshot(): ChapterRecord[] {
+    return [...this.chapters.values()]
+  }
+
+  search(query: string, entities: CodexEntity[]): EntitySearchResult[] {
+    return MemoryPalaceEngine.searchEntityOccurrences({
+      query,
+      entities,
+      chapters: this.snapshot(),
+    })
+  }
+}
+
 export class MemoryPalaceEngine {
   /**
    * 建立长篇小说跨章实体倒排索引，并快速召回特定实体的历史登场轨迹

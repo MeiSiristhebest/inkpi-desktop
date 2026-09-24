@@ -38,6 +38,7 @@ import { indexedDbProjectRepository } from '../adapters/indexedDbProjectReposito
 import { projectContent } from '../domain/content'
 import type { ChapterRecord } from '../types'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
+import type { PluginWorkflowOutcome } from '../types/pluginHost'
 import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
 
 /**
@@ -123,8 +124,6 @@ export type DomainSyncState = 'synced' | 'syncing' | 'offline' | 'pending' | 'co
 export interface AiConversation {
   isConnected: boolean
   isReconnecting: boolean
-  aiPanelOpen: boolean
-  setAiPanelOpen: (open: boolean) => void
   aiMessages: AiMessage[]
   aiInput: string
   setAiInput: (value: string) => void
@@ -157,7 +156,7 @@ export interface AiConversation {
     pluginId: string,
     input: unknown,
     metadata?: Record<string, unknown>,
-  ) => Promise<unknown | null>
+  ) => Promise<PluginWorkflowOutcome<unknown> | null>
   syncDomain: (workspaceId: string) => Promise<DomainSyncResult | null>
   listArtifacts: (workspaceId: string) => Promise<AiArtifact[]>
   domainSyncState: DomainSyncState
@@ -165,8 +164,6 @@ export interface AiConversation {
 }
 
 export interface UseAiConversationOptions {
-  /** 初始右侧 AI 面板是否开启（默认关闭，保持专注写作） */
-  initialPanelOpen?: boolean
   /** 任务恢复存储可注入，便于验证重启/失败/取消路径。 */
   taskRecoveryStore?: TaskRecoveryStore
   /** 时间源可注入，避免恢复快照测试依赖系统时钟。 */
@@ -182,7 +179,7 @@ export function useAiConversation(
   options: UseAiConversationOptions = {},
   activeWritingContext?: ActiveWritingContext | null,
 ): AiConversation {
-  const { initialPanelOpen = false, storyState } = options
+  const { storyState } = options
   const taskStore = options.taskRecoveryStore ?? indexedDbTaskRecoveryStore
   const clockPort = options.clock ?? clock
   const [isConnected, setIsConnected] = useState(false)
@@ -203,7 +200,6 @@ export function useAiConversation(
   const aiBusyRef = useRef(false)
   const promptRequestRef = useRef(0)
 
-  const [aiPanelOpen, setAiPanelOpen] = useState(initialPanelOpen)
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
   const [aiInput, setAiInput] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -644,7 +640,6 @@ export function useAiConversation(
       const trimmed = prompt.trim()
       if (!trimmed || aiBusyRef.current) return
 
-      setAiPanelOpen(true)
       const newMessages = [...aiMessages, { role: 'user' as const, text: trimmed }]
       setAiMessages(newMessages)
       setAiInput('')
@@ -1141,8 +1136,6 @@ export function useAiConversation(
   return {
     isConnected,
     isReconnecting,
-    aiPanelOpen,
-    setAiPanelOpen,
     aiMessages,
     aiInput,
     setAiInput,

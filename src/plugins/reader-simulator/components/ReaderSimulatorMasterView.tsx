@@ -61,7 +61,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
   }, [currentChapter])
 
   // 真实 AI 读者多视点本章追读段评推演
-  const handleAiReaderSimulate = () => {
+  const handleAiReaderSimulate = async () => {
     if (!currentChapter) return
     const chapterText = semanticTextFromContent(
       currentChapter.id,
@@ -81,7 +81,9 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('reader-simulator', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('reader-simulator', analysisInput)
+        .catch((error) => console.error('Reader Simulator plugin task failed:', error))
     }
   }
 

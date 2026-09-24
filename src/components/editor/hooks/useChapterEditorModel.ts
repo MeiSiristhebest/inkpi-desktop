@@ -30,9 +30,10 @@ import { composeChapterTitle } from '../../../domain/chapter/chapterNaming'
 import { blankChapterContent } from '../../../domain/chapter/blankContent'
 import { useSettings, type AppSettings } from '../../../core/settings'
 import { useChapterAutosave } from './useChapterAutosave'
-import { applyContentMutation } from '../editorContentBridge'
+import { applyContentMutation, loadContentIntoEditor } from '../editorContentBridge'
 import { draftJournal } from '../../../services/draftJournal'
 import { chapterMutationService } from '../../../services/defaultChapterMutationService'
+import type { ChapterMutation } from '../../../services/chapterMutationService'
 import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 
 export interface GlobalSearchResult {
@@ -40,6 +41,14 @@ export interface GlobalSearchResult {
   title: string
   snippet: string
   count: number
+}
+
+export interface DraftRecoveryState {
+  status: 'available' | 'recovered' | 'stale' | 'conflict'
+  chapterId: string
+  baseRevision: number
+  updatedAt: number
+  content?: string
 }
 
 interface ChapterContextMenu {
@@ -63,6 +72,7 @@ export interface EditorModelState {
   showGlobalSearch: boolean
   globalQuery: string
   globalResults: GlobalSearchResult[]
+  draftRecovery: DraftRecoveryState | null
   excludedNumberingIds: Set<string>
   findText: string
   replaceText: string
@@ -123,6 +133,7 @@ function createInitialState(projectId: string): EditorModelState {
     showGlobalSearch: false,
     globalQuery: '',
     globalResults: [],
+    draftRecovery: null,
     excludedNumberingIds,
     findText: '',
     replaceText: '',
@@ -186,6 +197,7 @@ export interface ChapterEditorModel {
   showGlobalSearch: boolean
   globalQuery: string
   globalResults: GlobalSearchResult[]
+  draftRecovery: DraftRecoveryState | null
   excludedNumberingIds: Set<string>
   findText: string
   replaceText: string
@@ -258,9 +270,13 @@ export interface ChapterEditorActions {
   punctuationFix: () => void
   executeReplace: () => void
   acceptGhostText: () => void
-  runGlobalSearch: () => Promise<void>
+  runGlobalSearch: (query: string) => Promise<void>
   jumpToChapterFromSearch: (r: GlobalSearchResult) => void
-  updateActiveTitle: (title: string) => void
+  updateActiveTitle: (title: string) => Promise<void>
+  recoverDraft: () => Promise<void>
+  discardDraft: () => void
+  drain: () => Promise<void>
+  hasPending: () => boolean
   handleEditorUpdate: () => void
   save: () => void
   setGhostText: (v: string) => void
@@ -338,6 +354,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const ghostTextRef = useRef('')
   const ghostTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ghostGeneration = useRef(0)
+  const globalSearchGeneration = useRef(0)
+  const canonicalMutationQueue = useRef<Promise<void>>(Promise.resolve())
+  const canonicalMutationError = useRef<unknown | null>(null)
+  const canonicalMutationPending = useRef(0)
 
   const kvStoreRef = useRef(kvStore)
   kvStoreRef.current = kvStore
@@ -443,6 +463,69 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const autosave = useChapterAutosave(flushSave, reportSaveError)
 
+  const applyCanonicalChapterMutation = useCallback(
+    (
+      chapterId: string,
+      mutation: ChapterMutation,
+      origin: 'title-edit' | 'draft-recovery',
+    ): Promise<ChapterRecord | null> => {
+      const operation = canonicalMutationQueue.current.then(async () => {
+        // Title changes share the same drain barrier as body changes so a title
+        // write can never overwrite a newer pending body revision.
+        await autosave.drain()
+        const current =
+          activeChapterRef.current?.id === chapterId
+            ? activeChapterRef.current
+            : stateRef.current.chapters.find((chapter) => chapter.id === chapterId)
+        if (!current) return null
+        if (mutation.type === 'update-title' && current.title === mutation.title) {
+          canonicalMutationError.current = null
+          return current
+        }
+
+        const result = await chapterMutationService.mutate({
+          workspaceId: projectId,
+          chapterId,
+          expectedRevision: current.revision,
+          mutation,
+          origin,
+        })
+        if (!result.success) throw new Error(result.error || 'Chapter title mutation failed')
+
+        const updated = result.chapter
+        canonicalMutationError.current = null
+        if (activeChapterRef.current?.id === chapterId) activeChapterRef.current = updated
+        patch({
+          chapters: stateRef.current.chapters.map((chapter) =>
+            chapter.id === chapterId ? updated : chapter,
+          ),
+          ...(activeChapterRef.current?.id === chapterId
+            ? { activeChapter: updated, isSaved: true }
+            : {}),
+        })
+        if (activeChapterRef.current?.id === chapterId) {
+          onStats?.({
+            title: updated.title,
+            wordCount: updated.wordCount,
+            updatedAt: updated.updatedAt,
+          })
+        }
+        return updated
+      })
+      canonicalMutationPending.current += 1
+      canonicalMutationQueue.current = operation
+        .catch((error) => {
+          canonicalMutationError.current = error
+        })
+        .then(() => {})
+        .finally(() => {
+          canonicalMutationPending.current = Math.max(0, canonicalMutationPending.current - 1)
+        })
+      return operation
+    },
+    [autosave, onStats, patch, projectId],
+  )
+
   const loadData = useCallback(async () => {
     const [allVols, allChs] = await Promise.all([
       indexedDbProjectRepository.getVolumesByProject(projectId),
@@ -508,21 +591,23 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       if (found) initialChapter = found
     }
 
+    let draftRecovery: DraftRecoveryState | null = null
     if (initialChapter) {
       const draft = draftJournal.get(projectId, initialChapter.id)
       const currentRev = initialChapter.revision ?? 1
-      // P1: WAL 严格恢复条件 (baseRevision === currentRev 自动恢复；< 为过时冲突；> 为异常)
-      if (
-        draft &&
-        draft.baseRevision === currentRev &&
-        draft.updatedAt > (initialChapter.updatedAt || 0) &&
-        draft.editorContent
-      ) {
-        initialChapter = {
-          ...initialChapter,
-          content: draft.editorContent,
-          wordCount: countWords(draft.editorContent),
+      if (draft) {
+        const status =
+          draft.baseRevision === currentRev && draft.updatedAt > (initialChapter.updatedAt || 0)
+            ? 'available'
+            : draft.baseRevision < currentRev
+              ? 'stale'
+              : 'conflict'
+        draftRecovery = {
+          status,
+          chapterId: initialChapter.id,
+          baseRevision: draft.baseRevision,
           updatedAt: draft.updatedAt,
+          ...(status === 'available' ? { content: draft.editorContent } : {}),
         }
       }
     }
@@ -533,6 +618,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       expanded: init,
       activeChapterId: initialChapter?.id ?? '',
       activeChapter: initialChapter,
+      draftRecovery,
     })
   }, [projectId, patch, runPersistence])
 
@@ -714,21 +800,18 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         patch({ renamingChapter: null })
         return
       }
-      const updated = { ...chapter, title: trimmed, updatedAt: clock.now() }
-      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) return
-      const chapters = stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c))
-      const next: Partial<EditorModelState> = { chapters, renamingChapter: null }
-      if (stateRef.current.activeChapterId === updated.id) {
-        next.activeChapter = updated
-        onStats?.({
-          title: updated.title,
-          wordCount: updated.wordCount,
-          updatedAt: updated.updatedAt,
-        })
+      try {
+        const updated = await applyCanonicalChapterMutation(
+          chapter.id,
+          { type: 'update-title', title: trimmed },
+          'title-edit',
+        )
+        if (updated) patch({ renamingChapter: null })
+      } catch (error) {
+        reportSaveError(error)
       }
-      patch(next)
     },
-    [onStats, patch, runPersistence],
+    [applyCanonicalChapterMutation, patch, reportSaveError],
   )
 
   const deleteChapter = useCallback(
@@ -1077,29 +1160,40 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     [editorRef],
   )
 
-  const runGlobalSearch = useCallback(async () => {
-    const q = stateRef.current.globalQuery.trim()
-    if (!q) {
-      patch({ globalResults: [] })
-      return
-    }
-    const proj = await indexedDbProjectRepository.getChaptersByProject(projectId)
-    const res: GlobalSearchResult[] = []
-    for (const ch of proj) {
-      const plain = htmlToPlain(ch.content || '')
-      const idx = plain.indexOf(q)
-      if (idx === -1) continue
-      const count = plain.split(q).length - 1
-      const start = Math.max(0, idx - 24)
-      const snippet = plain
-        .substring(start, start + 64)
-        .replace(/\s+/g, ' ')
-        .trim()
-      res.push({ chapterId: ch.id, title: ch.title, snippet, count })
-    }
-    res.sort((a, b) => b.count - a.count)
-    patch({ globalResults: res })
-  }, [projectId, patch])
+  const runGlobalSearch = useCallback(
+    async (query: string) => {
+      const requestGeneration = ++globalSearchGeneration.current
+      const q = query.trim()
+      patch({ globalQuery: query })
+      if (!q) {
+        patch({ globalResults: [] })
+        return
+      }
+      const proj = await indexedDbProjectRepository.getChaptersByProject(projectId)
+      if (
+        requestGeneration !== globalSearchGeneration.current ||
+        stateRef.current.globalQuery.trim() !== q
+      ) {
+        return
+      }
+      const res: GlobalSearchResult[] = []
+      for (const ch of proj) {
+        const plain = htmlToPlain(ch.content || '')
+        const idx = plain.indexOf(q)
+        if (idx === -1) continue
+        const count = plain.split(q).length - 1
+        const start = Math.max(0, idx - 24)
+        const snippet = plain
+          .substring(start, start + 64)
+          .replace(/\s+/g, ' ')
+          .trim()
+        res.push({ chapterId: ch.id, title: ch.title, snippet, count })
+      }
+      res.sort((a, b) => b.count - a.count)
+      if (requestGeneration === globalSearchGeneration.current) patch({ globalResults: res })
+    },
+    [projectId, patch],
+  )
 
   const jumpToChapterFromSearch = useCallback(
     (r: GlobalSearchResult) => {
@@ -1119,17 +1213,24 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   )
 
   const updateActiveTitle = useCallback(
-    (title: string) => {
-      const cur = stateRef.current.activeChapter
-      if (!cur) return
-      const updated = { ...cur, title }
-      patch({
-        activeChapter: updated,
-        chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
-        isSaved: false,
-      })
+    (title: string): Promise<void> => {
+      const chapterId = stateRef.current.activeChapter?.id
+      if (!chapterId) return Promise.resolve()
+      const trimmed = title.trim()
+      const currentTitle = stateRef.current.activeChapter?.title
+      if (!trimmed || trimmed === currentTitle) return Promise.resolve()
+
+      return applyCanonicalChapterMutation(
+        chapterId,
+        { type: 'update-title', title: trimmed },
+        'title-edit',
+      )
+        .then(() => {})
+        .catch((error) => {
+          reportSaveError(error)
+        })
     },
-    [patch],
+    [applyCanonicalChapterMutation, reportSaveError],
   )
 
   const handleEditorUpdate = useCallback(() => {
@@ -1206,6 +1307,44 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const save = useCallback(() => {
     void flushSave().catch(reportSaveError)
   }, [flushSave, reportSaveError])
+
+  const drain = useCallback(async () => {
+    await autosave.drain()
+    await canonicalMutationQueue.current
+    const error = canonicalMutationError.current
+    canonicalMutationError.current = null
+    if (error) throw error
+  }, [autosave])
+
+  const recoverDraft = useCallback(async () => {
+    const recovery = stateRef.current.draftRecovery
+    const current = stateRef.current.activeChapter
+    if (!recovery || recovery.status !== 'available' || !current || !recovery.content) return
+    try {
+      const updated = await applyCanonicalChapterMutation(
+        current.id,
+        { type: 'replace-content', content: recovery.content },
+        'draft-recovery',
+      )
+      if (!updated) return
+      if (editorRef.current && !editorRef.current.isDestroyed) {
+        loadContentIntoEditor(editorRef.current, recovery.content)
+      }
+      patch({
+        draftRecovery: { ...recovery, status: 'recovered' },
+        isSaved: true,
+      })
+    } catch (error) {
+      reportSaveError(error)
+    }
+  }, [applyCanonicalChapterMutation, editorRef, patch, reportSaveError])
+
+  const discardDraft = useCallback(() => {
+    const recovery = stateRef.current.draftRecovery
+    if (!recovery) return
+    draftJournal.clear(projectId, recovery.chapterId)
+    patch({ draftRecovery: null })
+  }, [patch, projectId])
 
   // ── 切换章节时把内容灌入编辑器（不覆盖正在进行的输入）──
   useEffect(() => {
@@ -1363,6 +1502,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     runGlobalSearch,
     jumpToChapterFromSearch,
     updateActiveTitle,
+    recoverDraft,
+    discardDraft,
+    drain,
+    hasPending: () => autosave.hasPending() || canonicalMutationPending.current > 0,
     handleEditorUpdate,
     save,
     setGhostText,

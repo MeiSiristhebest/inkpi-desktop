@@ -12,6 +12,10 @@ import {
 } from 'lucide-react'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
 import type { AiArtifact } from '../../ai/artifacts/artifactStore'
+import {
+  redactPluginValue as redactSensitive,
+  redactSensitiveString,
+} from '../../core/pluginDataRedaction'
 
 export interface ActivityResultItem {
   id: string
@@ -21,6 +25,28 @@ export interface ActivityResultItem {
   completedAt: number
   status: 'completed' | 'failed'
   artifact?: AiArtifact
+}
+
+const TASK_KIND_LABELS: Record<string, string> = {
+  'narrative.deep.reason': '深度思考',
+  'narrative.project.distill': '项目整理',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  queued: '排队中',
+  running: '进行中',
+  'waiting-user': '等待你的输入',
+  checkpointed: '已保存进度',
+  interrupted: '已中断',
+  failed: '未完成',
+}
+
+function humanizeTaskKind(kind: string): string {
+  return TASK_KIND_LABELS[kind] ?? kind.replace(/^plugin\./, '').replace(/[._-]+/g, ' ')
+}
+
+function humanizeStatus(status: string): string {
+  return STATUS_LABELS[status] ?? status
 }
 
 export interface AiActivityCenterProps {
@@ -145,7 +171,10 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-1.5 font-medium text-[var(--ink-text)]">
-                      <span>{record.task.kind}</span>
+                      <span>
+                        {humanizeTaskKind(record.task.kind)}
+                        <span className="sr-only">{record.task.kind}</span>
+                      </span>
                       <span
                         className={`px-1.5 py-0.2 rounded text-[10px] ${
                           isRunning
@@ -157,7 +186,8 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                                 : 'bg-gray-500/10 text-gray-400'
                         }`}
                       >
-                        {status}
+                        {humanizeStatus(status)}
+                        <span className="sr-only">{status}</span>
                       </span>
                     </div>
                     <div className="text-[10px] text-[var(--ink-text-faint)] font-mono mt-0.5">
@@ -277,6 +307,7 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                     </span>
                   </div>
                   <p className="text-[var(--ink-text-muted)] leading-relaxed">{item.summary}</p>
+                  {item.artifact && <ArtifactContent artifact={item.artifact} />}
                   {item.artifact && (
                     <div className="pt-1">
                       <button
@@ -325,6 +356,7 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                       v{art.version} · {new Date(art.createdAt).toLocaleTimeString()}
                     </span>
                   </div>
+                  <ArtifactContent artifact={art} />
                   <div className="pt-1">
                     <button
                       onClick={() => toggleDetails(art.id)}
@@ -357,4 +389,45 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
       </div>
     </div>
   )
+}
+
+const ArtifactContent: FC<{ artifact: AiArtifact }> = ({ artifact }) => {
+  const content = formatArtifactContent(artifact.content)
+  const provenance = formatProvenance(artifact.provenance)
+  return (
+    <div className="space-y-1">
+      <pre
+        data-testid={`artifact-content-${artifact.id}`}
+        className="max-h-36 overflow-auto whitespace-pre-wrap rounded bg-[var(--ink-bg-panel)] p-2 text-[10px] text-[var(--ink-text)]"
+      >
+        {content}
+      </pre>
+      {provenance && (
+        <div
+          data-testid={`artifact-provenance-${artifact.id}`}
+          className="text-[10px] text-[var(--ink-text-faint)]"
+        >
+          溯源：{provenance}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function formatArtifactContent(value: unknown): string {
+  if (typeof value === 'string') return redactSensitiveString(value).slice(0, 4000)
+  try {
+    return JSON.stringify(redactSensitive(value), null, 2).slice(0, 4000)
+  } catch {
+    return '[无法渲染产物内容]'
+  }
+}
+
+function formatProvenance(value: Record<string, unknown>): string {
+  const safe = redactSensitive(value)
+  if (!safe || typeof safe !== 'object') return ''
+  return Object.entries(safe)
+    .filter(([, item]) => item !== undefined && item !== null)
+    .map(([key, item]) => `${key}=${typeof item === 'string' ? item : JSON.stringify(item)}`)
+    .join(' · ')
 }

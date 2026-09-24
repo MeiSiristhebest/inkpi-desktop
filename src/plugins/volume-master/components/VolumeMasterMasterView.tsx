@@ -90,7 +90,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [projectId, reloadVersion, syncFormWithArc])
 
   // 真实 AI 辅助分卷弧线与卷末大悬念推演
-  const handleAiVolumeArcRecommend = () => {
+  const handleAiVolumeArcRecommend = async () => {
     const curVol = volumes.find((v) => v.id === selectedVolId)
     const volChapters = chapters.filter((c) => c.volumeId === selectedVolId)
     const analysisInput = {
@@ -108,7 +108,9 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('volume-master', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('volume-master', analysisInput)
+        .catch((error) => console.error('Volume Master plugin task failed:', error))
     }
   }
 

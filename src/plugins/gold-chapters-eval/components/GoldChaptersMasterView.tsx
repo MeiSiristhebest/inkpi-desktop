@@ -54,7 +54,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
   const currentEval = GoldChaptersEngine.evaluate(chaptersText)
 
   // AI 主编级黄金三章签约评测
-  const handleAiGoldAudit = () => {
+  const handleAiGoldAudit = async () => {
     if (!chaptersText.trim()) return
     const analysisInput = {
       openingText: semanticTextFromContent('gold-chapters-eval-ai-input', chaptersText).slice(
@@ -64,7 +64,9 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('gold-chapters-eval', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('gold-chapters-eval', analysisInput)
+        .catch((error) => console.error('Gold Chapters plugin task failed:', error))
     }
   }
 

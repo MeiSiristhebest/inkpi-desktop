@@ -65,7 +65,7 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }, [projectId])
 
   // AI 战斗拆招与越级绝杀推演
-  const handleAiCombatRecommend = () => {
+  const handleAiCombatRecommend = async () => {
     const analysisInput = {
       protagonist: {
         name: semanticTextFromContent('combat-sandbox-protagonist', protagonistName),
@@ -79,7 +79,9 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('combat-sandbox', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('combat-sandbox', analysisInput)
+        .catch((error) => console.error('Combat Sandbox plugin task failed:', error))
     }
   }
 

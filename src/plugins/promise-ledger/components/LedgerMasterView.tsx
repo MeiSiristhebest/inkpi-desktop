@@ -96,7 +96,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }
 
   // 真实 AI 读者遗忘曲线与伏笔死锁审查
-  const handleAiLedgerAudit = () => {
+  const handleAiLedgerAudit = async () => {
     if (entries.length === 0) return
     const entrySummaries = entries
       .map(
@@ -108,7 +108,9 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     const analysisInput = { currentChapter, promises: entrySummaries }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('promise-ledger', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('promise-ledger', analysisInput)
+        .catch((error) => console.error('Promise Ledger plugin task failed:', error))
     }
   }
 

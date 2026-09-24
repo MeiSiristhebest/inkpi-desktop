@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryPalaceMasterView } from './MemoryPalaceMasterView'
 import { MemoryPalaceDrawer } from './MemoryPalaceDrawer'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
+import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 
 vi.mock('../../../adapters/indexedDbCodexEntityRepository', () => ({
   indexedDbCodexEntityRepository: {
@@ -53,6 +54,87 @@ describe('MemoryPalace Components', () => {
     await waitFor(() => {
       expect(screen.getAllByText('镇魔钟').length).toBeGreaterThan(0)
     })
+  })
+
+  it('suppresses stale Runtime search results after the query changes', async () => {
+    let resolveFirst: ((value: unknown) => void) | undefined
+    let resolveSecond: ((value: unknown) => void) | undefined
+    const onPluginTool = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          }),
+      )
+    vi.mocked(indexedDbCodexEntityRepository.getAll).mockResolvedValue(fakeEntities as any)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
+
+    render(
+      <DesktopPluginHostProvider
+        projectId="proj-1"
+        activeChapter={null}
+        onPluginTool={onPluginTool}
+        isAiConnected
+      >
+        <MemoryPalaceMasterView projectId="proj-1" />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(onPluginTool).toHaveBeenCalledTimes(1))
+    fireEvent.change(screen.getByPlaceholderText(/快速搜索人物名/), { target: { value: '新查询' } })
+    await waitFor(() => expect(onPluginTool).toHaveBeenCalledTimes(2))
+
+    resolveFirst?.([
+      { entityId: 'old', entityName: '旧查询结果', totalOccurrences: 1, recentSnippets: [] },
+    ])
+    resolveSecond?.([
+      { entityId: 'new', entityName: '新查询结果', totalOccurrences: 1, recentSnippets: [] },
+    ])
+
+    await waitFor(() => expect(screen.getByText('新查询结果')).toBeInTheDocument())
+    expect(screen.queryByText('旧查询结果')).not.toBeInTheDocument()
+  })
+
+  it('refreshes Runtime indexing when a chapter is saved', async () => {
+    const onPluginTool = vi.fn(async () => null)
+    vi.mocked(indexedDbCodexEntityRepository.getAll).mockResolvedValue(fakeEntities as any)
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
+      fakeChapters as any,
+    )
+
+    render(
+      <DesktopPluginHostProvider
+        projectId="proj-1"
+        activeChapter={null}
+        onPluginTool={onPluginTool}
+        isAiConnected
+      >
+        <MemoryPalaceMasterView projectId="proj-1" />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(onPluginTool).toHaveBeenCalledTimes(1))
+    chapterSaveEvents.publish({
+      ...fakeChapters[0],
+      content: '<p>保存后的正文包含新的线索。</p>',
+    } as any)
+
+    await waitFor(() => expect(onPluginTool).toHaveBeenCalledTimes(2))
+    expect(onPluginTool).toHaveBeenLastCalledWith(
+      'memory-palace',
+      expect.objectContaining({
+        chapters: [expect.objectContaining({ content: '保存后的正文包含新的线索。' })],
+      }),
+    )
   })
 
   it('renders MemoryPalaceDrawer with detected entities', async () => {

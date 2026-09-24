@@ -46,7 +46,7 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [projectId])
 
   // AI 深度支线交织收敛排查
-  const handleAiSubPlotScan = () => {
+  const handleAiSubPlotScan = async () => {
     if (strands.length === 0) return
     const strandSummaries = strands
       .map(
@@ -58,7 +58,9 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const analysisInput = { currentMaxChapter: maxChapterOrder, strands: strandSummaries }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('sub-plot-braid', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('sub-plot-braid', analysisInput)
+        .catch((error) => console.error('Sub Plot Braid plugin task failed:', error))
     }
   }
 

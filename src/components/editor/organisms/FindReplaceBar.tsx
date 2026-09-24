@@ -82,7 +82,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
               setScope('book')
               if (findText && !globalQuery) {
                 actions.setGlobalQuery(findText)
-                actions.runGlobalSearch()
+                void actions.runGlobalSearch(findText)
               }
             }}
             className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
@@ -193,11 +193,11 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
                 onChange={(e) => {
                   actions.setGlobalQuery(e.target.value)
                   if (e.target.value.trim().length >= 2) {
-                    actions.runGlobalSearch()
+                    void actions.runGlobalSearch(e.target.value)
                   }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') actions.runGlobalSearch()
+                  if (e.key === 'Enter') void actions.runGlobalSearch(globalQuery)
                 }}
                 placeholder="跨全书所有分卷与章节全文检索…"
                 className="w-full pl-8 pr-3 py-1 rounded-md text-[12px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]"
@@ -207,7 +207,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
               type="button"
               {...gesture.button}
               transition={spring.snappy}
-              onClick={() => actions.runGlobalSearch()}
+              onClick={() => void actions.runGlobalSearch(globalQuery)}
               className="px-3 py-1 rounded-md text-[12px] bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors cursor-pointer font-medium"
             >
               检索全书

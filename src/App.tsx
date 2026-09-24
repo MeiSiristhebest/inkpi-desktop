@@ -22,6 +22,7 @@ import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
 import type { AiArtifact } from './ai/artifacts'
+import type { PluginWorkflowOutcome } from './types/pluginHost'
 import { artifactEvents } from './ports/artifactEvents'
 import { useState, useEffect } from 'react'
 
@@ -37,7 +38,7 @@ const ProjectWorkspace: FC<{
     pluginId: string,
     input: unknown,
     metadata?: Record<string, unknown>,
-  ) => Promise<unknown | null>
+  ) => Promise<PluginWorkflowOutcome<unknown> | null>
   children: ReactNode
 }> = ({
   projectId,
@@ -91,9 +92,6 @@ const ProjectEngine: FC<{
   onAiTask: (
     task: import('@inkpi/protocol').AiTask,
   ) => Promise<import('@inkpi/protocol').TaskResult | null>
-  onOpenAssistant: () => void
-  aiPanelOpen: boolean
-  setAiPanelOpen: (open: boolean) => void
   aiMessages: Array<{ role: 'user' | 'assistant'; text: string }>
   aiInput: string
   setAiInput: (value: string) => void
@@ -125,7 +123,6 @@ const ProjectEngine: FC<{
       onReconnect={props.onReconnect}
       onRequestGhost={props.onRequestGhost}
       onAiTask={props.onAiTask}
-      onOpenAssistant={props.onOpenAssistant}
       onHome={props.onHome}
       renderInspector={(state, onClose) => (
         <>
@@ -157,10 +154,7 @@ const ProjectEngine: FC<{
                   initialTab={state.surface === 'activity' ? 'activity' : 'chat'}
                   onInputChange={props.setAiInput}
                   onSend={() => props.sendAiPrompt(props.aiInput)}
-                  onClose={() => {
-                    props.setAiPanelOpen(false)
-                    onClose()
-                  }}
+                  onClose={onClose}
                   taskRecovery={props.taskRecovery}
                   artifacts={props.artifacts}
                   taskRecoveryLoading={props.taskRecoveryLoading}
@@ -243,8 +237,6 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
   const {
     isConnected,
     isReconnecting,
-    aiPanelOpen,
-    setAiPanelOpen,
     aiMessages,
     aiInput,
     setAiInput,
@@ -348,10 +340,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   onReconnect={reconnect}
                   onRequestGhost={requestGhost}
                   onAiTask={runAiTask}
-                  onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
                   onHome={() => setActiveProjectId(null)}
-                  aiPanelOpen={aiPanelOpen}
-                  setAiPanelOpen={setAiPanelOpen}
                   aiMessages={aiMessages}
                   aiInput={aiInput}
                   setAiInput={setAiInput}

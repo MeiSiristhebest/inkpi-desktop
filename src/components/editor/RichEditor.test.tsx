@@ -15,6 +15,7 @@ import type { TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
 import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
 import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diagnostics'
+import { draftJournal } from '../../services/draftJournal'
 
 // RichEditor 依赖 useSettings（§12.3：Provider 内才能使用），统一在此包裹 SettingsProvider。
 // rerender 也会落到 Provider 之外，故对 rerender 一并包裹。
@@ -127,6 +128,8 @@ beforeEach(async () => {
     'p-ghost',
     'p-type',
     'p-global',
+    'p-title',
+    'p-recovery',
     'p-tree-search',
     'p-status',
     'p-width',
@@ -470,7 +473,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
-  it('responds to global shortcuts (⌘\ folds tree, ⌘F opens find, Esc closes)', async () => {
+  it('responds to global shortcuts (⌘ folds tree, ⌘F opens find, Esc closes)', async () => {
     render(<RichEditor projectId="p-keys" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     fireEvent.keyDown(window, { key: '\\', ctrlKey: true })
@@ -505,6 +508,55 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(
       await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' }),
     ).toBeInTheDocument()
+  })
+
+  it('persists inline chapter title edits before updating the visible chapter', async () => {
+    render(<RichEditor projectId="p-title" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    // 工具栏的 titleDraft 是 activeChapter.title 的镜像，比侧栏晚一帧（同步 effect），必须异步查询
+    const titleInput = await screen.findByDisplayValue('第001章 寒潭惊变')
+    const originalChapter = (await db.getAll('chapters')).find(
+      (item) => item.projectId === 'p-title' && item.title === '第001章 寒潭惊变',
+    )
+    if (!originalChapter) throw new Error('title chapter not found')
+    fireEvent.change(titleInput, { target: { value: '第一章 已持久化' } })
+
+    await waitFor(async () => {
+      const chapter = await db.get('chapters', originalChapter.id)
+      expect(chapter?.title).toBe('第一章 已持久化')
+      expect(chapter?.revision).toBe(2)
+    })
+  })
+
+  it('exposes a recoverable draft state without replacing canonical content automatically', async () => {
+    render(<RichEditor projectId="p-recovery" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chapter = (await db.getAll('chapters')).find(
+      (item) => item.projectId === 'p-recovery' && item.title === '第001章 寒潭惊变',
+    )
+    if (!chapter) throw new Error('recovery chapter not found')
+
+    draftJournal.record({
+      workspaceId: 'p-recovery',
+      chapterId: chapter.id,
+      baseRevision: chapter.revision ?? 1,
+      editorContent: '<p>未落盘草稿</p>',
+      updatedAt: (chapter.updatedAt ?? 0) + 1,
+    })
+    cleanup()
+    editorInstance = makeMockEditor()
+
+    render(<RichEditor projectId="p-recovery" />)
+    expect(await screen.findByTestId('draft-recovery-state')).toHaveTextContent(
+      '检测到上次未落盘的草稿',
+    )
+    expect((await db.get('chapters', chapter.id))?.content).not.toBe('<p>未落盘草稿</p>')
+
+    fireEvent.click(screen.getByText('恢复草稿'))
+    await waitFor(async () => {
+      expect((await db.get('chapters', chapter.id))?.content).toBe('<p>未落盘草稿</p>')
+    })
   })
 
   it('opens the 全书检索 (cross-chapter) modal from the toolbar', async () => {

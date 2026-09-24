@@ -18,6 +18,10 @@ describe('CAPABILITY_REGISTRY (P2.1, P2.2, INV-10)', () => {
 
     const multiverse = getCapability('multiverse-whatif')
     expect(multiverse?.maturity).toBe('demo')
+
+    const storyboard = getCapability('storyboard-gen')
+    expect(storyboard?.surfaces).toContain('navigation')
+    expect(storyboard?.mutatesCanonicalState).toBe(false)
   })
 
   it('declares capability surfaces properly', () => {

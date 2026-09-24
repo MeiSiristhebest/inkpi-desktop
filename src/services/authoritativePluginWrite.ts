@@ -57,7 +57,7 @@ export async function appendAuthoritativePluginUpsert(
     },
   }
   await appendIndexedDbDomainChange(appendInput)
-  await storyStateMaterializer.materialize(input.workspaceId).catch(() => undefined)
+  await storyStateMaterializer.materialize(input.workspaceId)
   return value
 }
 
@@ -88,7 +88,7 @@ export async function appendAuthoritativePluginDelete(input: {
       expected: input.existing,
     },
   })
-  await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
+  await storyStateMaterializer.materialize(workspaceId)
 }
 
 function readProvenance(value: unknown): Provenance | undefined {

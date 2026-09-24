@@ -77,6 +77,19 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       newTitle = mutation.title
     }
 
+    // Canonical title writes are exact-idempotent: retrying the same title must
+    // not manufacture a new revision or append another durable change.
+    if (mutation.type === 'update-title' && existing.title === mutation.title) {
+      return {
+        success: true,
+        conflict: false,
+        previousRevision: currentRevision,
+        newRevision: currentRevision,
+        chapter: existing,
+        wordCountDelta: 0,
+      }
+    }
+
     const newRevision = currentRevision + 1
     const newWordCount = countWords(newContent)
     const previousWordCount = existing.wordCount ?? countWords(existing.content || '')

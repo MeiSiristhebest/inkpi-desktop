@@ -87,7 +87,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   }
 
   // AI 深度设定自洽与战力崩坏排查
-  const handleAiConsistencyAudit = () => {
+  const handleAiConsistencyAudit = async () => {
     if (!auditText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -100,7 +100,9 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('consistency-sentinel', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('consistency-sentinel', analysisInput)
+        .catch((error) => console.error('Consistency Sentinel plugin task failed:', error))
     }
   }
 

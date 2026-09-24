@@ -245,6 +245,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                     <button
                       type="button"
                       onClick={() => toggleCategory(category)}
+                      aria-expanded={!isCollapsed}
+                      aria-controls={`sidebar-category-${category}`}
                       className="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] cursor-pointer rounded hover:bg-[var(--ink-bg-hover)]/50 transition-colors"
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
@@ -263,7 +265,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
                     {/* 分类内插件列表 */}
                     {!isCollapsed && (
-                      <div className="pl-2 mt-0.5 ml-2 border-l border-[var(--ink-border)]/40 space-y-px">
+                      <div
+                        id={`sidebar-category-${category}`}
+                        className="pl-2 mt-0.5 ml-2 border-l border-[var(--ink-border)]/40 space-y-px"
+                      >
                         {plugins.map((p) => {
                           const Icon = p.icon || Sparkles
                           const isActive = activeTabId === p.id

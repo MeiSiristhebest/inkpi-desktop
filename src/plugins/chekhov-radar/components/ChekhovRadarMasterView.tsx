@@ -67,7 +67,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [loadData])
 
   // 核心：基于已写章节正文，让 AI 自动扫描前文埋下的道具/伏线
-  const handleAiScanGuns = () => {
+  const handleAiScanGuns = async () => {
     if (chapters.length === 0) return
     const chaptersSnippet = chapters
       .slice(0, 15)
@@ -80,7 +80,9 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const analysisInput = { chapterSamples: chaptersSnippet }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('chekhov-radar', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('chekhov-radar', analysisInput)
+        .catch((error) => console.error('Chekhov Radar plugin task failed:', error))
     }
   }
 

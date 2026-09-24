@@ -10,6 +10,7 @@ export type ChapterMutationOrigin =
   | 'history-restore'
   | 'ghost-accept'
   | 'title-edit'
+  | 'draft-recovery'
   | 'import'
 
 export interface ChapterContentReplaceMutation {

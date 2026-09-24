@@ -112,7 +112,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
   }
 
   // 触发 AI 进行台词语气深度排查
-  const handleAiDialogueCheck = () => {
+  const handleAiDialogueCheck = async () => {
     if (!extractText.trim()) return
     const analysisInput = {
       characters: [...characterNames],
@@ -121,7 +121,9 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('dialogue-distiller', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('dialogue-distiller', analysisInput)
+        .catch((error) => console.error('Dialogue Distiller plugin task failed:', error))
     }
   }
 

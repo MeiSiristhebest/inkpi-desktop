@@ -108,6 +108,73 @@ describe('AiActivityCenter Component', () => {
     expect(screen.getByText('发现 2 处潜在时间线冲突')).toBeInTheDocument()
   })
 
+  it('renders artifact content and redacts credentials while showing provenance', () => {
+    render(
+      <AiActivityCenter
+        recoveryRecords={[]}
+        artifacts={[
+          {
+            id: 'art-content-1',
+            taskId: 'task-content-1',
+            kind: 'plugin.analysis',
+            type: 'plugin.analysis',
+            version: 1,
+            content: {
+              finding: '正文内容',
+              apiKey: 'do-not-render',
+              password: 'do-not-render-password',
+            },
+            provenance: { routeId: 'local-route', model: 'local-model', token: 'private-token' },
+            createdAt: 1000,
+            updatedAt: 1000,
+          },
+        ]}
+      />,
+    )
+
+    expect(screen.getByTestId('artifact-content-art-content-1')).toHaveTextContent('正文内容')
+    expect(screen.getByTestId('artifact-content-art-content-1')).toHaveTextContent('[redacted]')
+    expect(screen.getByTestId('artifact-content-art-content-1')).not.toHaveTextContent(
+      'do-not-render',
+    )
+    expect(screen.getByTestId('artifact-content-art-content-1')).not.toHaveTextContent(
+      'do-not-render-password',
+    )
+    expect(screen.getByTestId('artifact-provenance-art-content-1')).toHaveTextContent(
+      'routeId=local-route',
+    )
+    expect(screen.getByTestId('artifact-provenance-art-content-1')).not.toHaveTextContent(
+      'private-token',
+    )
+  })
+
+  it('redacts credentials embedded in string artifact content', () => {
+    render(
+      <AiActivityCenter
+        recoveryRecords={[]}
+        artifacts={[
+          {
+            id: 'art-string-secret',
+            taskId: 'task-string-secret',
+            kind: 'plugin.analysis',
+            type: 'plugin.analysis',
+            version: 1,
+            content: 'apiKey=do-not-render Bearer secret-token',
+            provenance: {},
+            createdAt: 1000,
+            updatedAt: 1000,
+          },
+        ]}
+      />,
+    )
+
+    const content = screen.getByTestId('artifact-content-art-string-secret')
+    expect(content).toHaveTextContent('apiKey=[redacted]')
+    expect(content).toHaveTextContent('Bearer [redacted]')
+    expect(content).not.toHaveTextContent('do-not-render')
+    expect(content).not.toHaveTextContent('secret-token')
+  })
+
   it('renders artifacts and toggles Advanced details', () => {
     render(
       <AiActivityCenter

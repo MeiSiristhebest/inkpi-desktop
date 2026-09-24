@@ -85,7 +85,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }, [loadData])
 
   // AI 逆向扫描各章时间标注，防时间倒流
-  const handleAiChronologyScan = () => {
+  const handleAiChronologyScan = async () => {
     if (chapters.length === 0) return
     const chaptersText = chapters
       .slice(0, 15)
@@ -98,7 +98,9 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const analysisInput = { chapterSamples: chaptersText }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('multi-calendar', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('multi-calendar', analysisInput)
+        .catch((error) => console.error('Multi Calendar plugin task failed:', error))
     }
   }
 

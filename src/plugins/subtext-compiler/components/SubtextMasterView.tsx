@@ -17,7 +17,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
     'anger' | 'fear' | 'pride' | 'affection' | 'jealousy' | 'guilt'
   >('affection')
 
-  const handleAiSubtextCompile = () => {
+  const handleAiSubtextCompile = async () => {
     if (!spoken.trim()) return
     const analysisInput = {
       speaker: semanticTextFromContent('subtext-compiler-speaker', speakerName),
@@ -26,7 +26,9 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('subtext-compiler', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('subtext-compiler', analysisInput)
+        .catch((error) => console.error('Subtext Compiler plugin task failed:', error))
     }
   }
 

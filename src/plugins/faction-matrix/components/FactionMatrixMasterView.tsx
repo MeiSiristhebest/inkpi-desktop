@@ -90,7 +90,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }
 
   // 触发 AI 分析宗门博弈与剧情暗线
-  const handleAiFactionAnalysis = () => {
+  const handleAiFactionAnalysis = async () => {
     if (factions.length === 0) return
     const analysisInput = {
       factions: factions.map((faction) => ({
@@ -107,7 +107,9 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('faction-matrix', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('faction-matrix', analysisInput)
+        .catch((error) => console.error('Faction Matrix plugin task failed:', error))
     }
   }
 

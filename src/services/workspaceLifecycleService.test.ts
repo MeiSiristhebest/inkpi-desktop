@@ -298,6 +298,42 @@ describe('WorkspaceLifecycleService', () => {
     getAllSpy.mockRestore()
   })
 
+  it('purges the domain journal, AI artifacts and settingsKV projections from the real store while sparing neighbours', async () => {
+    // The mocked purge test only proves the loop runs. This one runs the same loop against real
+    // IndexedDB rows, so a wrong primary-key (rec.id || rec.key || rec.projectId) or an
+    // over-broad match that also deletes a neighbouring project would be caught here.
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const own = 'purge-real-ws'
+    const neighbour = 'purge-real-neighbour'
+
+    await db.put('domainChangeSets', { id: 'pr-cs-own', workspaceId: own })
+    await db.put('domainChangeSets', { id: 'pr-cs-neighbour', workspaceId: neighbour })
+    await db.put('codexEntities', { id: 'pr-ent-own', projectId: own })
+    await db.put('codexEntities', { id: 'pr-ent-neighbour', projectId: neighbour })
+    await db.put('aiArtifacts', { id: 'pr-art-own', ownership: { workspaceId: own } })
+    await db.put('aiArtifacts', {
+      id: 'pr-art-neighbour',
+      ownership: { workspaceId: neighbour },
+    })
+    await db.put('settingsKV', { key: `storyState::${own}`, value: { projectId: own } })
+    await db.put('settingsKV', { key: `ai-task-recovery::${own}`, value: {} })
+    await db.put('settingsKV', { key: `storyState::${neighbour}`, value: {} })
+
+    await service.purgeWorkspace(own)
+
+    expect(await db.get('domainChangeSets', 'pr-cs-own')).toBeUndefined()
+    expect(await db.get('codexEntities', 'pr-ent-own')).toBeUndefined()
+    expect(await db.get('aiArtifacts', 'pr-art-own')).toBeUndefined()
+    expect(await db.get('settingsKV', `storyState::${own}`)).toBeUndefined()
+    expect(await db.get('settingsKV', `ai-task-recovery::${own}`)).toBeUndefined()
+
+    // The neighbouring project shares every one of these stores and must survive untouched.
+    expect(await db.get('domainChangeSets', 'pr-cs-neighbour')).toBeDefined()
+    expect(await db.get('codexEntities', 'pr-ent-neighbour')).toBeDefined()
+    expect(await db.get('aiArtifacts', 'pr-art-neighbour')).toBeDefined()
+    expect(await db.get('settingsKV', `storyState::${neighbour}`)).toBeDefined()
+  })
+
   it('fails and rolls back if referential integrity is broken in Pass 3 (P0-1, INV-08)', async () => {
     const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
     const backup = await service.exportWorkspaceBackup('orig-proj')

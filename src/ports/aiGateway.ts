@@ -25,6 +25,7 @@ import type { ContinuityFinding, DeepReasoningResult } from '../ai/results/taskR
 import type { DomainSyncResult } from '../domain/sync/domainSyncService'
 import type { ProposalSyncRemote } from '../adapters/daemonDomainSyncRemote'
 import type { AiArtifact } from '../ai/artifacts'
+import type { PluginWorkflowOutcome } from '../types/pluginHost'
 
 /**
  * AI 网关端口（抽象）。
@@ -98,7 +99,7 @@ export interface AiAssistant {
     pluginId: string,
     input: unknown,
     metadata?: Record<string, unknown>,
-  ): Promise<unknown | null>
+  ): Promise<PluginWorkflowOutcome<unknown> | null>
   steerTask?(taskId: string, input: unknown): Promise<boolean>
   resumeTask?(taskId: string): Promise<void>
   syncDomain?(workspaceId: string): Promise<DomainSyncResult>

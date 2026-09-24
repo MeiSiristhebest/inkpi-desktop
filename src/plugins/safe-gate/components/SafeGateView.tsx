@@ -100,7 +100,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }
 
   // AI 全文违规隐晦语境排查
-  const handleAiDeepSafeAudit = () => {
+  const handleAiDeepSafeAudit = async () => {
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -113,7 +113,9 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('safe-gate', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('safe-gate', analysisInput)
+        .catch((error) => console.error('Safe Gate plugin task failed:', error))
     }
   }
 

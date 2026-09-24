@@ -87,7 +87,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
   }
 
   // 接入 AI 叙事深度体检
-  const handleAiDeepLint = () => {
+  const handleAiDeepLint = async () => {
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -100,7 +100,9 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('narrative-linter', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('narrative-linter', analysisInput)
+        .catch((error) => console.error('Narrative Linter plugin task failed:', error))
     }
   }
 

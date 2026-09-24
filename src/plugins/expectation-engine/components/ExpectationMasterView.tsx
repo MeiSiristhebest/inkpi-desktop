@@ -72,7 +72,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   }
 
   // AI 爽点节奏与契约长线排查
-  const handleAiExpectationAudit = () => {
+  const handleAiExpectationAudit = async () => {
     if (contracts.length === 0) return
     const analysisInput = {
       contracts: contracts.map((contract) => ({
@@ -82,7 +82,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('expectation-engine', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('expectation-engine', analysisInput)
+        .catch((error) => console.error('Expectation Engine plugin task failed:', error))
     }
   }
 

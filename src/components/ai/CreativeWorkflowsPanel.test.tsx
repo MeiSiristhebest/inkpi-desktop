@@ -516,7 +516,7 @@ describe('CreativeWorkflowsPanel', () => {
       id: 'existing-entity-1',
       projectId: 'project-1',
       name: '既有掌门',
-      type: 'character',
+      category: 'character',
       summary: '宗门掌门人',
       tags: [],
       customFields: {},

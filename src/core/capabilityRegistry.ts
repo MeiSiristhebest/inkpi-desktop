@@ -113,6 +113,16 @@ export const CAPABILITY_REGISTRY = {
     mutatesCanonicalState: false,
     description: '设定分支推演与蝴蝶效应剧情实验',
   },
+  'storyboard-gen': {
+    id: 'storyboard-gen',
+    name: '角色立绘与分镜 (Storyboard)',
+    category: 'experimental',
+    maturity: 'demo',
+    surfaces: ['navigation', 'canvas', 'drawer', 'command'],
+    mutatesDocument: false,
+    mutatesCanonicalState: false,
+    description: '明确运行的四格电影分镜与角色视觉提示词工作流',
+  },
 
   // ── Core Domain Modules (from TAB_DEFINITIONS) ──
   // 开书定位

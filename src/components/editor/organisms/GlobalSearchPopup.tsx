@@ -26,7 +26,7 @@ export const GlobalSearchPopup: React.FC<GlobalSearchPopupProps> = ({ model }) =
             value={globalQuery}
             onChange={(e) => actions.setGlobalQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') actions.runGlobalSearch()
+              if (e.key === 'Enter') void actions.runGlobalSearch(globalQuery)
             }}
             placeholder="检索全书所有章节…"
             className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--ink-text-faint)]"
@@ -38,7 +38,7 @@ export const GlobalSearchPopup: React.FC<GlobalSearchPopupProps> = ({ model }) =
         <div className="flex items-center justify-between px-4 py-1.5 text-[11px] text-[var(--ink-text-faint)] border-b border-[var(--ink-border)]">
           <span>{globalResults.length} 个章节命中</span>
           <button
-            onClick={() => actions.runGlobalSearch()}
+            onClick={() => void actions.runGlobalSearch(globalQuery)}
             className="text-[var(--ink-accent)] hover:underline"
           >
             检索

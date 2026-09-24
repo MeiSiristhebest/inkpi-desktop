@@ -47,7 +47,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [evaluations])
 
   // AI 深度长篇情绪心流节奏诊断
-  const handleAiEmotionDeepAudit = () => {
+  const handleAiEmotionDeepAudit = async () => {
     if (chapters.length === 0) return
     const summaries = evaluations
       .slice(0, 20)
@@ -60,7 +60,9 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const analysisInput = { chapterEmotionSummaries: summaries }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('emotion-curve', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('emotion-curve', analysisInput)
+        .catch((error) => console.error('Emotion Curve plugin task failed:', error))
     }
   }
 

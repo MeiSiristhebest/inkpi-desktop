@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Suspense, type FC, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense, type FC, type ReactNode } from 'react'
 import { PanelRight, Maximize2, Minimize2, Home, PanelLeftOpen, Sparkles } from 'lucide-react'
 import { RichEditor, type RichEditorProps } from '../components/editor/RichEditor'
 import { SettingsView } from '../components/settings/SettingsView'
@@ -43,7 +43,7 @@ interface EngineProps {
   renderInspector?: (state: InspectorState, onClose: () => void) => ReactNode
   /** 右侧信息栏默认是否开启（默认关闭，保持正文写作画布宽敞；测试中可显式开启） */
   defaultRightOpen?: boolean
-  /** 写作台工具栏中「打开 AI 副驾驶」的回调 */
+  /** Optional integration hook invoked when the AI assistant is opened. */
   onOpenAssistant?: () => void
   /** Daemon 连接状态与重连（透传给编辑器状态栏） */
   isConnected?: boolean
@@ -53,7 +53,7 @@ interface EngineProps {
   onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 返回书架/工作台入口（提供时顶栏显示返回按钮） */
-  onHome?: () => void
+  onHome?: () => void | Promise<void>
 }
 
 interface Stats {
@@ -127,6 +127,13 @@ export const Engine: FC<EngineProps> = ({
 }) => {
   // 当前激活的页签（默认直达正文写作 editor）
   const [activeTabId, setActiveTabId] = useState<string>('editor')
+  const activeTabRef = useRef(activeTabId)
+  activeTabRef.current = activeTabId
+  const editorDurabilityBarrierRef = useRef<(() => Promise<void>) | null>(null)
+  const editorDurabilityPendingRef = useRef(false)
+  const editorDurabilityHasPendingRef = useRef<(() => boolean) | null>(null)
+  const navigationQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const navigateToViewRef = useRef<(tabId: string) => void>(() => {})
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(() => !isCompactViewport())
@@ -144,15 +151,17 @@ export const Engine: FC<EngineProps> = ({
 
   // 统一面板开合状态：由 inspectorState 作为单一真理来源
   const isRightPanelOpen = inspectorState.surface !== 'closed'
+  const hasAssistant = Boolean(renderInspector || onOpenAssistant)
+  const openAssistant = useCallback(() => {
+    onOpenAssistant?.()
+    setInspectorState({ surface: 'assistant' })
+  }, [onOpenAssistant])
 
   useEffect(() => {
     const unreg = registerDefaultCommands()
     setNavigationHandler({
-      openView: (tabId) => setActiveTabId(tabId),
-      openAssistant: () => {
-        onOpenAssistant?.()
-        setInspectorState({ surface: 'assistant' })
-      },
+      openView: (tabId) => navigateToViewRef.current(tabId),
+      openAssistant: openAssistant,
       openActivityCenter: () => {
         onOpenAssistant?.()
         setInspectorState({ surface: 'activity' })
@@ -172,7 +181,7 @@ export const Engine: FC<EngineProps> = ({
       unreg()
       setNavigationHandler(null)
     }
-  }, [onOpenAssistant, pluginHostCtx])
+  }, [onOpenAssistant, openAssistant, pluginHostCtx])
 
   // 全局快捷键监听：Cmd/Ctrl+K 打开全局指令面板
   useEffect(() => {
@@ -245,28 +254,85 @@ export const Engine: FC<EngineProps> = ({
 
   const isEditor = activeTabId === 'editor'
 
+  const registerEditorDurabilityBarrier = useCallback(
+    (drain: () => Promise<void>, hasPending: () => boolean) => {
+      editorDurabilityBarrierRef.current = drain
+      editorDurabilityHasPendingRef.current = hasPending
+      editorDurabilityPendingRef.current = hasPending()
+      return () => {
+        if (editorDurabilityBarrierRef.current === drain) {
+          editorDurabilityBarrierRef.current = null
+          editorDurabilityHasPendingRef.current = null
+          editorDurabilityPendingRef.current = false
+        }
+      }
+    },
+    [],
+  )
+
+  const queueNavigation = useCallback((operation: () => Promise<void>) => {
+    const next = navigationQueueRef.current.then(operation).catch((error) => {
+      console.warn('[InkPi Desktop] Navigation durability barrier failed:', error)
+    })
+    navigationQueueRef.current = next
+    return next
+  }, [])
+
+  const navigateToView = useCallback(
+    (nextTabId: string) => {
+      const leavesEditor = activeTabRef.current === 'editor' && nextTabId !== 'editor'
+      editorDurabilityPendingRef.current = editorDurabilityHasPendingRef.current?.() ?? false
+      if (!leavesEditor || !editorDurabilityPendingRef.current) {
+        activeTabRef.current = nextTabId
+        setActiveTabId(nextTabId)
+        return
+      }
+      void queueNavigation(async () => {
+        await editorDurabilityBarrierRef.current?.()
+        activeTabRef.current = nextTabId
+        setActiveTabId(nextTabId)
+      })
+    },
+    [queueNavigation],
+  )
+
+  navigateToViewRef.current = navigateToView
+
+  const leaveWorkspace = useCallback(() => {
+    const leavesEditor = activeTabRef.current === 'editor'
+    editorDurabilityPendingRef.current = editorDurabilityHasPendingRef.current?.() ?? false
+    if (!leavesEditor || !editorDurabilityPendingRef.current) {
+      void onHome?.()
+      return
+    }
+    void queueNavigation(async () => {
+      await editorDurabilityBarrierRef.current?.()
+      await onHome?.()
+    })
+  }, [onHome, queueNavigation])
+
   const editorProps: RichEditorProps = {
     projectId,
     isTypewriter,
     onTypewriterChange: setIsTypewriter,
     focusMode,
     onStats: setStats,
-    onOpenAssistant,
+    onOpenAssistant: hasAssistant ? openAssistant : undefined,
     isConnected,
     isReconnecting,
     onReconnect,
     onRequestGhost,
     onAiTask,
-    onHome,
+    onHome: leaveWorkspace,
+    onRegisterDurabilityBarrier: registerEditorDurabilityBarrier,
     onToggleFocus: () => setFocusMode((f) => !f),
     isFullscreen,
     onToggleFullscreen: () => setIsFullscreen((f) => !f),
     onToggleRightPanel: () => {
-      if (onOpenAssistant) onOpenAssistant()
       setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
     },
     isRightOpen: isRightPanelOpen,
-    hasAssistant: Boolean(onOpenAssistant),
+    hasAssistant,
   }
 
   // 视图渲染分发：以注册表替代 if 链（OCP，§3.1）
@@ -275,9 +341,9 @@ export const Engine: FC<EngineProps> = ({
       projectId,
       activeTabId,
       tabMeta: activeTabMeta,
-      onOpenView: (v) => setActiveTabId(v),
+      onOpenView: navigateToView,
       onStats: setStats,
-      onOpenAssistant,
+      onOpenAssistant: hasAssistant ? openAssistant : undefined,
       onAiTask,
       onStartFocus: () => {
         setActiveTabId('editor')
@@ -327,9 +393,9 @@ export const Engine: FC<EngineProps> = ({
       {!isFullscreen && !focusMode && leftOpen && (
         <SidebarNav
           activeTabId={activeTabId}
-          onSelectTab={(tabId) => setActiveTabId(tabId)}
+          onSelectTab={navigateToView}
           projectName={projectName || ''}
-          onBackToHome={onHome}
+          onBackToHome={leaveWorkspace}
           onOpenSettings={() => setSettingsOpen(true)}
           onClose={() => setLeftOpen(false)}
         />
@@ -357,7 +423,7 @@ export const Engine: FC<EngineProps> = ({
           <header className="h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)]">
             <div className="flex items-center gap-1 min-w-0">
               {onHome && (
-                <IconButton onClick={onHome} title="返回作品库">
+                <IconButton onClick={leaveWorkspace} title="返回作品库">
                   <Home className="w-4 h-4" />
                 </IconButton>
               )}
@@ -371,12 +437,11 @@ export const Engine: FC<EngineProps> = ({
                   <Maximize2 className="w-4 h-4" />
                 )}
               </IconButton>
-              {onOpenAssistant ? (
+              {hasAssistant ? (
                 <IconButton
-                  onClick={() => {
-                    onOpenAssistant()
+                  onClick={() =>
                     setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
-                  }}
+                  }
                   title={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}
                   className={
                     isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
@@ -438,7 +503,7 @@ export const Engine: FC<EngineProps> = ({
                     : rightPanel}
                 </div>
               </aside>
-            ) : !onOpenAssistant ? (
+            ) : !hasAssistant ? (
               <aside
                 data-testid="project-engine-right-panel"
                 className="project-engine-right-panel shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto w-[220px]"

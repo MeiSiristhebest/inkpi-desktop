@@ -61,7 +61,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   // AI 深度叙事密度排查
-  const handleAiDeepWaterAudit = () => {
+  const handleAiDeepWaterAudit = async () => {
     if (!inputText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -74,7 +74,9 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('water-meter', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('water-meter', analysisInput)
+        .catch((error) => console.error('Water Meter plugin task failed:', error))
     }
   }
 

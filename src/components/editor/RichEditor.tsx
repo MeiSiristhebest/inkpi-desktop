@@ -76,6 +76,11 @@ export interface RichEditorProps {
   taskProgress?: TaskStatusSnapshot | null
   /** 顶栏单层合一注入 */
   onHome?: () => void
+  /** Engine registers this barrier before transitions that unmount the editor. */
+  onRegisterDurabilityBarrier?: (
+    drain: () => Promise<void>,
+    hasPending: () => boolean,
+  ) => void | (() => void)
   onToggleFocus?: () => void
   isFullscreen?: boolean
   onToggleFullscreen?: () => void
@@ -116,6 +121,7 @@ export const RichEditor: FC<RichEditorProps> = ({
   onAiTask,
   taskProgress,
   onHome,
+  onRegisterDurabilityBarrier,
   onToggleFocus,
   isFullscreen = false,
   onToggleFullscreen,
@@ -152,7 +158,21 @@ export const RichEditor: FC<RichEditorProps> = ({
     deletingVolume,
     volumeContextMenu,
     defaultTypewriter,
+    draftRecovery,
   } = model
+
+  const drainRef = useRef(model.actions.drain)
+  const hasPendingRef = useRef(model.actions.hasPending)
+  drainRef.current = model.actions.drain
+  hasPendingRef.current = model.actions.hasPending
+  useEffect(() => {
+    if (!onRegisterDurabilityBarrier) return
+    const unregister = onRegisterDurabilityBarrier(
+      () => drainRef.current(),
+      () => hasPendingRef.current(),
+    )
+    return typeof unregister === 'function' ? unregister : undefined
+  }, [onRegisterDurabilityBarrier])
 
   // 始终同步最新正文状态至外层 ActiveWritingContext (P1.1)
   const activeWritingCtx = useOptionalActiveWritingContext()
@@ -579,6 +599,39 @@ export const RichEditor: FC<RichEditorProps> = ({
   /* ── 渲染 ──────────────────────────────────────────────── */
   return (
     <div className="creative-editor-root flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+      {draftRecovery && draftRecovery.status !== 'recovered' && (
+        <div
+          data-testid="draft-recovery-state"
+          role="status"
+          className="absolute left-3 right-3 top-2 z-30 flex items-center justify-between gap-3 rounded border border-amber-500/40 bg-[var(--ink-bg-panel)]/95 px-3 py-2 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
+        >
+          <span>
+            {draftRecovery.status === 'available'
+              ? '检测到上次未落盘的草稿。'
+              : draftRecovery.status === 'stale'
+                ? '检测到已过期草稿，当前正典未被覆盖。'
+                : '检测到与当前版本冲突的草稿，当前正典未被覆盖。'}
+          </span>
+          <span className="flex items-center gap-2 shrink-0">
+            {draftRecovery.status === 'available' && (
+              <button
+                type="button"
+                onClick={() => void actions.recoverDraft()}
+                className="text-[var(--ink-accent)] hover:underline"
+              >
+                恢复草稿
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={actions.discardDraft}
+              className="text-[var(--ink-text-faint)] hover:underline"
+            >
+              丢弃
+            </button>
+          </span>
+        </div>
+      )}
       {visibleTaskProgress && (
         <div
           data-testid="editor-long-task-status"

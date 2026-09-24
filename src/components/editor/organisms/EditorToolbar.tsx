@@ -88,9 +88,23 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   } = model
 
   const [activeMenu, setActiveMenu] = useState<'format' | 'proof' | 'tools' | 'export' | null>(null)
+  const [titleDraft, setTitleDraft] = useState(activeChapter?.title ?? '')
+  const titleChapterIdRef = useRef<string | null>(activeChapter?.id ?? null)
+  const persistedTitleRef = useRef(activeChapter?.title ?? '')
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const host = useOptionalPluginHostContext()
   const registry = useOptionalPluginRegistry()
+
+  useEffect(() => {
+    const chapterId = activeChapter?.id ?? null
+    const nextTitle = activeChapter?.title ?? ''
+    const chapterChanged = titleChapterIdRef.current !== chapterId
+    if (chapterChanged || titleDraft === persistedTitleRef.current) {
+      setTitleDraft(nextTitle)
+    }
+    titleChapterIdRef.current = chapterId
+    persistedTitleRef.current = nextTitle
+  }, [activeChapter?.id, activeChapter?.title, titleDraft])
 
   // 点击外部收起打开的下拉菜单
   useEffect(() => {
@@ -161,8 +175,13 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         <input
           type="text"
-          value={activeChapter?.title || ''}
-          onChange={(e) => actions.updateActiveTitle(e.target.value)}
+          value={titleDraft}
+          onChange={(e) => {
+            const nextTitle = e.target.value
+            setTitleDraft(nextTitle)
+            void actions.updateActiveTitle(nextTitle)
+          }}
+          onBlur={() => void actions.updateActiveTitle(titleDraft)}
           className="min-w-0 flex-1 bg-transparent text-[13px] font-medium px-2 py-1 rounded-md hover:bg-[var(--ink-bg-hover)] focus:bg-[var(--ink-bg-hover)] focus:outline-none truncate transition-colors"
           placeholder="无标题章节"
         />

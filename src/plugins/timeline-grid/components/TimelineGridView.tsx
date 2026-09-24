@@ -114,7 +114,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }, [projectId])
 
   // 核心：基于作品真实章节正文，让 AI 逆向提炼多线大纲
-  const handleAiExtractTimeline = () => {
+  const handleAiExtractTimeline = async () => {
     if (chaptersList.length === 0) return
     const chaptersSummary = chaptersList
       .slice(0, 15)
@@ -127,7 +127,9 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     const analysisInput = { chapterSamples: chaptersSummary }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('timeline-grid', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('timeline-grid', analysisInput)
+        .catch((error) => console.error('Timeline Grid plugin task failed:', error))
     }
   }
 

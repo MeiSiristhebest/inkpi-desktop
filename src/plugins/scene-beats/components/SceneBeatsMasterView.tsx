@@ -58,7 +58,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   )
 
   // AI 智能拆解并生成单章 4 幕电影级节拍表
-  const handleAiGenerateBeats = () => {
+  const handleAiGenerateBeats = async () => {
     const curChap = chapters.find((c) => c.id === currentPlan?.chapterId)
     const analysisInput = {
       chapter: curChap ? { id: curChap.id, order: curChap.order, title: curChap.title } : undefined,
@@ -69,7 +69,9 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('scene-beats', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('scene-beats', analysisInput)
+        .catch((error) => console.error('Scene Beats plugin task failed:', error))
     }
   }
 

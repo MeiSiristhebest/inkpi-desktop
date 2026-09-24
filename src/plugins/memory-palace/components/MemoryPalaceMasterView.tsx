@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useState, useEffect, useMemo, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import { MemoryPalaceEngine } from '../engine/MemoryPalaceEngine'
+import { MemoryPalaceEngine, MemoryPalaceWorkspaceIndex } from '../engine/MemoryPalaceEngine'
 import type { EntitySearchResult } from '../types'
 import { Sparkles, Search, History, BookmarkCheck, BookOpen } from 'lucide-react'
 import { indexedDbMemoryPalaceRepository } from '../../../adapters/indexedDbMemoryPalaceRepository'
@@ -10,6 +10,7 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
+import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 
 export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const host = useOptionalPluginHostContext()
@@ -18,32 +19,63 @@ export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
-
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const [allEnts, allChs] = await Promise.all([
-        indexedDbCodexEntityRepository.getAll(),
-        indexedDbProjectRepository.getChaptersByProject(projectId),
-      ])
-      const projectEnts = (allEnts || []).filter((e) => !e.projectId || e.projectId === projectId)
-      setEntities(projectEnts)
-      setChapters(allChs || [])
-    } finally {
-      setLoading(false)
-    }
-  }
+  const indexRef = useRef<MemoryPalaceWorkspaceIndex | null>(null)
+  const pendingSavedChaptersRef = useRef(new Map<string, any>())
+  const requestVersionRef = useRef(0)
 
   useEffect(() => {
-    loadData()
+    let cancelled = false
+    pendingSavedChaptersRef.current.clear()
+    setLoading(true)
+    void Promise.all([
+      indexedDbCodexEntityRepository.getAll(),
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+    ])
+      .then(([allEnts, allChs]) => {
+        if (cancelled) return
+        const projectEnts = (allEnts || []).filter((e) => !e.projectId || e.projectId === projectId)
+        const mergedChapters = [...(allChs || [])]
+        const chapterIds = new Set(mergedChapters.map((chapter) => chapter.id))
+        for (const [chapterId, chapter] of pendingSavedChaptersRef.current) {
+          const index = mergedChapters.findIndex((item) => item.id === chapterId)
+          if (index >= 0) mergedChapters[index] = chapter
+          else if (!chapterIds.has(chapterId)) mergedChapters.push(chapter)
+        }
+        setEntities(projectEnts)
+        setChapters(mergedChapters)
+        const index = new MemoryPalaceWorkspaceIndex(projectId)
+        index.updateMany(mergedChapters)
+        indexRef.current = index
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+      indexRef.current = null
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    return chapterSaveEvents.subscribe(({ chapter }) => {
+      if (chapter.projectId !== projectId) return
+      pendingSavedChaptersRef.current.set(chapter.id, chapter)
+      indexRef.current?.update(chapter)
+      setChapters((current) => {
+        const existing = current.some((item) => item.id === chapter.id)
+        return existing
+          ? current.map((item) => (item.id === chapter.id ? chapter : item))
+          : [...current, chapter]
+      })
+    })
   }, [projectId])
 
   const localSearchResults: EntitySearchResult[] = useMemo(() => {
-    return MemoryPalaceEngine.searchEntityOccurrences({
-      query,
-      entities,
-      chapters,
-    })
+    const index = indexRef.current
+    return index
+      ? index.search(query, entities)
+      : MemoryPalaceEngine.searchEntityOccurrences({ query, entities, chapters })
   }, [query, entities, chapters])
   const runtimeChapters = useMemo(
     () =>
@@ -64,18 +96,38 @@ export const MemoryPalaceMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       return
     }
 
+    const runPluginTool = runtimeAssistant.runPluginTool
+    const requestVersion = ++requestVersionRef.current
     let cancelled = false
-    setRuntimeSearchResults(null)
-    void runtimeAssistant
-      .runPluginTool('memory-palace', { query, entities, chapters: runtimeChapters })
-      .then((result) => {
-        if (!cancelled && isEntitySearchResults(result)) setRuntimeSearchResults(result)
+    const dispatchSearch = () => {
+      setRuntimeSearchResults(null)
+      void runPluginTool('memory-palace', {
+        workspaceId: projectId,
+        query,
+        entities,
+        chapters: runtimeChapters,
+        index: {
+          mode: 'jit-incremental',
+          chapterIds: runtimeChapters.map((chapter) => chapter.id),
+        },
       })
-      .catch(() => undefined)
+        .then((result) => {
+          if (
+            !cancelled &&
+            requestVersion === requestVersionRef.current &&
+            isEntitySearchResults(result)
+          ) {
+            setRuntimeSearchResults(result)
+          }
+        })
+        .catch(() => undefined)
+    }
+    const timer = window.setTimeout(dispatchSearch, 150)
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
-  }, [entities, host?.aiAssistant, query, runtimeChapters])
+  }, [entities, host?.aiAssistant, projectId, query, runtimeChapters])
 
   const searchResults = runtimeSearchResults ?? localSearchResults
 

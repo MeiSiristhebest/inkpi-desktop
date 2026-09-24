@@ -87,6 +87,39 @@ describe('DefaultChapterMutationService', () => {
     unsub()
   })
 
+  it('persists canonical title edits through the same revisioned mutation path', async () => {
+    const repo = createMockRepo()
+    const service = new DefaultChapterMutationService(repo, mockClock)
+
+    const result = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      expectedRevision: 1,
+      mutation: { type: 'update-title', title: '第二章 新标题' },
+      origin: 'title-edit',
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      previousRevision: 1,
+      newRevision: 2,
+      chapter: { title: '第二章 新标题', content: fakeChapter.content, revision: 2 },
+    })
+    expect(repo.saveChapter).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '第二章 新标题', revision: 2 }),
+    )
+
+    const retry = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      expectedRevision: 2,
+      mutation: { type: 'update-title', title: '第二章 新标题' },
+      origin: 'title-edit',
+    })
+    expect(retry).toMatchObject({ success: true, previousRevision: 2, newRevision: 2 })
+    expect(repo.saveChapter).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects mutation when CAS revision does not match', async () => {
     const repo = createMockRepo()
     const service = new DefaultChapterMutationService(repo, mockClock)

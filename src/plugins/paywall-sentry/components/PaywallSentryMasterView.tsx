@@ -41,7 +41,7 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }, [projectId])
 
   // AI 深度测算最佳上架付费卡点
-  const handleAiPaywallRecommend = () => {
+  const handleAiPaywallRecommend = async () => {
     if (chapters.length === 0) return
     const summaries = chapters
       .slice(0, 30)
@@ -54,7 +54,9 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     const analysisInput = { chapterEndings: summaries }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('paywall-sentry', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('paywall-sentry', analysisInput)
+        .catch((error) => console.error('Paywall Sentry plugin task failed:', error))
     }
   }
 

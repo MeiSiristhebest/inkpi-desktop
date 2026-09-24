@@ -113,7 +113,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   // AI 深度推演：检查全书信息差悬念与视点越权
-  const handleAiDeepLeakAudit = () => {
+  const handleAiDeepLeakAudit = async () => {
     if (!scanText.trim()) return
     const analysisInput = {
       clues: clues.map((clue) => ({ title: clue.title, category: clue.category })),
@@ -122,7 +122,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('clue-weaver', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('clue-weaver', analysisInput)
+        .catch((error) => console.error('Clue Weaver plugin task failed:', error))
     }
   }
 

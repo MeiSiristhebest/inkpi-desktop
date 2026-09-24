@@ -91,7 +91,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   // 真实 AI 诊断请求通道
-  const handleAiDeepAudit = () => {
+  const handleAiDeepAudit = async () => {
     if (!testText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -104,7 +104,9 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     }
 
     if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('reader-hook', analysisInput)
+      await hostContext.aiAssistant
+        .runPluginTask('reader-hook', analysisInput)
+        .catch((error) => console.error('Reader Hook plugin task failed:', error))
     }
   }
 
