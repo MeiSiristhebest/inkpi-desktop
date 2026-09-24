@@ -1,8 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+// Resolve from the test file so the guard also works when Vitest is invoked
+// through an absolute config/root path instead of the Desktop cwd.
+const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
 /**
  * 架构依赖方向守卫。
@@ -21,6 +25,23 @@ const FORBIDDEN_LAYERS = ['src/components', 'src/domain', 'src/core', 'src/hooks
 
 const AI_AUTHORITATIVE_STORE_ACCESS =
   /\bdb\.(?:put|get|getAll|delete)\s*\(\s*["'](?:projects|volumes|chapters|domainChangeSets|domainProjectionCursors)["']/i
+
+/**
+ * INV-02 要求 chapters / domainChangeSets 只能经由唯一 mutation 通道落盘。原先的守卫
+ * 只匹配 `db.put('chapters')` 这种便利调用，而真实旁路是裸事务
+ * （`transaction.objectStore('chapters')`），完全不在扫描范围内。这里同时覆盖两种写法，
+ * 并把扫描面从 src/ai 扩展到整个 src/（db 目录是 schema 本身，予以排除）。
+ */
+const AUTHORITATIVE_STORE_NAMES =
+  'projects|volumes|chapters|domainChangeSets|domainProjectionCursors'
+const AUTHORITATIVE_STORE_ACCESS = new RegExp(
+  `objectStore\\(\\s*["'](?:${AUTHORITATIVE_STORE_NAMES})["']|\\bdb\\.(?:put|add|delete)\\s*\\(\\s*["'](?:${AUTHORITATIVE_STORE_NAMES})["']`,
+)
+/** 基础设施适配器：它们本身就是被授权的持久化实现。 */
+const AUTHORITATIVE_STORE_ADAPTERS = [
+  'src/adapters/indexedDbProjectRepository.ts',
+  'src/adapters/indexedDbDomainChangeStore.ts',
+]
 
 const FORBIDDEN_PATTERNS: { re: RegExp; msg: string }[] = [
   { re: /from\s+['"][^'"]*\/db\/indexedDB['"]/, msg: '直接 import db/indexedDB（应走适配器端口）' },
@@ -64,10 +85,32 @@ function walk(dir: string): string[] {
   return out
 }
 
+/** 与 walk 不同：权威 store 守卫需要同时看到适配器层，才能区分「被授权」与「旁路」。 */
+function walkAllSources(dir: string): string[] {
+  const out: string[] = []
+  for (const name of readdirSync(dir)) {
+    if (name === 'node_modules' || name === 'db' || name === '.git') continue
+    const p = join(dir, name)
+    const st = statSync(p)
+    if (st.isDirectory()) {
+      out.push(...walkAllSources(p))
+    } else if (/\.(ts|tsx)$/.test(name) && !/\.test\.(ts|tsx)$/.test(name)) {
+      out.push(p)
+    }
+  }
+  return out
+}
+
+const toPosix = (file: string) => relative(root, file).split(sep).join('/')
+
+/**
+ * 已登记的历史旁路：AI proposal 的 commit/undo 需要 chapters 与 aiProposals 同事务，
+ * 因此自带裸事务。这个清单只能变短——新增裸写者会让守卫失败，把这一条清空即代表
+ * INV-02 真正闭合。
+ */
+const REGISTERED_BYPASS_WRITERS = ['src/ai/proposals/proposalChapterUnitOfWork.ts']
+
 describe('架构依赖方向守卫', () => {
-  // Resolve from the test file so the guard also works when Vitest is invoked
-  // through an absolute config/root path instead of the Desktop cwd.
-  const root = dirname(dirname(fileURLToPath(import.meta.url)))
   for (const layer of FORBIDDEN_LAYERS) {
     describe(layer, () => {
       let files: string[] = []
@@ -111,6 +154,28 @@ describe('架构依赖方向守卫', () => {
         violations,
         `AI code references authoritative stores; return proposals through the task/proposal boundary: ${violations.join(', ')}`,
       ).toEqual([])
+    })
+  })
+
+  describe('权威事实源写入边界 (INV-02)', () => {
+    const writers = walkAllSources(join(root, 'src'))
+      .filter((file) => AUTHORITATIVE_STORE_ACCESS.test(readFileSync(file, 'utf-8')))
+      .map(toPosix)
+      .sort()
+
+    it('只有登记的持久化适配器可以裸写权威 store', () => {
+      const bypassers = writers.filter((file) => !AUTHORITATIVE_STORE_ADAPTERS.includes(file))
+      expect(
+        bypassers,
+        `新增权威 store 裸写者：请改走 ChapterMutationService，或在守卫中说明无法收口的原因: ${bypassers.join(', ')}`,
+      ).toEqual(REGISTERED_BYPASS_WRITERS)
+    })
+
+    it('适配器清单与实际写入者保持一致，避免守卫悄悄失效', () => {
+      const adaptersThatWrite = writers.filter((file) =>
+        AUTHORITATIVE_STORE_ADAPTERS.includes(file),
+      )
+      expect(adaptersThatWrite).toEqual([...AUTHORITATIVE_STORE_ADAPTERS].sort())
     })
   })
 })
