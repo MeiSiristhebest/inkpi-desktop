@@ -242,7 +242,7 @@ export const indexedDbProjectRepository: ProjectRepository = {
 
   getAllChapters: () => db.getAll<ChapterRecord>('chapters'),
   getChaptersByProject: (projectId) =>
-    db.getAll<ChapterRecord>('chapters').then((cs) => cs.filter((c) => c.projectId === projectId)),
+    db.getByIndex<ChapterRecord>('chapters', 'projectId', projectId),
   saveChapter: async (chapter) => {
     let existing: ChapterRecord | undefined
     if (typeof db.get === 'function') {

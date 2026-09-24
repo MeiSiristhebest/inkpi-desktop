@@ -692,10 +692,9 @@ export class WorkspaceLifecycleService {
     if (!project) return null
 
     const allVolumes = await this.projectRepo.getAllVolumes()
-    const allChapters = await this.projectRepo.getAllChapters()
+    const chapters = await this.projectRepo.getChaptersByProject(workspaceId)
 
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
-    const chapters = allChapters.filter((c) => c.projectId === workspaceId)
 
     const manifest: WorkspaceManifest = {
       schemaVersion: WORKSPACE_ARCHIVE_SCHEMA_VERSION,
@@ -730,9 +729,8 @@ export class WorkspaceLifecycleService {
     if (!project) return null
 
     const allVolumes = await this.projectRepo.getAllVolumes()
-    const allChapters = await this.projectRepo.getAllChapters()
+    const chapters = await this.projectRepo.getChaptersByProject(workspaceId)
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
-    const chapters = allChapters.filter((c) => c.projectId === workspaceId)
     const localStorageData = collectWorkspaceLocalStorage(
       workspaceId,
       chapters.map((chapter) => chapter.id),
@@ -1465,9 +1463,8 @@ export class WorkspaceLifecycleService {
 
     // 2. Delete chapters and volumes
     const allVolumes = await this.projectRepo.getAllVolumes()
-    const allChapters = await this.projectRepo.getAllChapters()
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
-    const chapters = allChapters.filter((c) => c.projectId === workspaceId)
+    const chapters = await this.projectRepo.getChaptersByProject(workspaceId)
 
     for (const ch of chapters) {
       await this.projectRepo.deleteChapter(ch.id)

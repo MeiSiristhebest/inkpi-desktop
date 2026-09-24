@@ -9,7 +9,7 @@
 // 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 24
+export const DB_VERSION = 25
 
 export const STORES = [
   'projects',
@@ -254,6 +254,20 @@ class InkStudioDB {
             if (name === 'storyboardScenes' && typeof store.createIndex === 'function') {
               store.createIndex('projectId', 'projectId', { unique: false })
               store.createIndex('chapterId', 'chapterId', { unique: false })
+            }
+          }
+        }
+
+        // 已存在的表在版本升级中补建索引：上面的分支只对新库生效，老库里缺失的索引
+        // 永远不会被创建，getByIndex 会静默退化为全表扫描。
+        const missingIndexes: Array<[StoreName, string]> = [['chapters', 'projectId']]
+        const upgradeTransaction = request.transaction
+        if (upgradeTransaction) {
+          for (const [storeName, indexName] of missingIndexes) {
+            if (!db.objectStoreNames.contains(storeName)) continue
+            const store = upgradeTransaction.objectStore(storeName)
+            if (!store.indexNames.contains(indexName)) {
+              store.createIndex(indexName, indexName, { unique: false })
             }
           }
         }

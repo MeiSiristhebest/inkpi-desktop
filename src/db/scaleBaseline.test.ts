@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CodexEntity } from '../plugins/living-codex/types'
 import type { TimelineNode } from '../plugins/timeline-grid/types'
 import type { ChapterRecord } from '../types'
-import { db, type StoreName } from './indexedDB'
+import { DB_NAME, db, type StoreName } from './indexedDB'
 
 /**
  * P7 scale baseline for the durable desktop store. A full-length manuscript is ~1000 chapters
@@ -20,6 +20,12 @@ const CHAPTERS_PER_PROJECT = 250
 const INDEXED_GROWTH_CEILING = 6
 /** Scanned-row growth, not result-set growth, so the manuscript listing gets a linear ceiling. */
 const LINEAR_GROWTH_CEILING = 12
+/**
+ * A project's own listing must not pay for the projects sitting next to it in the same store.
+ * Measured: an index-backed re-read of 250 chapters costs the same before and after 1000 unrelated
+ * chapters land (x1.0), while the degraded full-store clone the wrapper falls back to costs x2.9.
+ */
+const PROJECT_ISOLATION_CEILING = 2
 
 const GLYPHS = [
   '寒',
@@ -124,8 +130,8 @@ async function putAll<T extends { id: string }>(store: StoreName, records: T[]):
 
 /** The listing pattern the editor shell and sidebar actually use for a project's chapters. */
 async function listChapters(projectId: string): Promise<ChapterRecord[]> {
-  const all = await db.getAll<ChapterRecord>('chapters')
-  return all.filter((record) => record.projectId === projectId).sort((a, b) => a.order - b.order)
+  const records = await db.getByIndex<ChapterRecord>('chapters', 'projectId', projectId)
+  return records.sort((a, b) => a.order - b.order)
 }
 
 async function measureMs(
@@ -148,14 +154,26 @@ function growthRatio(smallMs: number, largeMs: number): number {
   return largeMs / Math.max(smallMs, 1)
 }
 
+/** Opens the same durable database the wrapper holds, to inspect schema the wrapper hides. */
+function openExistingDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME)
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+    request.onblocked = () =>
+      reject(new Error(`Opening ${DB_NAME} was blocked by another connection`))
+  })
+}
+
 describe('P7 desktop scale baseline', () => {
-  it('writes and lists a 1000-chapter manuscript without loss, growing linearly', async () => {
-    // A control project first, so the listing growth ratio compares 250 scanned rows against 1250.
+  it('writes a 1000-chapter manuscript without loss and lists it without other projects', async () => {
+    // The control project is seeded first, so its listing is timed against a store that holds only
+    // its own rows before the manuscript lands.
     await putAll(
       'chapters',
       Array.from({ length: 250 }, (_, index) => chapter('p-scale-small', index + 1)),
     )
-    const smallMs = await measureMs(3, 5, () => listChapters('p-scale-small'))
+    const ownRowsMs = await measureMs(3, 5, () => listChapters('p-scale-small'))
     expect((await listChapters('p-scale-small')).length).toBe(250)
 
     const orders = Array.from({ length: 1000 }, (_, index) => index + 1)
@@ -163,7 +181,7 @@ describe('P7 desktop scale baseline', () => {
       'chapters',
       orders.map((order) => chapter('p-scale-main', order)),
     )
-    const largeMs = await measureMs(3, 5, () => listChapters('p-scale-main'))
+    const mainMs = await measureMs(3, 5, () => listChapters('p-scale-main'))
 
     const listed = await listChapters('p-scale-main')
     expect(listed.length).toBe(1000)
@@ -184,15 +202,48 @@ describe('P7 desktop scale baseline', () => {
       )
     }
 
-    const ratio = growthRatio(smallMs, largeMs)
+    // An index read must serve a project's listing out of its own rows: re-reading the control
+    // project after 1000 unrelated chapters landed costs about what it cost before them. Without
+    // the projectId index getByIndex degrades to cloning all 1250 rows, which measures ~x2.9.
+    const afterGrowthMs = await measureMs(3, 5, () => listChapters('p-scale-small'))
+    const isolationRatio = growthRatio(ownRowsMs, afterGrowthMs)
+    expect(isolationRatio).toBeLessThanOrEqual(PROJECT_ISOLATION_CEILING)
+
+    // Cost aside, the index must agree row-for-row with the predicate it replaces.
+    const bruteForce = (await db.getAll<ChapterRecord>('chapters'))
+      .filter((record) => record.projectId === 'p-scale-main')
+      .map((record) => record.id)
+      .sort()
+    expect(
+      listed
+        .map((record) => record.id)
+        .slice()
+        .sort(),
+    ).toEqual(bruteForce)
+
+    // A project's own listing still scales with the rows it returns, not with the store.
+    const ratio = growthRatio(ownRowsMs, mainMs)
     expect(ratio).toBeLessThanOrEqual(LINEAR_GROWTH_CEILING)
     console.log(
-      `P7 chapter listing: 250 rows ${smallMs.toFixed(1)}ms -> 1250 rows ${largeMs.toFixed(1)}ms ` +
-        `(x${ratio.toFixed(2)} of ceiling ${LINEAR_GROWTH_CEILING})`,
+      `P7 chapter listing: 250-row store ${ownRowsMs.toFixed(1)}ms -> 1000 rows ${mainMs.toFixed(1)}ms ` +
+        `(x${ratio.toFixed(2)} of ceiling ${LINEAR_GROWTH_CEILING}); control project re-read from a ` +
+        `1250-row store ${afterGrowthMs.toFixed(1)}ms (x${isolationRatio.toFixed(2)} of ceiling ` +
+        `${PROJECT_ISOLATION_CEILING})`,
     )
   })
 
   it('keeps project-scoped chapter reads exact and isolated at manuscript scale', async () => {
+    // Structural half of the isolation gate: getByIndex degrades to a full-store filter when an
+    // index is absent, so the timing assertion alone could be satisfied by a store that never
+    // grew. The index has to actually exist on the chapters store.
+    const raw = await openExistingDatabase()
+    try {
+      const store = raw.transaction('chapters', 'readonly').objectStore('chapters')
+      expect(Array.from(store.indexNames)).toContain('projectId')
+    } finally {
+      raw.close()
+    }
+
     const projects = ['p-scale-small', 'p-scale-main']
     const byProject = new Map<string, ChapterRecord[]>()
     for (const projectId of projects) byProject.set(projectId, await listChapters(projectId))

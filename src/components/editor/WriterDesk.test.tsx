@@ -11,6 +11,13 @@ vi.mock('../../db/indexedDB', () => {
   const put = vi.fn().mockResolvedValue(undefined)
   const remove = vi.fn().mockResolvedValue(undefined)
 
+  // 索引读在同一条内存数据上按属性过滤，语义与真实封装的 getByIndex 一致。
+  const getByIndex = vi.fn(async (store: string, indexName: string, queryValue: unknown) =>
+    (((await getAll(store)) as Array<Record<string, unknown>>) ?? []).filter(
+      (item) => item && item[indexName] === queryValue,
+    ),
+  )
+
   const runTransaction = vi.fn(
     (
       _stores: string[],
@@ -97,7 +104,7 @@ vi.mock('../../db/indexedDB', () => {
   )
 
   return {
-    db: { getAll, get, put, delete: remove, runTransaction },
+    db: { getAll, get, getByIndex, put, delete: remove, runTransaction },
     uid: (p = 'id') => `${p}-mock-${Math.random().toString(36).slice(2, 8)}`,
   }
 })
@@ -105,6 +112,7 @@ vi.mock('../../db/indexedDB', () => {
 const mocked = db as unknown as {
   getAll: ReturnType<typeof vi.fn>
   get: ReturnType<typeof vi.fn>
+  getByIndex: ReturnType<typeof vi.fn>
   put: ReturnType<typeof vi.fn>
   delete: ReturnType<typeof vi.fn>
   runTransaction: ReturnType<typeof vi.fn>

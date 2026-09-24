@@ -47,9 +47,11 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 /** 单项目聚合统计：字数 / 章节数 / 卷数 / 最近更新时间（全部取自真实数据） */
 export async function loadProjectStats(projectId: string): Promise<ProjectStats> {
-  const [vols, chs] = await Promise.all([projectRepo.getAllVolumes(), projectRepo.getAllChapters()])
+  const [vols, pc] = await Promise.all([
+    projectRepo.getAllVolumes(),
+    projectRepo.getChaptersByProject(projectId),
+  ])
   const pv = vols.filter((v) => v.projectId === projectId)
-  const pc = chs.filter((c) => c.projectId === projectId)
   return {
     words: pc.reduce((a, c) => a + (c.wordCount || 0), 0),
     chapters: pc.length,
