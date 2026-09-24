@@ -13,7 +13,7 @@
 > 📚 Explore the technical blueprint: [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 <p align="center">
-  <b>Cross-Platform AI-Powered Creative Writing Workstation built with Tauri 2 and React</b>
+  <b>AI-Powered Creative Writing Workstation built with Tauri 2 and React · Windows</b>
 </p>
 
 <p align="center">

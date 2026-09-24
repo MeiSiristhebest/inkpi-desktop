@@ -1,7 +1,7 @@
 {
   "name": "inkpi-desktop",
   "version": "0.1.0",
-  "description": "InkPi Desktop - Cross-Platform AI-Powered Creative Writing Workstation",
+  "description": "InkPi Desktop - AI-Powered Creative Writing Workstation for Windows",
   "type": "module",
   "private": true,
   "author": "InkPi Contributors",

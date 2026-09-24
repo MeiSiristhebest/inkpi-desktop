@@ -13,7 +13,7 @@
 > 📚 深入探索系统技术架构蓝图：[ARCHITECTURE.md](./ARCHITECTURE.md)
 
 <p align="center">
-  <b>基于 Tauri 2 + React 构建的跨平台 AI 智能写作桌面工作台</b>
+  <b>基于 Tauri 2 + React 构建的 AI 智能写作桌面工作台 · Windows</b>
 </p>
 
 <p align="center">
