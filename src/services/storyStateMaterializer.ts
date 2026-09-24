@@ -74,62 +74,42 @@ export class StoryStateMaterializer {
   }
 
   private async runMaterialize(workspaceId: string): Promise<StoryState | undefined> {
-    // 1. 并发从持久化存储中读取 canonical 插件与 legacy 领域数据
+    // 1. 从持久化存储读取本 workspace 的 canonical 插件与领域数据（按 projectId 索引取，
+    // 不再克隆其它作品的记录；写作越频繁，全表扫描的代价越高）
     // 严格 fail-closed：如果任一读取失败，直接抛出，决不降级为 [] 导致冲掉 read model
     const [
-      allEntities,
-      allThreads,
-      allNodes,
-      allPromises,
-      allFormData,
-      allTableRows,
-      allCardRecords,
-      allCalendarProjects,
-      allGeoMaps,
-      allFactionDiplomacies,
-      allPowerTierSystems,
-      allSceneBeatPlans,
-      allExpectationContracts,
+      entities,
+      threads,
+      nodes,
+      promises,
+      formData,
+      tableRows,
+      cardRecords,
+      calendarProjects,
+      geoMaps,
+      factionDiplomacies,
+      powerTierSystems,
+      sceneBeatPlans,
+      expectationContracts,
       latestWsRev,
     ] = await Promise.all([
-      db.getAll<CodexEntity>('codexEntities'),
-      db.getAll<NarrativeThread>('narrativeThreads'),
-      db.getAll<TimelineNode>('timelineNodes'),
-      db.getAll<PromiseLedgerEntry>('promiseLedger'),
-      db.getAll<FormDataRecord>('formData'),
-      db.getAll<TableRowRecord>('tableRows'),
-      db.getAll<CardRecord>('cardRecords'),
-      db.getAll<MultiCalendarProjectRecord>('multiCalendars'),
-      db.getAll<GeoMapGridRecord>('geoMapGrids'),
-      db.getAll<FactionDiplomacyRecord>('factionDiplomacies'),
-      db.getAll<PowerTierSystem>('powerTierSystems'),
-      db.getAll<ChapterBeatPlan>('sceneBeats'),
-      db.getAll<ExpectationContract>('expectationContracts'),
+      db.getByIndex<CodexEntity>('codexEntities', 'projectId', workspaceId),
+      db.getByIndex<NarrativeThread>('narrativeThreads', 'projectId', workspaceId),
+      db.getByIndex<TimelineNode>('timelineNodes', 'projectId', workspaceId),
+      db.getByIndex<PromiseLedgerEntry>('promiseLedger', 'projectId', workspaceId),
+      db.getByIndex<FormDataRecord>('formData', 'projectId', workspaceId),
+      db.getByIndex<TableRowRecord>('tableRows', 'projectId', workspaceId),
+      db.getByIndex<CardRecord>('cardRecords', 'projectId', workspaceId),
+      db.getByIndex<MultiCalendarProjectRecord>('multiCalendars', 'projectId', workspaceId),
+      db.getByIndex<GeoMapGridRecord>('geoMapGrids', 'projectId', workspaceId),
+      db.getByIndex<FactionDiplomacyRecord>('factionDiplomacies', 'projectId', workspaceId),
+      db
+        .get<PowerTierSystem>('powerTierSystems', workspaceId)
+        .then((system) => (system ? [system] : [])),
+      db.getByIndex<ChapterBeatPlan>('sceneBeats', 'projectId', workspaceId),
+      db.getByIndex<ExpectationContract>('expectationContracts', 'projectId', workspaceId),
       domainChangeStore.latestRevision(workspaceId),
     ])
-
-    // 按 workspaceId 严格过滤（遵循 INV-03: 数据永不串）
-    const entities = allEntities.filter((e) => e.projectId === workspaceId)
-    const threads = allThreads.filter((t) => t.projectId === workspaceId)
-    const nodes = allNodes.filter((n) => n.projectId === workspaceId)
-    const promises = allPromises.filter((p) => p.projectId === workspaceId)
-    const formData = allFormData.filter((record) => record.projectId === workspaceId)
-    const tableRows = allTableRows.filter((record) => record.projectId === workspaceId)
-    const cardRecords = allCardRecords.filter((record) => record.projectId === workspaceId)
-    const calendarProjects = allCalendarProjects.filter(
-      (record) => record.projectId === workspaceId,
-    )
-    const geoMaps = allGeoMaps.filter((record) => record.projectId === workspaceId)
-    const factionDiplomacies = allFactionDiplomacies.filter(
-      (record) => record.projectId === workspaceId,
-    )
-    const powerTierSystems = allPowerTierSystems.filter(
-      (record) => record.projectId === workspaceId,
-    )
-    const sceneBeatPlans = allSceneBeatPlans.filter((record) => record.projectId === workspaceId)
-    const expectationContracts = allExpectationContracts.filter(
-      (record) => record.projectId === workspaceId,
-    )
 
     // 2. 遵循 INV-05 fail-closed 溯源保护：
     // 未显式提供可信 provenance 的历史/导入数据，降级标记为 'derived'/'hypothesis'，绝不静默伪造成 'canonical-fact'

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CodexEntity } from '../plugins/living-codex/types'
 import type { TimelineNode } from '../plugins/timeline-grid/types'
 import type { ChapterRecord } from '../types'
+import { storyStateMaterializer } from '../services/storyStateMaterializer'
 import { DB_NAME, db, type StoreName } from './indexedDB'
 
 /**
@@ -321,6 +322,23 @@ describe('P7 desktop scale baseline', () => {
     )
     expect(byThread.length).toBe(125)
     expect(byThread.every((node) => node.threadId === 'p-scale-main-thread-3')).toBe(true)
+  })
+
+  it('materializes one project read model out of a shared manuscript-scale store', async () => {
+    // The read-model refresh runs after every domain write, so its reads must be scoped by
+    // project index rather than by the whole store: this project owns 500 of the 2500 entities.
+    const state = await storyStateMaterializer.materialize('p-scale-codex-small')
+    expect(state).toBeDefined()
+    expect(Object.keys(state!.entities)).toHaveLength(500)
+    expect(state!.entities['p-scale-codex-small-e-0000']).toBeDefined()
+    expect(state!.entities['p-scale-codex-small-e-0499']).toBeDefined()
+
+    // No leakage from the 2000-entity manuscript project sharing the same stores.
+    const foreignKeys = Object.keys(state!.entities).filter((key) =>
+      key.startsWith('p-scale-main-e-'),
+    )
+    expect(foreignKeys).toEqual([])
+    expect(state!.timelines).toEqual({})
   })
 
   it('keeps index-backed reads near-flat from 500 to 2000 codex entities', async () => {
