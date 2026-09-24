@@ -1,4 +1,5 @@
-import { db } from '../db/indexedDB'
+import { db, readIndexInTransaction } from '../db/indexedDB'
+import type { DomainChangeSet } from '@inkpi/protocol'
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
 import {
@@ -120,16 +121,14 @@ export const indexedDbProjectRepository: ProjectRepository = {
       const domainStore = transaction.objectStore('domainChangeSets')
 
       const volumeReq = volumeStore.get(volumeId)
-      const chaptersReq = chapterStore.getAll()
-      const domainReq = domainStore.getAll()
 
       let volumeLoaded = false
       let chaptersLoaded = false
       let domainLoaded = false
 
       let volumeRecord: VolumeRecord | undefined
-      let allChapters: ChapterRecord[] | undefined
-      let allDomainChanges: any[] | undefined
+      let projectChapters: ChapterRecord[] = []
+      let workspaceJournal: DomainChangeSet[] = []
 
       const checkReady = () => {
         if (!volumeLoaded || !chaptersLoaded || !domainLoaded) return
@@ -141,9 +140,7 @@ export const indexedDbProjectRepository: ProjectRepository = {
 
           const now = Date.now()
           const changes: any[] = []
-          const relatedChapters = (allChapters || []).filter(
-            (ch) => ch.projectId === workspaceId && ch.volumeId === volumeId,
-          )
+          const relatedChapters = projectChapters.filter((ch) => ch.volumeId === volumeId)
 
           if (fallbackVolumeId) {
             // Migrate all child chapters to fallback volume
@@ -193,9 +190,9 @@ export const indexedDbProjectRepository: ProjectRepository = {
           })
 
           // Append DomainChangeSet atomically
-          const workspaceChanges = (allDomainChanges || [])
-            .filter((record: any) => record.workspaceId === workspaceId)
-            .sort((a: any, b: any) => a.revision - b.revision)
+          const workspaceChanges = workspaceJournal.sort(
+            (left, right) => left.revision - right.revision,
+          )
           const baseRevision = workspaceChanges.at(-1)?.revision ?? 0
           result.finalWorkspaceRevision = baseRevision + 1
 
@@ -221,19 +218,22 @@ export const indexedDbProjectRepository: ProjectRepository = {
       }
       volumeReq.onerror = () => fail(volumeReq.error)
 
-      chaptersReq.onsuccess = () => {
-        allChapters = chaptersReq.result
-        chaptersLoaded = true
-        checkReady()
-      }
-      chaptersReq.onerror = () => fail(chaptersReq.error)
-
-      domainReq.onsuccess = () => {
-        allDomainChanges = domainReq.result
-        domainLoaded = true
-        checkReady()
-      }
-      domainReq.onerror = () => fail(domainReq.error)
+      readIndexInTransaction<ChapterRecord>(chapterStore, 'projectId', workspaceId, {
+        onSuccess: (records) => {
+          projectChapters = records
+          chaptersLoaded = true
+          checkReady()
+        },
+        onError: (error) => fail(error),
+      })
+      readIndexInTransaction<DomainChangeSet>(domainStore, 'workspaceId', workspaceId, {
+        onSuccess: (records) => {
+          workspaceJournal = records
+          domainLoaded = true
+          checkReady()
+        },
+        onError: (error) => fail(error),
+      })
     })
 
     domainChangeEvents.publish(workspaceId, result.finalWorkspaceRevision)

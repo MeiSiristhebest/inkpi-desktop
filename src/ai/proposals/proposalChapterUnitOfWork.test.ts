@@ -8,7 +8,10 @@ import { ProposalConflictError } from './proposalLedger'
 // Store registry for the current test
 let mockStores: Record<string, Record<string, unknown>> = {}
 
-vi.mock('../../db/indexedDB', () => {
+vi.mock('../../db/indexedDB', async (importOriginal) => {
+  // readIndexInTransaction keeps its real implementation: the fake stores below expose the same
+  // index surface, so the code under test takes the same branch it takes in the app.
+  const actual = await importOriginal()
   const makeRequest = (getResult: () => unknown) => {
     const req: {
       result: unknown
@@ -33,6 +36,8 @@ vi.mock('../../db/indexedDB', () => {
           getAll: () => unknown
           put: (value: unknown) => unknown
           delete: (key: string) => unknown
+          indexNames: { contains: (indexName: string) => boolean }
+          index: (indexName: string) => { getAll: (queryValue: unknown) => unknown }
         }
       },
       fail: (e: unknown) => void,
@@ -54,6 +59,17 @@ vi.mock('../../db/indexedDB', () => {
           delete: (key: string) => {
             delete mockStores[name]?.[key]
           },
+          // 索引面与真实封装一致：chapters 按 projectId、journal 按 workspaceId 只取自己那一份。
+          indexNames: { contains: (indexName: string) => indexName === 'workspaceId' },
+          index: (indexName: string) => ({
+            getAll: (queryValue: unknown) =>
+              makeRequest(() =>
+                Object.values(mockStores[name] ?? {}).filter(
+                  (record) =>
+                    (record as Record<string, unknown> | undefined)?.[indexName] === queryValue,
+                ),
+              ),
+          }),
         }),
       }
       try {
@@ -68,7 +84,7 @@ vi.mock('../../db/indexedDB', () => {
         .then(() => resolve())
     })
 
-  return { db: { runTransaction } }
+  return { ...actual, db: { runTransaction } }
 })
 
 vi.mock('../../services/draftJournal', () => ({ draftJournal: { clear: vi.fn() } }))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ChapterRecord } from '../types'
+import type { ChapterRecord, VolumeRecord } from '../types'
 import { db } from '../db/indexedDB'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
@@ -197,5 +197,125 @@ describe('atomic IndexedDB domain writes', () => {
 
     expect(await db.get('chapters', chapterId)).toEqual(first)
     expect(await store.latestRevision(workspaceId)).toBe(1)
+  })
+
+  it('cascades a volume delete onto the fallback volume without touching a neighbour', async () => {
+    const workspaceId = 'atomic-domain-cascade-workspace'
+    const neighbourId = 'atomic-domain-cascade-neighbour'
+    const volumeId = 'atomic-domain-cascade-volume'
+    const fallbackVolumeId = 'atomic-domain-cascade-fallback'
+    const journal = new IndexedDbDomainChangeStore()
+
+    const chapter = (projectId: string, id: string, ownedVolume: string): ChapterRecord => ({
+      id,
+      projectId,
+      volumeId: ownedVolume,
+      title: '章节',
+      content: '正文',
+      order: 0,
+      wordCount: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const volume = (projectId: string, id: string): VolumeRecord => ({
+      id,
+      projectId,
+      title: '第一卷',
+      order: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+
+    await db.put('chapters', chapter(workspaceId, 'cascade-c-1', volumeId))
+    await db.put('chapters', chapter(workspaceId, 'cascade-c-2', volumeId))
+    await db.put('chapters', chapter(workspaceId, 'cascade-c-3', fallbackVolumeId))
+    await db.put('chapters', chapter(neighbourId, 'cascade-neighbour-1', volumeId))
+    await db.put('volumes', volume(workspaceId, volumeId))
+    for (const scoped of [workspaceId, neighbourId]) {
+      await db.put(
+        'domainChangeSets',
+        createDomainChangeSet({
+          id: `cascade-seed-${scoped}`,
+          workspaceId: scoped,
+          sourceDeviceId: 'desktop-test',
+          baseRevision: 0,
+          changes: [
+            {
+              id: `cascade-seed-change-${scoped}`,
+              aggregateType: 'chapter',
+              aggregateId: `${scoped}-chapter`,
+              operation: 'upsert',
+              revision: 1,
+              occurredAt: 1,
+            },
+          ],
+          createdAt: 1,
+        }),
+      )
+    }
+
+    const result = await indexedDbProjectRepository.deleteVolumeCascade(
+      workspaceId,
+      volumeId,
+      fallbackVolumeId,
+    )
+
+    expect(result.migratedChapters.map((record) => record.id).sort()).toEqual([
+      'cascade-c-1',
+      'cascade-c-2',
+    ])
+    expect(result.deletedChapterIds).toEqual([])
+    expect((await db.get<ChapterRecord>('chapters', 'cascade-c-1'))?.volumeId).toBe(
+      fallbackVolumeId,
+    )
+    expect(await db.get('volumes', volumeId)).toBeUndefined()
+
+    // The journal head is read through the workspaceId index, so the appended change continues
+    // this workspace's own history rather than starting over at revision 1.
+    expect(result.finalWorkspaceRevision).toBe(2)
+    expect(await journal.latestRevision(workspaceId)).toBe(2)
+
+    // The neighbour happens to use the same volumeId: a whole-store scan filtered only on
+    // volumeId would have migrated its chapter and written into its journal (INV-03).
+    expect((await db.get<ChapterRecord>('chapters', 'cascade-neighbour-1'))?.volumeId).toBe(
+      volumeId,
+    )
+    expect(await journal.list(neighbourId)).toHaveLength(1)
+    expect((await journal.list(workspaceId)).at(-1)?.changes).toHaveLength(3)
+  })
+
+  it('deletes the child chapters when no fallback volume is given', async () => {
+    const workspaceId = 'atomic-domain-cascade-hard-workspace'
+    const volumeId = 'atomic-domain-cascade-hard-volume'
+    const journal = new IndexedDbDomainChangeStore()
+
+    await db.put('chapters', {
+      id: 'cascade-hard-c-1',
+      projectId: workspaceId,
+      volumeId,
+      title: '章节',
+      content: '正文',
+      order: 0,
+      wordCount: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    await db.put('volumes', {
+      id: volumeId,
+      projectId: workspaceId,
+      title: '第一卷',
+      order: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+
+    const result = await indexedDbProjectRepository.deleteVolumeCascade(workspaceId, volumeId)
+
+    expect(result.deletedChapterIds).toEqual(['cascade-hard-c-1'])
+    expect(result.migratedChapters).toEqual([])
+    expect(await db.get('chapters', 'cascade-hard-c-1')).toBeUndefined()
+    expect(await db.get('volumes', volumeId)).toBeUndefined()
+    expect(result.finalWorkspaceRevision).toBe(1)
+    expect(await journal.latestRevision(workspaceId)).toBe(1)
   })
 })
