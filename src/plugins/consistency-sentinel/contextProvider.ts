@@ -1,23 +1,56 @@
 import type { PluginContextFragment, PluginContextRequest } from '../../types/plugin'
 import { indexedDbPowerTierRepository } from '../../adapters/indexedDbPowerTierRepository'
+import { createProvenance } from '../../domain/story/provenance'
 import { consistencyEngine } from './engine/ConsistencyEngine'
 
+const RULE =
+  'Ordered power tiers require explicit compensating cost for a breach; dead characters do not return without evidence.'
+
+/**
+ * INV-05：只有作者确认过的力量体系才是事实。工作区没有记录时，内置修真阶梯只能作为
+ * 明确标注的候选预设进入上下文；以高优先级注入会让模型把「练气→渡劫」当成这本西幻
+ * 书的世界观去做一致性判定。这里刻意不走 getDefaultSystem()：它返回引擎内缓存的
+ * customSystem，可能属于另一个工作区（INV-03）。
+ */
 export async function provideConsistencyContext(
   request: PluginContextRequest,
 ): Promise<PluginContextFragment> {
   try {
-    const system =
-      (await indexedDbPowerTierRepository.get(request.projectId)) ||
-      consistencyEngine.getDefaultSystem()
+    const authored = await indexedDbPowerTierRepository.get(request.projectId)
+    if (authored) {
+      return {
+        id: `consistency:${request.projectId}:tiers:${authored.tiers.join('|')}`,
+        source: 'plugin.consistency-sentinel',
+        kind: 'power-system-constraints',
+        data: {
+          powerSystemDefined: true,
+          tiers: [...authored.tiers],
+          rule: RULE,
+        },
+        metadata: {
+          provenance:
+            authored.provenance ??
+            createProvenance({ sourceType: 'author', factLevel: 'canonical-fact' }),
+        },
+        priority: 700,
+      }
+    }
+
+    const preset = consistencyEngine.getPresetSystems()[0]
     return {
-      id: `consistency:${request.projectId}:${system.tiers.join('|')}`,
+      id: `consistency:${request.projectId}:preset:${preset.tiers.join('|')}`,
       source: 'plugin.consistency-sentinel',
       kind: 'power-system-constraints',
       data: {
-        tiers: [...system.tiers],
-        rule: 'Ordered power tiers require explicit compensating cost for a breach; dead characters do not return without evidence.',
+        powerSystemDefined: false,
+        candidateTiers: [...preset.tiers],
+        rule: RULE,
+        note: 'This workspace has no author-defined power system. The candidate ladder is a generic preset offered for reference only; never treat it as story canon and never report tier violations against it.',
       },
-      priority: 700,
+      metadata: {
+        provenance: createProvenance({ sourceType: 'derived', factLevel: 'proposal' }),
+      },
+      priority: 200,
     }
   } catch (error) {
     console.warn('[ConsistencySentinel] Failed to provide context:', error)
