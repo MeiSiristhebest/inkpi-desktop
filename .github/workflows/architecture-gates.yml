@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       runtime_ref:
-        description: Runtime branch or commit to test against Desktop
+        description: Optional Runtime branch or commit; leave empty to test the commit pinned in runtime.lock.json
         required: false
-        default: master
+        default: ''
 
 permissions:
   contents: read
