@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import type { DomainChangeSet } from '@inkpi/protocol'
 import type { CodexEntity } from '../plugins/living-codex/types'
 import type { TimelineNode } from '../plugins/timeline-grid/types'
 import type { ChapterRecord } from '../types'
+import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
+import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { storyStateMaterializer } from '../services/storyStateMaterializer'
 import { DB_NAME, db, type StoreName } from './indexedDB'
 
@@ -121,6 +124,32 @@ function timelineNode(projectId: string, index: number): TimelineNode {
     createdAt: BASE_TIME + index,
     updatedAt: BASE_TIME + index,
   }
+}
+
+/** One journal entry, contiguous by construction: revision is always baseRevision + 1. */
+function journalSet(workspaceId: string, baseRevision: number, tag = String(baseRevision + 1)) {
+  return createDomainChangeSet({
+    id: `${workspaceId}-set-${tag}`,
+    workspaceId,
+    sourceDeviceId: 'scale-runner',
+    baseRevision,
+    changes: [
+      {
+        id: `${workspaceId}-change-${tag}`,
+        aggregateType: 'chapter',
+        aggregateId: `${workspaceId}-c-${tag}`,
+        operation: 'upsert',
+        revision: baseRevision + 1,
+        payload: { wordCount: baseRevision + 1 },
+        occurredAt: BASE_TIME + baseRevision,
+      },
+    ],
+    createdAt: BASE_TIME + baseRevision,
+  })
+}
+
+function journalSets(workspaceId: string, count: number): DomainChangeSet[] {
+  return Array.from({ length: count }, (_, index) => journalSet(workspaceId, index))
 }
 
 async function putAll<T extends { id: string }>(store: StoreName, records: T[]): Promise<void> {
@@ -339,6 +368,67 @@ describe('P7 desktop scale baseline', () => {
     )
     expect(foreignKeys).toEqual([])
     expect(state!.timelines).toEqual({})
+  })
+
+  it('reads and appends one workspace journal without cloning the neighbours', async () => {
+    const journal = new IndexedDbDomainChangeStore()
+    const own = 'p-journal-main'
+    const neighbour = 'p-journal-neighbour'
+
+    // Structural half of the gate, for the same reason as the chapters one: both getByIndex and
+    // readIndexInTransaction fall back to a full-store filter when the index is absent, so timing
+    // alone could be satisfied by a store that simply never grew. The index has to exist.
+    const raw = await openExistingDatabase()
+    try {
+      const store = raw.transaction('domainChangeSets', 'readonly').objectStore('domainChangeSets')
+      expect(Array.from(store.indexNames)).toContain('workspaceId')
+    } finally {
+      raw.close()
+    }
+
+    await putAll('domainChangeSets', journalSets(own, 40))
+    const ownRowsMs = await measureMs(3, 5, () => journal.list(own))
+    expect((await journal.list(own)).at(-1)?.revision).toBe(40)
+
+    // A neighbour with a 75x longer journal now shares the one store. This is the shape a
+    // returning author is in: the autosave path re-reads the journal head on every keystroke.
+    await putAll('domainChangeSets', journalSets(neighbour, 3000))
+
+    const afterGrowthMs = await measureMs(3, 5, () => journal.list(own))
+    const isolationRatio = growthRatio(ownRowsMs, afterGrowthMs)
+    expect(isolationRatio).toBeLessThanOrEqual(PROJECT_ISOLATION_CEILING)
+
+    // Cost aside, the index must agree with the predicate it replaced, revision for revision.
+    const listed = await journal.list(own)
+    expect(listed.map((changeSet) => changeSet.revision)).toEqual(
+      Array.from({ length: 40 }, (_, index) => index + 1),
+    )
+    const bruteForce = (await db.getAll<DomainChangeSet>('domainChangeSets'))
+      .filter((changeSet) => changeSet.workspaceId === own)
+      .map((changeSet) => changeSet.id)
+      .sort()
+    expect(
+      listed
+        .map((changeSet) => changeSet.id)
+        .slice()
+        .sort(),
+    ).toEqual(bruteForce)
+    expect(await journal.latestRevision(neighbour)).toBe(3000)
+
+    // The compare-and-set head must come from this workspace alone: the next revision is accepted
+    // into a 3040-entry store, and a stale revision is rejected as a conflict rather than silently
+    // accepted because some other workspace had already grown past it.
+    await journal.append(journalSet(own, 40))
+    expect(await journal.latestRevision(own)).toBe(41)
+    await expect(journal.append(journalSet(own, 39, 'stale'))).rejects.toThrow(/revision conflict/)
+    expect(await journal.latestRevision(own)).toBe(41)
+    expect(await journal.latestRevision(neighbour)).toBe(3000)
+
+    console.log(
+      `P7 domain journal: 40-entry workspace read ${ownRowsMs.toFixed(1)}ms -> from a ` +
+        `3040-entry store ${afterGrowthMs.toFixed(1)}ms (x${isolationRatio.toFixed(2)} of ceiling ` +
+        `${PROJECT_ISOLATION_CEILING})`,
+    )
   })
 
   it('keeps index-backed reads near-flat from 500 to 2000 codex entities', async () => {

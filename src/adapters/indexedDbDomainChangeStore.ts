@@ -1,5 +1,5 @@
 import { type DomainProjectionSnapshot, type DomainChangeSet } from '@inkpi/protocol'
-import { db } from '../db/indexedDB'
+import { db, readIndexInTransaction } from '../db/indexedDB'
 import { assertDomainChangeSet, cloneDomainChangeSet } from '../domain/sync/domainChangeSet'
 import type { AuthoritativeDomainChangeStore } from '../domain/sync/domainChangeStore'
 
@@ -50,15 +50,14 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
       await db.runTransaction(['domainChangeSets'], (transaction, fail) => {
         const store = transaction.objectStore('domainChangeSets')
         const existingRequest = store.get(changeSet.id)
-        const allChangesRequest = store.getAll()
         let existing: DomainChangeSet | undefined
-        let allChanges: DomainChangeSet[] | undefined
+        let workspaceJournal: DomainChangeSet[] = []
         let existingLoaded = false
-        let allChangesLoaded = false
+        let journalLoaded = false
         let finished = false
 
         const finish = () => {
-          if (finished || !existingLoaded || !allChangesLoaded) return
+          if (finished || !existingLoaded || !journalLoaded) return
           finished = true
           try {
             if (existing) {
@@ -66,9 +65,9 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
               if (existing.checksum === changeSet.checksum) return
               throw new Error(`Domain change set id collision: ${changeSet.id}`)
             }
-            const workspaceChanges = allChanges!
-              .filter((record) => record.workspaceId === changeSet.workspaceId)
-              .sort((left, right) => left.revision - right.revision)
+            const workspaceChanges = workspaceJournal.sort(
+              (left, right) => left.revision - right.revision,
+            )
             validateOrderedChangeSets(workspaceChanges, changeSet.workspaceId)
             const current = workspaceChanges.at(-1)?.revision ?? 0
             if (changeSet.baseRevision !== current || changeSet.revision !== current + 1) {
@@ -88,12 +87,14 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
           existingLoaded = true
           finish()
         }
-        allChangesRequest.onerror = () => fail(allChangesRequest.error)
-        allChangesRequest.onsuccess = () => {
-          allChanges = (allChangesRequest.result as DomainChangeSet[]) ?? []
-          allChangesLoaded = true
-          finish()
-        }
+        readIndexInTransaction<DomainChangeSet>(store, 'workspaceId', changeSet.workspaceId, {
+          onSuccess: (records) => {
+            workspaceJournal = records
+            journalLoaded = true
+            finish()
+          },
+          onError: (error) => fail(error),
+        })
       })
     })
     domainAppendQueue = operation.catch(() => undefined)
@@ -112,17 +113,16 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
         const domainStore = transaction.objectStore('domainChangeSets')
         const aggregateStore = transaction.objectStore(aggregate.store)
         const changeRequest = domainStore.get(changeSet.id)
-        const allChangesRequest = domainStore.getAll()
         const aggregateRequest = aggregateStore.get(aggregate.key)
         let existingChange: DomainChangeSet | undefined
-        let allChanges: DomainChangeSet[] | undefined
+        let workspaceJournal: DomainChangeSet[] = []
         let currentAggregate: unknown
         let changeLoaded = false
-        let allChangesLoaded = false
+        let journalLoaded = false
         let aggregateLoaded = false
 
         const finish = () => {
-          if (!changeLoaded || !allChangesLoaded || !aggregateLoaded) return
+          if (!changeLoaded || !journalLoaded || !aggregateLoaded) return
           try {
             if (existingChange) {
               assertValidChangeSet(existingChange)
@@ -135,15 +135,14 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
               return
             }
 
-            const workspaceChanges = allChanges!
-              .filter((record) => record.workspaceId === changeSet.workspaceId)
-              .sort((left, right) => left.revision - right.revision)
+            const workspaceChanges = workspaceJournal.sort(
+              (left, right) => left.revision - right.revision,
+            )
             validateOrderedChangeSets(workspaceChanges, changeSet.workspaceId)
             const currentRevision = workspaceChanges.at(-1)?.revision ?? 0
             if (
-              !existingChange &&
-              (changeSet.baseRevision !== currentRevision ||
-                changeSet.revision !== currentRevision + 1)
+              changeSet.baseRevision !== currentRevision ||
+              changeSet.revision !== currentRevision + 1
             ) {
               throw new Error(
                 `Domain change revision conflict: expected base ${currentRevision}, received ${changeSet.baseRevision}`,
@@ -157,7 +156,7 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
 
             if (aggregate.operation === 'upsert') aggregateStore.put(aggregate.value)
             else aggregateStore.delete(aggregate.key)
-            if (!existingChange) domainStore.put(cloneChangeSet(changeSet))
+            domainStore.put(cloneChangeSet(changeSet))
           } catch (error) {
             fail(error)
           }
@@ -169,12 +168,14 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
           changeLoaded = true
           finish()
         }
-        allChangesRequest.onerror = () => fail(allChangesRequest.error)
-        allChangesRequest.onsuccess = () => {
-          allChanges = (allChangesRequest.result as DomainChangeSet[]) ?? []
-          allChangesLoaded = true
-          finish()
-        }
+        readIndexInTransaction<DomainChangeSet>(domainStore, 'workspaceId', changeSet.workspaceId, {
+          onSuccess: (records) => {
+            workspaceJournal = records
+            journalLoaded = true
+            finish()
+          },
+          onError: (error) => fail(error),
+        })
         aggregateRequest.onerror = () => fail(aggregateRequest.error)
         aggregateRequest.onsuccess = () => {
           currentAggregate = aggregateRequest.result
@@ -192,8 +193,11 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
       throw new Error('Domain change workspace id must not be empty')
     if (!Number.isSafeInteger(afterRevision) || afterRevision < 0)
       throw new Error('Invalid domain change cursor')
-    const records = await db.getAll<DomainChangeSet>('domainChangeSets')
-    const workspaceRecords = records.filter((record) => record.workspaceId === workspaceId)
+    const workspaceRecords = await db.getByIndex<DomainChangeSet>(
+      'domainChangeSets',
+      'workspaceId',
+      workspaceId,
+    )
     const ordered = workspaceRecords.sort((left, right) => left.revision - right.revision)
     validateOrderedChangeSets(ordered, workspaceId)
     return ordered.filter((record) => record.revision > afterRevision).map(cloneChangeSet)
@@ -225,22 +229,21 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
     const operation = domainAppendQueue.then(() =>
       db.runTransaction(['domainChangeSets'], (transaction, fail) => {
         const store = transaction.objectStore('domainChangeSets')
-        const request = store.getAll()
-        request.onerror = () => fail(request.error)
-        request.onsuccess = () => {
-          try {
-            for (const record of (request.result as DomainChangeSet[]).filter(
-              (record) => record.workspaceId === snapshot.workspaceId,
-            )) {
-              store.delete(record.id)
+        readIndexInTransaction<DomainChangeSet>(store, 'workspaceId', snapshot.workspaceId, {
+          onError: (error) => fail(error),
+          onSuccess: (records) => {
+            try {
+              for (const record of records) {
+                store.delete(record.id)
+              }
+              for (const changeSet of snapshot.changeSets) {
+                store.put(cloneChangeSet(changeSet))
+              }
+            } catch (error) {
+              fail(error)
             }
-            for (const changeSet of snapshot.changeSets) {
-              store.put(cloneChangeSet(changeSet))
-            }
-          } catch (error) {
-            fail(error)
-          }
-        }
+          },
+        })
       }),
     )
     domainAppendQueue = operation.catch(() => undefined)

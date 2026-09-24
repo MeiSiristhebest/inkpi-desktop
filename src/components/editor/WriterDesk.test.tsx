@@ -5,7 +5,9 @@ import { db } from '../../db/indexedDB'
 import type { ChapterRecord, VolumeRecord } from '../../types'
 
 // 用内存 mock 替换真实 IndexedDB 调用，便于断言持久化行为
-vi.mock('../../db/indexedDB', () => {
+vi.mock('../../db/indexedDB', async (importOriginal) => {
+  // readIndexInTransaction 保留真实实现：它要在假事务上跑同一条索引/退化分支。
+  const actual = await importOriginal()
   const getAll = vi.fn()
   const get = vi.fn().mockResolvedValue(undefined)
   const put = vi.fn().mockResolvedValue(undefined)
@@ -38,6 +40,15 @@ vi.mock('../../db/indexedDB', () => {
             }
             put: (value: unknown) => unknown
             delete: (key: string) => unknown
+            indexNames: { contains: (name: string) => boolean }
+            index: (name: string) => {
+              getAll: (queryValue: unknown) => {
+                result: unknown
+                error: unknown
+                onsuccess?: () => void
+                onerror?: () => void
+              }
+            }
           }
         },
         fail: (error: unknown) => void,
@@ -88,6 +99,12 @@ vi.mock('../../db/indexedDB', () => {
               void remove(store, key)
               return {}
             },
+            // 事务内的索引读走同一份内存数据，与封装里 readIndexInTransaction 的语义一致。
+            indexNames: { contains: (name: string) => name === 'workspaceId' },
+            index: (name: string) => ({
+              getAll: (queryValue: unknown) =>
+                requestFor(() => getByIndex(store, name, queryValue)),
+            }),
           }),
         }
 
@@ -104,6 +121,7 @@ vi.mock('../../db/indexedDB', () => {
   )
 
   return {
+    ...actual,
     db: { getAll, get, getByIndex, put, delete: remove, runTransaction },
     uid: (p = 'id') => `${p}-mock-${Math.random().toString(36).slice(2, 8)}`,
   }

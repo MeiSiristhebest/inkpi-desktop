@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import type { DomainChangeSet } from '@inkpi/protocol'
 import type { ChapterRecord, FormDataRecord } from '../types'
+import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
+import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { DB_NAME, DB_VERSION, db } from './indexedDB'
 
 /**
  * The store wrapper only created indexes for stores it created inside the same upgrade, so a
  * pre-existing library never gains a newly required index — getByIndex would quietly keep doing
- * full-store filters. Both stores the project-scoped reads now depend on have to be indexed in
- * the upgrade pass, and not one row may be lost while doing it (INV-01).
+ * full-store filters. Every store the project-scoped reads now depend on has to be indexed in the
+ * upgrade pass, and not one row may be lost while doing it (INV-01).
  */
 
 const LEGACY_WORKSPACE = 'p-legacy'
@@ -28,6 +31,26 @@ function legacyChapter(projectId: string, id: string): ChapterRecord {
 
 function legacyFormRecord(projectId: string, id: string): FormDataRecord {
   return { id, projectId, tabId: 'notes', data: { text: id } }
+}
+
+function legacyChangeSet(projectId: string, baseRevision: number): DomainChangeSet {
+  return createDomainChangeSet({
+    id: `${projectId}-set-${baseRevision + 1}`,
+    workspaceId: projectId,
+    sourceDeviceId: 'legacy-device',
+    baseRevision,
+    changes: [
+      {
+        id: `${projectId}-change-${baseRevision + 1}`,
+        aggregateType: 'chapter',
+        aggregateId: `${projectId}-c-0001`,
+        operation: 'upsert',
+        revision: baseRevision + 1,
+        occurredAt: 1_600_000_000_000 + baseRevision,
+      },
+    ],
+    createdAt: 1_600_000_000_000 + baseRevision,
+  })
 }
 
 function openRaw(
@@ -61,11 +84,16 @@ async function seedLegacyLibrary(): Promise<void> {
   const legacy = await openRaw(DB_VERSION - 1, (database) => {
     database.createObjectStore('chapters', { keyPath: 'id' })
     database.createObjectStore('formData', { keyPath: 'id' })
+    database.createObjectStore('domainChangeSets', { keyPath: 'id' })
   })
   expect(indexNamesOf(legacy, 'chapters')).toEqual([])
   expect(indexNamesOf(legacy, 'formData')).toEqual([])
+  expect(indexNamesOf(legacy, 'domainChangeSets')).toEqual([])
   await new Promise<void>((resolve, reject) => {
-    const transaction = legacy.transaction(['chapters', 'formData'], 'readwrite')
+    const transaction = legacy.transaction(
+      ['chapters', 'formData', 'domainChangeSets'],
+      'readwrite',
+    )
     const chapters = transaction.objectStore('chapters')
     chapters.put(legacyChapter(LEGACY_WORKSPACE, 'legacy-chapter-1'))
     chapters.put(legacyChapter(LEGACY_WORKSPACE, 'legacy-chapter-2'))
@@ -73,6 +101,10 @@ async function seedLegacyLibrary(): Promise<void> {
     const forms = transaction.objectStore('formData')
     forms.put(legacyFormRecord(LEGACY_WORKSPACE, 'legacy-form-1'))
     forms.put(legacyFormRecord(OTHER_WORKSPACE, 'legacy-other-form-1'))
+    const journal = transaction.objectStore('domainChangeSets')
+    journal.put(legacyChangeSet(LEGACY_WORKSPACE, 0))
+    journal.put(legacyChangeSet(LEGACY_WORKSPACE, 1))
+    journal.put(legacyChangeSet(OTHER_WORKSPACE, 0))
     transaction.oncomplete = () => resolve()
     transaction.onerror = () => reject(transaction.error)
   })
@@ -80,7 +112,7 @@ async function seedLegacyLibrary(): Promise<void> {
 }
 
 describe('project index upgrade on an existing library', () => {
-  it('indexes chapters and formData that predate the indexes, keeping every row', async () => {
+  it('indexes chapters, formData and the domain journal that predate the indexes, keeping every row', async () => {
     await removeDatabase()
     await seedLegacyLibrary()
 
@@ -90,11 +122,13 @@ describe('project index upgrade on an existing library', () => {
     // the upgrade neither dropped nor duplicated anything.
     expect(await db.getAll('chapters')).toHaveLength(3)
     expect(await db.getAll('formData')).toHaveLength(2)
+    expect(await db.getAll('domainChangeSets')).toHaveLength(3)
 
     const raw = await openRaw(DB_VERSION)
     try {
       expect(indexNamesOf(raw, 'chapters')).toContain('projectId')
       expect(indexNamesOf(raw, 'formData')).toContain('projectId')
+      expect(indexNamesOf(raw, 'domainChangeSets')).toContain('workspaceId')
     } finally {
       raw.close()
     }
@@ -110,9 +144,17 @@ describe('project index upgrade on an existing library', () => {
     expect(await db.getByIndex<FormDataRecord>('formData', 'projectId', LEGACY_WORKSPACE)).toEqual([
       legacyFormRecord(LEGACY_WORKSPACE, 'legacy-form-1'),
     ])
+    expect(
+      (
+        await db.getByIndex<DomainChangeSet>('domainChangeSets', 'workspaceId', LEGACY_WORKSPACE)
+      ).map((changeSet) => changeSet.revision),
+    ).toEqual([1, 2])
+    expect(
+      await db.getByIndex<DomainChangeSet>('domainChangeSets', 'workspaceId', OTHER_WORKSPACE),
+    ).toEqual([legacyChangeSet(OTHER_WORKSPACE, 0)])
 
-    // Nothing was lost or duplicated by the upgrade.
-    expect(await db.getAll('chapters')).toHaveLength(3)
-    expect(await db.getAll('formData')).toHaveLength(2)
+    // The upgraded journal answers to the store's own head, so a returning author's compare-and-set
+    // keeps working instead of silently starting from revision 0.
+    expect(await new IndexedDbDomainChangeStore().latestRevision(LEGACY_WORKSPACE)).toBe(2)
   })
 })

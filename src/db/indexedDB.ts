@@ -9,7 +9,7 @@
 // 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 26
+export const DB_VERSION = 27
 
 export const STORES = [
   'projects',
@@ -263,6 +263,7 @@ class InkStudioDB {
         const missingIndexes: Array<[StoreName, string]> = [
           ['chapters', 'projectId'],
           ['formData', 'projectId'],
+          ['domainChangeSets', 'workspaceId'],
         ]
         const upgradeTransaction = request.transaction
         if (upgradeTransaction) {
@@ -402,6 +403,33 @@ class InkStudioDB {
 }
 
 export const db = new InkStudioDB()
+
+/**
+ * 在一个已经打开的事务里按索引读取，退化语义与 InkStudioDB.getByIndex 完全一致
+ * （索引不存在时做全表属性过滤）。权威 store 的「校验 + 写入」必须共用一个事务，
+ * 所以调用方拿不到 getByIndex，只能用这个：事务内读自己的那部分，而不是整张表。
+ */
+export function readIndexInTransaction<T>(
+  store: IDBObjectStore,
+  indexName: string,
+  queryValue: IDBValidKey,
+  handlers: { onSuccess: (records: T[]) => void; onError: (error: unknown) => void },
+): void {
+  if (!store.indexNames.contains(indexName)) {
+    const request = store.getAll()
+    request.onerror = () => handlers.onError(request.error)
+    request.onsuccess = () => {
+      const list = (request.result as Array<Record<string, unknown>>) || []
+      handlers.onSuccess(
+        list.filter((item) => item && item[indexName] === queryValue) as unknown as T[],
+      )
+    }
+    return
+  }
+  const request = store.index(indexName).getAll(queryValue)
+  request.onerror = () => handlers.onError(request.error)
+  request.onsuccess = () => handlers.onSuccess((request.result as T[]) || [])
+}
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error ?? 'Unknown IndexedDB error'))
