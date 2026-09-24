@@ -8,8 +8,8 @@ import {
 
 export class IndexedDbTableRecordRepository implements TableRecordRepository {
   async getRows(projectId: string, tabId: string): Promise<TableRowRecord[]> {
-    const all = await db.getAll<TableRowRecord>('tableRows')
-    return all.filter((r) => r.projectId === projectId && r.tabId === tabId)
+    const rows = await db.getByIndex<TableRowRecord>('tableRows', 'projectId', projectId)
+    return rows.filter((row) => row.tabId === tabId)
   }
 
   async saveRow(row: TableRowRecord): Promise<void> {
