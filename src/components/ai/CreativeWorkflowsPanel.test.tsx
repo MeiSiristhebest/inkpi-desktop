@@ -2,6 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord } from '../../types'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
+import type {
+  DistillationWorkflowOptions,
+  DistillationWorkflowResult,
+  ProjectDistillationInput,
+} from '../../ai/orchestrator/verticalSlices'
 import { CreativeWorkflowsPanel } from './CreativeWorkflowsPanel'
 
 const chapter: ChapterRecord = {
@@ -568,5 +573,113 @@ describe('CreativeWorkflowsPanel', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('distillation-merge-picker')).not.toBeInTheDocument()
     })
+  })
+
+  it('generates a chapter synopsis and writes it through the authoritative mutation path', async () => {
+    const synopsis = '雨停后她离城，剑匣留在原地。'
+    const distill = vi.fn(
+      async (
+        _input: ProjectDistillationInput,
+        _options?: DistillationWorkflowOptions,
+      ): Promise<DistillationWorkflowResult> => ({
+        facts: { summary: synopsis, entities: [], events: [], promises: [] },
+        complete: true,
+        failedChunks: [],
+        completedChunks: 1,
+        totalChunks: 1,
+        checkpoint: {
+          nextChunk: 1,
+          completedChunkIndexes: [0],
+          failedChunkIndexes: [],
+          failedChunks: [],
+          facts: { summary: synopsis, entities: [], events: [], promises: [] },
+        },
+        chunkTaskIds: ['chapter-1:chunk:0'],
+      }),
+    )
+    const mutate = vi.fn(async () => ({
+      success: true as const,
+      conflict: false as const,
+      previousRevision: 3,
+      newRevision: 4,
+      chapter: { ...chapter, synopsis, revision: 4 },
+      wordCountDelta: 0,
+    }))
+
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={distill}
+        onSteerTask={vi.fn()}
+        chapterMutation={{ mutate }}
+      />,
+    )
+
+    expect(screen.getByTestId('chapter-synopsis')).toHaveTextContent('暂无梗概')
+
+    fireEvent.click(screen.getByRole('button', { name: '生成本章梗概' }))
+
+    await waitFor(() => expect(screen.getByTestId('chapter-synopsis')).toHaveTextContent(synopsis))
+    expect(screen.getByRole('button', { name: '重新生成' })).toBeInTheDocument()
+    expect(distill).toHaveBeenCalledOnce()
+    const [input, options] = distill.mock.calls[0]
+    expect(input.target).toBe('document')
+    expect(input.fields).toEqual(['summary'])
+    expect(input.documents[0].text).toBe('雨停后，她没有回头。')
+    expect(options.chunkSize).toBe(1)
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'project-1',
+        chapterId: 'chapter-1',
+        expectedRevision: 3,
+        origin: 'ai-rewrite',
+        mutation: { type: 'update-synopsis', synopsis },
+      }),
+    )
+  })
+
+  it('reports a synopsis failure instead of showing a stale summary', async () => {
+    const mutate = vi.fn(async () => ({
+      success: false as const,
+      conflict: true as const,
+      currentRevision: 5,
+      error: 'CAS Conflict: expected revision 3, but current revision is 5',
+    }))
+
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[{ ...chapter, synopsis: '旧梗概' }]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn(async () => ({
+          facts: { summary: '新梗概', entities: [], events: [], promises: [] },
+          complete: true,
+          failedChunks: [],
+          completedChunks: 1,
+          totalChunks: 1,
+          checkpoint: {
+            nextChunk: 1,
+            completedChunkIndexes: [0],
+            failedChunkIndexes: [],
+            failedChunks: [],
+            facts: { summary: '新梗概', entities: [], events: [], promises: [] },
+          },
+          chunkTaskIds: [],
+        }))}
+        onSteerTask={vi.fn()}
+        chapterMutation={{ mutate }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '重新生成' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('CAS Conflict'))
+    expect(screen.getByTestId('chapter-synopsis')).toHaveTextContent('旧梗概')
   })
 })
