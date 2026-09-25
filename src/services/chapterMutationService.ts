@@ -30,8 +30,21 @@ export interface ChapterTitleEditMutation {
   title: string
 }
 
+/**
+ * Writes the chapter synopsis that the Runtime's JIT L2 tier reads as `documents.synopsis`.
+ * It is a separate mutation from a title edit because a summary is derived by an AI task and a
+ * content edit must not silently drop it.
+ */
+export interface ChapterSynopsisEditMutation {
+  type: 'update-synopsis'
+  synopsis: string
+}
+
 export type ChapterMutation =
-  ChapterContentReplaceMutation | ChapterRangePatchMutation | ChapterTitleEditMutation
+  | ChapterContentReplaceMutation
+  | ChapterRangePatchMutation
+  | ChapterTitleEditMutation
+  | ChapterSynopsisEditMutation
 
 export interface ChapterMutationCommand {
   workspaceId: string

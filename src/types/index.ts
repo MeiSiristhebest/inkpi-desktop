@@ -36,6 +36,11 @@ export interface ChapterRecord {
   order: number
   /** 章节状态：草稿 / 审阅中 / 已发布 / 已归档 */
   status?: ChapterStatus
+  /**
+   * 章节梗概，供 Runtime 的 JIT L2「近期摘要」层检索。由章节摘要工件（creative.chapter-summary）
+   * 经 ChapterMutationService 权威写入，随领域日志同步到 Runtime 的 documents.synopsis。
+   */
+  synopsis?: string
   /** CAS 乐观并发控制修订版本号 */
   revision?: number
   createdAt: number

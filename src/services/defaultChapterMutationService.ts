@@ -65,6 +65,7 @@ export class DefaultChapterMutationService implements ChapterMutationService {
     // 3. Compute new content & title
     let newContent = existing.content || ''
     let newTitle = existing.title
+    let newSynopsis = existing.synopsis
 
     if (mutation.type === 'replace-content') {
       newContent = mutation.content
@@ -75,11 +76,26 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       newContent = newContent.slice(0, clampedFrom) + content + newContent.slice(clampedTo)
     } else if (mutation.type === 'update-title') {
       newTitle = mutation.title
+    } else if (mutation.type === 'update-synopsis') {
+      newSynopsis = mutation.synopsis
     }
 
     // Canonical title writes are exact-idempotent: retrying the same title must
     // not manufacture a new revision or append another durable change.
     if (mutation.type === 'update-title' && existing.title === mutation.title) {
+      return {
+        success: true,
+        conflict: false,
+        previousRevision: currentRevision,
+        newRevision: currentRevision,
+        chapter: existing,
+        wordCountDelta: 0,
+      }
+    }
+
+    // Same rule for the synopsis: an AI task that re-runs on an unchanged chapter must not
+    // bump the revision or replay a domain change just to restate the same summary.
+    if (mutation.type === 'update-synopsis' && existing.synopsis === mutation.synopsis) {
       return {
         success: true,
         conflict: false,
@@ -100,6 +116,7 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       ...existing,
       title: newTitle,
       content: newContent,
+      ...(newSynopsis === undefined ? {} : { synopsis: newSynopsis }),
       wordCount: newWordCount,
       revision: newRevision,
       updatedAt: now,

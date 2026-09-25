@@ -159,6 +159,67 @@ describe('DefaultChapterMutationService', () => {
     }
   })
 
+  it('writes the synopsis through the authoritative path and keeps it across content edits', async () => {
+    const repo = createMockRepo()
+    const service = new DefaultChapterMutationService(repo, mockClock)
+
+    const result = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      expectedRevision: 1,
+      mutation: { type: 'update-synopsis', synopsis: '主角启程，留下未解的预言。' },
+      origin: 'ai-rewrite',
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.chapter.synopsis).toBe('主角启程，留下未解的预言。')
+      expect(result.chapter.content).toBe(fakeChapter.content)
+      expect(result.newRevision).toBe(2)
+
+      // A later content edit must not silently drop the derived synopsis.
+      const edited = await service.mutate({
+        workspaceId: 'proj-1',
+        chapterId: 'ch-1',
+        expectedRevision: result.newRevision,
+        mutation: { type: 'replace-content', content: '第二段正文。' },
+        origin: 'user-typing',
+      })
+      expect(edited.success).toBe(true)
+      if (edited.success) {
+        expect(edited.chapter.synopsis).toBe('主角启程，留下未解的预言。')
+        expect(edited.newRevision).toBe(3)
+      }
+    }
+    const saved = (repo.saveChapter as ReturnType<typeof vi.fn>).mock.calls[0][0] as ChapterRecord
+    expect(saved.synopsis).toBe('主角启程，留下未解的预言。')
+  })
+
+  it('treats a repeated synopsis as an exact no-op so a retried AI task cannot replay a domain change', async () => {
+    const repo = createMockRepo([{ ...fakeChapter, synopsis: '已有梗概' }])
+    const service = new DefaultChapterMutationService(repo, mockClock)
+    const listener = vi.fn()
+    const unsubscribe = chapterSaveEvents.subscribe(listener)
+
+    const result = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      mutation: { type: 'update-synopsis', synopsis: '已有梗概' },
+      origin: 'ai-rewrite',
+    })
+    unsubscribe()
+
+    expect(result).toMatchObject({
+      success: true,
+      conflict: false,
+      previousRevision: 1,
+      newRevision: 1,
+      wordCountDelta: 0,
+    })
+    expect(repo.saveChapter).not.toHaveBeenCalled()
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('returns failure if chapter does not exist', async () => {
     const repo = createMockRepo()
     const service = new DefaultChapterMutationService(repo, mockClock)

@@ -31,6 +31,37 @@ describe('atomic IndexedDB domain writes', () => {
     expect(await new IndexedDbDomainChangeStore().latestRevision(workspaceId)).toBe(1)
   })
 
+  it('journals the chapter synopsis so the Runtime projection can fill its JIT summary tier', async () => {
+    const workspaceId = 'atomic-domain-synopsis-workspace'
+    const chapterId = 'atomic-domain-synopsis-chapter'
+    await db.delete('chapters', chapterId)
+    for (const changeSet of await new IndexedDbDomainChangeStore().list(workspaceId)) {
+      await db.delete('domainChangeSets', changeSet.id)
+    }
+
+    const chapter: ChapterRecord = {
+      id: chapterId,
+      projectId: workspaceId,
+      volumeId: 'volume-1',
+      title: '梗概同步',
+      content: '正文',
+      order: 0,
+      wordCount: 2,
+      synopsis: '主角在雨夜离城。',
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    expect(
+      await indexedDbProjectRepository.saveChapterCAS({ chapter, expectedRevision: 1 }),
+    ).toMatchObject({ success: true })
+
+    const change = (await new IndexedDbDomainChangeStore().list(workspaceId))
+      .flatMap((changeSet) => changeSet.changes)
+      .find((item) => item.aggregateId === chapterId)
+    expect((change?.payload as ChapterRecord | undefined)?.synopsis).toBe('主角在雨夜离城。')
+  })
+
   it('does not mutate daily writing statistics when persisting a chapter directly', async () => {
     const workspaceId = 'atomic-domain-no-stats-workspace'
     const chapterId = 'atomic-domain-no-stats-chapter'
