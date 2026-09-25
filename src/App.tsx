@@ -20,6 +20,7 @@ import {
 import type { ReactNode } from 'react'
 import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
+import { inspectorPanelFor } from './types/inspectorState'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
 import type { AiArtifact } from './ai/artifacts'
 import type { PluginWorkflowOutcome } from './types/pluginHost'
@@ -124,51 +125,54 @@ const ProjectEngine: FC<{
       onRequestGhost={props.onRequestGhost}
       onAiTask={props.onAiTask}
       onHome={props.onHome}
-      renderInspector={(state, onClose) => (
-        <>
-          <CreativeWorkflowsPanel
-            projectId={props.projectId}
-            chapters={chapters}
-            connected={props.isConnected}
-            onContinuityAudit={props.runContinuityAudit}
-            onDeepReasoning={props.runDeepReasoning}
-            onDistillationWorkflow={props.runDistillationWorkflow}
-            onSteerTask={props.steerTask}
-          />
-          <AnimatePresence>
-            {state.surface !== 'closed' && (
-              <motion.div
-                key="ai-assistant-drawer"
-                {...variants.slideInFromRight}
-                transition={spring.gentle}
-                className="h-full flex"
-              >
-                <AiAssistantPanel
-                  messages={props.aiMessages}
-                  input={props.aiInput}
-                  busy={props.aiBusy}
-                  connected={props.isConnected}
-                  domainSyncState={props.domainSyncState}
-                  syncConflict={props.syncConflict}
-                  onRetrySync={props.onRetrySync}
-                  initialTab={state.surface === 'activity' ? 'activity' : 'chat'}
-                  onInputChange={props.setAiInput}
-                  onSend={() => props.sendAiPrompt(props.aiInput)}
-                  onClose={onClose}
-                  taskRecovery={props.taskRecovery}
-                  artifacts={props.artifacts}
-                  taskRecoveryLoading={props.taskRecoveryLoading}
-                  taskRecoveryError={props.taskRecoveryError}
-                  onResumeTask={props.resumeTask}
-                  onCancelTask={props.cancelTask}
-                  onDismissTask={props.dismissTask}
-                  onSteerTask={props.steerTask}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
-      )}
+      renderInspector={(state, onClose) => {
+        const panel = inspectorPanelFor(state)
+        return (
+          <>
+            <CreativeWorkflowsPanel
+              projectId={props.projectId}
+              chapters={chapters}
+              connected={props.isConnected}
+              onContinuityAudit={props.runContinuityAudit}
+              onDeepReasoning={props.runDeepReasoning}
+              onDistillationWorkflow={props.runDistillationWorkflow}
+              onSteerTask={props.steerTask}
+            />
+            <AnimatePresence>
+              {panel !== 'none' && (
+                <motion.div
+                  key="ai-assistant-drawer"
+                  {...variants.slideInFromRight}
+                  transition={spring.gentle}
+                  className="h-full flex"
+                >
+                  <AiAssistantPanel
+                    messages={props.aiMessages}
+                    input={props.aiInput}
+                    busy={props.aiBusy}
+                    connected={props.isConnected}
+                    domainSyncState={props.domainSyncState}
+                    syncConflict={props.syncConflict}
+                    onRetrySync={props.onRetrySync}
+                    initialTab={panel}
+                    onInputChange={props.setAiInput}
+                    onSend={() => props.sendAiPrompt(props.aiInput)}
+                    onClose={onClose}
+                    taskRecovery={props.taskRecovery}
+                    artifacts={props.artifacts}
+                    taskRecoveryLoading={props.taskRecoveryLoading}
+                    taskRecoveryError={props.taskRecoveryError}
+                    onResumeTask={props.resumeTask}
+                    onCancelTask={props.cancelTask}
+                    onDismissTask={props.dismissTask}
+                    onSteerTask={props.steerTask}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )
+      }}
     />
   )
 }

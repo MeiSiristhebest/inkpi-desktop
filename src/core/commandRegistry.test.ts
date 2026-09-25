@@ -65,8 +65,8 @@ describe('CommandRegistry & InspectorState (P3.3, P3.5)', () => {
     state = toggleInspectorSurface(state, 'assistant')
     expect(state.surface).toBe('closed')
 
-    state = toggleInspectorSurface(state, 'references')
-    expect(state.surface).toBe('references')
+    state = toggleInspectorSurface(state, 'activity')
+    expect(state.surface).toBe('activity')
 
     state = closeInspectorSurface()
     expect(state.surface).toBe('closed')

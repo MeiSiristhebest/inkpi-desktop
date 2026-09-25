@@ -28,6 +28,8 @@ import {
   type InspectorState,
   type InspectorSurface,
   initialInspectorState,
+  inspectorPanelFor,
+  resolveInspectorRequest,
   toggleInspectorSurface,
 } from '../types/inspectorState'
 import { useOptionalActiveWritingContext } from './activeWritingContext'
@@ -150,7 +152,7 @@ export const Engine: FC<EngineProps> = ({
   const pluginHostCtx = useOptionalPluginHostContext()
 
   // 统一面板开合状态：由 inspectorState 作为单一真理来源
-  const isRightPanelOpen = inspectorState.surface !== 'closed'
+  const isRightPanelOpen = inspectorPanelFor(inspectorState) !== 'none'
   const hasAssistant = Boolean(renderInspector || onOpenAssistant)
   const openAssistant = useCallback(() => {
     onOpenAssistant?.()
@@ -167,10 +169,16 @@ export const Engine: FC<EngineProps> = ({
         setInspectorState({ surface: 'activity' })
       },
       openInspector: (surface: InspectorSurface, pluginId?: string) => {
-        if (surface === 'assistant' || surface === 'activity') {
+        const request = resolveInspectorRequest(surface, pluginId)
+        if (request.kind === 'drawer') {
+          pluginHostCtx?.openDrawer(request.pluginId)
+          return
+        }
+        if (request.kind === 'ignored') return
+        if (request.state.surface === 'assistant' || request.state.surface === 'activity') {
           onOpenAssistant?.()
         }
-        setInspectorState({ surface, pluginId })
+        setInspectorState(request.state)
       },
       openDrawer: (pluginId: string) => {
         pluginHostCtx?.openDrawer(pluginId)
