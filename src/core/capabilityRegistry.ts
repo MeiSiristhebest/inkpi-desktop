@@ -1,3 +1,5 @@
+import type { DesktopPluginCategory } from '../types/plugin'
+
 export type CapabilityMaturity =
   | 'production' // 成熟稳定的正典功能（如 Living Codex, Promise Ledger, Timeline Grid, Diff Reviewer）
   | 'beta' // 体验良好但处于调优期（如 Continuity Sentinel, Memory Palace）
@@ -12,17 +14,22 @@ export type CapabilitySurface =
   | 'drawer' // 悬浮折叠抽屉
   | 'command' // 仅通过全局命令呼出
 
+export type CapabilityCategory =
+  'core' | 'worldbuilding' | 'plot' | 'intelligence' | 'format' | 'experimental'
+
 export interface CapabilityDescriptor {
   id: string
   name: string
-  category: 'core' | 'worldbuilding' | 'plot' | 'intelligence' | 'format' | 'experimental'
-  maturity: CapabilityMaturity
+  /** The registry's own taxonomy plus the plugin suite taxonomy it now derives from. */
+  category: CapabilityCategory | DesktopPluginCategory
+  /** Renders as a stability badge in the sidebar, so it is declared only where a human verified it. */
+  maturity?: CapabilityMaturity
   surfaces: CapabilitySurface[]
 
-  /** 是否直接修改正文章节内容 */
-  mutatesDocument: boolean
-  /** 是否修改正典世界观事实 (StoryState / Codex) */
-  mutatesCanonicalState: boolean
+  /** Declared only where a write path proves it; nothing reads these two at runtime. */
+  mutatesDocument?: boolean
+  /** Whether the capability writes canonical world facts (StoryState / Codex). */
+  mutatesCanonicalState?: boolean
 
   description: string
 }

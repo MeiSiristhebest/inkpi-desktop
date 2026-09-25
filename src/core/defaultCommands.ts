@@ -1,5 +1,5 @@
 import { commandRegistry, type Command } from './commandRegistry'
-import { CAPABILITY_REGISTRY } from './capabilityRegistry'
+import { ALL_CAPABILITIES } from './capabilityIndex'
 import type { InspectorSurface } from '../types/inspectorState'
 
 export interface NavigationHandler {
@@ -88,8 +88,8 @@ export function registerDefaultCommands(): () => void {
     unregisterCallbacks.push(commandRegistry.register(cmd))
   }
 
-  // 2. 从 CAPABILITY_REGISTRY 动态注册已收敛能力，依据 surface 精准分发
-  for (const cap of Object.values(CAPABILITY_REGISTRY)) {
+  // 2. 从能力注册表（含由插件定义派生的条目）动态注册已收敛能力，依据 surface 精准分发
+  for (const cap of Object.values(ALL_CAPABILITIES)) {
     const surfaces = cap.surfaces as readonly string[]
     const isNavigation = surfaces.includes('navigation') || surfaces.includes('canvas')
     const isInspector = surfaces.includes('inspector')

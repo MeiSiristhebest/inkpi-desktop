@@ -19,7 +19,7 @@ import {
 import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
-import { CAPABILITY_REGISTRY } from '../../core/capabilityRegistry'
+import { capabilityFor } from '../../core/capabilityIndex'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
 
 interface SidebarNavProps {
@@ -92,7 +92,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const groupedCategories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     const navigationPlugins = activePlugins.filter((p) => {
-      const cap = CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
+      const cap = capabilityFor(p.id)
       return Boolean(
         cap &&
         Array.isArray(cap.surfaces) &&
@@ -272,8 +272,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                         {plugins.map((p) => {
                           const Icon = p.icon || Sparkles
                           const isActive = activeTabId === p.id
-                          const capability =
-                            CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
+                          const capability = capabilityFor(p.id)
                           const maturity = capability?.maturity
                           const showBeta = maturity === 'beta'
                           const showExp = maturity === 'experimental' || maturity === 'demo'
