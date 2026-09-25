@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { AiActivityCenter } from './AiActivityCenter'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
-import type { AiArtifact } from '../../ai/artifacts/artifactStore'
+import type { StandardAiResult } from '../../types/aiResultLifecycle'
 import type { DomainSyncConflict } from '../../domain/sync/domainSyncService'
 
 interface AiMessage {
@@ -32,7 +32,8 @@ interface AiAssistantPanelProps {
   initialTab?: 'chat' | 'activity'
   onTabChange?: (tab: 'chat' | 'activity') => void
   taskRecovery?: TaskRecoveryRecord[]
-  artifacts?: AiArtifact[]
+  /** 本工作区的统一 AI 结果，Activity Center 的唯一结果列表来源 */
+  results?: StandardAiResult[]
   taskRecoveryLoading?: boolean
   taskRecoveryError?: string
   onResumeTask?: (taskId: string) => Promise<boolean>
@@ -55,7 +56,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   initialTab = 'chat',
   onTabChange,
   taskRecovery = [],
-  artifacts = [],
+  results = [],
   taskRecoveryLoading = false,
   taskRecoveryError,
   onResumeTask,
@@ -102,9 +103,9 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           >
             <Activity className="w-3.5 h-3.5" />
             活动中心
-            {(taskRecovery.length > 0 || artifacts.length > 0) && (
+            {(taskRecovery.length > 0 || results.length > 0) && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]">
-                {taskRecovery.length + artifacts.length}
+                {taskRecovery.length + results.length}
               </span>
             )}
           </button>
@@ -172,7 +173,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
         <div className="flex-1 overflow-hidden">
           <AiActivityCenter
             recoveryRecords={taskRecovery}
-            artifacts={artifacts}
+            results={results}
             loading={taskRecoveryLoading}
             error={taskRecoveryError}
             onResume={onResumeTask}

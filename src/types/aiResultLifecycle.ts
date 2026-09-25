@@ -26,12 +26,14 @@ export interface AiResultFinding {
 }
 
 export interface AiResultProvenance {
-  provider: string
-  model: string
+  /** Absent for results produced without a model call (local tools, workflows). */
+  provider?: string
+  model?: string
   latencyMs?: number
   inputTokens?: number
   outputTokens?: number
-  sourceRevision: number
+  /** Revision the analysed text was read at; absent when the producer did not record one. */
+  sourceRevision?: number
   contextSourcesCount?: number
   cacheHit?: boolean
   timestamp: number

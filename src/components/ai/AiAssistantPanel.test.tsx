@@ -173,7 +173,7 @@ describe('AiAssistantPanel Component', () => {
     expect((screen.getByText('发送') as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('should support initialTab="activity" and show badge for artifacts', () => {
+  it('should support initialTab="activity" and show badge for workspace results', () => {
     const onTabChange = vi.fn()
     render(
       <AiAssistantPanel
@@ -183,15 +183,16 @@ describe('AiAssistantPanel Component', () => {
         connected={true}
         initialTab="activity"
         onTabChange={onTabChange}
-        artifacts={[
+        results={[
           {
-            id: 'art-1',
-            type: 'creative.story-plan',
-            version: 1,
+            id: 'res-1',
             taskId: 't-1',
+            scope: { workspaceId: 'ws-1', workspaceRevision: 1 },
             kind: 'story-plan',
-            content: {},
-            provenance: {},
+            title: '故事线草案',
+            summary: '',
+            status: 'result',
+            provenance: { timestamp: 1000 },
             createdAt: 1000,
             updatedAt: 1000,
           },

@@ -22,9 +22,11 @@ import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { inspectorPanelFor } from './types/inspectorState'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
-import type { AiArtifact } from './ai/artifacts'
+import { loadWorkspaceResults } from './ai/results/resultCenter'
+import type { StandardAiResult } from './types/aiResultLifecycle'
 import type { PluginWorkflowOutcome } from './types/pluginHost'
 import { artifactEvents } from './ports/artifactEvents'
+import { proposalStateEvents } from './ports/proposalStateEvents'
 import { useState, useEffect } from 'react'
 
 const ProjectWorkspace: FC<{
@@ -103,7 +105,7 @@ const ProjectEngine: FC<{
   runDistillationWorkflow: import('./hooks/useAiConversation').AiConversation['runDistillationWorkflow']
   steerTask: import('./hooks/useAiConversation').AiConversation['steerTask']
   taskRecovery?: import('./db/taskRecoveryStore').TaskRecoveryRecord[]
-  artifacts?: AiArtifact[]
+  results?: StandardAiResult[]
   taskRecoveryLoading?: boolean
   taskRecoveryError?: string
   resumeTask?: (taskId: string) => Promise<boolean>
@@ -159,7 +161,7 @@ const ProjectEngine: FC<{
                     onSend={() => props.sendAiPrompt(props.aiInput)}
                     onClose={onClose}
                     taskRecovery={props.taskRecovery}
-                    artifacts={props.artifacts}
+                    results={props.results}
                     taskRecoveryLoading={props.taskRecoveryLoading}
                     taskRecoveryError={props.taskRecoveryError}
                     onResumeTask={props.resumeTask}
@@ -267,16 +269,17 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     listArtifacts,
   } = ai
 
-  const [artifacts, setArtifacts] = useState<AiArtifact[]>([])
+  const [results, setResults] = useState<StandardAiResult[]>([])
 
   useEffect(() => {
     let alive = true
     const load = async (projectId: string) => {
       try {
         const items = await listArtifacts(projectId)
-        if (alive) setArtifacts(items)
+        const projected = await loadWorkspaceResults(projectId, items)
+        if (alive) setResults(projected)
       } catch (error) {
-        if (alive) console.error('Failed to load workspace artifacts:', error)
+        if (alive) console.error('Failed to load workspace AI results:', error)
       }
     }
 
@@ -285,13 +288,22 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
       const unsubscribe = artifactEvents.subscribe(activeProjectId, () => {
         void load(activeProjectId)
       })
+      // Author decisions live on proposals, not artifacts, so the lifecycle
+      // status of a result only converges once the proposal change is re-read.
+      const unsubscribeProposals = proposalStateEvents.subscribe(
+        { workspaceId: activeProjectId },
+        () => {
+          void load(activeProjectId)
+        },
+      )
       return () => {
         alive = false
         unsubscribe()
+        unsubscribeProposals()
       }
     }
 
-    setArtifacts([])
+    setResults([])
     return () => {
       alive = false
     }
@@ -355,7 +367,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   runDistillationWorkflow={runDistillationWorkflow}
                   steerTask={steerTask}
                   taskRecovery={taskRecovery}
-                  artifacts={artifacts}
+                  results={results}
                   taskRecoveryLoading={taskRecoveryLoading}
                   taskRecoveryError={taskRecoveryError}
                   resumeTask={resumeTask}
