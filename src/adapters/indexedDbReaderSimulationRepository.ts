@@ -10,8 +10,12 @@ export const indexedDbReaderSimulationRepository: ReaderSimulationRepository = {
   },
 
   async getByChapterId(chapterId: string): Promise<ReaderSimulationRecord | undefined> {
-    const all = await db.getAll<ReaderSimulationRecord>('readerSimulations')
-    return all.find((r) => r.chapterId === chapterId)
+    const matches = await db.getByIndex<ReaderSimulationRecord>(
+      'readerSimulations',
+      'chapterId',
+      chapterId,
+    )
+    return matches[0]
   },
 
   async save(record: ReaderSimulationRecord): Promise<void> {

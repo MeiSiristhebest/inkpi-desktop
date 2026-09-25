@@ -14,8 +14,12 @@ export const indexedDbMemoryPalaceRepository: MemoryPalaceRepository = {
   },
 
   async getByEntityId(entityId: string): Promise<MemoryPalaceSnapshotRecord | undefined> {
-    const all = await db.getAll<MemoryPalaceSnapshotRecord>('memoryPalaceSnapshots')
-    return all.find((r) => r.entityId === entityId)
+    const matches = await db.getByIndex<MemoryPalaceSnapshotRecord>(
+      'memoryPalaceSnapshots',
+      'entityId',
+      entityId,
+    )
+    return matches[0]
   },
 
   async save(record: MemoryPalaceSnapshotRecord): Promise<void> {

@@ -7,8 +7,8 @@ export const indexedDbPovGuardRepository: PovGuardRepository = {
   },
 
   async getByChapter(chapterId: string): Promise<PovSnapshotRecord | undefined> {
-    const all = await db.getAll<PovSnapshotRecord>('povSnapshots')
-    return all.find((r) => r.chapterId === chapterId)
+    const matches = await db.getByIndex<PovSnapshotRecord>('povSnapshots', 'chapterId', chapterId)
+    return matches[0]
   },
 
   async get(id: string): Promise<PovSnapshotRecord | undefined> {

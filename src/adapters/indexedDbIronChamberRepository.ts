@@ -7,8 +7,12 @@ export const indexedDbIronChamberRepository: IronChamberRepository = {
   },
 
   async getActive(projectId: string): Promise<IronChamberRecord | undefined> {
-    const all = await db.getAll<IronChamberRecord>('ironChamberRecords')
-    return all.find((r) => r.projectId === projectId && r.status === 'locked')
+    const scoped = await db.getByIndex<IronChamberRecord>(
+      'ironChamberRecords',
+      'projectId',
+      projectId,
+    )
+    return scoped.find((r) => r.status === 'locked')
   },
 
   async get(id: string): Promise<IronChamberRecord | undefined> {

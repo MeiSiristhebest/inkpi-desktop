@@ -7,8 +7,12 @@ import { appendAuthoritativePluginUpsert } from '../services/authoritativePlugin
 
 export const indexedDbMultiCalendarRepository: MultiCalendarRepository = {
   async get(projectId: string): Promise<MultiCalendarProjectRecord | undefined> {
-    const all = await db.getAll<MultiCalendarProjectRecord>('multiCalendars')
-    return all.find((r) => r.projectId === projectId)
+    const matches = await db.getByIndex<MultiCalendarProjectRecord>(
+      'multiCalendars',
+      'projectId',
+      projectId,
+    )
+    return matches[0]
   },
 
   async save(record: MultiCalendarProjectRecord): Promise<void> {

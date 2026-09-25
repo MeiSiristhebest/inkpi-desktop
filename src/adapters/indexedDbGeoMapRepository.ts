@@ -15,8 +15,8 @@ export const indexedDbGeoMapRepository: GeoMapRepository = {
   },
 
   async getByLocationId(locationId: string): Promise<GeoMapGridRecord | undefined> {
-    const all = await db.getAll<GeoMapGridRecord>('geoMapGrids')
-    return all.find((r) => r.locationId === locationId)
+    const matches = await db.getByIndex<GeoMapGridRecord>('geoMapGrids', 'locationId', locationId)
+    return matches[0]
   },
 
   async save(record: GeoMapGridRecord): Promise<void> {

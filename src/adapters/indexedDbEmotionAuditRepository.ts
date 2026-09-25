@@ -7,8 +7,8 @@ export const indexedDbEmotionAuditRepository: EmotionAuditRepository = {
   },
 
   async getByChapterId(chapterId: string): Promise<EmotionAuditRecord | undefined> {
-    const all = await db.getAll<EmotionAuditRecord>('emotionAudits')
-    return all.find((r) => r.chapterId === chapterId)
+    const matches = await db.getByIndex<EmotionAuditRecord>('emotionAudits', 'chapterId', chapterId)
+    return matches[0]
   },
 
   async save(record: EmotionAuditRecord): Promise<void> {

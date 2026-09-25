@@ -12,8 +12,8 @@ import {
 export const indexedDbSceneBeatRepository: SceneBeatRepository = {
   getAll: () => db.getAll<ChapterBeatPlan>('sceneBeats'),
   getByChapter: async (chapterId: string) => {
-    const all = await db.getAll<ChapterBeatPlan>('sceneBeats')
-    return all.find((p) => p.chapterId === chapterId)
+    const matches = await db.getByIndex<ChapterBeatPlan>('sceneBeats', 'chapterId', chapterId)
+    return matches[0]
   },
   save: async (plan) => {
     const existing = await db.get<ChapterBeatPlan>('sceneBeats', plan.id)

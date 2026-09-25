@@ -7,8 +7,12 @@ export const indexedDbRhythmRadarRepository: RhythmRadarRepository = {
   },
 
   async getByChapter(chapterId: string): Promise<RhythmRadarReportRecord | undefined> {
-    const all = await db.getAll<RhythmRadarReportRecord>('rhythmRadarReports')
-    return all.find((r) => r.chapterId === chapterId)
+    const matches = await db.getByIndex<RhythmRadarReportRecord>(
+      'rhythmRadarReports',
+      'chapterId',
+      chapterId,
+    )
+    return matches[0]
   },
 
   async get(id: string): Promise<RhythmRadarReportRecord | undefined> {
