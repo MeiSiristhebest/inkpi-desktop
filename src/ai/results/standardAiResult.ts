@@ -1,5 +1,6 @@
 import type { TaskScope } from '../../types/taskScope'
 import type { AiArtifact } from '../artifacts/artifactStore'
+import { artifactWorkspaceId } from '../artifacts/artifactStore'
 import type { AiProposal, ProposalStatus } from '../proposals/proposalLedger'
 import type {
   AiResultFinding,
@@ -134,12 +135,6 @@ export function projectArtifactToStandardAiResult(
   if (findings) result.findings = findings
   if (proposal) result.proposalId = proposal.id
   return result
-}
-
-export function artifactWorkspaceId(artifact: AiArtifact): string | undefined {
-  const fromOwnership = artifact.ownership?.workspaceId
-  if (fromOwnership?.trim()) return fromOwnership
-  return readString(artifact.metadata, 'workspaceId')
 }
 
 function findingsFromProposal(proposal: AiProposal | undefined): AiResultFinding[] | undefined {

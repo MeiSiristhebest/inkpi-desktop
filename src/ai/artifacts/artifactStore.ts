@@ -103,11 +103,26 @@ export interface ArtifactStore {
   listByWorkspace?(workspaceId: string): Promise<AiArtifact[]>
 }
 
+/**
+ * The one workspace an artifact belongs to: `ownership` is the authority and
+ * `metadata.workspaceId` is the legacy fallback that the write path folds into it.
+ * Reading this expression anywhere else re-creates the two-field OR that let one
+ * row surface in two projects.
+ */
+export function artifactWorkspaceId(artifact: {
+  ownership?: ArtifactOwnership
+  metadata?: Record<string, unknown>
+}): string | undefined {
+  const fromOwnership = artifact.ownership?.workspaceId
+  if (typeof fromOwnership === 'string' && fromOwnership.trim()) return fromOwnership
+  const fromMetadata = artifact.metadata?.workspaceId
+  return typeof fromMetadata === 'string' && fromMetadata.trim() ? fromMetadata : undefined
+}
+
 /** Normalizes and validates an artifact entering the Desktop-authoritative store. */
 export function normalizeDesktopArtifact(artifact: AiArtifact): AiArtifact {
   const normalized = normalizeArtifactForPersistence(artifact)
-  const workspaceId =
-    normalized.ownership?.workspaceId ?? (normalized.metadata?.workspaceId as string | undefined)
+  const workspaceId = artifactWorkspaceId(normalized)
   const ownership = {
     owner: 'desktop' as const,
     authoritative: true,
@@ -183,9 +198,7 @@ export class IndexedDbArtifactStore implements ArtifactStore {
         await db.put('aiArtifacts', serializableArtifact)
         artifactEvents.publish({
           artifactId: serializableArtifact.id,
-          workspaceId:
-            serializableArtifact.ownership?.workspaceId ??
-            (serializableArtifact.metadata?.workspaceId as string | undefined),
+          workspaceId: artifactWorkspaceId(serializableArtifact),
           action: 'created',
         })
       })
@@ -206,30 +219,25 @@ export class IndexedDbArtifactStore implements ArtifactStore {
   }
 
   async list(taskId?: string): Promise<AiArtifact[]> {
-    const artifacts = await db.getAll<AiArtifact>('aiArtifacts')
+    const artifacts = taskId
+      ? await db.getByIndex<AiArtifact>('aiArtifacts', 'taskId', taskId)
+      : await db.getAll<AiArtifact>('aiArtifacts')
     return artifacts
       .map(normalizeDesktopArtifact)
-      .filter((artifact) => !taskId || artifact.taskId === taskId)
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 
   async listByType(type: string): Promise<AiArtifact[]> {
-    const artifacts = await db.getAll<AiArtifact>('aiArtifacts')
+    const artifacts = await db.getByIndex<AiArtifact>('aiArtifacts', 'type', type)
     return artifacts
       .map(normalizeDesktopArtifact)
-      .filter((artifact) => artifact.type === type)
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 
   async listByWorkspace(workspaceId: string): Promise<AiArtifact[]> {
-    const artifacts = await db.getAll<AiArtifact>('aiArtifacts')
+    const artifacts = await db.getByIndex<AiArtifact>('aiArtifacts', 'workspaceId', workspaceId)
     return artifacts
       .map(normalizeDesktopArtifact)
-      .filter(
-        (artifact) =>
-          artifact.ownership?.workspaceId === workspaceId ||
-          (artifact.metadata?.workspaceId as string | undefined) === workspaceId,
-      )
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 }

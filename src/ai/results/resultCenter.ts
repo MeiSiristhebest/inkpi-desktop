@@ -1,7 +1,7 @@
 import { db } from '../../db/indexedDB'
-import type { AiArtifact } from '../artifacts/artifactStore'
+import { artifactWorkspaceId, type AiArtifact } from '../artifacts/artifactStore'
 import { IndexedDbProposalStore, type AiProposal } from '../proposals/proposalLedger'
-import { artifactWorkspaceId, projectWorkspaceResults } from './standardAiResult'
+import { projectWorkspaceResults } from './standardAiResult'
 import type { StandardAiResult } from '../../types/aiResultLifecycle'
 
 const proposalStore = new IndexedDbProposalStore()

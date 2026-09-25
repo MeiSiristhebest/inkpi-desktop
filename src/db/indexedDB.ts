@@ -9,7 +9,7 @@
 // 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 27
+export const DB_VERSION = 28
 
 export const STORES = [
   'projects',
@@ -255,23 +255,33 @@ class InkStudioDB {
               store.createIndex('projectId', 'projectId', { unique: false })
               store.createIndex('chapterId', 'chapterId', { unique: false })
             }
+            if (name === 'aiArtifacts' && typeof store.createIndex === 'function') {
+              store.createIndex('taskId', 'taskId', { unique: false })
+              store.createIndex('type', 'type', { unique: false })
+              // Artifact rows carry no top-level workspaceId; ownership is the authority, and the
+              // write path copies a metadata workspace into it before persisting.
+              store.createIndex('workspaceId', 'ownership.workspaceId', { unique: false })
+            }
           }
         }
 
         // 已存在的表在版本升级中补建索引：上面的分支只对新库生效，老库里缺失的索引
         // 永远不会被创建，getByIndex 会静默退化为全表扫描。
-        const missingIndexes: Array<[StoreName, string]> = [
+        const missingIndexes: Array<[StoreName, string, string?]> = [
           ['chapters', 'projectId'],
           ['formData', 'projectId'],
           ['domainChangeSets', 'workspaceId'],
+          ['aiArtifacts', 'taskId'],
+          ['aiArtifacts', 'type'],
+          ['aiArtifacts', 'workspaceId', 'ownership.workspaceId'],
         ]
         const upgradeTransaction = request.transaction
         if (upgradeTransaction) {
-          for (const [storeName, indexName] of missingIndexes) {
+          for (const [storeName, indexName, keyPath] of missingIndexes) {
             if (!db.objectStoreNames.contains(storeName)) continue
             const store = upgradeTransaction.objectStore(storeName)
             if (!store.indexNames.contains(indexName)) {
-              store.createIndex(indexName, indexName, { unique: false })
+              store.createIndex(indexName, keyPath ?? indexName, { unique: false })
             }
           }
         }

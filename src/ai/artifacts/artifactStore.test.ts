@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { db } from '../../db/indexedDB'
 import {
@@ -179,6 +179,42 @@ describe('AI artifact runtime', () => {
     const betaList = await store.listByWorkspace('project-beta')
     expect(betaList).toHaveLength(1)
     expect(betaList[0].id).toBe('art-ws-2')
+  })
+
+  it('folds a metadata-only workspace into ownership so the workspace index can see it', async () => {
+    const store = new IndexedDbArtifactStore()
+    const legacy = makeArtifact('art-ws-legacy', { info: 'ws3' }, 30)
+    legacy.metadata = { workspaceId: 'project-gamma' }
+
+    await store.save(legacy)
+
+    // listByWorkspace is backed by ownership.workspaceId alone: a row persisted with the
+    // workspace only in metadata would vanish from the Result Center instead of leaking.
+    const persisted = await db.get<AiArtifact>('aiArtifacts', 'art-ws-legacy')
+    expect(persisted?.ownership?.workspaceId).toBe('project-gamma')
+    expect((await store.listByWorkspace('project-gamma')).map((artifact) => artifact.id)).toEqual([
+      'art-ws-legacy',
+    ])
+  })
+
+  it('reads filtered artifact lists through indexes instead of the whole store', async () => {
+    const store = new IndexedDbArtifactStore()
+    await store.save(makeArtifact('art-indexed', { info: 'ws4' }, 40))
+
+    const getAll = vi.spyOn(db, 'getAll')
+    try {
+      await store.list()
+      expect(getAll).toHaveBeenCalledTimes(1)
+
+      await store.list('task-artifact')
+      await store.listByType('creative.chapter-summary')
+      expect((await store.list('task-artifact')).map((artifact) => artifact.id)).toEqual([
+        'art-indexed',
+      ])
+      expect(getAll).toHaveBeenCalledTimes(1)
+    } finally {
+      getAll.mockRestore()
+    }
   })
 })
 

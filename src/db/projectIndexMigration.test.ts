@@ -33,6 +33,21 @@ function legacyFormRecord(projectId: string, id: string): FormDataRecord {
   return { id, projectId, tabId: 'notes', data: { text: id } }
 }
 
+function legacyArtifact(workspaceId: string, id: string) {
+  return {
+    id,
+    taskId: `${id}-task`,
+    kind: 'narrative.project.distill',
+    type: 'creative.chapter-summary',
+    version: 1,
+    content: { summary: id },
+    provenance: { taskId: `${id}-task` },
+    createdAt: 1_600_000_000_000,
+    updatedAt: 1_600_000_000_000,
+    ownership: { owner: 'desktop', authoritative: true, workspaceId },
+  }
+}
+
 function legacyChangeSet(projectId: string, baseRevision: number): DomainChangeSet {
   return createDomainChangeSet({
     id: `${projectId}-set-${baseRevision + 1}`,
@@ -85,13 +100,15 @@ async function seedLegacyLibrary(): Promise<void> {
     database.createObjectStore('chapters', { keyPath: 'id' })
     database.createObjectStore('formData', { keyPath: 'id' })
     database.createObjectStore('domainChangeSets', { keyPath: 'id' })
+    database.createObjectStore('aiArtifacts', { keyPath: 'id' })
   })
   expect(indexNamesOf(legacy, 'chapters')).toEqual([])
   expect(indexNamesOf(legacy, 'formData')).toEqual([])
   expect(indexNamesOf(legacy, 'domainChangeSets')).toEqual([])
+  expect(indexNamesOf(legacy, 'aiArtifacts')).toEqual([])
   await new Promise<void>((resolve, reject) => {
     const transaction = legacy.transaction(
-      ['chapters', 'formData', 'domainChangeSets'],
+      ['chapters', 'formData', 'domainChangeSets', 'aiArtifacts'],
       'readwrite',
     )
     const chapters = transaction.objectStore('chapters')
@@ -105,6 +122,9 @@ async function seedLegacyLibrary(): Promise<void> {
     journal.put(legacyChangeSet(LEGACY_WORKSPACE, 0))
     journal.put(legacyChangeSet(LEGACY_WORKSPACE, 1))
     journal.put(legacyChangeSet(OTHER_WORKSPACE, 0))
+    const artifacts = transaction.objectStore('aiArtifacts')
+    artifacts.put(legacyArtifact(LEGACY_WORKSPACE, 'legacy-artifact-1'))
+    artifacts.put(legacyArtifact(OTHER_WORKSPACE, 'legacy-artifact-2'))
     transaction.oncomplete = () => resolve()
     transaction.onerror = () => reject(transaction.error)
   })
@@ -112,7 +132,7 @@ async function seedLegacyLibrary(): Promise<void> {
 }
 
 describe('project index upgrade on an existing library', () => {
-  it('indexes chapters, formData and the domain journal that predate the indexes, keeping every row', async () => {
+  it('indexes chapters, formData, the domain journal and artifacts that predate the indexes, keeping every row', async () => {
     await removeDatabase()
     await seedLegacyLibrary()
 
@@ -123,12 +143,16 @@ describe('project index upgrade on an existing library', () => {
     expect(await db.getAll('chapters')).toHaveLength(3)
     expect(await db.getAll('formData')).toHaveLength(2)
     expect(await db.getAll('domainChangeSets')).toHaveLength(3)
+    expect(await db.getAll('aiArtifacts')).toHaveLength(2)
 
     const raw = await openRaw(DB_VERSION)
     try {
       expect(indexNamesOf(raw, 'chapters')).toContain('projectId')
       expect(indexNamesOf(raw, 'formData')).toContain('projectId')
       expect(indexNamesOf(raw, 'domainChangeSets')).toContain('workspaceId')
+      expect(indexNamesOf(raw, 'aiArtifacts')).toEqual(
+        expect.arrayContaining(['taskId', 'type', 'workspaceId']),
+      )
     } finally {
       raw.close()
     }
@@ -152,6 +176,21 @@ describe('project index upgrade on an existing library', () => {
     expect(
       await db.getByIndex<DomainChangeSet>('domainChangeSets', 'workspaceId', OTHER_WORKSPACE),
     ).toEqual([legacyChangeSet(OTHER_WORKSPACE, 0)])
+
+    // The artifact workspace index is keyed on the nested ownership field, while getByIndex's
+    // safety degradation filters on a top-level property of the index's name. Artifacts have no
+    // such property, so an unbackfilled index would not scan the store — it would drop every AI
+    // result from the Result Center.
+    expect(
+      (await db.getByIndex<{ id: string }>('aiArtifacts', 'workspaceId', LEGACY_WORKSPACE)).map(
+        (artifact) => artifact.id,
+      ),
+    ).toEqual(['legacy-artifact-1'])
+    expect(
+      (await db.getByIndex<{ id: string }>('aiArtifacts', 'taskId', 'legacy-artifact-2-task')).map(
+        (artifact) => artifact.id,
+      ),
+    ).toEqual(['legacy-artifact-2'])
 
     // The upgraded journal answers to the store's own head, so a returning author's compare-and-set
     // keeps working instead of silently starting from revision 0.
