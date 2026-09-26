@@ -16,6 +16,7 @@ import type { ContinuityDiagnosticMarker } from '../../ai/results/continuityDiag
 import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
 import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diagnostics'
 import { draftJournal } from '../../services/draftJournal'
+import { shortcutHint } from '../../core/editorShortcuts'
 import { chapterMutationService } from '../../services/defaultChapterMutationService'
 import type { ChapterMutationExecutionResult } from '../../services/chapterMutationService'
 
@@ -313,7 +314,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     h.getText = () => 'abc'
     h.getHTML = () => '<p>abc</p>'
-    fireEvent.click(screen.getByTitle('查找替换 / 全文检索 (⌘F)'))
+    fireEvent.click(screen.getByTitle(shortcutHint('查找替换 / 全文检索', 'findReplace')))
     fireEvent.change(screen.getByPlaceholderText('检索（文档内全文）'), { target: { value: 'a' } })
     fireEvent.change(screen.getByPlaceholderText('替换为（可选）'), { target: { value: 'X' } })
     fireEvent.click(screen.getByText('全部替换'))
@@ -342,7 +343,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     // 默认展开：不显示面包屑
     expect(screen.queryByText(/第\d+卷 · 第\d+章/)).not.toBeInTheDocument()
     // 折叠目录：树完全隐藏，左上角显示「第X卷 · 第X章」
-    fireEvent.click(screen.getByTitle('折叠目录 (⌘\\)'))
+    fireEvent.click(screen.getByTitle(shortcutHint('折叠目录', 'toggleChapterTree')))
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     expect(screen.getByText(/第\d+卷 · 第\d+章/)).toBeInTheDocument()
   })
@@ -429,7 +430,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('creates a new chapter via the tree and writes it to IndexedDB', async () => {
     render(<RichEditor projectId="p-new" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('在当前卷新建章节 (⌘N)'))
+    fireEvent.click(screen.getByTitle(shortcutHint('在当前卷新建章节', 'newChapter')))
     await waitFor(async () => {
       const chs = await db.getAll('chapters')
       expect(chs.some((c) => c.title.startsWith('第') && c.title.includes('未命名'))).toBe(true)
@@ -471,7 +472,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('toggles the find/replace bar open and closed', async () => {
     render(<RichEditor projectId="p-find2" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('查找替换 / 全文检索 (⌘F)'))
+    fireEvent.click(screen.getByTitle(shortcutHint('查找替换 / 全文检索', 'findReplace')))
     expect(screen.getByPlaceholderText('检索（文档内全文）')).toBeInTheDocument()
     fireEvent.click(screen.getByTitle('关闭'))
     expect(screen.queryByPlaceholderText('检索（文档内全文）')).not.toBeInTheDocument()
@@ -524,9 +525,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('collapses and restores the chapter tree via the sidebar toggle', async () => {
     render(<RichEditor projectId="p-side" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('折叠目录 (⌘\\)'))
+    fireEvent.click(screen.getByTitle(shortcutHint('折叠目录', 'toggleChapterTree')))
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('展开目录 (⌘\\)'))
+    fireEvent.click(screen.getByTitle(shortcutHint('展开目录', 'toggleChapterTree')))
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 

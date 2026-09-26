@@ -1,5 +1,6 @@
 import React from 'react'
 import type { EditorModel, SaveState } from '../hooks/useChapterEditorModel'
+import { shortcutLabel } from '../../../core/editorShortcuts'
 
 interface StatusFooterProps {
   model: EditorModel
@@ -19,7 +20,7 @@ const SAVE_STATE_VIEW: Record<SaveState, { label: string; hint: string; tone: st
   saved: { label: '已保存', hint: '内容已保存到本地工作区', tone: '' },
   unsaved: {
     label: '未保存',
-    hint: '有改动等待自动保存，按 ⌘S 立即保存',
+    hint: `有改动等待自动保存，按 ${shortcutLabel('saveChapter')} 立即保存`,
     tone: 'text-[var(--ink-text-muted)]',
   },
   saving: { label: '正在保存…', hint: '正在写入本地工作区', tone: 'text-[var(--ink-text-muted)]' },

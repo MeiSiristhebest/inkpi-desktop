@@ -23,7 +23,7 @@ import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
 import { commandRegistry } from './commandRegistry'
-import { matchesEditorShortcut } from './editorShortcuts'
+import { matchesEditorShortcut, shortcutLabel } from './editorShortcuts'
 import { CommandPaletteModal } from '../components/CommandPaletteModal'
 import {
   type InspectorState,
@@ -536,7 +536,9 @@ export const Engine: FC<EngineProps> = ({
                     }
                   />
                   <div className="pt-2 border-t border-[var(--ink-border)] text-[11px] leading-relaxed text-[var(--ink-text-faint)]">
-                    快捷键：⌘S 保存 · ⌘B 折叠目录 · ⌘\ 全屏
+                    快捷键：{shortcutLabel('saveChapter')} 保存 ·{' '}
+                    {shortcutLabel('toggleChapterTree')} 折叠目录 ·{' '}
+                    {shortcutLabel('commandPalette')} 命令面板
                   </div>
                 </div>
               </aside>

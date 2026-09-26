@@ -39,6 +39,7 @@ import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { ChapterStatus } from '../../../types'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { useOptionalPluginRegistry } from '../../../core/pluginRegistry'
+import { shortcutHint } from '../../../core/editorShortcuts'
 
 interface EditorToolbarProps {
   model: EditorModel
@@ -159,7 +160,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         {!isSidebarOpen && (
           <IconButton
             onClick={() => actions.setSidebar(true)}
-            title="展开目录 (⌘\)"
+            title={shortcutHint('展开目录', 'toggleChapterTree')}
             className="text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]"
           >
             <PanelLeftOpen className="w-4 h-4" />
@@ -270,7 +271,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             {...gesture.iconButton}
             transition={spring.snappy}
             className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title="撤销 / 返回上一步 (⌘Z)"
+            title={shortcutHint('撤销 / 返回上一步', 'undo')}
           >
             <Undo2 className="w-3.5 h-3.5" />
           </motion.button>
@@ -287,7 +288,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             {...gesture.iconButton}
             transition={spring.snappy}
             className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title="重做 / 返回下一步 (⇧⌘Z)"
+            title={shortcutHint('重做 / 返回下一步', 'redo')}
           >
             <Redo2 className="w-3.5 h-3.5" />
           </motion.button>
@@ -309,7 +310,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)] font-bold'
                 : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
             }`}
-            title="加粗 (⌘B)"
+            title={shortcutHint('加粗', 'bold')}
           >
             <Bold className="w-3.5 h-3.5" />
           </motion.button>
@@ -329,7 +330,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)]'
                 : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
             }`}
-            title="倾斜 (⌘I)"
+            title={shortcutHint('倾斜', 'italic')}
           >
             <Italic className="w-3.5 h-3.5" />
           </motion.button>
@@ -669,7 +670,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
           }`}
           onClick={() => actions.setShowFindReplace(!showFindReplace)}
-          title="查找替换 / 全文检索 (⌘F)"
+          title={shortcutHint('查找替换 / 全文检索', 'findReplace')}
         >
           <Search className="w-3.5 h-3.5" />
           <span className="editor-toolbar-label">查找</span>

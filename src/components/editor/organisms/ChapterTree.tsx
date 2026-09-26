@@ -14,6 +14,7 @@ import { spring, variants, gesture } from '../../../motion'
 import { STATUS_OPTIONS } from '../editorUi'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import { useResizableWidth } from '../../../hooks/useResizableWidth'
+import { shortcutHint } from '../../../core/editorShortcuts'
 
 interface ChapterTreeProps {
   model: EditorModel
@@ -73,7 +74,7 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
             {...gesture.iconButton}
             transition={spring.snappy}
             onClick={() => actions.newChapter()}
-            title="在当前卷新建章节 (⌘N)"
+            title={shortcutHint('在当前卷新建章节', 'newChapter')}
             className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
           >
             <FilePlus className="w-3.5 h-3.5" />
@@ -83,7 +84,7 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
             {...gesture.iconButton}
             transition={spring.snappy}
             onClick={() => actions.setSidebar(false)}
-            title="折叠目录 (⌘\)"
+            title={shortcutHint('折叠目录', 'toggleChapterTree')}
             className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
           >
             <PanelLeftClose className="w-3.5 h-3.5" />
