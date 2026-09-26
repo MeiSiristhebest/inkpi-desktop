@@ -650,17 +650,13 @@ function hasNamedImport(ast: ts.SourceFile, name: string, moduleSuffix: string):
 describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
   const sources = implementationSources()
 
-  it('projects both central editor entry points before dispatching drawer/sidebar text', () => {
-    const writer = sources.find(
-      (source) => source.relativeFile === 'src/components/editor/WriterDesk.tsx',
-    )
+  it('projects the live editor entry point before dispatching drawer/sidebar text', () => {
     const rich = sources.find(
       (source) => source.relativeFile === 'src/components/editor/RichEditor.tsx',
     )
-    expect(writer).toBeDefined()
     expect(rich).toBeDefined()
 
-    for (const source of [writer!, rich!]) {
+    for (const source of [rich!]) {
       expect(hasNamedImport(source.ast, 'semanticTextFromContent', '/domain/content')).toBe(true)
       expect(hasProjectorCall(variableInitializer(source.ast, 'activeChapterText'))).toBe(true)
       expect(jsxPropExpressions(source.ast, 'currentText')).not.toContain('activeChapter?.content')
@@ -682,14 +678,6 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
     ).toBe(true)
     expect(
       hasJsxAttributeOnComponent(rich!.ast, 'DrawerDock', 'currentText', 'activeChapterText'),
-    ).toBe(true)
-    expect(
-      hasJsxAttributeOnComponent(
-        writer!.ast,
-        'DrawerComponent',
-        'currentText',
-        'activeChapterText',
-      ),
     ).toBe(true)
   })
 
