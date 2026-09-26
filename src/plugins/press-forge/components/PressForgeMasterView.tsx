@@ -2,7 +2,7 @@ import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { PressForgeEngine } from '../engine/PressForgeEngine'
 import type { PressFormatOptions, TypesetResult } from '../types'
-import { Printer, Download, Settings, Copy, Check } from 'lucide-react'
+import { Printer, Download, Settings, Copy, Check, Sparkles } from 'lucide-react'
 import { indexedDbPressConfigRepository } from '../../../adapters/indexedDbPressConfigRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
@@ -62,32 +62,47 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     : ''
 
   const localFormattedResult = PressForgeEngine.formatText(currentChapterText, options)
-  const [runtimeFormattedResult, setRuntimeFormattedResult] = useState<TypesetResult | null>(null)
 
-  useEffect(() => {
+  // §P2.7：AI 深度排版是「付费且慢」的动作，不能由 useEffect(正文) 代发。
+  // 结果连同产生它的那一份输入一起保存，所以换章节或改预设时无需清理 effect：
+  // 旧结果对不上当前输入，预览自然回到本地引擎，而不是继续显示上一份正文的「压制成果」。
+  const [aiRun, setAiRun] = useState<{
+    text: string
+    options: PressFormatOptions
+    result: TypesetResult
+  } | null>(null)
+  const [aiRunning, setAiRunning] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const aiFormattedResult =
+    aiRun && aiRun.text === currentChapterText && aiRun.options === options ? aiRun.result : null
+  const formattedResult = aiFormattedResult ?? localFormattedResult
+
+  const handleRunAiTypeset = async () => {
     const runtimeAssistant = host?.aiAssistant
     if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginTool) {
-      setRuntimeFormattedResult(null)
+      setAiError('AI 通道不可用，深度排版没有发出。下方预览仍是本地实时排版结果。')
       return
     }
 
-    let cancelled = false
-    setRuntimeFormattedResult(null)
-    void runtimeAssistant
-      .runPluginTool('press-forge', {
+    setAiRunning(true)
+    setAiError(null)
+    try {
+      const result = await runtimeAssistant.runPluginTool('press-forge', {
         rawContent: currentChapterText,
         options,
       })
-      .then((result) => {
-        if (!cancelled && isTypesetResult(result)) setRuntimeFormattedResult(result)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
+      if (!isTypesetResult(result)) {
+        setAiError('Runtime 返回的内容不是排版结果，预览保持为本地实时排版。')
+        return
+      }
+      setAiRun({ text: currentChapterText, options, result })
+    } catch (cause) {
+      setAiError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setAiRunning(false)
     }
-  }, [currentChapterText, host?.aiAssistant, options])
-
-  const formattedResult = runtimeFormattedResult ?? localFormattedResult
+  }
 
   const handleApplyPreset = (presetId: keyof typeof PressForgeEngine.PRESETS) => {
     const preset = PressForgeEngine.PRESETS[presetId]
@@ -268,16 +283,60 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
           {/* 右侧预览区 */}
           <div className="lg:col-span-3 flex flex-col space-y-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-700 text-xs">
-              <span className="font-semibold text-slate-600 dark:text-slate-300">
-                压制排版预览（{formattedResult.lineCount} 段 · {formattedResult.characterCount} 字）
-              </span>
-              {formattedResult.warnings.length > 0 && (
-                <span className="text-rose-500 font-medium">
-                  {formattedResult.warnings.length} 条敏感词预警
+            <div className="flex items-start justify-between gap-3 border-b pb-2 border-slate-100 dark:border-slate-700 text-xs">
+              <div>
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  压制排版预览（{formattedResult.lineCount} 段 · {formattedResult.characterCount}{' '}
+                  字）
                 </span>
-              )}
+                <p
+                  data-testid="press-forge-result-origin"
+                  className={`mt-0.5 ${aiFormattedResult ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400'}`}
+                >
+                  {aiFormattedResult
+                    ? '来源：AI 深度排版（本次显式运行，未写入正文）'
+                    : '来源：本地排版引擎（随正文与规范实时计算）'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {formattedResult.warnings.length > 0 && (
+                  <span className="text-rose-500 font-medium">
+                    {formattedResult.warnings.length} 条敏感词预警
+                  </span>
+                )}
+                <button
+                  type="button"
+                  data-testid="press-forge-ai-run"
+                  onClick={handleRunAiTypeset}
+                  disabled={aiRunning}
+                  className="px-2.5 py-1 rounded-lg border border-cyan-500/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 font-medium transition disabled:opacity-60 flex items-center gap-1"
+                >
+                  <Sparkles
+                    className={`w-3.5 h-3.5 ${aiRunning ? 'animate-pulse' : ''}`}
+                    aria-hidden="true"
+                  />
+                  {aiRunning ? 'AI 深度排版执行中…' : 'AI 深度排版'}
+                </button>
+                {aiFormattedResult && (
+                  <button
+                    type="button"
+                    onClick={() => setAiRun(null)}
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition"
+                  >
+                    回到本地排版
+                  </button>
+                )}
+              </div>
             </div>
+
+            {aiError && (
+              <div
+                role="alert"
+                className="p-2.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg text-xs text-rose-700 dark:text-rose-300"
+              >
+                {aiError}
+              </div>
+            )}
 
             {formattedResult.warnings.length > 0 && (
               <div className="p-2.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg text-xs text-rose-700 dark:text-rose-300 space-y-1">

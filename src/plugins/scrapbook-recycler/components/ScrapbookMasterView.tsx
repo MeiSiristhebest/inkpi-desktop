@@ -2,7 +2,7 @@ import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbScrapbookRepository } from '../../../adapters/indexedDbScrapbookRepository'
 import type { ScrapbookFragmentRecord, ScrapRecommendation } from '../types'
-import { Archive, Trash2, Search, Copy, Check } from 'lucide-react'
+import { Archive, Trash2, Search, Copy, Check, Sparkles } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
@@ -12,7 +12,6 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
   const [fragments, setFragments] = useState<ScrapbookFragmentRecord[]>([])
   const [filterQuery, setFilterQuery] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [runtimeRankedIds, setRuntimeRankedIds] = useState<string[] | null>(null)
 
   const loadData = async () => {
     const all = await indexedDbScrapbookRepository.getAll(projectId)
@@ -23,18 +22,37 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     loadData().catch(console.error)
   }, [projectId])
 
-  useEffect(() => {
+  // §P2.7：AI 语义排序要连同整批废稿正文一起发给模型，属于「付费且慢」的动作，
+  // 不能挂在 useEffect([搜索框]) 上——那样每敲一个字符就是一次真实调用。
+  // 排序结果连同产生它的查询词与那一批切片一起保存，输入一变结果即失效，
+  // 不需要清理 effect，也不会把上一次搜索的排序用在已经换掉的列表上。
+  const [aiRun, setAiRun] = useState<{
+    query: string
+    fragments: ScrapbookFragmentRecord[]
+    rankedIds: string[]
+  } | null>(null)
+  const [aiRunning, setAiRunning] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const runtimeRankedIds =
+    aiRun && aiRun.query === filterQuery && aiRun.fragments === fragments ? aiRun.rankedIds : null
+
+  const handleRunAiRanking = async () => {
     const runtimeAssistant = host?.aiAssistant
-    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginTool || !filterQuery.trim()) {
-      setRuntimeRankedIds(null)
+    if (!filterQuery.trim()) {
+      setAiError('先在上方输入关键词，AI 语义排序需要一段查询意图才能工作。')
+      return
+    }
+    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginTool) {
+      setAiError('AI 通道不可用，语义排序没有发出。下方仍是本地关键词匹配结果。')
       return
     }
 
-    let cancelled = false
-    setRuntimeRankedIds(null)
+    setAiRunning(true)
+    setAiError(null)
     const fragmentRecords = fragments
-    void runtimeAssistant
-      .runPluginTool('scrapbook-recycler', {
+    try {
+      const result = await runtimeAssistant.runPluginTool('scrapbook-recycler', {
         contextText: semanticTextFromContent('scrapbook-recycler-query', filterQuery),
         fragments: fragmentRecords.map((fragment) => ({
           ...fragment,
@@ -43,18 +61,23 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
             fragment.snippet,
           ),
         })),
-        topK: fragments.length || 1,
+        topK: fragmentRecords.length || 1,
       })
-      .then((result) => {
-        if (!cancelled && isScrapRecommendations(result)) {
-          setRuntimeRankedIds(result.map((item) => item.fragment.id))
-        }
+      if (!isScrapRecommendations(result)) {
+        setAiError('Runtime 返回的内容不是有效的排序结果，列表保持本地匹配顺序。')
+        return
+      }
+      setAiRun({
+        query: filterQuery,
+        fragments: fragmentRecords,
+        rankedIds: result.map((item) => item.fragment.id),
       })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
+    } catch (cause) {
+      setAiError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setAiRunning(false)
     }
-  }, [filterQuery, fragments, host?.aiAssistant])
+  }
 
   useEffect(() => {
     onStats?.({
@@ -108,16 +131,58 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-          <input
-            className="w-full pl-9 pr-4 py-2 border rounded-lg text-xs bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus:outline-none focus:border-indigo-500"
-            placeholder="搜索废稿内容、关键词标签或原所属章节..."
-            value={filterQuery}
-            onChange={(e) => setFilterQuery(e.target.value)}
-          />
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              className="w-full pl-9 pr-4 py-2 border rounded-lg text-xs bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus:outline-none focus:border-indigo-500"
+              placeholder="搜索废稿内容、关键词标签或原所属章节..."
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            data-testid="scrapbook-ai-run"
+            onClick={handleRunAiRanking}
+            disabled={aiRunning}
+            className="shrink-0 px-3 py-2 rounded-lg border border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-xs font-medium transition disabled:opacity-60 flex items-center gap-1.5"
+          >
+            <Sparkles
+              className={`w-3.5 h-3.5 ${aiRunning ? 'animate-pulse' : ''}`}
+              aria-hidden="true"
+            />
+            {aiRunning ? 'AI 语义排序执行中…' : 'AI 语义重排这份结果'}
+          </button>
+          {runtimeRankedIds && (
+            <button
+              type="button"
+              onClick={() => setAiRun(null)}
+              className="shrink-0 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition"
+            >
+              回到本地匹配顺序
+            </button>
+          )}
         </div>
+
+        <p
+          data-testid="scrapbook-result-origin"
+          className={`text-xs ${runtimeRankedIds ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
+        >
+          {runtimeRankedIds
+            ? `排序来源：AI 语义重排（对「${filterQuery}」的本次显式运行）· ${filtered.length} 条命中`
+            : `排序来源：本地关键词匹配 · ${filtered.length} 条命中`}
+        </p>
+
+        {aiError && (
+          <div
+            role="alert"
+            className="p-2.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg text-xs text-rose-700 dark:text-rose-300"
+          >
+            {aiError}
+          </div>
+        )}
       </div>
 
       <div className="space-y-3">
