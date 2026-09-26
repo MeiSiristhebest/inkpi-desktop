@@ -2,6 +2,11 @@
 name: Tauri Rust Backend Check
 
 on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/tauri-rust-check.yml'
   pull_request:
     paths:
       - 'src-tauri/**'
@@ -51,7 +56,7 @@ jobs:
         working-directory: src-tauri
         run: cargo fmt --all -- --check
 
-      - name: Cargo Check
+      - name: Cargo Clippy
         working-directory: src-tauri
-        run: cargo check
+        run: cargo clippy --all-targets
 ...
