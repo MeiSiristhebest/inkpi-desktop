@@ -12,6 +12,7 @@ import {
   removeProjectFromLibrary,
   restoreProjectToLibrary,
 } from '../core/projectService'
+import type { NewProjectForm } from '../domain/project/projectDefaults'
 import type { ProjectRecord } from '../types'
 
 /**
@@ -25,12 +26,7 @@ export interface ProjectLibrary {
   archivedProjects: ProjectRecord[]
   activeProjectId: string | null
   setActiveProjectId: (id: string | null) => void
-  createProject: (
-    name: string,
-    genre: string,
-    intro: string,
-    templateType?: 'blank' | 'demo',
-  ) => Promise<void>
+  createProject: (form: NewProjectForm) => Promise<void>
   importProject: (file: File) => Promise<void>
   createDemo: () => Promise<void>
   /** 完整工作区备份（含设定/时间线/插件/AI 数据） */
@@ -61,19 +57,11 @@ export function useProjectLibrary(): ProjectLibrary {
     setArchivedProjects(await loadArchivedProjects())
   }, [])
 
-  const handleCreateProject = useCallback(
-    async (
-      name: string,
-      genre: string,
-      intro: string,
-      templateType: 'blank' | 'demo' = 'blank',
-    ) => {
-      const project = await createProject(name, genre, intro, templateType)
-      setProjects((prev) => [project, ...prev])
-      setActiveProjectId(project.id)
-    },
-    [],
-  )
+  const handleCreateProject = useCallback(async (form: NewProjectForm) => {
+    const project = await createProject(form)
+    setProjects((prev) => [project, ...prev])
+    setActiveProjectId(project.id)
+  }, [])
 
   const handleImportProject = useCallback(async (file: File) => {
     const result = await importProject(file)

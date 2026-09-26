@@ -14,6 +14,12 @@ import {
   buildBlankChapters,
 } from '../domain/seed'
 import { LEGACY_PROJECT_ID } from '../config'
+import {
+  pluginIdsFor,
+  projectTypeFor,
+  type NewProjectForm,
+} from '../domain/project/projectDefaults'
+import { saveEnabledPluginIds } from './pluginRegistry'
 import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
 import { resolveResumeChapterTitle } from '../lib/resumePointer'
 
@@ -170,27 +176,30 @@ export async function getProject(id: string): Promise<ProjectRecord | undefined>
   return projectRepo.getProject(id)
 }
 
-export async function createProject(
-  name: string,
-  genre = '未分类',
-  intro = '',
-  templateType: 'blank' | 'demo' = 'blank',
-): Promise<ProjectRecord> {
+/**
+ * 新建一本作品（§P3.6）。表单上的每个选择都在这里落地：
+ * 封面进记录、工具组合进这本书自己的插件开关、从哪里开始决定种子路径。
+ */
+export async function createProject(form: NewProjectForm): Promise<ProjectRecord> {
   const now = clock.now()
   const project: ProjectRecord = {
     id: idGen.generate('proj'),
-    name,
-    genre,
-    intro,
-    templateType,
+    name: form.name,
+    genre: form.genre.trim() || '未分类',
+    intro: form.intro ?? '',
+    projectType: projectTypeFor(form.tooling),
+    templateType: form.starter,
     createdAt: now,
     updatedAt: now,
+    // 没有封面时整个键省略：saveProject 会把记录当领域变更集外发，
+    // 而那条路径拒绝任何显式 undefined 字段。
+    ...(form.cover ? { cover: form.cover } : {}),
   }
 
   await projectRepo.saveProject(project)
 
   // INV-05: 严格分离 Blank 与 Demo。普通新项目默认生成单卷单空章，不得静默注入“林凡/玄剑宗”示范事实
-  const isDemo = templateType === 'demo'
+  const isDemo = form.starter === 'demo'
   const volumes = isDemo
     ? buildSeedVolumes(project.id, idGen, clock)
     : buildBlankVolumes(project.id, idGen, clock)
@@ -200,6 +209,10 @@ export async function createProject(
 
   await Promise.all(volumes.map((v) => projectRepo.saveVolume(v)))
   await Promise.all(chapters.map((c) => projectRepo.saveChapter(c)))
+
+  // 每个项目的工具集合本来就是按 projectId 分域存的，所以「这本书用哪些工具」是项目数据，
+  // 不是全局偏好 —— 写在全局会让下一本书继承上一本的选择。
+  await saveEnabledPluginIds(new Set(pluginIdsFor(form.tooling, form.customPluginIds)), project.id)
 
   return project
 }
@@ -262,12 +275,15 @@ export async function deleteProject(projectId: string): Promise<void> {
   await workspaceLifecycleService.purgeWorkspace(projectId)
 }
 
-/** 一键创建示范项目：自带种子卷章，便于第一次使用即体验完整功能 */
+/** 一键创建示范项目：自带种子卷章，并给足看得懂这些卷章要用哪些工具 */
 export async function createDemoProject(): Promise<ProjectRecord> {
-  return createProject(
-    '示范 · 苍澜纪元',
-    '仙侠修真',
-    '废脉少年于测灵大典觉醒，吞噬进化，从杂役一路镇压神族。',
-    'demo',
-  )
+  return createProject({
+    name: '示范 · 苍澜纪元',
+    genre: '仙侠修真',
+    intro: '废脉少年于测灵大典觉醒，吞噬进化，从杂役一路镇压神族。',
+    cover: '',
+    starter: 'demo',
+    tooling: 'recommended',
+    customPluginIds: [],
+  })
 }

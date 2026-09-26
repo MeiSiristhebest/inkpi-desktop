@@ -31,7 +31,7 @@ function balancedParenEnd(source: string, openIndex: number): number | null {
   return null
 }
 
-export function effectTriggeredAiCalls(source: string): string[] {
+function effectTriggeredAiCalls(source: string): string[] {
   const violations: string[] = []
   for (const effect of source.matchAll(EFFECT_CALL)) {
     const open = source.indexOf('(', effect.index ?? 0)

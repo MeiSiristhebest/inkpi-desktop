@@ -15,6 +15,21 @@ import {
   exportManuscript,
 } from './projectService'
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
+import type { NewProjectForm } from '../domain/project/projectDefaults'
+import { LEAN_PLUGIN_IDS, RECOMMENDED_PLUGIN_IDS } from '../domain/project/projectDefaults'
+import { loadEnabledPluginIdsFromIDB } from './pluginRegistry'
+
+/** 新建项目表单的一次提交：测试只覆盖自己关心的那几项，其余走面板同款默认值 */
+const form = (over: Partial<NewProjectForm> = {}): NewProjectForm => ({
+  name: '未命名',
+  genre: '',
+  intro: '',
+  cover: '',
+  starter: 'blank',
+  tooling: 'recommended',
+  customPluginIds: [],
+  ...over,
+})
 
 const seed = async (pid: string, wordsByChapter: number[], recent: boolean = true) => {
   await db.put<ProjectRecord>('projects', {
@@ -101,7 +116,9 @@ describe('projectService — 工作区聚合统计', () => {
   })
 
   it('createProject defaults to pure blank project (INV-05)', async () => {
-    const p = await createProject('纯净新书', '科幻灵异', '一本完全崭新的小说')
+    const p = await createProject(
+      form({ name: '纯净新书', genre: '科幻灵异', intro: '一本完全崭新的小说' }),
+    )
     expect(p.templateType).toBe('blank')
     const [volumes, chapters] = await Promise.all([
       db.getAll<VolumeRecord>('volumes'),
@@ -126,9 +143,60 @@ describe('projectService — 工作区聚合统计', () => {
   })
 })
 
+describe('projectService — 新建表单上的每个选择都要在数据层留下差别（§P3.6）', () => {
+  it('封面进项目记录，而不是停在面板里当预览', async () => {
+    const p = await createProject(form({ name: '有封面的书', cover: 'data:image/png;base64,AAAA' }))
+
+    expect(p.cover).toBe('data:image/png;base64,AAAA')
+    expect((await db.get<ProjectRecord>('projects', p.id))?.cover).toBe(
+      'data:image/png;base64,AAAA',
+    )
+  })
+
+  it('没有上传封面时不写空字符串，卡片才会走「暂无封面」而不是一块空白', async () => {
+    const p = await createProject(form({ name: '没封面的书' }))
+    expect(p.cover).toBeUndefined()
+  })
+
+  it.each([
+    ['lite', LEAN_PLUGIN_IDS],
+    ['recommended', RECOMMENDED_PLUGIN_IDS],
+  ] as const)('%s 组合把这套工具写进这本书自己的域', async (combo, ids) => {
+    const p = await createProject(form({ name: `工具组合-${combo}`, tooling: combo }))
+
+    expect(p.projectType).toBe(combo === 'lite' ? 'lite' : 'full')
+    expect(await loadEnabledPluginIdsFromIDB(p.id)).toEqual(new Set(ids))
+  })
+
+  it('自定义组合原样落库，并留下认得出它的 projectType', async () => {
+    const p = await createProject(
+      form({ name: '自己挑', tooling: 'custom', customPluginIds: ['living-codex', 'press-forge'] }),
+    )
+
+    expect(p.projectType).toBe('custom')
+    expect(await loadEnabledPluginIdsFromIDB(p.id)).toEqual(
+      new Set(['living-codex', 'press-forge']),
+    )
+  })
+
+  it('两本书的工具开关互不继承', async () => {
+    const lean = await createProject(form({ name: '精简本', tooling: 'lite' }))
+    const full = await createProject(form({ name: '全用本', tooling: 'recommended' }))
+
+    const leanIds = await loadEnabledPluginIdsFromIDB(lean.id)
+    expect(leanIds.has('sprint-arena')).toBe(false)
+    expect((await loadEnabledPluginIdsFromIDB(full.id)).has('sprint-arena')).toBe(true)
+  })
+
+  it('留空的题材记成未分类，而不是替作者编一个东方玄幻', async () => {
+    const p = await createProject(form({ name: '还没想好题材' }))
+    expect(p.genre).toBe('未分类')
+  })
+})
+
 describe('projectService — 移出作品库与永久删除是两条独立路径（P0.8 / INV-04）', () => {
   it('移出作品库只隐藏书架条目，卷章数据一条不少', async () => {
-    const p = await createProject('暂时收起来', '都市', '')
+    const p = await createProject(form({ name: '暂时收起来', genre: '都市' }))
     const chapters = await db.getAll<ChapterRecord>('chapters')
     const volumes = await db.getAll<VolumeRecord>('volumes')
 
@@ -150,7 +218,7 @@ describe('projectService — 移出作品库与永久删除是两条独立路径
   })
 
   it('放回书架后重新出现在 loadProjects，archivedAt 被清空', async () => {
-    const p = await createProject('再写一本', '科幻', '')
+    const p = await createProject(form({ name: '再写一本', genre: '科幻' }))
     await removeProjectFromLibrary(p.id)
     await restoreProjectToLibrary(p.id)
 
@@ -160,7 +228,7 @@ describe('projectService — 移出作品库与永久删除是两条独立路径
   })
 
   it('永久删除才会真正清除 projects 记录与级联卷章', async () => {
-    const p = await createProject('彻底删掉', '历史', '')
+    const p = await createProject(form({ name: '彻底删掉', genre: '历史' }))
     await deleteProject(p.id)
 
     expect(await db.get('projects', p.id)).toBeUndefined()
@@ -175,7 +243,7 @@ describe('projectService — 移出作品库与永久删除是两条独立路径
 
 describe('projectService — 两种导出的范围必须不同（P0.6 / INV-04）', () => {
   it('完整备份含领域数据，纯正文导出只有卷章与项目元数据', async () => {
-    const p = await createProject('双导出', '玄幻', '')
+    const p = await createProject(form({ name: '双导出', genre: '玄幻' }))
     await db.put('codexEntities', {
       id: `ent-${p.id}`,
       projectId: p.id,

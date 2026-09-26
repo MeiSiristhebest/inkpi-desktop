@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { Bookshelf } from './Bookshelf'
+import { RECOMMENDED_PLUGIN_IDS } from '../../domain/project/projectDefaults'
 
 describe('Bookshelf (InkPi 主页)', () => {
   it('显示主页 Header 标题与空项目占位提示', () => {
@@ -62,34 +63,100 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(screen.getByTitle('打开项目')).toBeInTheDocument()
   })
 
-  it('新建项目面板展开并收集信息回调（默认纯净空白）', async () => {
+  it('书名之外全是可选：不展开「更多设置」就按摘要念出的默认值创建（§P3.6）', async () => {
     const onCreate = vi.fn()
     render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
 
     fireEvent.click(screen.getByText('新建小说项目'))
-    expect(screen.getByText('项目形态')).toBeInTheDocument()
+    // 折叠着也不能藏着生效的选择 —— 摘要必须把默认值念出来
+    expect(screen.getByTestId('creation-advanced-toggle').textContent).toContain(
+      `空白作品 · ${RECOMMENDED_PLUGIN_IDS.length} 件工具 · 题材未定`,
+    )
+    expect(screen.queryByTestId('tooling-catalog')).not.toBeInTheDocument()
+
     fireEvent.change(screen.getByPlaceholderText('给这本书起个名字，其他信息之后随时可以补'), {
       target: { value: '吞天神脉（测试）' },
     })
     fireEvent.click(screen.getByText('创建并进入项目'))
 
     await waitFor(() =>
-      expect(onCreate).toHaveBeenCalledWith('吞天神脉（测试）', '东方玄幻', '', 'blank'),
+      expect(onCreate).toHaveBeenCalledWith({
+        name: '吞天神脉（测试）',
+        genre: '',
+        cover: '',
+        starter: 'blank',
+        tooling: 'recommended',
+        customPluginIds: RECOMMENDED_PLUGIN_IDS,
+      }),
     )
   })
 
-  it('新建项目面板支持显式选择示范模板', async () => {
+  it('示范样例、题材与工具组合各自是一次真实选择，全部回传给创建流程（§P3.6）', async () => {
     const onCreate = vi.fn()
     render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
 
     fireEvent.click(screen.getByText('新建小说项目'))
-    fireEvent.click(screen.getByText('示范模板 (苍澜纪元)'))
+    fireEvent.click(screen.getByTestId('creation-advanced-toggle'))
+    fireEvent.click(screen.getByText('示范样例（苍澜纪元）'))
+    fireEvent.click(screen.getByText('科幻'))
+    fireEvent.click(screen.getByTestId('tooling-lite'))
     fireEvent.change(screen.getByPlaceholderText('给这本书起个名字，其他信息之后随时可以补'), {
       target: { value: '苍澜测试' },
     })
     fireEvent.click(screen.getByText('创建并进入项目'))
 
-    await waitFor(() => expect(onCreate).toHaveBeenCalledWith('苍澜测试', '东方玄幻', '', 'demo'))
+    await waitFor(() =>
+      expect(onCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: '苍澜测试',
+          genre: '科幻',
+          starter: 'demo',
+          tooling: 'lite',
+        }),
+      ),
+    )
+  })
+
+  it('「自定义」当场展开工具全集，勾掉的那件不再交给新书', async () => {
+    const onCreate = vi.fn()
+    render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
+
+    fireEvent.click(screen.getByText('新建小说项目'))
+    fireEvent.click(screen.getByTestId('creation-advanced-toggle'))
+    fireEvent.click(screen.getByTestId('tooling-custom'))
+
+    const catalog = await screen.findByTestId('tooling-catalog')
+    const water = within(catalog).getByRole('checkbox', { name: '字数水分表' })
+    fireEvent.click(water)
+    fireEvent.change(screen.getByPlaceholderText('给这本书起个名字，其他信息之后随时可以补'), {
+      target: { value: '挑着写' },
+    })
+    fireEvent.click(screen.getByText('创建并进入项目'))
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalled())
+    const ids: readonly string[] = onCreate.mock.calls[0][0].customPluginIds
+    expect(ids).toContain('living-codex')
+    expect(ids).not.toContain('water-meter')
+  })
+
+  it('上传的封面跟着项目走，不是选完就丢的临时预览（§P3.6）', async () => {
+    const onCreate = vi.fn()
+    render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
+
+    fireEvent.click(screen.getByText('新建小说项目'))
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'cover.png', {
+      type: 'image/png',
+    })
+    fireEvent.change(screen.getByTestId('creation-cover-input'), { target: { files: [file] } })
+    await screen.findByAltText('封面预览')
+
+    fireEvent.change(screen.getByPlaceholderText('给这本书起个名字，其他信息之后随时可以补'), {
+      target: { value: '有封面的书' },
+    })
+    fireEvent.click(screen.getByText('创建并进入项目'))
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalled())
+    expect(onCreate.mock.calls[0][0].cover).toMatch(/^data:image\/png/)
   })
 
   it('不渲染创建示范项目等外来冗余按钮', () => {

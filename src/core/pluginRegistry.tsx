@@ -75,9 +75,10 @@ export function loadEnabledPluginIds(workspaceId?: string): Set<string> {
   return legacyPluginIds(workspaceId) ?? defaultPluginIds()
 }
 
-export function saveEnabledPluginIds(ids: Set<string>, workspaceId?: string): void {
+export function saveEnabledPluginIds(ids: Set<string>, workspaceId?: string): Promise<void> {
   const next = Array.from(ids)
-  void indexedDbSettingsKVRepository
+  // 返回给调用方等待：新建项目要把工具组合写进这个项目自己的域，写没落地不能说「已创建」。
+  return indexedDbSettingsKVRepository
     .set(canonicalScope(workspaceId), CANONICAL_PLUGIN_KEY, next)
     .then(async () => {
       const legacyKey = getPluginStorageKey(workspaceId)

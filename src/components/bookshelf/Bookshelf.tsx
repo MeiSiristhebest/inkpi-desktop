@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import { motion } from 'motion/react'
 import { BookPlus, FileDown, Sparkles, ArchiveRestore, Trash2 } from 'lucide-react'
 import type { ProjectRecord } from '../../types'
+import type { NewProjectForm } from '../../domain/project/projectDefaults'
 import { loadStatsForProjects, type ProjectStats } from '../../core/projectService'
 import { spring, gesture } from '../../motion'
 import { CreateProjectPanel } from './organisms/CreateProjectPanel'
@@ -15,12 +16,7 @@ interface BookshelfProps {
   /** 已移出作品库的项目：数据仍在本地，可随时放回（P0.8） */
   archivedProjects?: ProjectRecord[]
   onOpenProject: (id: string) => void
-  onCreateProject: (
-    name: string,
-    genre: string,
-    intro: string,
-    templateType?: 'blank' | 'demo',
-  ) => void
+  onCreateProject: (form: NewProjectForm) => void
   onImportProject?: (file: File) => void
   /** 一键创建自带种子内容的示范项目，便于首次体验 */
   onCreateDemo?: () => void
