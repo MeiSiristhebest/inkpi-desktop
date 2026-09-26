@@ -7,6 +7,11 @@ export interface ContextMenuItem {
   danger?: boolean
   /** 该项之前渲染一条分隔线（用于分组，如危险操作前） */
   dividerBefore?: boolean
+  /**
+   * 互斥选择项：渲染成 role="menuitemradio" + aria-checked（P4.3）。
+   * 用于「状态标记」这类当前值有意义的条目。
+   */
+  checked?: boolean
   onClick: () => void
 }
 
@@ -14,6 +19,12 @@ interface ContextMenuProps {
   items: ContextMenuItem[]
   /** 锚定宽度类，默认 w-36 */
   widthClass?: string
+  /** 光标锚定（右键菜单）：给定时改为 fixed 定位到该坐标 */
+  position?: { x: number; y: number }
+  /** 菜单顶部的上下文标题（如被操作的章节名），非交互元素 */
+  header?: ReactNode
+  /** 无障碍名称；缺省为「选项菜单」 */
+  ariaLabel?: string
   /** Called when menu is closed via Esc, backdrop click, or item selection */
   onClose?: () => void
 }
@@ -21,16 +32,24 @@ interface ContextMenuProps {
 /**
  * 通用气泡菜单（原子设计 · molecules）。
  * 只负责「锚定浮层 + 条目列表 + 危险态配色」的展示外壳，条目由调用方以配置驱动（§10/§11）。
+ * 全站的气泡/右键菜单都走这里，键盘语义只维护这一份（P4.3）。
  *
  * ARIA:
  *   - role="menu" on container
- *   - role="menuitem" on each button
+ *   - role="menuitem" on each button, role="menuitemradio" when item.checked is set
  *   - ArrowUp / ArrowDown / Home / End navigate items
  *   - Enter / Space activates the focused item
  *   - Esc closes the menu
  *   - First item gains focus on open
  */
-export const ContextMenu = ({ items, widthClass = 'w-36', onClose }: ContextMenuProps) => {
+export const ContextMenu = ({
+  items,
+  widthClass = 'w-36',
+  position,
+  header,
+  ariaLabel = '选项菜单',
+  onClose,
+}: ContextMenuProps) => {
   const [focusedIndex, setFocusedIndex] = useState(-1)
   const containerRef = useRef<HTMLDivElement>(null)
   const focusedIndexRef = useRef(0)
@@ -129,10 +148,18 @@ export const ContextMenu = ({ items, widthClass = 'w-36', onClose }: ContextMenu
     <div
       ref={containerRef}
       role="menu"
-      aria-label="选项菜单"
-      className={`absolute right-0 top-8 z-30 ${widthClass} py-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12.5px]`}
+      aria-label={ariaLabel}
+      className={`z-50 ${widthClass} py-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12.5px] ${
+        position ? 'fixed' : 'absolute right-0 top-8'
+      }`}
+      style={position ? { left: position.x, top: position.y } : undefined}
       onKeyDown={handleKeyDown}
     >
+      {header && (
+        <div className="px-3 py-1.5 mb-1 border-b border-[var(--ink-border)]/60 text-[11px] text-[var(--ink-text-faint)] truncate font-medium">
+          {header}
+        </div>
+      )}
       {items.map((it, idx) => (
         <div key={it.key} role="none">
           {it.dividerBefore && (
@@ -140,14 +167,17 @@ export const ContextMenu = ({ items, widthClass = 'w-36', onClose }: ContextMenu
           )}
           <button
             type="button"
-            role="menuitem"
+            role={it.checked === undefined ? 'menuitem' : 'menuitemradio'}
+            aria-checked={it.checked}
             title={it.label}
             aria-disabled={false}
             onClick={() => handleItemClick(idx, it)}
             className={`w-full px-3 py-1.5 text-left flex items-center gap-2 cursor-pointer ${
               it.danger
                 ? 'text-[var(--ink-danger)] hover:bg-[var(--ink-danger)]/10'
-                : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                : it.checked
+                  ? 'text-[var(--ink-accent)] bg-[var(--ink-accent)]/10 hover:bg-[var(--ink-accent)]/15'
+                  : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
             }`}
           >
             {it.icon && <span className="[&>svg]:text-[var(--ink-text-muted)]">{it.icon}</span>}
