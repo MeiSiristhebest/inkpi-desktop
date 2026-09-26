@@ -1,6 +1,7 @@
-import React, { type ReactNode, useId, useEffect, useRef } from 'react'
+import React, { type ReactNode, useId, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { spring, variants, tween } from '../../motion'
+import { useOverlayFocus } from '../useOverlayFocus'
 
 interface ModalProps {
   onClose: () => void
@@ -18,11 +19,12 @@ interface ModalProps {
   /** Use a visible heading supplied by the child content as the dialog label. */
   ariaLabelledBy?: string
   /**
-   * 面板停靠方式。center = 居中对话框（默认）；
-   * right = 右侧全高抽屉（编辑面板等需要大表单的场景），仅停靠位置与入场动画不同，
-   * ARIA / 焦点契约完全一致，避免为抽屉再写一份模态实现。
+   * 面板停靠方式。center = 居中对话框（默认）；top = 顶部停靠（命令面板这类
+   * 「贴顶 + 居中宽度」的浮层）；right = 右侧全高抽屉（编辑面板等需要大表单的场景）。
+   * 三者只有停靠位置与入场动画不同，ARIA / 焦点契约完全一致，
+   * 避免为任何一种浮层再写一份模态实现。
    */
-  placement?: 'center' | 'right'
+  placement?: 'center' | 'top' | 'right'
 }
 
 /**
@@ -52,81 +54,21 @@ export const Modal: React.FC<ModalProps> = ({
   const titleId = title ? `modal-title-${id}` : undefined
   const labelledBy = ariaLabelledBy ?? titleId
   const panelRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLElement | null>(null)
-  // 消费方普遍传内联箭头函数，因此 Esc 只能经 ref 读取最新值：
-  // 把 onClose 放进下面焦点契约的依赖数组，会让该 effect 在宿主每次重渲染时重跑，
-  // 用户在面板里选中的控件会被抢回首项。
-  const onCloseRef = useRef(onClose)
-  useEffect(() => {
-    onCloseRef.current = onClose
-  }, [onClose])
+  useOverlayFocus({ containerRef: panelRef, active: true, onClose })
 
-  // Save trigger focus on open, restore on unmount/close
-  useEffect(() => {
-    triggerRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const el = panelRef.current
-    if (!el) return
-    // Focus first focusable descendant
-    const focusable = Array.from(
-      el.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    )
-    const first = focusable[0]
-    if (first) {
-      first.focus()
-    } else {
-      el.setAttribute('tabindex', '-1')
-      el.focus()
-    }
-
-    const trapFocus = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      const focusableInside = Array.from(
-        el.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      )
-      if (focusableInside.length === 0) return
-      const currentIndex = focusableInside.indexOf(document.activeElement as HTMLElement)
-      const nextIndex = e.shiftKey
-        ? currentIndex <= 0
-          ? focusableInside.length - 1
-          : currentIndex - 1
-        : currentIndex === focusableInside.length - 1
-          ? 0
-          : currentIndex + 1
-      e.preventDefault()
-      focusableInside[nextIndex]?.focus()
-    }
-
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onCloseRef.current()
-      }
-    }
-
-    window.addEventListener('keydown', trapFocus)
-    window.addEventListener('keydown', handleEsc)
-    return () => {
-      window.removeEventListener('keydown', trapFocus)
-      window.removeEventListener('keydown', handleEsc)
-      triggerRef.current?.focus()
-      triggerRef.current = null
-    }
-    // 焦点契约只在挂载/卸载时建立与销毁；见上方 onCloseRef 注释
-  }, [])
+  const alignment =
+    placement === 'right'
+      ? 'items-stretch justify-end'
+      : placement === 'top'
+        ? 'items-start justify-center'
+        : 'items-center justify-center'
 
   return (
     <AnimatePresence>
       <motion.div
         {...variants.fade}
         transition={tween.fade}
-        className={`fixed inset-0 z-50 flex ${
-          dockedRight ? 'items-stretch justify-end' : 'items-center justify-center'
-        } ${overlayClassName} p-4 select-none`}
+        className={`fixed inset-0 z-50 flex ${alignment} ${overlayClassName} p-4 select-none`}
         onClick={(e) => {
           if (closeOnBackdrop && e.target === e.currentTarget) onClose()
         }}
