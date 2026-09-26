@@ -298,3 +298,17 @@ describe('useSettings', () => {
     expect(result.current[0].fontSize).toBe(20)
   })
 })
+
+describe('写作与习惯：全场只有一份每章目标（P3.9）', () => {
+  it('移除无人读取的「分章提示」，每章目标只在编辑器页配置一次', () => {
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('写作与习惯'))
+
+    expect(screen.queryByText('分章提示')).toBeNull()
+    expect(screen.queryByLabelText('分章提示的每满字数')).toBeNull()
+
+    // 唯一的一份在「编辑器」标签，且真的被状态栏读取（settings.wordTarget）
+    fireEvent.click(screen.getByText('编辑器'))
+    expect(screen.getAllByText(/每章字数目标/).length).toBeGreaterThan(0)
+  })
+})

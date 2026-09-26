@@ -3,7 +3,11 @@ import { motion } from 'motion/react'
 import { X, Feather, SlidersHorizontal } from 'lucide-react'
 import { spring, gesture } from '../../../motion'
 import { Modal } from '../../../ui/molecules/Modal'
-import type { WritingSessionStats } from '../hooks/useWritingSessionStats'
+import {
+  SESSION_WORDS_LABEL,
+  SESSION_WORDS_RULE,
+  type WritingSessionStats,
+} from '../hooks/useWritingSessionStats'
 import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource } from '../../../adapters/randomSource'
 import { MascotFigure } from '../organisms/MascotFigure'
@@ -228,7 +232,7 @@ export const WordCountPanelModal: React.FC<
                     onChange={(e) => updateConfig({ showSessionWords: e.target.checked })}
                     className="w-4 h-4 rounded text-[var(--ink-accent)] border-[var(--ink-border)] accent-[var(--ink-accent)] cursor-pointer"
                   />
-                  <span>本次码字</span>
+                  <span title={SESSION_WORDS_RULE}>{SESSION_WORDS_LABEL}</span>
                 </label>
 
                 <label className="flex items-center gap-2 text-[13px] text-[var(--ink-text)] cursor-pointer select-none">
@@ -338,8 +342,11 @@ export const WordCountPanelModal: React.FC<
                     <div className="flex-1 flex flex-col gap-2.5 text-[12px]">
                       {showSessionWords && (
                         <div className="flex items-center justify-between">
-                          <span className="text-[var(--ink-text-muted)] flex items-center gap-1">
-                            本次码字
+                          <span
+                            className="text-[var(--ink-text-muted)] flex items-center gap-1"
+                            title={SESSION_WORDS_RULE}
+                          >
+                            {SESSION_WORDS_LABEL}
                             <span className="inline-flex items-center justify-center w-3 h-3 text-[8.5px] rounded-full border border-[var(--ink-border-strong)] text-[var(--ink-text-faint)]">
                               i
                             </span>
@@ -413,7 +420,12 @@ export const WordCountPanelModal: React.FC<
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                          <span className="text-[9px] text-[var(--ink-text-faint)]">今日计划</span>
+                          <span
+                            className="text-[9px] text-[var(--ink-text-faint)]"
+                            title={SESSION_WORDS_RULE}
+                          >
+                            今日计划
+                          </span>
                           <span className="text-[11px] font-bold text-[var(--ink-accent)] tabular-nums">
                             {stats.sessionWords}/{todayTarget}
                           </span>
@@ -459,7 +471,10 @@ export const WordCountPanelModal: React.FC<
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                        <span className="text-[10px] text-[var(--ink-text-faint)] font-medium">
+                        <span
+                          className="text-[10px] text-[var(--ink-text-faint)] font-medium"
+                          title={SESSION_WORDS_RULE}
+                        >
                           今日计划
                         </span>
                         <span className="text-xs font-bold text-[var(--ink-accent)] tabular-nums">
@@ -487,8 +502,11 @@ export const WordCountPanelModal: React.FC<
                     <div className="w-full grid grid-cols-2 gap-y-3 gap-x-2 py-2.5 border-t border-[var(--ink-border)]">
                       {showSessionWords && (
                         <div className="flex flex-col items-center">
-                          <span className="text-[10.5px] text-[var(--ink-text-muted)] flex items-center gap-1 mb-0.5">
-                            本次码字
+                          <span
+                            className="text-[10.5px] text-[var(--ink-text-muted)] flex items-center gap-1 mb-0.5"
+                            title={SESSION_WORDS_RULE}
+                          >
+                            {SESSION_WORDS_LABEL}
                             <span className="inline-flex items-center justify-center w-2.5 h-2.5 text-[8px] rounded-full border border-[var(--ink-border-strong)] text-[var(--ink-text-faint)]">
                               i
                             </span>
@@ -536,7 +554,9 @@ export const WordCountPanelModal: React.FC<
                     <div className="w-full flex flex-col gap-1.5 py-2 border-t border-[var(--ink-border)] text-[12px]">
                       {showSessionWords && (
                         <div className="flex items-center justify-between px-2">
-                          <span className="text-[var(--ink-text-muted)]">本次码字</span>
+                          <span className="text-[var(--ink-text-muted)]" title={SESSION_WORDS_RULE}>
+                            {SESSION_WORDS_LABEL}
+                          </span>
                           <span className="font-semibold tabular-nums text-[var(--ink-text)]">
                             {stats.sessionWords}
                           </span>

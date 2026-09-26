@@ -15,7 +15,6 @@ export interface WritingHabitsConfig {
   autoQuotes: boolean
   showRoyaltyEstimate: boolean
   sedentaryMinutes: string
-  chapterTargetWord: string
 }
 
 export const WRITING_HABITS_STORAGE_KEY = 'inkpi-writing-habits-config'
@@ -39,7 +38,6 @@ export const getWritingHabitsConfig = (): WritingHabitsConfig => {
     autoQuotes: true,
     showRoyaltyEstimate: false,
     sedentaryMinutes: '40',
-    chapterTargetWord: '2000',
   }
 }
 
@@ -186,19 +184,6 @@ export const WritingHabitsTab: React.FC<{
             <option value="40">连续 40 分钟</option>
             <option value="60">连续 60 分钟</option>
           </select>
-        </Row>
-        <Row label="分章提示" hint="单章字数达到设定目标时提醒收尾剧情钩子">
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-[var(--ink-text-muted)]">每满</span>
-            <input
-              type="number"
-              aria-label="分章提示的每满字数"
-              value={config.chapterTargetWord}
-              onChange={(e) => updateConfig({ chapterTargetWord: e.target.value })}
-              className="w-16 px-2 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-center text-xs tabular-nums"
-            />
-            <span className="text-[var(--ink-text-muted)]">字提醒</span>
-          </div>
         </Row>
       </Section>
     </>

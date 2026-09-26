@@ -140,4 +140,84 @@ describe('computeDashboardModel 写作面板聚合算法', () => {
     expect(model.streakDays).toBe(0)
     expect(model.idleDays).toBe(5)
   })
+
+  it('当天已有领域日记录时，今日产出只认记录，不再叠加整章字数（P3.9）', () => {
+    const now = new Date(2025, 4, 15, 12, 0, 0).getTime() // 2025-05-15
+    const todayTs = new Date(2025, 4, 15, 9, 30, 0).getTime()
+
+    const chapters: ChapterRecord[] = [
+      {
+        id: 'c1',
+        projectId: 'proj-1',
+        volumeId: 'v1',
+        title: '第1章',
+        content: '',
+        wordCount: 3000,
+        order: 0,
+        createdAt: 1000,
+        updatedAt: todayTs,
+      },
+    ]
+    // 权威记录：今天实际只净增了 200 字（章节整份 3000 字是历史存量）
+    const dailyStatsRecords = [
+      { key: 'proj-1::2025-05-15', projectId: 'proj-1', date: '2025-05-15', words: 200 },
+    ]
+
+    const model = computeDashboardModel(
+      'proj-1',
+      mockProject,
+      mockVolumes,
+      chapters,
+      now,
+      [],
+      [],
+      [],
+      dailyStatsRecords,
+    )
+
+    expect(model.todayWords).toBe(200)
+    expect(model.dailyStatsMap['2025-05-15']).toBe(200)
+    // 全书总字数依旧按章节实际字数统计——它和「当日产量」是两件事
+    expect(model.totalWords).toBe(3000)
+  })
+
+  it('本周产量与今日产量共用同一份每日口径', () => {
+    const now = new Date(2025, 4, 15, 12, 0, 0).getTime() // 2025-05-15
+    const todayTs = new Date(2025, 4, 15, 9, 30, 0).getTime()
+
+    const chapters: ChapterRecord[] = [
+      {
+        id: 'c1',
+        projectId: 'proj-1',
+        volumeId: 'v1',
+        title: '第1章',
+        content: '',
+        wordCount: 3000,
+        order: 0,
+        createdAt: 1000,
+        updatedAt: todayTs,
+      },
+    ]
+    const dailyStatsRecords = [
+      { key: 'proj-1::2025-05-15', projectId: 'proj-1', date: '2025-05-15', words: 200 },
+      { key: 'proj-1::2025-05-13', projectId: 'proj-1', date: '2025-05-13', words: 300 },
+      // 05-08 落在近 7 天窗口之外（窗口为 05-09~05-15）
+      { key: 'proj-1::2025-05-08', projectId: 'proj-1', date: '2025-05-08', words: 999 },
+    ]
+
+    const model = computeDashboardModel(
+      'proj-1',
+      mockProject,
+      mockVolumes,
+      chapters,
+      now,
+      [],
+      [],
+      [],
+      dailyStatsRecords,
+    )
+
+    expect(model.weekWords).toBe(500)
+    expect(model.todayWords).toBe(200)
+  })
 })

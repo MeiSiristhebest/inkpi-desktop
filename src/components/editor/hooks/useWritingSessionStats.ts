@@ -19,6 +19,15 @@ interface UseWritingSessionStatsProps {
   kvStore?: KeyValueStore
 }
 
+/**
+ * `sessionWords` 的对外口径（P3.9：同一个数字在界面上只能有一个名字）。
+ * 它按「项目 + 自然日」持久化累计，记录的是编辑器净增字数——粘贴不计，
+ * 但 AI 续写与插件写入计。写作面板的「今日产出」读的是领域日记录，两者不同源。
+ */
+export const SESSION_WORDS_LABEL = '今日新增'
+export const SESSION_WORDS_RULE =
+  '今日在编辑器里净增的字数：粘贴不计入，AI 续写与插件写入计入。写作面板的「今日产出」按领域记录统计，口径与此不同。'
+
 // 设定输入空闲阈值：8秒无击键判定为停顿构思（符合人机交互感知标准）
 const IDLE_THRESHOLD_MS = 8000
 // 指数平滑时间窗口（秒）：避免离散突刺，同时确保 10~15 秒内平滑收敛到真实时速

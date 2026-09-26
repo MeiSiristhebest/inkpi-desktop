@@ -6,14 +6,14 @@ import { STORAGE_KEY_WIDGET_POS, getInitialWidgetPosition } from './floatingWord
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
 import type { WordCountConfig } from '../modals/WordCountPanelModal'
 import type { WritingSessionStats } from '../hooks/useWritingSessionStats'
+import { SESSION_WORDS_LABEL, SESSION_WORDS_RULE } from '../hooks/useWritingSessionStats'
 
 const mockStats: WritingSessionStats = {
   sessionWords: 1500,
   speedPerHour: 1200,
   writingSeconds: 4500,
   idleSeconds: 300,
-  todayTotalWords: 3500,
-  speedHistory: [],
+  isTyping: true,
 }
 
 const mockConfig: WordCountConfig = {
@@ -96,5 +96,24 @@ describe('FloatingWordCountWidget layout and position persistence', () => {
 
     fireEvent.click(layout1Button)
     expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ layout: 'layout1' }))
+  })
+
+  it('三种排版里同一个字数只有一个名字，并写明统计口径（P3.9）', () => {
+    for (const layout of ['layout1', 'layout2', 'layout3'] as const) {
+      const { unmount } = render(
+        <FloatingWordCountWidget
+          stats={mockStats}
+          config={{ ...mockConfig, layout }}
+          onOpenSettings={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      )
+
+      // 半圆环与数据行都读 stats.sessionWords，必须共用同一个标签与同一段口径说明
+      expect(screen.getAllByText(SESSION_WORDS_LABEL).length).toBeGreaterThan(0)
+      expect(screen.queryByText('本次码字')).toBeNull()
+      expect(screen.getAllByTitle(SESSION_WORDS_RULE).length).toBeGreaterThan(0)
+      unmount()
+    }
   })
 })

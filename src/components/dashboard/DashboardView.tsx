@@ -296,8 +296,11 @@ export const DashboardView: FC<DashboardViewProps> = ({
           <div className="flex items-center justify-between px-1">
             <div>
               <h3 className="text-[14px] font-semibold text-[var(--ink-text)]">码字活动</h3>
-              <p className="text-[12px] text-[var(--ink-text-faint)] mt-0.5">
-                今日产出 {data.todayWords.toLocaleString()} 字 · 全自动实时统计
+              <p
+                className="text-[12px] text-[var(--ink-text-faint)] mt-0.5"
+                title="优先取本机每日码字记录；某天没有记录时，按当天更新过的章节字数回填，所以导入或历史项目的数字会偏大。浮窗的「今日新增」另有口径：它记的是编辑器净增字数，粘贴不计。"
+              >
+                今日产出 {data.todayWords.toLocaleString()} 字 · 本机统计
               </p>
             </div>
             <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)]">
