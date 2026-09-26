@@ -125,9 +125,7 @@ describe('AiActivityCenter Component', () => {
     expect(screen.getByTestId('result-status-res-1')).toHaveTextContent('待审阅')
     expect(screen.getByTestId('result-status-res-2')).toHaveTextContent('已落盘')
     expect(screen.getByText('第1章连续性诊断')).toBeInTheDocument()
-    expect(screen.getByTestId('result-summary-res-1')).toHaveTextContent(
-      '发现 2 处潜在时间线冲突',
-    )
+    expect(screen.getByTestId('result-summary-res-1')).toHaveTextContent('发现 2 处潜在时间线冲突')
   })
 
   it('redacts credentials in result data', () => {
