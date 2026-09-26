@@ -4,7 +4,10 @@
  * 设计原则：
  *   - Apple HIG：所有动效必须有物理感（弹簧阻尼），不允许线性匀速
  *   - Notion：克制、不抢戏，动效服务于内容，而非展示自身
- *   - 可访问性：所有动效尊重 prefers-reduced-motion（motion 自动处理）
+ *   - 可访问性：reduced motion 由两层共同兜底——App 根的
+ *     `<MotionConfig reducedMotion="user">` 管 motion 驱动的位移动画，
+ *     index.css 的 `@media (prefers-reduced-motion: reduce)` 兜底表管 CSS 关键帧。
+ *     motion 不会自己读系统偏好，删掉 MotionConfig 这层就失效。
  *
  * 使用方式：
  *   import { spring, variants, transition } from '@/motion'

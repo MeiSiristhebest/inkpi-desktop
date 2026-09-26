@@ -952,6 +952,9 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* 只压时长不压循环次数会让 animate-spin / animate-ping 变成高频频闪，
+       对前庭不耐受的用户比原来的 1s 动效更难受，所以循环必须一并封掉。 */
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
