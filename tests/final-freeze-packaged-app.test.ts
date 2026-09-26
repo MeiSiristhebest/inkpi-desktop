@@ -85,11 +85,8 @@ const expectedSkillManifests = {
   'promise.md': 'promise',
   'timeline-consistency.md': 'timeline-consistency',
 } as const
-const expectedResourceFiles = [
-  'WebView2Loader.dll',
-  'libgcc_s_seh-1.dll',
-  'libwinpthread-1.dll',
-] as const
+// The supported release target is x86_64-pc-windows-msvc; GNU runtime DLLs are not bundled.
+const expectedResourceFiles = ['WebView2Loader.dll'] as const
 
 interface TauriBundleConfig {
   targets?: string[]
@@ -195,8 +192,6 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
     expect(config.bundle?.resources).toMatchObject({
       'binaries/skills': 'skills',
       'dlls/WebView2Loader.dll': 'WebView2Loader.dll',
-      'dlls/libgcc_s_seh-1.dll': 'libgcc_s_seh-1.dll',
-      'dlls/libwinpthread-1.dll': 'libwinpthread-1.dll',
     })
     expect(config.app?.windows?.[0]).toMatchObject({ label: 'main' })
 
