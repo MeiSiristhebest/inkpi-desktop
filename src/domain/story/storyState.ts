@@ -19,7 +19,7 @@ export interface StoryState {
   constraints: Record<string, StoryConstraint>
 }
 
-const STORY_COLLECTIONS = [
+export const STORY_COLLECTIONS = [
   'entities',
   'relations',
   'events',
@@ -113,6 +113,12 @@ export function withStoryRevision(state: StoryState, revision: number): StorySta
     throw new RangeError('Story revision must be a non-negative integer')
   }
   return { ...state, revision }
+}
+
+/** 集合条目总数：用于"本次请求携带多少设定事实"这类披露，不另建一份集合清单。 */
+export function countStoryRecords(state: StoryState | undefined): number {
+  if (!state) return 0
+  return STORY_COLLECTIONS.reduce((total, name) => total + Object.keys(state[name]).length, 0)
 }
 
 export function assertStoryState(state: StoryState): void {

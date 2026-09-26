@@ -9,6 +9,10 @@ import {
   CloudOff,
 } from 'lucide-react'
 import { AiActivityCenter } from './AiActivityCenter'
+import {
+  formatAssistantRequestScope,
+  type AssistantRequestScope,
+} from '../../ai/context/requestScope'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
 import type { StandardAiResult } from '../../types/aiResultLifecycle'
 import type { DomainSyncConflict } from '../../domain/sync/domainSyncService'
@@ -29,6 +33,8 @@ interface AiAssistantPanelProps {
   onInputChange: (value: string) => void
   onSend: () => void
   onClose: () => void
+  /** 发送前披露：随指令带出的本地内容，由会话状态机投影，面板只负责如实展示（P3.15） */
+  requestScope?: AssistantRequestScope
   initialTab?: 'chat' | 'activity'
   onTabChange?: (tab: 'chat' | 'activity') => void
   taskRecovery?: TaskRecoveryRecord[]
@@ -53,6 +59,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   onInputChange,
   onSend,
   onClose,
+  requestScope,
   initialTab = 'chat',
   onTabChange,
   taskRecovery = [],
@@ -215,6 +222,11 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           </div>
 
           <div className="shrink-0 p-2.5 border-t border-[var(--ink-border)]">
+            {requestScope && (
+              <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--ink-text-faint)]">
+                {formatAssistantRequestScope(requestScope)}
+              </p>
+            )}
             <div className="flex items-end gap-1.5">
               <input
                 type="text"

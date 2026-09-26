@@ -89,6 +89,7 @@ const ProjectEngine: FC<{
   setAiInput: (value: string) => void
   aiBusy: boolean
   sendAiPrompt: (prompt: string) => void
+  requestScope: import('./ai/context/requestScope').AssistantRequestScope
   runContinuityAudit: import('./hooks/useAiConversation').AiConversation['runContinuityAudit']
   runDeepReasoning: import('./hooks/useAiConversation').AiConversation['runDeepReasoning']
   runDistillationWorkflow: import('./hooks/useAiConversation').AiConversation['runDistillationWorkflow']
@@ -149,6 +150,7 @@ const ProjectEngine: FC<{
                     onInputChange={props.setAiInput}
                     onSend={() => props.sendAiPrompt(props.aiInput)}
                     onClose={onClose}
+                    requestScope={props.requestScope}
                     taskRecovery={props.taskRecovery}
                     results={props.results}
                     taskRecoveryLoading={props.taskRecoveryLoading}
@@ -260,6 +262,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     syncConflict,
     syncDomain,
     listArtifacts,
+    requestScope,
   } = ai
 
   const [results, setResults] = useState<StandardAiResult[]>([])
@@ -359,6 +362,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   setAiInput={setAiInput}
                   aiBusy={aiBusy}
                   sendAiPrompt={sendAiPrompt}
+                  requestScope={requestScope}
                   runContinuityAudit={runContinuityAudit}
                   runDeepReasoning={runDeepReasoning}
                   runDistillationWorkflow={runDistillationWorkflow}

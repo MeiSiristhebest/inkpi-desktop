@@ -209,4 +209,32 @@ describe('AiAssistantPanel Component', () => {
     fireEvent.click(screen.getByRole('button', { name: '副驾驶' }))
     expect(onTabChange).toHaveBeenCalledWith('chat')
   })
+
+  it('shows the pre-send request scope above the composer (P3.15)', () => {
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input="继续"
+        busy={false}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+        requestScope={{
+          hasChapter: true,
+          chapterTitle: '断谷之夜',
+          selectionChars: 12,
+          storyFactCount: 5,
+          historyTurns: 3,
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        '本次请求将发送：当前章节《断谷之夜》 · 选中文本 · 设定 5 项 · 上文 3 条对话',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('发送')).toBeInTheDocument()
+  })
 })

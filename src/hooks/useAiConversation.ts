@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { connectToDaemon } from '../core/daemonConnection'
 import { inkpiDaemonGateway } from '../adapters/inkpiDaemonGateway'
 import type { AiAssistant } from '../ports/aiGateway'
@@ -18,6 +18,11 @@ import {
   createDistillationTask,
 } from '../ai/tasks/taskFactories'
 import { taskResultText } from '../ai/tasks/pluginTasks'
+import {
+  ASSISTANT_HISTORY_TURN_LIMIT,
+  projectAssistantRequestScope,
+  type AssistantRequestScope,
+} from '../ai/context/requestScope'
 import { idGenerator } from '../adapters/idGenerator'
 import type { DomainSyncConflict, DomainSyncResult } from '../domain/sync/domainSyncService'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tasks/taskFactories'
@@ -161,6 +166,8 @@ export interface AiConversation {
   listArtifacts: (workspaceId: string) => Promise<AiArtifact[]>
   domainSyncState: DomainSyncState
   syncConflict?: DomainSyncConflict
+  /** 发送前披露：本次请求会随指令带出的本地内容（P3.15） */
+  requestScope: AssistantRequestScope
 }
 
 export interface UseAiConversationOptions {
@@ -635,6 +642,18 @@ export function useAiConversation(
     [activeWritingContext?.workspaceRevision, aiModel?.id, isConnected, runTrackedTask, storyState],
   )
 
+  // 发送前的请求范围披露：与 sendAiPrompt 读取同一份章节、选区、StoryState 与消息列表
+  const requestScope = useMemo(
+    () =>
+      projectAssistantRequestScope({
+        chapter: activeWritingContext?.chapter,
+        selection: activeWritingContext?.selection,
+        storyState,
+        historyMessages: aiMessages,
+      }),
+    [activeWritingContext?.chapter, activeWritingContext?.selection, storyState, aiMessages],
+  )
+
   const sendAiPrompt = useCallback(
     async (prompt: string, chapterId?: string) => {
       const trimmed = prompt.trim()
@@ -688,8 +707,8 @@ export function useAiConversation(
             ? activeWritingContext.chapter.semanticDocument
             : projectContent(targetChapterId, activeDocText, activeDocRevision)
 
-        // P1-5: 构造滚动多轮历史 turns (提取最近 6 轮历史)
-        const rollingHistory = newMessages.slice(-6)
+        // P1-5: 构造滚动多轮历史 turns，轮数上限与面板的发送前披露共用同一个常量
+        const rollingHistory = newMessages.slice(-ASSISTANT_HISTORY_TURN_LIMIT)
 
         const task = createAssistantTask({
           taskId: idGenerator.generate('assistant'),
@@ -1160,6 +1179,7 @@ export function useAiConversation(
     listArtifacts,
     domainSyncState,
     syncConflict,
+    requestScope,
   }
 }
 
