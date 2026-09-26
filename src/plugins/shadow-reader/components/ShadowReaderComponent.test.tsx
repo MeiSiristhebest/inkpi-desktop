@@ -17,6 +17,14 @@ describe('ShadowReader UI Components', () => {
     expect(screen.getByText(/读者弹幕哨兵/)).toBeDefined()
   })
 
+  it('没有活动章节时不伪造正文，也不允许归档弹幕', () => {
+    render(<ShadowReaderMasterView projectId="p1" />)
+
+    expect(screen.getByRole('textbox', { name: /章节正文推演区/ })).toHaveValue('')
+    expect(screen.queryByText(/长夜漫漫/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /存入项目弹幕库/ })).toBeDisabled()
+  })
+
   it('projects active chapter HTML into the local reader simulation', async () => {
     const chapter = {
       id: 'shadow-reader-chapter',
@@ -37,7 +45,10 @@ describe('ShadowReader UI Components', () => {
       </DesktopPluginHostProvider>,
     )
 
-    expect(screen.getAllByRole('textbox')[1]).toHaveValue('标题\n甲乙\n丙')
+    const textarea = screen.getByRole('textbox', { name: /章节正文推演区/ })
+    expect(textarea).toHaveValue('标题\n甲乙\n丙')
+    expect(screen.getByText(/当前章节：/)).toHaveTextContent('第一章')
+    expect(screen.getByRole('button', { name: /存入项目弹幕库/ })).toBeEnabled()
 
     const nextChapter = { ...chapter, id: 'shadow-reader-chapter-2', content: '<p>新章节。</p>' }
     view.rerender(
@@ -46,6 +57,6 @@ describe('ShadowReader UI Components', () => {
       </DesktopPluginHostProvider>,
     )
 
-    await waitFor(() => expect(screen.getAllByRole('textbox')[1]).toHaveValue('新章节。'))
+    await waitFor(() => expect(textarea).toHaveValue('新章节。'))
   })
 })
