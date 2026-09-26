@@ -129,6 +129,19 @@ describe('AiTab 添加面板（真实拉取/手动添加 + 目录预填 + 思考
   })
 })
 
+describe('AiTab 不展示未生效的选项（P3.14）', () => {
+  it('添加服务面板没有「接口协议格式」选择器：协议由所选供应商决定', () => {
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('自定义 AI 模型'))
+    fireEvent.click(screen.getByText('添加服务'))
+
+    // 反例锚点：面板确实渲染出来了，缺的这一项不是因为整页没打开。
+    expect(screen.getByPlaceholderText('https://api.example.com/v1')).toBeInTheDocument()
+    expect(screen.queryByText('接口协议格式')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /接口协议/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('AiTab 模型目录', () => {
   it('展示内置快照规模；「更新模型目录」重新拉取端点模型列表并记录更新时间', async () => {
     seedTwoProviders()

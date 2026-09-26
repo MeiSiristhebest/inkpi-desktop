@@ -51,7 +51,6 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
   const [name, setName] = useState(initialConfig?.name ?? '')
   const [baseUrl, setBaseUrl] = useState(initialConfig?.baseUrl ?? '')
   const [apiKey, setApiKey] = useState(initialConfig?.apiKey ?? '')
-  const [apiFormat, setApiFormat] = useState('OpenAI Chat Completions')
 
   // 测试连接状态
   const [testing, setTesting] = useState(false)
@@ -416,25 +415,6 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
             <span className="block text-[10.5px] text-[var(--ink-text-faint)] mt-1">
               留空则保留已保存的密钥；本地模型（如 Ollama）可免填。
             </span>
-          </div>
-          <div>
-            <label className={fieldLabel} htmlFor={`${uid}-api-format`}>
-              接口协议格式
-            </label>
-            <div className="relative">
-              <select
-                id={`${uid}-api-format`}
-                value={apiFormat}
-                onChange={(e) => setApiFormat(e.target.value)}
-                className={`${inputCls} appearance-none cursor-pointer`}
-              >
-                <option value="OpenAI Chat Completions">OpenAI Chat Completions (标准格式)</option>
-                <option value="Anthropic Messages">Anthropic Messages</option>
-                <option value="Google Generative AI">Google Generative AI</option>
-                <option value="OpenAI Codex Responses">OpenAI Codex Responses</option>
-              </select>
-              <ChevronDown className="w-4 h-4 text-[var(--ink-text-faint)] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
           </div>
         </div>
       </div>
