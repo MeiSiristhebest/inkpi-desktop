@@ -16,7 +16,7 @@ const renderSettings = (
   render(
     <SettingsProvider>
       <ThemeController />
-      <SettingsView open={props.open} onClose={props.onClose} {...props} />
+      <SettingsView {...props} />
     </SettingsProvider>,
   )
 

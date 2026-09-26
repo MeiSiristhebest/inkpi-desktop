@@ -52,9 +52,9 @@ const seed = async (pid: string, wordsByChapter: number[], recent: boolean = tru
 }
 
 afterEach(async () => {
-  for (const c of await db.getAll('chapters')) await db.delete('chapters', c.id)
-  for (const v of await db.getAll('volumes')) await db.delete('volumes', v.id)
-  for (const p of await db.getAll('projects')) await db.delete('projects', p.id)
+  for (const c of await db.getAll<ChapterRecord>('chapters')) await db.delete('chapters', c.id)
+  for (const v of await db.getAll<VolumeRecord>('volumes')) await db.delete('volumes', v.id)
+  for (const p of await db.getAll<ProjectRecord>('projects')) await db.delete('projects', p.id)
 })
 
 describe('projectService — 工作区聚合统计', () => {
@@ -140,7 +140,7 @@ describe('projectService — 移出作品库与永久删除是两条独立路径
     expect(archived.find((x) => x.id === p.id)?.archivedAt).toBeGreaterThan(0)
 
     // 关键：移出后持久化数据仍在真实 store 里，而不是被顺手清掉
-    expect((await db.getAll('projects')).find((x) => x.id === p.id)).toBeDefined()
+    expect((await db.getAll<ProjectRecord>('projects')).find((x) => x.id === p.id)).toBeDefined()
     expect(
       (await db.getAll<ChapterRecord>('chapters')).filter((c) => c.projectId === p.id),
     ).toHaveLength(chapters.filter((c) => c.projectId === p.id).length)
