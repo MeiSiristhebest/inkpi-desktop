@@ -29,6 +29,7 @@ import {
 } from '../../ai/orchestrator/distillationCheckpointStore'
 import { idGenerator } from '../../adapters/idGenerator'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
+import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
 import { buildDurableTaskId } from '../../types/durableTaskId'
 import {
   distillationReviewInbox,
@@ -83,7 +84,12 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   chapterMutation,
 }) => {
   const [tab, setTab] = useState<WorkflowTab>('audit')
-  const [selectedChapterId, setSelectedChapterId] = useState(chapters[0]?.id ?? '')
+  const activeWritingCtx = useOptionalActiveWritingContext()
+  const editorChapterId = activeWritingCtx?.chapter?.id
+  const userPickedChapterRef = useRef(false)
+  const [selectedChapterId, setSelectedChapterId] = useState(
+    editorChapterId ?? chapters[0]?.id ?? '',
+  )
   const [auditFindings, setAuditFindings] = useState<ContinuityFinding[]>([])
   const [auditDocument, setAuditDocument] = useState<SemanticDocument | null>(null)
   const [deepResult, setDeepResult] = useState<DeepReasoningResult | null>(null)
@@ -124,15 +130,21 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   }, [projectId])
 
   useEffect(() => {
-    if (!chapters.some((chapter) => chapter.id === selectedChapterId)) {
-      setSelectedChapterId(chapters[0]?.id ?? '')
-    }
-  }, [chapters, selectedChapterId])
+    // P1.1: one chapter pointer — the panel audits what the editor is showing until the author
+    // picks another chapter explicitly.
+    const inList = chapters.some((chapter) => chapter.id === selectedChapterId)
+    if (userPickedChapterRef.current && inList) return
+    const fallback =
+      editorChapterId && chapters.some((chapter) => chapter.id === editorChapterId)
+        ? editorChapterId
+        : (chapters[0]?.id ?? '')
+    if (!inList || selectedChapterId !== fallback) setSelectedChapterId(fallback)
+  }, [chapters, selectedChapterId, editorChapterId])
 
   useEffect(() => () => activeController.current?.abort(), [])
 
   const selectedChapter = useMemo(
-    () => chapters.find((chapter) => chapter.id === selectedChapterId) ?? chapters[0],
+    () => chapters.find((chapter) => chapter.id === selectedChapterId),
     [chapters, selectedChapterId],
   )
   const synopsisOfSelectedChapter =
@@ -513,7 +525,10 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         <select
           aria-label="选择章节"
           value={selectedChapterId}
-          onChange={(event) => setSelectedChapterId(event.target.value)}
+          onChange={(event) => {
+            userPickedChapterRef.current = true
+            setSelectedChapterId(event.target.value)
+          }}
           className="mb-2 w-full rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs"
         >
           {chapters.map((chapter) => (

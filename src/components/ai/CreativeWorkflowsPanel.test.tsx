@@ -2,6 +2,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord } from '../../types'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
+import { ActiveWritingContextProvider } from '../../core/activeWritingContext'
+import type { ContinuityAuditTaskInput } from '../../ai/tasks/taskFactories'
+import type { ContinuityFinding } from '../../ai/results/taskResults'
 import type {
   DistillationWorkflowOptions,
   DistillationWorkflowResult,
@@ -681,5 +684,92 @@ describe('CreativeWorkflowsPanel', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('CAS Conflict'))
     expect(screen.getByTestId('chapter-synopsis')).toHaveTextContent('旧梗概')
+  })
+})
+
+describe('CreativeWorkflowsPanel 的活动章节指针', () => {
+  const first: ChapterRecord = {
+    id: 'chapter-1',
+    projectId: 'project-1',
+    volumeId: 'volume-1',
+    title: '第一章',
+    order: 1,
+    content: '<p>雨停后，她没有回头。</p>',
+    wordCount: 10,
+    revision: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  }
+  const second: ChapterRecord = { ...first, id: 'chapter-2', title: '第二章', order: 2 }
+  const third: ChapterRecord = {
+    ...first,
+    id: 'chapter-3',
+    title: '第三章',
+    order: 3,
+    content: '<p>剑折了，她依然没有回头。</p>',
+  }
+  const hierarchy = [first, second, third]
+
+  function makeAudit() {
+    return vi.fn(async (_input: ContinuityAuditTaskInput): Promise<ContinuityFinding[]> => [])
+  }
+
+  function Harness({
+    writingChapter,
+    audit,
+  }: {
+    writingChapter: ChapterRecord
+    audit: (input: ContinuityAuditTaskInput) => Promise<ContinuityFinding[] | null>
+  }) {
+    return (
+      <ActiveWritingContextProvider workspaceId="project-1" initialChapter={writingChapter}>
+        <CreativeWorkflowsPanel
+          projectId="project-1"
+          chapters={hierarchy}
+          connected
+          onContinuityAudit={audit}
+          onDeepReasoning={vi.fn()}
+          onDistillationWorkflow={vi.fn()}
+          onSteerTask={vi.fn()}
+        />
+      </ActiveWritingContextProvider>
+    )
+  }
+
+  it('把「审计当前章节」指向编辑器里正在写的章节，而不是层级里的第一章', async () => {
+    const audit = makeAudit()
+    render(<Harness writingChapter={third} audit={audit} />)
+
+    expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-3')
+    fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
+
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    expect(audit.mock.calls[0][0].document.text).toContain('剑折了')
+  })
+
+  it('跟随编辑器翻页，直到作者自己改过章节下拉框', async () => {
+    const audit = makeAudit()
+    const { rerender } = render(<Harness writingChapter={first} audit={audit} />)
+    expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-1')
+
+    rerender(<Harness writingChapter={second} audit={audit} />)
+    await waitFor(() => expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-2'))
+
+    fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    expect(audit.mock.calls[0][0].document.text).toContain('她没有回头')
+  })
+
+  it('作者手动选定的章节不会被编辑器的翻页抢回去', async () => {
+    const audit = makeAudit()
+    const { rerender } = render(<Harness writingChapter={first} audit={audit} />)
+
+    fireEvent.change(screen.getByLabelText('选择章节'), { target: { value: 'chapter-3' } })
+    rerender(<Harness writingChapter={second} audit={audit} />)
+
+    expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-3')
+    fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    expect(audit.mock.calls[0][0].document.text).toContain('剑折了')
   })
 })

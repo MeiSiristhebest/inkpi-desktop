@@ -17,8 +17,8 @@ import {
   ActiveWritingContextProvider,
   useOptionalActiveWritingContext,
 } from './core/activeWritingContext'
+import { resolveActiveChapter } from './core/activeChapterResolution'
 import type { ReactNode } from 'react'
-import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
 import { inspectorPanelFor } from './types/inspectorState'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
@@ -54,18 +54,7 @@ const ProjectWorkspace: FC<{
 }) => {
   const { chapters, volumes, reloadChapters } = useProjectData()
   const activeWritingCtx = useOptionalActiveWritingContext()
-  const matchingChapter =
-    activeWritingCtx?.chapter && chapters.find((c) => c.id === activeWritingCtx.chapter?.id)
-
-  // P0-4: 将 ActiveWritingContext 中最新的 content/revision 注入，确保 PluginHost 拿到最新权威正文
-  const authoritativeActiveChapter: ChapterRecord | null = matchingChapter
-    ? {
-        ...matchingChapter,
-        content: activeWritingCtx.chapter?.content ?? matchingChapter.content,
-        wordCount: activeWritingCtx.chapter?.wordCount ?? matchingChapter.wordCount,
-        revision: activeWritingCtx.chapter?.revision ?? matchingChapter.revision,
-      }
-    : chapters[0] || null
+  const authoritativeActiveChapter = resolveActiveChapter(chapters, activeWritingCtx?.chapter)
 
   return (
     <DesktopPluginHostProvider
