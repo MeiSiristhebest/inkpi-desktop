@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react'
-import { useId, type ReactNode } from 'react'
+import { createContext, useContext, useId, type ReactNode } from 'react'
 import { spring, gesture, variants } from '../../motion'
 
 // ── 排版常量（所有设置页共用，不得私造）─────────────────────────────────────
@@ -34,25 +34,37 @@ export const Section = ({ title, desc, children }: SectionProps) => (
 )
 
 // ── Row ───────────────────────────────────────────────────────────────────────
+// Row 的可见文字是设置页里控件唯一的名称来源。若只作为兄弟节点渲染，读屏器在
+// 焦点落到 Switch / Slider / Segmented 时只会念出「开关」「滑块」而没有任何语义，
+// 因此 Row 把 label 元素的 id 通过 context 下发，由这些控件自动 aria-labelledby 指回它。
+const RowLabelIdContext = createContext<string | undefined>(undefined)
+
 export interface RowProps {
   label: string
   hint?: string
   children: ReactNode
 }
 
-export const Row = ({ label, hint, children }: RowProps) => (
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5">
-    <div className="min-w-0 flex-1 sm:pr-4">
-      <div className="text-[13px] text-[var(--ink-text)] font-medium">{label}</div>
-      {hint && (
-        <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5 leading-relaxed">
-          {hint}
+export const Row = ({ label, hint, children }: RowProps) => {
+  const labelId = useId()
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5">
+      <div className="min-w-0 flex-1 sm:pr-4">
+        <div id={labelId} className="text-[13px] text-[var(--ink-text)] font-medium">
+          {label}
         </div>
-      )}
+        {hint && (
+          <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5 leading-relaxed">
+            {hint}
+          </div>
+        )}
+      </div>
+      <div className="shrink-0 flex items-center sm:justify-end w-full sm:w-auto">
+        <RowLabelIdContext.Provider value={labelId}>{children}</RowLabelIdContext.Provider>
+      </div>
     </div>
-    <div className="shrink-0 flex items-center sm:justify-end w-full sm:w-auto">{children}</div>
-  </div>
-)
+  )
+}
 
 // ── Segmented ─────────────────────────────────────────────────────────────────
 // 使用 motion 的 layoutId 实现选中指示器的平滑滑动（自动隔离实例，避免跨组件乱飞）
@@ -75,6 +87,8 @@ export const Segmented = <T extends string | number>({
 }: SegmentedProps<T>) => {
   const autoId = useId()
   const activeLayoutId = layoutId || `segmented-active-${autoId}`
+  // 没有显式 aria-label 时回退到所在 Row 的可见标题，否则读屏器只会念出「分组」
+  const rowLabelId = useContext(RowLabelIdContext)
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const currentIndex = options.findIndex((o) => o.v === value)
@@ -102,6 +116,7 @@ export const Segmented = <T extends string | number>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-labelledby={ariaLabel ? undefined : rowLabelId}
       className="relative flex flex-wrap gap-0 p-1 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] max-w-full"
       onKeyDown={handleKeyDown}
     >
@@ -156,19 +171,24 @@ export const Slider = ({
   onChange,
   ariaLabel,
   ariaValueText,
-}: SliderProps) => (
-  <input
-    type="range"
-    min={min}
-    max={max}
-    step={step}
-    value={value}
-    onChange={(e) => onChange(Number(e.target.value))}
-    aria-label={ariaLabel}
-    aria-valuetext={ariaValueText ?? String(value)}
-    className="w-48 sm:w-56 accent-[var(--ink-accent)] cursor-pointer"
-  />
-)
+}: SliderProps) => {
+  // 同 Segmented：调用点没给显式名称时，用所在 Row 的可见标题兜住
+  const rowLabelId = useContext(RowLabelIdContext)
+  return (
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabel ? undefined : rowLabelId}
+      aria-valuetext={ariaValueText ?? String(value)}
+      className="w-48 sm:w-56 accent-[var(--ink-accent)] cursor-pointer"
+    />
+  )
+}
 
 // ── Switch ────────────────────────────────────────────────────────────────────
 // 真正的 motion 弹簧驱动：底座颜色 + 圆形滑块位移均有物理弹簧
@@ -182,27 +202,38 @@ export interface SwitchProps {
   label?: string
 }
 
-export const Switch = ({ checked, onChange, ariaLabel, label }: SwitchProps) => (
-  <div className="inline-flex items-center gap-2">
-    <motion.button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel}
-      onClick={() => onChange(!checked)}
-      {...gesture.button}
-      className={`relative w-10 h-5.5 rounded-full cursor-pointer select-none flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-accent)] ${checked ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'}`}
-      style={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      <motion.span
-        animate={{ x: checked ? 18 : 0 }}
-        transition={spring.snappy}
-        className="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-xs"
-      />
-    </motion.button>
-    {label && <span className="text-[12.5px] text-[var(--ink-text)] select-none">{label}</span>}
-  </div>
-)
+export const Switch = ({ checked, onChange, ariaLabel, label }: SwitchProps) => {
+  const rowLabelId = useContext(RowLabelIdContext)
+  const ownLabelId = useId()
+  // 名称优先级：显式 aria-label > 紧贴开关的可见文字 > 所在 Row 的标题
+  const labelledBy = ariaLabel ? undefined : label ? ownLabelId : rowLabelId
+  return (
+    <div className="inline-flex items-center gap-2">
+      <motion.button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={ariaLabel}
+        aria-labelledby={labelledBy}
+        onClick={() => onChange(!checked)}
+        {...gesture.button}
+        className={`relative w-10 h-5.5 rounded-full cursor-pointer select-none flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink-accent)] ${checked ? 'bg-[var(--ink-accent)]' : 'bg-[var(--ink-border-strong)]'}`}
+        style={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        <motion.span
+          animate={{ x: checked ? 18 : 0 }}
+          transition={spring.snappy}
+          className="absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-xs"
+        />
+      </motion.button>
+      {label && (
+        <span id={ownLabelId} className="text-[12.5px] text-[var(--ink-text)] select-none">
+          {label}
+        </span>
+      )}
+    </div>
+  )
+}
 
 // ── PrimaryButton ─────────────────────────────────────────────────────────────
 export interface PrimaryButtonProps {

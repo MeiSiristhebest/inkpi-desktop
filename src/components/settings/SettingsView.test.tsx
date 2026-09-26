@@ -22,6 +22,32 @@ const renderSettings = (
 
 const readStored = () => JSON.parse(localStorage.getItem('inkpi-settings') || '{}')
 
+// 与读屏器一致的兜底算法：显式 aria-label > aria-labelledby 指向的文本 > 包裹式 label >
+// label[for] 关联。只断言「视觉上有相邻文字」不算通过，那正是 P4.4 点名的反例。
+const accessibleName = (el: Element): string => {
+  const direct = el.getAttribute('aria-label')
+  if (direct) return direct.trim()
+  const byId = el.getAttribute('aria-labelledby')
+  if (byId) {
+    const text = byId
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ')
+      .trim()
+    if (text) return text
+  }
+  const wrapper = el.closest('label')
+  if (wrapper?.textContent?.trim()) return wrapper.textContent.trim()
+  const elId = el.getAttribute('id')
+  if (elId) {
+    // 逐个比对而不是拼选择器：useId 生成的 id 含冒号，拼进 querySelector 会抛语法错
+    for (const lab of Array.from(document.querySelectorAll('label[for]'))) {
+      if (lab.getAttribute('for') === elId && lab.textContent?.trim()) return lab.textContent.trim()
+    }
+  }
+  return ''
+}
+
 beforeEach(async () => {
   localStorage.clear()
   // 清空 IDB 镜像，避免跨测试串扰
@@ -138,6 +164,27 @@ describe('SettingsView', () => {
     fireEvent.click(screen.getByText('关于'))
     expect(screen.getByText('内置功能一览')).toBeInTheDocument()
     expect(screen.getByText('统一设置中心')).toBeInTheDocument()
+  })
+
+  it('每个设置标签下的控件都能被读屏器念出名称（P4.4）', () => {
+    const { container } = renderSettings({ open: true, onClose: vi.fn() })
+    let visited = 0
+    // 只覆盖真正承载表单控件的标签：快捷键/关于是只读清单，插件管理渲染的是动作按钮，
+    // 三者都不含 input/select/switch，纳入门控只会变成空转断言。
+    for (const tab of ['外观', '编辑器', '写作与习惯', '连接']) {
+      fireEvent.click(screen.getByText(tab))
+      for (const el of container.querySelectorAll<HTMLElement>(
+        'input, select, textarea, [role="switch"], [role="radiogroup"]',
+      )) {
+        visited += 1
+        expect(
+          accessibleName(el),
+          `${tab} 下存在无名控件：${el.outerHTML.slice(0, 120)}`,
+        ).toBeTruthy()
+      }
+    }
+    // 实测覆盖 26 个控件；下限只防门控空转（例如标签名写错导致一个控件都没遍历到）
+    expect(visited).toBeGreaterThanOrEqual(20)
   })
 
   it('关闭按钮触发 onClose', () => {

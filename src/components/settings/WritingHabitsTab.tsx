@@ -79,6 +79,7 @@ export const WritingHabitsTab: React.FC<{
           hint="内容达到指定视口高度时开始平滑滚屏"
         >
           <select
+            aria-label="滚屏触发高度"
             value={config.scrollThreshold}
             onChange={(e) => updateConfig({ scrollThreshold: e.target.value })}
             className="px-2.5 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs"
@@ -124,6 +125,7 @@ export const WritingHabitsTab: React.FC<{
         <Row label="高亮触发范围与呈现样式">
           <div className="flex items-center gap-2 text-xs">
             <select
+              aria-label="高亮触发范围"
               value={config.highlightOccurrence}
               onChange={(e) =>
                 updateConfig({ highlightOccurrence: e.target.value as 'first' | 'all' })
@@ -134,6 +136,7 @@ export const WritingHabitsTab: React.FC<{
               <option value="all">全部出现</option>
             </select>
             <select
+              aria-label="高亮呈现样式"
               value={config.highlightStyle}
               onChange={(e) =>
                 updateConfig({ highlightStyle: e.target.value as 'underline' | 'badge' })
@@ -174,6 +177,7 @@ export const WritingHabitsTab: React.FC<{
       <Section title="健康与节奏提醒">
         <Row label="久坐提醒" hint="连续码字达到设定时长后弹出柔和休息提示">
           <select
+            aria-label="久坐提醒触发时长"
             value={config.sedentaryMinutes}
             onChange={(e) => updateConfig({ sedentaryMinutes: e.target.value })}
             className="px-2.5 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs"
@@ -188,6 +192,7 @@ export const WritingHabitsTab: React.FC<{
             <span className="text-[var(--ink-text-muted)]">每满</span>
             <input
               type="number"
+              aria-label="分章提示的每满字数"
               value={config.chapterTargetWord}
               onChange={(e) => updateConfig({ chapterTargetWord: e.target.value })}
               className="w-16 px-2 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-center text-xs tabular-nums"

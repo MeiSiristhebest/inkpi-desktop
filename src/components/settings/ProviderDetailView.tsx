@@ -1,4 +1,4 @@
-import { useState, useMemo, type FC } from 'react'
+import { useId, useState, useMemo, type FC } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { Search, RefreshCw, Plus, X, ChevronDown, Check, ArrowLeft } from 'lucide-react'
 import {
@@ -39,6 +39,8 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
   onTest,
 }) => {
   const isEditing = Boolean(initialConfig?.id)
+  // 字段 id 前缀：视觉 label 必须真正关联到控件，否则读屏器只报出「combo box」而无名称
+  const uid = useId()
 
   const [service, setService] = useState<string>(() => {
     if (initialConfig?.provider && initialConfig.provider !== 'custom') {
@@ -339,9 +341,12 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
       <div className="rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-5 space-y-4 shadow-2xs">
         {/* 服务类型选择 */}
         <div>
-          <label className={fieldLabel}>服务提供商</label>
+          <label className={fieldLabel} htmlFor={`${uid}-service`}>
+            服务提供商
+          </label>
           <div className="relative">
             <select
+              id={`${uid}-service`}
               value={service}
               onChange={(e) => {
                 const s = e.target.value
@@ -367,8 +372,11 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
         {/* 名称 与 接口地址 */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={fieldLabel}>服务显示名称</label>
+            <label className={fieldLabel} htmlFor={`${uid}-name`}>
+              服务显示名称
+            </label>
             <input
+              id={`${uid}-name`}
               type="text"
               value={name}
               placeholder="例如 我的主力模型"
@@ -377,8 +385,11 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
             />
           </div>
           <div>
-            <label className={fieldLabel}>API Base URL 接口地址</label>
+            <label className={fieldLabel} htmlFor={`${uid}-base-url`}>
+              API Base URL 接口地址
+            </label>
             <input
+              id={`${uid}-base-url`}
               type="text"
               value={baseUrl}
               placeholder="https://api.example.com/v1"
@@ -391,8 +402,11 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
         {/* API 密钥 与 接口格式 */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={fieldLabel}>API Key 接口密钥</label>
+            <label className={fieldLabel} htmlFor={`${uid}-api-key`}>
+              API Key 接口密钥
+            </label>
             <input
+              id={`${uid}-api-key`}
               type="password"
               value={apiKey}
               placeholder={isEditing ? '留空则保留已保存的密钥' : 'sk-...'}
@@ -404,9 +418,12 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
             </span>
           </div>
           <div>
-            <label className={fieldLabel}>接口协议格式</label>
+            <label className={fieldLabel} htmlFor={`${uid}-api-format`}>
+              接口协议格式
+            </label>
             <div className="relative">
               <select
+                id={`${uid}-api-format`}
                 value={apiFormat}
                 onChange={(e) => setApiFormat(e.target.value)}
                 className={`${inputCls} appearance-none cursor-pointer`}
@@ -456,6 +473,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
               <Search className="w-3.5 h-3.5 text-[var(--ink-text-faint)] absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
+                aria-label="搜索模型 ID"
                 value={modelSearch}
                 onChange={(e) => setModelSearch(e.target.value)}
                 placeholder="搜索模型 ID..."
@@ -621,8 +639,11 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                           className="pt-2 border-t border-[var(--ink-border)]/60 space-y-3 text-[11.5px] animate-ink-fade-in"
                         >
                           <div>
-                            <label className={fieldLabel}>模型别名</label>
+                            <label className={fieldLabel} htmlFor={`${uid}-alias-${modelId}`}>
+                              模型别名
+                            </label>
                             <input
+                              id={`${uid}-alias-${modelId}`}
                               type="text"
                               value={override.alias ?? ''}
                               placeholder="例如 fast"
@@ -638,8 +659,11 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
 
                           <div className="grid grid-cols-2 gap-2.5">
                             <div>
-                              <label className={fieldLabel}>上下文窗口 (tokens)</label>
+                              <label className={fieldLabel} htmlFor={`${uid}-context-${modelId}`}>
+                                上下文窗口 (tokens)
+                              </label>
                               <input
+                                id={`${uid}-context-${modelId}`}
                                 type="number"
                                 value={ctxVal ?? ''}
                                 placeholder={
@@ -660,8 +684,11 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                               />
                             </div>
                             <div>
-                              <label className={fieldLabel}>最大输出 (tokens)</label>
+                              <label className={fieldLabel} htmlFor={`${uid}-max-${modelId}`}>
+                                最大输出 (tokens)
+                              </label>
                               <input
+                                id={`${uid}-max-${modelId}`}
                                 type="number"
                                 value={maxVal ?? ''}
                                 placeholder={
@@ -783,9 +810,12 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
 
           {/* 添加自定义模型 */}
           <div className="mt-3 pt-3 border-t border-[var(--ink-border)] shrink-0">
-            <label className={fieldLabel}>自定义模型 ID</label>
+            <label className={fieldLabel} htmlFor={`${uid}-custom-model`}>
+              自定义模型 ID
+            </label>
             <div className="flex gap-2">
               <input
+                id={`${uid}-custom-model`}
                 type="text"
                 value={customModelInput}
                 placeholder="输入模型 ID，如 my-model-v2"
