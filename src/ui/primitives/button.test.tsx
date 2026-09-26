@@ -34,6 +34,12 @@ describe('Button 门面', () => {
   })
 
   it('门面只导出 InkPi 自己的组件名，不泄漏引擎符号', () => {
-    expect(Object.keys(facade).sort()).toEqual(['Button', 'buttonVariants'])
+    expect(Object.keys(facade).sort()).toEqual([
+      'Button',
+      'Select',
+      'Tooltip',
+      'TooltipProvider',
+      'buttonVariants',
+    ])
   })
 })

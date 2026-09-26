@@ -27,6 +27,7 @@ import type { StandardAiResult } from './types/aiResultLifecycle'
 import type { PluginWorkflowOutcome } from './types/pluginHost'
 import { artifactEvents } from './ports/artifactEvents'
 import { proposalStateEvents } from './ports/proposalStateEvents'
+import { TooltipProvider } from './ui/primitives'
 import { useState, useEffect } from 'react'
 
 const ProjectWorkspace: FC<{
@@ -389,7 +390,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
   )
 
   return (
-    <>
+    <TooltipProvider>
       {content}
       {activeProjectId && (
         <TaskRecoveryPanel
@@ -402,7 +403,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
           onDismiss={dismissTask}
         />
       )}
-    </>
+    </TooltipProvider>
   )
 }
 

@@ -19,6 +19,22 @@ const ENGINE_PATTERN = /from\s+['"]@base-ui\/react/
 /** shadcn 生成器会把 cn 写成裸包名；本项目的 cn 只有一个来源，就是 src/lib/utils。 */
 const BARE_CN_PATTERN = /from\s+['"]cn['"]/
 
+/**
+ * 引擎在运行时写到 Positioner 内联样式上的定位变量（实测自 @base-ui/react 1.8.0 产物），
+ * 不由 src/index.css 定义，因此不能按"未定义令牌"计。
+ */
+const RUNTIME_VARS = new Set([
+  '--available-height',
+  '--available-width',
+  '--anchor-height',
+  '--anchor-width',
+  '--popup-height',
+  '--popup-width',
+  '--positioner-height',
+  '--positioner-width',
+  '--transform-origin',
+])
+
 const toPosix = (file: string) => relative(root, file).split(sep).join('/')
 
 function walk(dir: string): string[] {
@@ -63,7 +79,9 @@ describe('UI 门面边界守卫', () => {
     const defined = new Set([...tokens.matchAll(/(--[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]))
     const violations: string[] = []
     for (const file of sources.filter((f) => f.path.startsWith(`${BOUNDARY}/`))) {
-      for (const match of file.text.matchAll(/var\(\s*(--[a-zA-Z0-9-]+)/g)) {
+      // 一条模式覆盖两种写法：CSS 的 var(--x) 与 Tailwind v4 任意值简写 w-(--x)，
+      // 因为两者都必然出现 `(--`。
+      for (const match of file.text.matchAll(/\(\s*(--[a-zA-Z0-9-]+)/g)) {
         const name = match[1]
         // @theme inline 把值内联进工具类，--color-* 从不落到产物里；
         // shadcn 调色板变量（--secondary / --foreground …）在本项目也不存在。
@@ -71,7 +89,8 @@ describe('UI 门面边界守卫', () => {
           violations.push(`${file.path}: ${name}（@theme inline 不输出该变量）`)
           continue
         }
-        if (defined.has(name) || name.startsWith('--radius-')) continue
+        // Tailwind 默认主题在引用时输出 --radius-*；引擎在运行时自己写上定位变量。
+        if (defined.has(name) || name.startsWith('--radius-') || RUNTIME_VARS.has(name)) continue
         violations.push(`${file.path}: ${name}（src/index.css 未定义）`)
       }
     }
