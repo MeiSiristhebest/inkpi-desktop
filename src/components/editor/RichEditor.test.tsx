@@ -982,7 +982,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-status-ctx" />)
     const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     fireEvent.contextMenu(chItem)
-    const doneBtn = screen.getByRole('button', { name: '已发布' })
+    const doneBtn = screen.getByRole('menuitemradio', { name: '状态：已发布' })
     await act(async () => {
       fireEvent.click(doneBtn)
     })

@@ -1,5 +1,6 @@
 import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useId, useState, useEffect, useMemo, type FC } from 'react'
+import { Modal } from '../../../ui/molecules/Modal'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { NarrativeThread, TimelineNode, NarrativeConflict } from '../types'
 import { causalEngine } from '../engine/CausalEngine'
@@ -393,6 +394,7 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
   onCancel,
 }) => {
   const [eventTitle, setEventTitle] = useState(node.eventTitle || '')
+  const titleId = useId()
   const [threadId, setThreadId] = useState(node.threadId || threads[0]?.id || '')
   const [chapterOrder, setChapterOrder] = useState(node.chapterOrder ?? 1)
   const [summary, setSummary] = useState(node.summary || '')
@@ -427,171 +429,173 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ink-border)]">
-          <h3 className="font-semibold text-sm text-[var(--ink-text)]">
-            {node.id ? '编辑时空大纲事件' : '新建大纲事件节点'}
-          </h3>
-          <button
-            onClick={onCancel}
-            className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <Modal
+      onClose={onCancel}
+      ariaLabelledBy={titleId}
+      widthClass="max-w-md"
+      panelClassName="bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col text-xs text-[var(--ink-text)]"
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ink-border)] shrink-0">
+        <h3 id={titleId} className="font-semibold text-sm text-[var(--ink-text)]">
+          {node.id ? '编辑时空大纲事件' : '新建大纲事件节点'}
+        </h3>
+        <button
+          onClick={onCancel}
+          aria-label="关闭"
+          className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="p-4 space-y-3 overflow-y-auto max-h-[80vh]">
+        <div>
+          <label className="block text-[var(--ink-text-muted)] mb-1">
+            事件标题 <span className="text-rose-400">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={eventTitle}
+            onChange={(e) => setEventTitle(e.target.value)}
+            placeholder="如：断界渊试炼突破"
+            className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-3 overflow-y-auto max-h-[80vh]">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">
-              事件标题 <span className="text-rose-400">*</span>
-            </label>
+            <label className="block text-[var(--ink-text-muted)] mb-1">所属叙事线</label>
+            <select
+              value={threadId}
+              onChange={(e) => setThreadId(e.target.value)}
+              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+            >
+              {threads.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[var(--ink-text-muted)] mb-1">发生章节 (X轴)</label>
             <input
-              type="text"
-              required
-              value={eventTitle}
-              onChange={(e) => setEventTitle(e.target.value)}
-              placeholder="如：断界渊试炼突破"
+              type="number"
+              min="1"
+              value={chapterOrder}
+              onChange={(e) => setChapterOrder(Number(e.target.value))}
               className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
             />
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">所属叙事线</label>
-              <select
-                value={threadId}
-                onChange={(e) => setThreadId(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              >
-                {threads.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">发生章节 (X轴)</label>
-              <input
-                type="number"
-                min="1"
-                value={chapterOrder}
-                onChange={(e) => setChapterOrder(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              />
-            </div>
-          </div>
+        <div>
+          <label className="block text-[var(--ink-text-muted)] mb-1">
+            事件摘要 (供 AI 提取情境)
+          </label>
+          <textarea
+            rows={2}
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            placeholder="一句话阐述核心冲突与情境..."
+            className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none resize-none"
+          />
+        </div>
 
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">
-              事件摘要 (供 AI 提取情境)
-            </label>
-            <textarea
-              rows={2}
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="一句话阐述核心冲突与情境..."
-              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none resize-none"
+            <label className="block text-[var(--ink-text-muted)] mb-1">因果演变走向</label>
+            <input
+              type="text"
+              value={causalOutcome}
+              onChange={(e) => setCausalOutcome(e.target.value)}
+              placeholder="如：宗门势力介入"
+              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">因果演变走向</label>
-              <input
-                type="text"
-                value={causalOutcome}
-                onChange={(e) => setCausalOutcome(e.target.value)}
-                placeholder="如：宗门势力介入"
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">
-                情感张力 (-1.0 ~ +1.0)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="-1"
-                max="1"
-                value={emotionalPolarity}
-                onChange={(e) => setEmotionalPolarity(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              />
-            </div>
-          </div>
-
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">
-              前置依赖事件 (DAG 因果约束)
+              情感张力 (-1.0 ~ +1.0)
             </label>
-            <div className="max-h-28 overflow-y-auto border border-[var(--ink-border)] rounded bg-[var(--ink-bg-canvas)] p-1.5 space-y-1">
-              {availablePreNodes.length === 0 ? (
-                <div className="text-[var(--ink-text-faint)] py-2 text-center">
-                  暂无其他可选节点
-                </div>
-              ) : (
-                availablePreNodes.map((pn) => {
-                  const checked = prerequisites.includes(pn.id)
-                  return (
-                    <label
-                      key={pn.id}
-                      className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-[var(--ink-bg-hover)] cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setPrerequisites((prev) => [...prev, pn.id])
-                          } else {
-                            setPrerequisites((prev) => prev.filter((id) => id !== pn.id))
-                          }
-                        }}
-                      />
-                      <span className="truncate">
-                        第 {pn.chapterOrder} 章：{pn.eventTitle}
-                      </span>
-                    </label>
-                  )
-                })
-              )}
-            </div>
+            <input
+              type="number"
+              step="0.1"
+              min="-1"
+              max="1"
+              value={emotionalPolarity}
+              onChange={(e) => setEmotionalPolarity(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+            />
           </div>
+        </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-[var(--ink-border)]">
-            {node.id ? (
-              <button
-                type="button"
-                onClick={() => onDelete(node.id!)}
-                className="px-3 py-1.5 rounded text-rose-400 hover:bg-rose-500/10 flex items-center gap-1"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> 删除
-              </button>
+        <div>
+          <label className="block text-[var(--ink-text-muted)] mb-1">
+            前置依赖事件 (DAG 因果约束)
+          </label>
+          <div className="max-h-28 overflow-y-auto border border-[var(--ink-border)] rounded bg-[var(--ink-bg-canvas)] p-1.5 space-y-1">
+            {availablePreNodes.length === 0 ? (
+              <div className="text-[var(--ink-text-faint)] py-2 text-center">暂无其他可选节点</div>
             ) : (
-              <div />
+              availablePreNodes.map((pn) => {
+                const checked = prerequisites.includes(pn.id)
+                return (
+                  <label
+                    key={pn.id}
+                    className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-[var(--ink-bg-hover)] cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPrerequisites((prev) => [...prev, pn.id])
+                        } else {
+                          setPrerequisites((prev) => prev.filter((id) => id !== pn.id))
+                        }
+                      }}
+                    />
+                    <span className="truncate">
+                      第 {pn.chapterOrder} 章：{pn.eventTitle}
+                    </span>
+                  </label>
+                )
+              })
             )}
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onCancel}
-                className="px-3 py-1.5 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-              >
-                取消
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-1.5 rounded bg-[var(--ink-accent)] text-white hover:opacity-90 flex items-center gap-1"
-              >
-                <Check className="w-3.5 h-3.5" /> 保存事件
-              </button>
-            </div>
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-[var(--ink-border)]">
+          {node.id ? (
+            <button
+              type="button"
+              onClick={() => onDelete(node.id!)}
+              className="px-3 py-1.5 rounded text-rose-400 hover:bg-rose-500/10 flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> 删除
+            </button>
+          ) : (
+            <div />
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-3 py-1.5 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-1.5 rounded bg-[var(--ink-accent)] text-white hover:opacity-90 flex items-center gap-1"
+            >
+              <Check className="w-3.5 h-3.5" /> 保存事件
+            </button>
+          </div>
+        </div>
+      </form>
+    </Modal>
   )
 }

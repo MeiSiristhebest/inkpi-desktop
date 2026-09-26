@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { useState } from 'react'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { Modal } from './Modal'
 
@@ -101,5 +102,50 @@ describe('Modal primitive', () => {
     )
     fireEvent.click(document.querySelector('.fixed.inset-0')!)
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('keeps the user focus when the host re-renders with a new onClose identity', () => {
+    // 消费方几乎都传内联箭头函数，宿主每次重渲染都是新引用；
+    // 若焦点契约依赖 onClose，用户在弹窗里换过控件后会被抢回首项。
+    const Host = () => {
+      const [, bump] = useState(0)
+      return (
+        <>
+          <button type="button" onClick={() => bump((n) => n + 1)}>
+            宿主重渲染
+          </button>
+          <Modal onClose={() => {}}>
+            <input aria-label="名称" />
+            <button type="button">下游控件</button>
+          </Modal>
+        </>
+      )
+    }
+    render(<Host />)
+    expect(document.activeElement).toBe(screen.getByLabelText('名称'))
+
+    const downstream = screen.getByRole('button', { name: '下游控件' })
+    downstream.focus()
+    expect(document.activeElement).toBe(downstream)
+
+    fireEvent.click(screen.getByRole('button', { name: '宿主重渲染' }))
+    expect(document.activeElement).toBe(downstream)
+  })
+
+  it('docks the panel to the right edge with placement="right"', () => {
+    render(
+      <Modal onClose={vi.fn()} placement="right" widthClass="w-[500px]" ariaLabelledBy="t">
+        <p>Drawer body</p>
+      </Modal>,
+    )
+    const overlay = document.querySelector('.fixed.inset-0')
+    expect(overlay?.className).toContain('items-stretch')
+    expect(overlay?.className).toContain('justify-end')
+    expect(overlay?.className).not.toContain('items-center')
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.className).toContain('w-[500px]')
+    // 停靠式面板不能带居中态的 w-full，否则会顶掉调用方的固定宽度
+    expect(dialog.className).not.toContain('w-full')
   })
 })

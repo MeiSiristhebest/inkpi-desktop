@@ -17,6 +17,12 @@ interface ModalProps {
   title?: string
   /** Use a visible heading supplied by the child content as the dialog label. */
   ariaLabelledBy?: string
+  /**
+   * 面板停靠方式。center = 居中对话框（默认）；
+   * right = 右侧全高抽屉（编辑面板等需要大表单的场景），仅停靠位置与入场动画不同，
+   * ARIA / 焦点契约完全一致，避免为抽屉再写一份模态实现。
+   */
+  placement?: 'center' | 'right'
 }
 
 /**
@@ -39,12 +45,21 @@ export const Modal: React.FC<ModalProps> = ({
   closeOnBackdrop = true,
   title,
   ariaLabelledBy,
+  placement = 'center',
 }) => {
   const id = useId()
+  const dockedRight = placement === 'right'
   const titleId = title ? `modal-title-${id}` : undefined
   const labelledBy = ariaLabelledBy ?? titleId
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
+  // 消费方普遍传内联箭头函数，因此 Esc 只能经 ref 读取最新值：
+  // 把 onClose 放进下面焦点契约的依赖数组，会让该 effect 在宿主每次重渲染时重跑，
+  // 用户在面板里选中的控件会被抢回首项。
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   // Save trigger focus on open, restore on unmount/close
   useEffect(() => {
@@ -89,7 +104,7 @@ export const Modal: React.FC<ModalProps> = ({
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        onCloseRef.current()
       }
     }
 
@@ -101,26 +116,29 @@ export const Modal: React.FC<ModalProps> = ({
       triggerRef.current?.focus()
       triggerRef.current = null
     }
-  }, [onClose])
+    // 焦点契约只在挂载/卸载时建立与销毁；见上方 onCloseRef 注释
+  }, [])
 
   return (
     <AnimatePresence>
       <motion.div
         {...variants.fade}
         transition={tween.fade}
-        className={`fixed inset-0 z-50 flex items-center justify-center ${overlayClassName} p-4 select-none`}
+        className={`fixed inset-0 z-50 flex ${
+          dockedRight ? 'items-stretch justify-end' : 'items-center justify-center'
+        } ${overlayClassName} p-4 select-none`}
         onClick={(e) => {
           if (closeOnBackdrop && e.target === e.currentTarget) onClose()
         }}
       >
         <motion.div
-          {...variants.scaleIn}
+          {...(dockedRight ? variants.slideInFromRight : variants.scaleIn)}
           transition={spring.gentle}
           ref={panelRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby={labelledBy}
-          className={`w-full ${widthClass} ${panelClassName}`}
+          className={`${dockedRight ? '' : 'w-full'} ${widthClass} ${panelClassName}`}
           onClick={(e) => e.stopPropagation()}
         >
           {title && !ariaLabelledBy && (

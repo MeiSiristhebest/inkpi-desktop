@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useId, type FC, type ReactNode } from 'react'
+import { useState, useMemo, useId, type FC, type ReactNode } from 'react'
+import { Modal } from '../../ui/molecules/Modal'
 import {
   Settings as Gear,
   Palette,
@@ -293,157 +294,141 @@ export const SettingsView: FC<SettingsViewProps> = ({
   const [settings, update] = useSettings()
   const [tab, setTab] = useState<TabKey>('appearance')
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    },
-    [onClose],
-  )
-
-  useEffect(() => {
-    if (!open) return
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, handleKeyDown])
+  const dialogTitleId = useId()
 
   if (!open) return null
 
   return (
-    <div
-      className={`fixed inset-0 z-50 flex items-center justify-center ${
-        isExpanded ? 'p-0 bg-[var(--ink-bg)]' : 'bg-black/40 backdrop-blur-sm p-4 sm:p-6'
-      }`}
-      onClick={(e) => {
-        if (!isExpanded && e.currentTarget === e.target) onClose()
-      }}
+    <Modal
+      onClose={onClose}
+      ariaLabelledBy={dialogTitleId}
+      closeOnBackdrop={!isExpanded}
+      overlayClassName={isExpanded ? 'bg-[var(--ink-bg)]' : 'bg-black/40 backdrop-blur-sm sm:p-6'}
+      widthClass={isExpanded ? 'w-full' : 'w-[960px] max-w-[calc(100vw-2rem)]'}
+      panelClassName={`${
+        isExpanded
+          ? 'h-full rounded-none border-0 shadow-none'
+          : 'h-[700px] max-h-[calc(100vh-2rem)] rounded-2xl shadow-2xl border border-[var(--ink-border)]'
+      } flex flex-col overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)] transition-all duration-150`}
     >
-      <div
-        className={`${
-          isExpanded
-            ? 'w-full h-full rounded-none border-0 shadow-none'
-            : 'w-[960px] h-[700px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] rounded-2xl shadow-2xl border border-[var(--ink-border)]'
-        } flex flex-col overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)] transition-all duration-150`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="设置"
-      >
-        {/* 顶部主标题栏（参考 VSCode / Notion 全景控制条） */}
-        <header className="h-13 shrink-0 flex items-center justify-between px-5 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] select-none">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] flex items-center justify-center">
-              <Gear className="w-4 h-4" />
-            </div>
-            <h2 className="text-[14px] font-semibold text-[var(--ink-text)] tracking-tight">
-              设置中心
-              <span className="text-[12px] font-normal text-[var(--ink-text-faint)] ml-2.5">
-                · {TABS.find((t) => t.key === tab)?.label}
-              </span>
-            </h2>
+      {/* 顶部主标题栏（参考 VSCode / Notion 全景控制条） */}
+      <header className="h-13 shrink-0 flex items-center justify-between px-5 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] select-none">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] flex items-center justify-center">
+            <Gear className="w-4 h-4" />
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsExpanded(!isExpanded)}
-              title={isExpanded ? '还原为窗口' : '展开为全景整页'}
-              className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-            >
-              {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={onClose}
-              title="关闭 (Esc)"
-              className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
-
-        <div className="flex-1 flex min-h-0 overflow-hidden">
-          {/* 左侧分区导航栏（支持 VSCode 式分类） */}
-          <aside
-            className={`${
-              isExpanded ? 'w-64' : 'w-56'
-            } shrink-0 border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] p-3 space-y-1 overflow-y-auto select-none transition-all flex flex-col justify-between`}
+          <h2
+            id={dialogTitleId}
+            className="text-[14px] font-semibold text-[var(--ink-text)] tracking-tight"
           >
-            <div className="space-y-1">
-              <div className="px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
-                功能偏好
-              </div>
-              {TABS.map((t) => {
-                const Icon = t.icon
-                const active = tab === t.key
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setTab(t.key)}
-                    className={`w-full text-left p-2 rounded-xl transition-all duration-150 cursor-pointer flex items-center gap-2.5 ${
+            设置中心
+            <span className="text-[12px] font-normal text-[var(--ink-text-faint)] ml-2.5">
+              · {TABS.find((t) => t.key === tab)?.label}
+            </span>
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            title={isExpanded ? '还原为窗口' : '展开为全景整页'}
+            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
+          >
+            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={onClose}
+            title="关闭 (Esc)"
+            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* 左侧分区导航栏（支持 VSCode 式分类） */}
+        <aside
+          className={`${
+            isExpanded ? 'w-64' : 'w-56'
+          } shrink-0 border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] p-3 space-y-1 overflow-y-auto select-none transition-all flex flex-col justify-between`}
+        >
+          <div className="space-y-1">
+            <div className="px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
+              功能偏好
+            </div>
+            {TABS.map((t) => {
+              const Icon = t.icon
+              const active = tab === t.key
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`w-full text-left p-2 rounded-xl transition-all duration-150 cursor-pointer flex items-center gap-2.5 ${
+                    active
+                      ? 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border-strong)] shadow-xs text-[var(--ink-text)]'
+                      : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-transparent'
+                  }`}
+                >
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                       active
-                        ? 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border-strong)] shadow-xs text-[var(--ink-text)]'
-                        : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-transparent'
+                        ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
+                        : 'bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
                     }`}
                   >
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
                     <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                        active
-                          ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-                          : 'bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
+                      className={`text-[12.5px] leading-tight ${
+                        active ? 'font-semibold text-[var(--ink-text)]' : 'font-medium'
                       }`}
                     >
-                      <Icon className="w-3.5 h-3.5" />
+                      {t.label}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className={`text-[12.5px] leading-tight ${
-                          active ? 'font-semibold text-[var(--ink-text)]' : 'font-medium'
-                        }`}
-                      >
-                        {t.label}
-                      </div>
-                      <div className="text-[10px] text-[var(--ink-text-faint)] truncate mt-0.5">
-                        {t.desc}
-                      </div>
+                    <div className="text-[10px] text-[var(--ink-text-faint)] truncate mt-0.5">
+                      {t.desc}
                     </div>
-                  </button>
-                )
-              })}
-            </div>
-          </aside>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </aside>
 
-          {/* 右侧设置主体区：按整页与卡片自适应拉宽，彻底告别 640px 窄缝 */}
-          <main className="flex-1 min-w-0 overflow-y-auto p-6 lg:p-10">
-            <div
-              className={
-                tab === 'plugins'
-                  ? 'h-full'
-                  : isExpanded
-                    ? 'w-full max-w-5xl mx-auto space-y-8'
-                    : 'w-full max-w-[720px] mx-auto space-y-6'
-              }
-            >
-              {tab === 'appearance' && <AppearanceTab settings={settings} update={update} />}
-              {tab === 'editor' && <EditorTab settings={settings} update={update} />}
-              {tab === 'writing' && <WritingHabitsTab settings={settings} update={update} />}
-              {tab === 'shortcuts' && <ShortcutsTab />}
-              {tab === 'plugins' && <PluginSettingsView />}
-              {tab === 'ai' && <AiTab settings={settings} update={update} />}
-              {tab === 'connection' && (
-                <ConnectionTab
-                  settings={settings}
-                  update={update}
-                  runtimeState={runtimeState}
-                  onReconnect={onReconnect}
-                />
-              )}
-              {tab === 'about' && <AboutTab />}
-            </div>
-          </main>
-        </div>
+        {/* 右侧设置主体区：按整页与卡片自适应拉宽，彻底告别 640px 窄缝 */}
+        <main className="flex-1 min-w-0 overflow-y-auto p-6 lg:p-10">
+          <div
+            className={
+              tab === 'plugins'
+                ? 'h-full'
+                : isExpanded
+                  ? 'w-full max-w-5xl mx-auto space-y-8'
+                  : 'w-full max-w-[720px] mx-auto space-y-6'
+            }
+          >
+            {tab === 'appearance' && <AppearanceTab settings={settings} update={update} />}
+            {tab === 'editor' && <EditorTab settings={settings} update={update} />}
+            {tab === 'writing' && <WritingHabitsTab settings={settings} update={update} />}
+            {tab === 'shortcuts' && <ShortcutsTab />}
+            {tab === 'plugins' && <PluginSettingsView />}
+            {tab === 'ai' && <AiTab settings={settings} update={update} />}
+            {tab === 'connection' && (
+              <ConnectionTab
+                settings={settings}
+                update={update}
+                runtimeState={runtimeState}
+                onReconnect={onReconnect}
+              />
+            )}
+            {tab === 'about' && <AboutTab />}
+          </div>
+        </main>
       </div>
-    </div>
+    </Modal>
   )
 }
 
