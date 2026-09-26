@@ -1136,8 +1136,14 @@ const AiTab: FC<{
       if (m.enabled === false || !url) continue
       try {
         const ids = await fetchModelIds(url, m.apiKey)
-        nextList[i] = { ...m, availableModelIds: ids }
-        okCount += 1
+        // 空数组既可能是端点没返回、也可能是请求被整体拦下（打包版 CSP 只放行本机地址）。
+        // 两种都不能记成「已更新」：fetchedCount 会被写成上次成功时间旁的绿字。
+        if (ids.length > 0) {
+          nextList[i] = { ...m, availableModelIds: ids }
+          okCount += 1
+        } else {
+          failedCount += 1
+        }
       } catch {
         failedCount += 1
       }
@@ -1152,7 +1158,7 @@ const AiTab: FC<{
     update({ savedAiModels: nextList })
     setCatalogMsg(
       failedCount > 0
-        ? `已更新 ${okCount} 个供应商端点的模型列表，${failedCount} 个暂不可达`
+        ? `已更新 ${okCount} 个供应商端点的模型列表，${failedCount} 个没拿到列表`
         : `已更新 ${okCount} 个供应商端点的模型列表`,
     )
     setCatalogBusy(false)
@@ -1489,6 +1495,7 @@ const PROVIDER_VIEW: Record<ProviderReadiness, { label: string; dot: string }> =
   healthy: { label: '可达', dot: 'bg-emerald-500' },
   'auth-error': { label: '鉴权失败', dot: 'bg-[var(--ink-danger)]' },
   unreachable: { label: '无法访问', dot: 'bg-[var(--ink-danger)]' },
+  blocked: { label: '无法探测', dot: 'bg-amber-500' },
 }
 
 const ReadinessCard: FC<{
@@ -1552,10 +1559,13 @@ const ConnectionTab: FC<{
         detail: `HTTP ${status} · ${latency} ms`,
       })
     } catch (error) {
+      // 抛异常意味着一个 HTTP 状态码都没拿到。打包版 CSP 的 connect-src 只放行本机地址，
+      // 所以这多半是探测通道本身不通，而不是用户的端点挂了——别说成「无法访问」。
+      const reason = error instanceof Error ? error.name : String(error)
       setProbe({
         signature: probeSignature,
-        state: 'unreachable',
-        detail: error instanceof Error ? error.name : String(error),
+        state: 'blocked',
+        detail: `请求没有拿到端点回应（${reason}）。打包版只允许界面连接本机地址；AI 任务由 Runtime 进程发起，不受此限。`,
       })
     }
   }

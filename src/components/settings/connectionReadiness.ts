@@ -9,7 +9,13 @@ import { PROVIDER_META, type AppSettings } from '../../core/settings'
  */
 export type RuntimeReadiness = 'online' | 'connecting' | 'offline' | 'unknown'
 export type AiReadiness = 'ready' | 'degraded' | 'unavailable'
-export type ProviderReadiness = 'probing' | 'healthy' | 'auth-error' | 'unreachable' | 'unknown'
+/**
+ * 'blocked' 与 'unreachable' 必须分开：探测是在渲染进程里发的，而打包版 CSP 的
+ * connect-src 只放行本机地址，拿不到任何 HTTP 状态码。这种情况说「无法访问」
+ * 等于把应用自身的边界谎报成用户的网络故障（INV-09）。
+ */
+export type ProviderReadiness =
+  'probing' | 'healthy' | 'auth-error' | 'unreachable' | 'blocked' | 'unknown'
 
 /**
  * Daemon 的两个布尔 → Runtime 三态。
@@ -45,7 +51,7 @@ export function deriveAiReadiness(settings: Pick<AppSettings, 'aiModel'>): AiRea
 /** HTTP 响应码 → 供应商可达性。401/403 是凭据问题，不是断网。 */
 export function classifyProbeStatus(
   status: number,
-): Exclude<ProviderReadiness, 'probing' | 'unknown'> {
+): Exclude<ProviderReadiness, 'probing' | 'unknown' | 'blocked'> {
   if (status === 401 || status === 403) return 'auth-error'
   if (status >= 200 && status < 400) return 'healthy'
   return 'unreachable'

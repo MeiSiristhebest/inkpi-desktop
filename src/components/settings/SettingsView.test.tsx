@@ -172,6 +172,43 @@ describe('SettingsView', () => {
     expect(screen.getByRole('button', { name: '检测' })).toBeDisabled()
   })
 
+  it('连接：请求被平台边界拦下时说「无法探测」，不谎报端点无法访问（P5.2 / INV-09）', async () => {
+    localStorage.setItem(
+      'inkpi-settings',
+      JSON.stringify({
+        aiModel: {
+          id: 'deepseek-chat',
+          name: 'DS',
+          provider: 'deepseek',
+          baseUrl: 'https://api.deepseek.com/v1',
+        },
+      }),
+    )
+    // 打包版 CSP 的 connect-src 只放行本机地址：渲染进程直连提供商端点必然拿不到回应。
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch')
+      }),
+    )
+    try {
+      renderSettings({ open: true, onClose: vi.fn() })
+      fireEvent.click(screen.getByText('连接'))
+      const probe = screen.getByRole('button', { name: '检测' })
+      expect(probe).toBeEnabled()
+
+      fireEvent.click(probe)
+
+      await waitFor(() => expect(screen.getByText('无法探测')).toBeInTheDocument())
+      expect(screen.getByText(/请求没有拿到端点回应/)).toBeInTheDocument()
+      expect(screen.getByText(/AI 任务由 Runtime 进程发起/)).toBeInTheDocument()
+      // 反例锚点：旧口径把这条报成端点故障。
+      expect(screen.queryByText('无法访问')).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('连接：Runtime 离线时如实说明后果，并给出重连入口', () => {
     const onReconnect = vi.fn()
     renderSettings({ open: true, onClose: vi.fn(), runtimeState: 'offline', onReconnect })

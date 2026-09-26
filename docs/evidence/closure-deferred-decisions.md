@@ -12,10 +12,11 @@ This record keeps intentionally deferred comparison items explicit. A deferral i
 - **Async clipboard backend (#38):** deferred. Clipboard writes already cross the `clipboardWriter` port; a native async backend change needs platform acceptance evidence and is not required for the current correctness boundary.
 - **Extension model gateway (#57):** deferred. Runtime remains the sole model-routing authority and extension workflows do not receive provider credentials or route-selection authority. Add a gateway only after an extension contract and trust policy are approved.
 - **Duplicate domain concepts (#52):** deferred pending a migration map for legacy and advanced plugin data. No speculative schema merge is performed during closure hardening.
+- **Provider endpoint probe from the app shell (P5.2 consequence):** the packaged CSP sets `connect-src 'self' ipc: ws://127.0.0.1:* http://127.0.0.1:*`, so `src/adapters/modelProviderProbe.ts` — a `fetch` issued by the UI process — cannot reach any provider host in a shipped build, and the same applies to "更新模型目录". The settings page now labels that outcome `无法探测` (and counts an empty model list as a failure) instead of blaming the author's endpoint. A real capability needs either a user-configured dynamic `connect-src` allowlist or a Runtime-side probe RPC; `packages/protocol` exposes no model-listing method today. Do not present the probe button as an endpoint health check until one of those exists.
 
 ## Evidence currently available
 
 - Runtime: pinned-dependency check, TypeScript build, 177 files / 827 tests, process restart recovery, cache persistence, route fallback, dual-instance sync, and cross-boundary freeze tests pass.
-- Desktop: typecheck, Oxlint (warnings only), 243 files / 1123 tests (2 skipped), production build, frontend parity, NSIS build, and opt-in packaged sidecar RPC acceptance pass.
+- Desktop: typecheck, Oxlint (warnings only), 273 files / 1320 tests (3 skipped), production build, frontend parity, NSIS build, and opt-in packaged sidecar RPC acceptance pass.
 - GUI acceptance and real-provider acceptance remain explicit manual/opt-in gates; they are not represented as completed by this record.
 - The current dirty Runtime contract fingerprint is `28f36aed`; `runtime.lock.json` records that hash while retaining the historical pinned commit. Advance the pinned commit together with the Runtime changes before formal release sign-off.

@@ -4,6 +4,7 @@ import { SettingsView } from './SettingsView'
 import { SettingsProvider } from '../../core/settings'
 import { ThemeController } from '../../core/ThemeController'
 import { db } from '../../db/indexedDB'
+import { fetchModelIds } from '../../adapters/modelProviderProbe'
 
 vi.mock('../../adapters/modelProviderProbe', () => ({
   probeModelEndpoint: vi.fn(async () => ({ status: 200, latency: 42 })),
@@ -164,5 +165,50 @@ describe('AiTab 模型目录', () => {
     const meta = JSON.parse(localStorage.getItem('inkpi-ai-catalog-meta') || '{}')
     expect(meta.fetchedAt).toBeTruthy()
     expect(meta.fetchedCount).toBe(2)
+  })
+
+  it('端点没返回模型列表时不算成功，也不覆盖上一次的列表（P5.2 的探测边界）', async () => {
+    // 打包版 CSP 的 connect-src 只放行本机地址，渲染进程直连端点会一个 id 都拿不到。
+    vi.mocked(fetchModelIds).mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    localStorage.setItem(
+      'inkpi-settings',
+      JSON.stringify({
+        aiModel: {
+          id: 'deepseek-chat',
+          name: 'DS',
+          provider: 'deepseek',
+          baseUrl: 'https://api.deepseek.com/v1',
+          availableModelIds: ['old-1'],
+        },
+        savedAiModels: [
+          {
+            id: 'deepseek-chat',
+            name: 'DS',
+            provider: 'deepseek',
+            baseUrl: 'https://api.deepseek.com/v1',
+            availableModelIds: ['old-1'],
+          },
+          {
+            id: 'gpt-4o',
+            name: 'GPT',
+            provider: 'openai',
+            baseUrl: 'https://api.openai.com/v1',
+            availableModelIds: ['old-2'],
+          },
+        ],
+      }),
+    )
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('自定义 AI 模型'))
+
+    fireEvent.click(screen.getByText('更新模型目录'))
+
+    await waitFor(() => expect(screen.getByText(/没拿到列表/)).toBeInTheDocument())
+    const meta = JSON.parse(localStorage.getItem('inkpi-ai-catalog-meta') || '{}')
+    expect(meta.fetchedCount).toBe(0)
+    expect(meta.failedCount).toBe(2)
+    const s = readStored()
+    expect(s.savedAiModels[0].availableModelIds).toEqual(['old-1'])
+    expect(s.savedAiModels[1].availableModelIds).toEqual(['old-2'])
   })
 })
