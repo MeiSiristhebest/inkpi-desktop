@@ -1,4 +1,4 @@
-<!-- 
+<!--
   Designed & Built with ❤️ by MeiSiristhebest (https://github.com/MeiSiristhebest)
   如果本项目的架构设计、工程实现或工具链对你的学习或工作有所启发，欢迎点亮右上角的 ⭐ Star！
 -->
@@ -14,6 +14,10 @@
 
 <p align="center">
   <b>基于 Tauri 2 + React 构建的 AI 智能写作桌面工作台 · Windows</b>
+</p>
+
+<p align="center">
+  <b>平台状态：Windows 已可生产（NSIS 安装包）。macOS / Linux 在计划中，目前既不可构建，也不随发布提供。</b>
 </p>
 
 <p align="center">
@@ -114,32 +118,37 @@ InkPi Desktop 是 **InkPi** 的官方桌面工作台客户端。它将高性能�
 ## ✨ 核心特性
 
 ### 1. 独立 Sidecar 守护进程隔离
+
 后端守护进程由 [Bun](https://bun.sh) 编译为单个独立的二进制文件（`inkpi.exe`）。终端用户运行桌面端**完全免装 Node.js、pnpm 或额外运行时环境**。
 
 ### 2. 沉浸式写作流与幽灵补全
+
 基于 Tiptap 与 Novel 深度定制，支持通过统一 Task Runtime 的 AI 实时幽灵补全、行内润色、实时字数统计与中文排版格式化。
 
 ### 3. Living Codex 设定集图谱与 AC 自动机
+
 - $O(N+M)$ Aho-Corasick 多模式串匹配引擎，毫秒级扫描数千个世界观词条。
 - 动态 1-hop 拓扑能量扩散模型与 0-1 背包 Token 预算上下文切片。
 - 交互式侧边抽屉，正文写作时随动高亮并支持即时检索设定档案。
 
 ### 4. Local-First 本地离线优先 (IndexedDB)
+
 本地状态、章节草稿与实体关联全部事务化写入浏览器 IndexedDB（`inkpi-desktop-db`），配合防抖自动保存机制，断网环境数据零丢失。
 
 ### 5. 纯净进程生命周期管控与端口即时释放
+
 Rust 外壳负责拉起 Daemon 子进程，并在窗口关闭时严格回收进程，彻底杜绝孤儿进程与端口占用。
 
 ---
 
 ## ⚙️ 环境依赖
 
-| 工具 | 作用 | 阶段 |
-|---|---|---|
-| **Node.js**: $\ge 22.0.0$ | 前端 SPA 构建与测试运行 | 开发 / CI |
-| **npm** / **pnpm** | 依赖包管理 | 开发 / CI |
-| **Rust (MinGW-w64 GNU / MSVC)** | Tauri 2 原生外壳编译 | 桌面打包 |
-| **Bun** | 上游 Daemon 独立单文件构建 | InkPi Monorepo |
+| 工具                            | 作用                       | 阶段           |
+| ------------------------------- | -------------------------- | -------------- |
+| **Node.js**: $\ge 22.0.0$       | 前端 SPA 构建与测试运行    | 开发 / CI      |
+| **npm** / **pnpm**              | 依赖包管理                 | 开发 / CI      |
+| **Rust (MinGW-w64 GNU / MSVC)** | Tauri 2 原生外壳编译       | 桌面打包       |
+| **Bun**                         | 上游 Daemon 独立单文件构建 | InkPi Monorepo |
 
 ---
 
@@ -163,15 +172,15 @@ npm run build
 
 ### 1. 统一开发指令集
 
-| 指令 | 动作 | 示例 |
-| :--- | :--- | :--- |
-| `npm run dev` | 启动 Vite React SPA 本地开发服务器 | `npm run dev` |
-| `npm run tauri:dev` | 同步 sidecar 并启动 Tauri 2 桌面原生调试外壳 | `npm run tauri:dev` |
-| `npm run build` | 使用 `tsc -b` 进行类型检查并通过 Vite 打包 SPA | `npm run build` |
-| `npm run lint` | 使用超高速 Oxlint 检查全库源码风格 | `npm run lint` |
-| `npm run test` | 运行 Vitest 单元与集成测试套件 | `npm run test` |
-| `npm run test:coverage` | 运行测试套件并验证 V8 覆盖率质量门禁 | `npm run test:coverage` |
-| `npm run tauri:build` | 编译生成 Windows NSIS 桌面独立安装包 | `npm run tauri:build` |
+| 指令                    | 动作                                           | 示例                    |
+| :---------------------- | :--------------------------------------------- | :---------------------- |
+| `npm run dev`           | 启动 Vite React SPA 本地开发服务器             | `npm run dev`           |
+| `npm run tauri:dev`     | 同步 sidecar 并启动 Tauri 2 桌面原生调试外壳   | `npm run tauri:dev`     |
+| `npm run build`         | 使用 `tsc -b` 进行类型检查并通过 Vite 打包 SPA | `npm run build`         |
+| `npm run lint`          | 使用超高速 Oxlint 检查全库源码风格             | `npm run lint`          |
+| `npm run test`          | 运行 Vitest 单元与集成测试套件                 | `npm run test`          |
+| `npm run test:coverage` | 运行测试套件并验证 V8 覆盖率质量门禁           | `npm run test:coverage` |
+| `npm run tauri:build`   | 编译生成 Windows NSIS 桌面独立安装包           | `npm run tauri:build`   |
 
 ### 2. 运行全量测试与覆盖率门禁
 
@@ -184,6 +193,7 @@ npm run test:coverage
 ```bash
 npm run tauri:build
 ```
+
 安装包构建产物位于：`src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/`。
 
 ---
@@ -221,6 +231,7 @@ npm run tauri:build
 </a>
 
 ### 🤝 Contributors
+
 <a href="https://github.com/MeiSiristhebest/inkpi-desktop/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=MeiSiristhebest/inkpi-desktop" alt="Contributors" />
 </a>
