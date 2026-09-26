@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { AUTHORITATIVE_STORES } from './db/indexedDB'
 
 // Resolve from the test file so the guard also works when Vitest is invoked
 // through an absolute config/root path instead of the Desktop cwd.
@@ -23,8 +24,14 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
  */
 const FORBIDDEN_LAYERS = ['src/components', 'src/domain', 'src/core', 'src/hooks', 'src/plugins']
 
-const AI_AUTHORITATIVE_STORE_ACCESS =
-  /\bdb\.(?:put|get|getAll|delete)\s*\(\s*["'](?:projects|volumes|chapters|domainChangeSets|domainProjectionCursors)["']/i
+// 权威 store 名单只有一个来源（src/db/indexedDB 的 AUTHORITATIVE_STORES），避免守卫与
+// 清单测试各写一份、彼此漂移。
+const AUTHORITATIVE_STORE_PATTERN = AUTHORITATIVE_STORES.join('|')
+
+const AI_AUTHORITATIVE_STORE_ACCESS = new RegExp(
+  `\\bdb\\.(?:put|get|getAll|delete)\\s*\\(\\s*["'](?:${AUTHORITATIVE_STORE_PATTERN})["']`,
+  'i',
+)
 
 /**
  * INV-02 要求 chapters / domainChangeSets 只能经由唯一 mutation 通道落盘。原先的守卫
@@ -32,10 +39,8 @@ const AI_AUTHORITATIVE_STORE_ACCESS =
  * （`transaction.objectStore('chapters')`），完全不在扫描范围内。这里同时覆盖两种写法，
  * 并把扫描面从 src/ai 扩展到整个 src/（db 目录是 schema 本身，予以排除）。
  */
-const AUTHORITATIVE_STORE_NAMES =
-  'projects|volumes|chapters|domainChangeSets|domainProjectionCursors'
 const AUTHORITATIVE_STORE_ACCESS = new RegExp(
-  `objectStore\\(\\s*["'](?:${AUTHORITATIVE_STORE_NAMES})["']|\\bdb\\.(?:put|add|delete)\\s*\\(\\s*["'](?:${AUTHORITATIVE_STORE_NAMES})["']`,
+  `objectStore\\(\\s*["'](?:${AUTHORITATIVE_STORE_PATTERN})["']|\\bdb\\.(?:put|add|delete)\\s*\\(\\s*["'](?:${AUTHORITATIVE_STORE_PATTERN})["']`,
 )
 /** 基础设施适配器：它们本身就是被授权的持久化实现。 */
 const AUTHORITATIVE_STORE_ADAPTERS = [

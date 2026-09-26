@@ -4,7 +4,9 @@ import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
 import type { IdGenerator } from '../ports/idGenerator'
 import type { Clock } from '../ports/clock'
-import { db, STORES } from '../db/indexedDB'
+import { AUTHORITATIVE_STORES, db, STORES } from '../db/indexedDB'
+import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
+import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 import { PROJECT_DOMAIN_STORES } from './workspaceLifecycleService'
 
 describe('WorkspaceLifecycleService', () => {
@@ -93,10 +95,20 @@ describe('WorkspaceLifecycleService', () => {
     }
   })
 
-  it('keeps every project-scoped IndexedDB store in the backup/purge manifest', () => {
+  it('keeps every portable project-scoped store in the backup/purge manifest and no authoritative one', () => {
+    // 权威事实源由各自通道负责（卷章走 projectRepo/ChapterMutationService，领域日志走
+    // IndexedDbDomainChangeStore）。通用领域表循环把它们纳进来就是 INV-02 旁路，
+    // 而且领域日志的 checksum 在重新命名空间化后必然失效。
     const coreStores = new Set(['projects', 'volumes', 'chapters', 'pluginSettings', 'settings'])
-    const projectStores = STORES.filter((store) => !coreStores.has(store))
-    expect(PROJECT_DOMAIN_STORES).toEqual(expect.arrayContaining(projectStores))
+    const authoritativeStores = new Set<string>(AUTHORITATIVE_STORES)
+    const portableStores = STORES.filter((store) => !coreStores.has(store)).filter(
+      (store) => !authoritativeStores.has(store),
+    )
+    expect(PROJECT_DOMAIN_STORES).toEqual(expect.arrayContaining(portableStores))
+    expect(PROJECT_DOMAIN_STORES.filter((store) => authoritativeStores.has(store))).toEqual([])
+    // 两个集合都不能是空的，否则上面的不相交断言只是空对空。
+    expect(portableStores.length).toBeGreaterThan(0)
+    expect(authoritativeStores.size).toBeGreaterThan(0)
   })
 
   it('exports full workspace backup with valid manifest and metadata (INV-04)', async () => {
@@ -748,7 +760,7 @@ describe('WorkspaceLifecycleService', () => {
     expect(failResult.error).toContain('ghost-parent-artifact')
   })
 
-  it('importWorkspaceAsCopy strips domainChangeSets and aiProposals, while restoreWorkspaceBackup retains them', async () => {
+  it('never replays the domain journal into an imported workspace, in copy or restore mode', async () => {
     const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
     const backup = await service.exportWorkspaceBackup('orig-proj')
     expect(backup).not.toBeNull()
@@ -765,28 +777,94 @@ describe('WorkspaceLifecycleService', () => {
     const putSpy = vi.spyOn(db, 'put').mockResolvedValue(undefined as any)
 
     // 1. Copy mode (importWorkspaceAsCopy)
-    const copyResult = await service.importWorkspaceAsCopy(backupWithSyncAndProposals, 'New Copy')
+    const copyResult = await service.importWorkspaceAsCopy(backupWithSyncAndProposals)
     expect(copyResult.ok).toBe(true)
 
-    const copyPutCalls = putSpy.mock.calls
-    const savedDomainStoresInCopy = copyPutCalls.map((c) => c[0])
+    const savedDomainStoresInCopy = putSpy.mock.calls.map((c) => c[0])
     expect(savedDomainStoresInCopy).not.toContain('domainChangeSets')
     expect(savedDomainStoresInCopy).not.toContain('aiProposals')
     expect(savedDomainStoresInCopy).toContain('codexEntities')
 
     putSpy.mockClear()
 
-    // 2. Restore mode (restoreWorkspaceBackup)
+    // 2. Restore mode keeps active proposals but still cannot carry the journal: every import
+    // allocates a new workspace id, and a change set is checksum-sealed over its own id.
     const restoreResult = await service.restoreWorkspaceBackup(backupWithSyncAndProposals)
     expect(restoreResult.ok).toBe(true)
 
-    const restorePutCalls = putSpy.mock.calls
-    const savedDomainStoresInRestore = restorePutCalls.map((c) => c[0])
-    expect(savedDomainStoresInRestore).toContain('domainChangeSets')
+    const savedDomainStoresInRestore = putSpy.mock.calls.map((c) => c[0])
+    expect(savedDomainStoresInRestore).not.toContain('domainChangeSets')
     expect(savedDomainStoresInRestore).toContain('aiProposals')
     expect(savedDomainStoresInRestore).toContain('codexEntities')
 
     putSpy.mockRestore()
+  })
+
+  it('restores a backup that still carries a sealed journal from an older archive (INV-02, INV-08)', async () => {
+    // The bulk domain loop used to write journal rows blind. Remapping rewrites both `id` and
+    // `workspaceId`, which are inside the change set checksum, so the stored row is one the
+    // adapter refuses to read back: latestRevision() threw, and the materialize() call inside the
+    // same try block rolled the whole restore back.
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+
+    const sealed = createDomainChangeSet({
+      id: 'cs-sealed-1',
+      workspaceId: 'orig-proj',
+      sourceDeviceId: 'dev-legacy',
+      baseRevision: 0,
+      changes: [
+        {
+          id: 'change-1',
+          aggregateType: 'chapter',
+          aggregateId: 'orig-ch-1',
+          operation: 'upsert',
+          revision: 1,
+          occurredAt: 1000,
+          payload: { title: '第一章 拜入宗门' },
+        },
+      ],
+      createdAt: 1000,
+    })
+    await new IndexedDbDomainChangeStore().append(sealed)
+
+    const journalBackup = {
+      ...backup!,
+      domainData: {
+        ...backup!.domainData,
+        domainChangeSets: [sealed],
+        codexEntities: [
+          { id: 'ent-sealed-1', projectId: 'orig-proj', name: 'Hero', category: 'character' },
+        ],
+      },
+    }
+
+    const restoreResult = await service.restoreWorkspaceBackup(journalBackup)
+    expect(restoreResult.error).toBeUndefined()
+    expect(restoreResult.ok).toBe(true)
+    const imported = restoreResult.workspaceId!
+
+    // Aggregates are imported and the source workspace's sealed journal survives untouched.
+    const importedEntities = await db.getByIndex<{ name: string }>(
+      'codexEntities',
+      'projectId',
+      imported,
+    )
+    expect(importedEntities.map((entity) => entity.name)).toContain('Hero')
+    const journal = new IndexedDbDomainChangeStore()
+    expect(await journal.list('orig-proj')).toEqual([sealed])
+
+    // The archived change set is never replayed under a remapped id. Whatever the imported
+    // workspace does have in its journal was appended by the authorized channel (materialize).
+    const remappedJournalRows = (await db.getAll<{ id: string }>('domainChangeSets')).filter(
+      (row) => row.id.includes('-imported-'),
+    )
+    expect(remappedJournalRows).toEqual([])
+    expect(await journal.latestRevision(imported)).toBeGreaterThan(0)
+
+    await journal.purgeWorkspace('orig-proj')
+    await service.purgeWorkspace(imported)
   })
 
   it('remaps timelineNodes prerequisites and nextEventIds and validates Pass 3 integrity', async () => {

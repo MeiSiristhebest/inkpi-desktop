@@ -257,6 +257,35 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
   restoreSnapshot(snapshot: DomainProjectionSnapshot): Promise<void> {
     return this.restore(snapshot)
   }
+
+  /**
+   * Drops a workspace's journal rows. Workspace deletion is the one case that must not validate
+   * what it is deleting: a row left over from an older import can have a stale checksum, and the
+   * generic domain-store loop can no longer reach this authoritative store.
+   */
+  async purgeWorkspace(workspaceId: string): Promise<void> {
+    if (typeof workspaceId !== 'string' || !workspaceId.trim())
+      throw new Error('Domain change workspace id must not be empty')
+    const operation = domainAppendQueue.then(() =>
+      db.runTransaction(['domainChangeSets'], (transaction, fail) => {
+        const store = transaction.objectStore('domainChangeSets')
+        readIndexInTransaction<DomainChangeSet>(store, 'workspaceId', workspaceId, {
+          onError: (error) => fail(error),
+          onSuccess: (records) => {
+            try {
+              for (const record of records) {
+                store.delete(record.id)
+              }
+            } catch (error) {
+              fail(error)
+            }
+          },
+        })
+      }),
+    )
+    domainAppendQueue = operation.catch(() => undefined)
+    await operation
+  }
 }
 
 function assertValidChangeSet(changeSet: DomainChangeSet): void {

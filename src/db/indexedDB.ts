@@ -70,6 +70,24 @@ export const STORES = [
 ] as const
 export type StoreName = (typeof STORES)[number]
 
+/**
+ * INV-02 权威事实源：只能由各自的领域通道（ChapterMutationService、
+ * IndexedDbDomainChangeStore 等）写入。工作区备份/导入/清除的通用领域表循环必须与它
+ * 完全不相交，架构守卫（src/architecture.test.ts）与本文件的清单测试共用这一份定义。
+ */
+export const AUTHORITATIVE_STORES = [
+  'projects',
+  'volumes',
+  'chapters',
+  'domainChangeSets',
+  'domainProjectionCursors',
+] as const
+
+export type AuthoritativeStoreName = (typeof AUTHORITATIVE_STORES)[number]
+
+export const isAuthoritativeStore = (name: string): name is AuthoritativeStoreName =>
+  (AUTHORITATIVE_STORES as readonly string[]).includes(name)
+
 class InkStudioDB {
   private dbPromise: Promise<IDBDatabase> | null = null
 
