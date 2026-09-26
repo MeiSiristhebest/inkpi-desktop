@@ -31,15 +31,31 @@ import {
   PanelRight,
   Puzzle,
   Palette,
+  X,
 } from 'lucide-react'
 import { STATUS_OPTIONS } from '../editorUi'
 import { IconButton } from '../../../ui/atoms/IconButton'
+import { ContextMenu, type ContextMenuItem } from '../../../ui/molecules/ContextMenu'
 import { spring, gesture } from '../../../motion'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { ChapterStatus } from '../../../types'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
-import { useOptionalPluginRegistry } from '../../../core/pluginRegistry'
+import { useOptionalPluginRegistry, PLUGIN_CATEGORIES } from '../../../core/pluginRegistry'
+import type { DesktopPlugin } from '../../../types/plugin'
 import { shortcutHint } from '../../../core/editorShortcuts'
+
+const CATEGORY_ORDER = PLUGIN_CATEGORIES.map((c) => c.id)
+
+function categoryLabel(category: DesktopPlugin['category']): string {
+  return PLUGIN_CATEGORIES.find((c) => c.id === category)?.label ?? category
+}
+
+/** 抽屉候选按插件套件连续排列，分组小标题才成立；同套件内保持注册表原序（sort 稳定）。 */
+function sortDrawerPlugins(plugins: DesktopPlugin[]): DesktopPlugin[] {
+  return [...plugins].sort(
+    (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
+  )
+}
 
 interface EditorToolbarProps {
   model: EditorModel
@@ -88,7 +104,9 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
     ghostText,
   } = model
 
-  const [activeMenu, setActiveMenu] = useState<'format' | 'proof' | 'tools' | 'export' | null>(null)
+  const [activeMenu, setActiveMenu] = useState<
+    'format' | 'proof' | 'tools' | 'export' | 'drawers' | null
+  >(null)
   const [titleDraft, setTitleDraft] = useState(activeChapter?.title ?? '')
   const titleChapterIdRef = useRef<string | null>(activeChapter?.id ?? null)
   const persistedTitleRef = useRef(activeChapter?.title ?? '')
@@ -118,9 +136,41 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
     return () => window.removeEventListener('click', handleDocClick)
   }, [])
 
-  const toggleMenu = (menu: 'format' | 'proof' | 'tools' | 'export') => {
+  const toggleMenu = (menu: 'format' | 'proof' | 'tools' | 'export' | 'drawers') => {
     setActiveMenu((curr) => (curr === menu ? null : menu))
   }
+
+  // §P2.8：抽屉不是「每个插件一个抽屉」，也不允许由工具栏猜一个。
+  // Puzzle 按钮只做一件事——把当前启用且真的带随动抽屉的插件摊开，由作者明确选一个。
+  const drawerPlugins: DesktopPlugin[] = sortDrawerPlugins(
+    (registry?.activePlugins ?? []).filter((p) => Boolean(p.drawerSnippetView)),
+  )
+  const openDrawerPlugin =
+    drawerPlugins.find((p) => p.id === host?.activeDrawerPluginId) ?? undefined
+  const drawerMenuItems: ContextMenuItem[] = [
+    ...(openDrawerPlugin
+      ? [
+          {
+            key: 'close-drawer',
+            label: `关闭「${openDrawerPlugin.name}」抽屉`,
+            icon: <X size={13} />,
+            onClick: () => host?.closeDrawer(),
+          },
+        ]
+      : []),
+    ...drawerPlugins.map((plugin, index) => {
+      const startsGroup = index === 0 || drawerPlugins[index - 1].category !== plugin.category
+      return {
+        key: `drawer:${plugin.id}`,
+        label: plugin.name,
+        description: plugin.description,
+        icon: <plugin.icon className="w-3.5 h-3.5" />,
+        groupLabel: startsGroup ? categoryLabel(plugin.category) : undefined,
+        dividerBefore: startsGroup && index > 0,
+        onClick: () => host?.openDrawer(plugin.id),
+      }
+    }),
+  ]
 
   const hasGhostText = ghostText.trim().length > 0
 
@@ -810,21 +860,15 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             {host && (
               <div className="relative">
                 <IconButton
-                  onClick={() => {
-                    if (host.activeDrawerPluginId) {
-                      host.closeDrawer()
-                    } else {
-                      // 默认打开活体世界书或第一个具备抽屉的插件
-                      const firstDrawer = registry?.activePlugins.find((p) =>
-                        Boolean(p.drawerSnippetView),
-                      )
-                      if (firstDrawer) host.openDrawer(firstDrawer.id)
-                    }
-                  }}
+                  data-testid="editor-toolbar-drawer-trigger"
+                  aria-haspopup="menu"
+                  aria-expanded={activeMenu === 'drawers'}
+                  aria-label="插件随动抽屉"
+                  onClick={() => toggleMenu('drawers')}
                   title={
-                    host.activeDrawerPluginId
-                      ? `关闭插件抽屉 (${host.activeDrawerPluginId})`
-                      : '打开随动插件抽屉'
+                    openDrawerPlugin
+                      ? `当前抽屉：${openDrawerPlugin.name}（可切换或关闭）`
+                      : '选择要打开的插件抽屉'
                   }
                   className={
                     host.activeDrawerPluginId
@@ -834,6 +878,29 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 >
                   <Puzzle className="w-3.5 h-3.5" />
                 </IconButton>
+                {activeMenu === 'drawers' && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setActiveMenu(null)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setActiveMenu(null)
+                      }}
+                    />
+                    <ContextMenu
+                      items={drawerMenuItems}
+                      header={
+                        drawerPlugins.length === 0
+                          ? '没有启用中的插件提供随动抽屉，请先在「插件管理」里启用'
+                          : '选择要打开哪个抽屉'
+                      }
+                      widthClass="min-w-[268px] max-w-[320px] max-h-[70vh] overflow-y-auto"
+                      ariaLabel="插件随动抽屉"
+                      onClose={() => setActiveMenu(null)}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>

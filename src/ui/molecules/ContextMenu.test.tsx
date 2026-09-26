@@ -143,4 +143,32 @@ describe('ContextMenu primitive', () => {
     expect(screen.getAllByRole('menu')).toHaveLength(1)
     expect(screen.getByRole('menuitem')).toBeInTheDocument()
   })
+
+  it('分组小标题与说明只作展示，不占用焦点、也不改写无障碍名称', () => {
+    const items: ContextMenuItem[] = [
+      {
+        key: 'a',
+        label: '活体世界书',
+        description: '人物与设定的实时档案',
+        groupLabel: '设定与世界书',
+        onClick: vi.fn(),
+      },
+      { key: 'b', label: '叙事体检', onClick: vi.fn() },
+    ]
+    const onClose = vi.fn()
+    render(<ContextMenu items={items} onClose={onClose} />)
+
+    expect(screen.getByText('设定与世界书')).toBeInTheDocument()
+    expect(screen.getByText('人物与设定的实时档案')).toBeInTheDocument()
+    // 分组与说明都不得成为可聚焦条目：焦点序列里只有两个 menuitem
+    const menuitems = screen.getAllByRole('menuitem')
+    expect(menuitems).toHaveLength(2)
+    expect(document.activeElement).toBe(menuitems[0])
+    expect(menuitems[0]).toHaveAccessibleName(/^活体世界书/)
+    expect(menuitems[0]).toHaveAttribute('title', '活体世界书：人物与设定的实时档案')
+    expect(menuitems[1]).toHaveAttribute('title', '叙事体检')
+
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(menuitems[1])
+  })
 })

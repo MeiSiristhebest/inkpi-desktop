@@ -8,6 +8,13 @@ export interface ContextMenuItem {
   /** 该项之前渲染一条分隔线（用于分组，如危险操作前） */
   dividerBefore?: boolean
   /**
+   * 分组小标题，渲染在该条目之前，非交互、不参与键盘导航。
+   * 用于「条目很多、必须说明它属于哪一组」的菜单（如插件抽屉选择器）。
+   */
+  groupLabel?: string
+  /** 次级说明文字：说明选中后会发生什么，让「明确选择」真的建立在选择者能读懂的信息上。 */
+  description?: string
+  /**
    * 互斥选择项：渲染成 role="menuitemradio" + aria-checked（P4.3）。
    * 用于「状态标记」这类当前值有意义的条目。
    */
@@ -162,6 +169,14 @@ export const ContextMenu = ({
       )}
       {items.map((it, idx) => (
         <div key={it.key} role="none">
+          {it.groupLabel && (
+            <div
+              role="presentation"
+              className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-text-faint)] truncate"
+            >
+              {it.groupLabel}
+            </div>
+          )}
           {it.dividerBefore && (
             <div className="border-t border-[var(--ink-border)] my-1" role="separator" />
           )}
@@ -169,10 +184,12 @@ export const ContextMenu = ({
             type="button"
             role={it.checked === undefined ? 'menuitem' : 'menuitemradio'}
             aria-checked={it.checked}
-            title={it.label}
+            title={it.description ? `${it.label}：${it.description}` : it.label}
             aria-disabled={false}
             onClick={() => handleItemClick(idx, it)}
-            className={`w-full px-3 py-1.5 text-left flex items-center gap-2 cursor-pointer ${
+            className={`w-full px-3 py-1.5 text-left flex gap-2 cursor-pointer ${
+              it.description ? 'items-start' : 'items-center'
+            } ${
               it.danger
                 ? 'text-[var(--ink-danger)] hover:bg-[var(--ink-danger)]/10'
                 : it.checked
@@ -180,8 +197,23 @@ export const ContextMenu = ({
                   : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
             }`}
           >
-            {it.icon && <span className="[&>svg]:text-[var(--ink-text-muted)]">{it.icon}</span>}
-            {it.label}
+            {it.icon && (
+              <span
+                className={`${it.description ? 'mt-0.5 shrink-0' : ''} [&>svg]:text-[var(--ink-text-muted)]`}
+              >
+                {it.icon}
+              </span>
+            )}
+            {it.description ? (
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{it.label}</span>
+                <span className="block text-[10.5px] leading-snug text-[var(--ink-text-faint)] line-clamp-2">
+                  {it.description}
+                </span>
+              </span>
+            ) : (
+              it.label
+            )}
           </button>
         </div>
       ))}
