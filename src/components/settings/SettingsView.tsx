@@ -1,4 +1,12 @@
-import { useState, useMemo, useId, type FC, type ReactNode } from 'react'
+import {
+  useState,
+  useMemo,
+  useId,
+  useRef,
+  type FC,
+  type KeyboardEvent as TabKeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { Modal } from '../../ui/molecules/Modal'
 import {
   Settings as Gear,
@@ -103,7 +111,7 @@ const TABS: TabDescriptor[] = [
   {
     key: 'writing',
     label: '写作与习惯',
-    desc: '自动滚屏、实体高亮、久坐与分章提醒',
+    desc: '自动滚屏、实体高亮与久坐提醒',
     icon: Feather,
     group: '功能偏好',
   },
@@ -370,6 +378,39 @@ export const SettingsView: FC<SettingsViewProps> = ({
   const [tab, setTab] = useState<TabKey>('appearance')
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
   const dialogTitleId = useId()
+  const tabRefs = useRef<Partial<Record<TabKey, HTMLButtonElement | null>>>({})
+
+  // §P4.1：分区导航是一张纵向 tablist——方向键在组内切换并立即激活，Tab 键每组只经过一个停靠点。
+  const activateTab = (target: TabDescriptor) => {
+    setTab(target.key)
+    tabRefs.current[target.key]?.focus()
+  }
+
+  const handleTabKeyDown = (
+    event: TabKeyboardEvent<HTMLButtonElement>,
+    groupTabs: TabDescriptor[],
+    index: number,
+  ) => {
+    const total = groupTabs.length
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault()
+        activateTab(groupTabs[(index + 1) % total])
+        break
+      case 'ArrowUp':
+        event.preventDefault()
+        activateTab(groupTabs[(index - 1 + total) % total])
+        break
+      case 'Home':
+        event.preventDefault()
+        activateTab(groupTabs[0])
+        break
+      case 'End':
+        event.preventDefault()
+        activateTab(groupTabs[total - 1])
+        break
+    }
+  }
 
   if (!open) return null
 
@@ -430,57 +471,81 @@ export const SettingsView: FC<SettingsViewProps> = ({
           } shrink-0 border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] p-3 overflow-y-auto select-none transition-all flex flex-col`}
         >
           <div className="space-y-3">
-            {TAB_GROUPS.map((group) => (
-              <div key={group} className="space-y-1">
-                <div className="px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
-                  {group}
-                </div>
-                {TABS.filter((t) => t.group === group).map((t) => {
-                  const Icon = t.icon
-                  const active = tab === t.key
-                  return (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setTab(t.key)}
-                      className={`w-full text-left p-2 rounded-xl transition-all duration-150 cursor-pointer flex items-center gap-2.5 ${
-                        active
-                          ? 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border-strong)] shadow-xs text-[var(--ink-text)]'
-                          : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-transparent'
-                      }`}
-                    >
-                      <div
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                          active
-                            ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-                            : 'bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className={`text-[12.5px] leading-tight ${
-                            active ? 'font-semibold text-[var(--ink-text)]' : 'font-medium'
+            {TAB_GROUPS.map((group) => {
+              const groupTabs = TABS.filter((t) => t.group === group)
+              // 当前分区所在组之外的 tablist 也要能被 Tab 键到达，否则键盘用户永远进不去那几个组
+              const groupHasActive = groupTabs.some((t) => t.key === tab)
+              return (
+                <div key={group} className="space-y-1">
+                  <div className="px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
+                    {group}
+                  </div>
+                  <div
+                    role="tablist"
+                    aria-orientation="vertical"
+                    aria-label={group}
+                    className="space-y-1"
+                  >
+                    {groupTabs.map((t, index) => {
+                      const Icon = t.icon
+                      const active = tab === t.key
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          role="tab"
+                          id={`settings-tab-${t.key}`}
+                          aria-selected={active}
+                          aria-controls={`settings-panel-${t.key}`}
+                          tabIndex={active || (!groupHasActive && index === 0) ? 0 : -1}
+                          ref={(node) => {
+                            tabRefs.current[t.key] = node
+                          }}
+                          onKeyDown={(event) => handleTabKeyDown(event, groupTabs, index)}
+                          onClick={() => setTab(t.key)}
+                          className={`w-full text-left p-2 rounded-xl transition-all duration-150 cursor-pointer flex items-center gap-2.5 ${
+                            active
+                              ? 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border-strong)] shadow-xs text-[var(--ink-text)]'
+                              : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-transparent'
                           }`}
                         >
-                          {t.label}
-                        </div>
-                        <div className="text-[10px] text-[var(--ink-text-faint)] truncate mt-0.5">
-                          {t.desc}
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            ))}
+                          <div
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                              active
+                                ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
+                                : 'bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className={`text-[12.5px] leading-tight ${
+                                active ? 'font-semibold text-[var(--ink-text)]' : 'font-medium'
+                              }`}
+                            >
+                              {t.label}
+                            </div>
+                            <div className="text-[10px] text-[var(--ink-text-faint)] truncate mt-0.5">
+                              {t.desc}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </aside>
 
         {/* 右侧设置主体区：按整页与卡片自适应拉宽，彻底告别 640px 窄缝 */}
         <main className="flex-1 min-w-0 overflow-y-auto p-6 lg:p-10">
           <div
+            role="tabpanel"
+            id={`settings-panel-${tab}`}
+            aria-labelledby={`settings-tab-${tab}`}
             className={
               tab === 'plugins'
                 ? 'h-full'
