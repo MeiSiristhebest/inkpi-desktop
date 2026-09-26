@@ -2,6 +2,8 @@ import { motion } from 'motion/react'
 import { BookOpen, MoreVertical, Upload, FolderOpen } from 'lucide-react'
 import type { ProjectRecord } from '../../../types'
 import type { ProjectStats } from '../../../core/projectService'
+import { clock } from '../../../adapters/clock'
+import { formatRelativeTime } from '../../../lib/relativeTime'
 import { spring, gesture, variants } from '../../../motion'
 import { ProjectContextMenu } from './ProjectContextMenu'
 import { ProjectEditForm, type ProjectEditFormValues } from './ProjectEditForm'
@@ -141,11 +143,11 @@ export const ProjectCard = ({
         </div>
       </div>
 
-      {/* 卡片底栏：创建时间与直觉的“进入写作”主按钮 */}
+      {/* 卡片底栏：上次编辑的相对时间与主按钮（章数未知时不承诺"继续"） */}
       <div className="mt-4 pt-3 border-t border-[var(--ink-border)] flex items-center justify-between text-[11px] text-[var(--ink-text-faint)]">
         <span>
           {project.updatedAt || project.createdAt
-            ? `更新于 ${new Date(project.updatedAt || project.createdAt!).toLocaleDateString()}`
+            ? `上次编辑 ${formatRelativeTime(project.updatedAt || project.createdAt!, clock.now())}`
             : '暂无更新记录'}
         </span>
 
@@ -163,12 +165,12 @@ export const ProjectCard = ({
           <motion.button
             type="button"
             onClick={onOpen}
-            title="打开项目"
+            title={chs > 0 ? '继续写作' : '打开项目'}
             {...gesture.button}
             transition={spring.snappy}
             className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer"
           >
-            <FolderOpen size={13} /> 进入写作
+            <FolderOpen size={13} /> {chs > 0 ? '继续写作' : '打开项目'}
           </motion.button>
         </div>
       </div>

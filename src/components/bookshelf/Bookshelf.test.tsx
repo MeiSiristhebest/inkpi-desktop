@@ -39,6 +39,29 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(onOpen).toHaveBeenCalledWith('p1')
   })
 
+  it('卡片底栏按"上次编辑 2 小时前"这类间隔来读，而不是日历日期（P3.7）', () => {
+    render(
+      <Bookshelf
+        projects={[
+          {
+            id: 'p7',
+            name: '时雨集',
+            genre: '都市',
+            createdAt: 1,
+            updatedAt: Date.now() - (2 * 3_600_000 + 60_000),
+          },
+        ]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('上次编辑 2 小时前')).toBeInTheDocument()
+    expect(screen.queryByText(/更新于/)).not.toBeInTheDocument()
+    // 章数尚未加载完时不承诺"继续写作"，等 stats 到位再换文案
+    expect(screen.getByTitle('打开项目')).toBeInTheDocument()
+  })
+
   it('新建项目面板展开并收集信息回调（默认纯净空白）', async () => {
     const onCreate = vi.fn()
     render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
