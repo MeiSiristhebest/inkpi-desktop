@@ -59,6 +59,13 @@ interface ChapterContextMenu {
 
 export type CanvasWidth = 'narrow' | 'wide' | 'full'
 
+/**
+ * 计划 P0.2 要求的「三个状态分开」：React 脏状态（unsaved）、防抖排队（也属于 unsaved，
+ * 用户不需要区分）、落库在途（saving）与已 durable（saved），外加失败可重试（error）。
+ * 视图只消费这一层语义，不读 revision。
+ */
+export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error'
+
 export interface EditorModelState {
   volumes: VolumeRecord[]
   chapters: ChapterRecord[]
@@ -66,6 +73,10 @@ export interface EditorModelState {
   activeChapter: ChapterRecord | null
   expanded: Record<string, boolean>
   isSaved: boolean
+  /** 正文落库在途（flushSave 执行中）。与「有改动待落库」的 isSaved 是两个维度。 */
+  saveInFlight: boolean
+  /** 最近一次持久化失败的摘要；null 表示没有等待用户处理的失败。 */
+  saveError: string | null
   treeQuery: string
   sessionWordDelta: number
   ghostText: string
@@ -127,6 +138,8 @@ function createInitialState(projectId: string): EditorModelState {
     activeChapter: null,
     expanded: {},
     isSaved: true,
+    saveInFlight: false,
+    saveError: null,
     treeQuery: '',
     sessionWordDelta: 0,
     ghostText: '',
@@ -191,6 +204,8 @@ export interface ChapterEditorModel {
   activeChapter: ChapterRecord | null
   expanded: Record<string, boolean>
   isSaved: boolean
+  saveInFlight: boolean
+  saveError: string | null
   treeQuery: string
   sessionWordDelta: number
   ghostText: string
@@ -240,6 +255,8 @@ export interface ChapterEditorModel {
   wordTarget: number
   showStatsBar: boolean
   defaultTypewriter: boolean
+  /** 底部状态栏唯一消费的保存语义（已保存 / 未保存 / 正在保存… / 保存失败 · 重试）。 */
+  saveState: SaveState
   // ── 命令（视图只负责派发） ──
   ghostTextRef: MutableRefObject<string>
   actions: ChapterEditorActions
@@ -279,6 +296,8 @@ export interface ChapterEditorActions {
   hasPending: () => boolean
   handleEditorUpdate: () => void
   save: () => void
+  /** 失败后由状态栏「保存失败 · 重试」触发：重放防抖队列里最新的那份草稿。 */
+  retrySave: () => void
   setGhostText: (v: string) => void
   setSidebar: (v: boolean) => void
   setShowFindReplace: (v: boolean) => void
@@ -358,6 +377,8 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const canonicalMutationQueue = useRef<Promise<void>>(Promise.resolve())
   const canonicalMutationError = useRef<unknown | null>(null)
   const canonicalMutationPending = useRef(0)
+  // ⌘S 直发与防抖队列可能同时落库，因此用计数而不是布尔：最后一个 in-flight 结束才回到非保存态。
+  const inFlightSaves = useRef(0)
 
   const kvStoreRef = useRef(kvStore)
   kvStoreRef.current = kvStore
@@ -394,7 +415,8 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     (error: unknown) => {
       if (!mountedRef.current) return
       console.warn('[InkPi Desktop] Chapter save failed:', error)
-      patch({ isSaved: false })
+      const message = error instanceof Error ? error.message : String(error)
+      patch({ isSaved: false, saveError: message })
     },
     [patch],
   )
@@ -404,45 +426,55 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       const target = ch ?? activeChapterRef.current
       if (!target) return
 
-      // P0: 用户输入存盘统一走 ChapterMutationService (INV-02)
-      // 使用权威的 durable revision 模型，不绑定已陈旧的 target.revision，
-      // 允许 mutation 依据最新真实 durable 版本推进存盘，杜绝 fast-typing 导致的伪 CAS 冲突
-      const currentStoredRevision =
-        activeChapterRef.current?.id === target.id
-          ? activeChapterRef.current?.revision
-          : target.revision
+      inFlightSaves.current += 1
+      patch({ saveInFlight: true })
+      try {
+        // P0: 用户输入存盘统一走 ChapterMutationService (INV-02)
+        // 使用权威的 durable revision 模型，不绑定已陈旧的 target.revision，
+        // 允许 mutation 依据最新真实 durable 版本推进存盘，杜绝 fast-typing 导致的伪 CAS 冲突
+        const currentStoredRevision =
+          activeChapterRef.current?.id === target.id
+            ? activeChapterRef.current?.revision
+            : target.revision
 
-      const result = await chapterMutationService.mutate({
-        workspaceId: projectId,
-        chapterId: target.id,
-        expectedRevision: currentStoredRevision,
-        mutation: { type: 'replace-content', content: target.content || '' },
-        origin: 'user-typing',
-        countAsAuthorWriting: true,
-      })
+        const result = await chapterMutationService.mutate({
+          workspaceId: projectId,
+          chapterId: target.id,
+          expectedRevision: currentStoredRevision,
+          mutation: { type: 'replace-content', content: target.content || '' },
+          origin: 'user-typing',
+          countAsAuthorWriting: true,
+        })
 
-      if (!result.success) {
-        throw new Error(result.error || 'Chapter mutation save failed')
-      }
+        if (!result.success) {
+          throw new Error(result.error || 'Chapter mutation save failed')
+        }
 
-      const updated = result.chapter
-      saveSnapshot(updated)
-      if (activeChapterRef.current?.id === updated.id) {
-        activeChapterRef.current = updated
-        patch({
-          activeChapter: updated,
-          chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
-          isSaved: true,
-        })
-        onStats?.({
-          title: updated.title,
-          wordCount: updated.wordCount,
-          updatedAt: updated.updatedAt,
-        })
-      } else {
-        patch({
-          chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
-        })
+        // 落库成功即撤销失败标记：此刻这份内容确实是 durable 的，与是否当前章无关
+        patch({ saveError: null })
+
+        const updated = result.chapter
+        saveSnapshot(updated)
+        if (activeChapterRef.current?.id === updated.id) {
+          activeChapterRef.current = updated
+          patch({
+            activeChapter: updated,
+            chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+            isSaved: true,
+          })
+          onStats?.({
+            title: updated.title,
+            wordCount: updated.wordCount,
+            updatedAt: updated.updatedAt,
+          })
+        } else {
+          patch({
+            chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+          })
+        }
+      } finally {
+        inFlightSaves.current -= 1
+        if (inFlightSaves.current === 0) patch({ saveInFlight: false })
       }
     },
     [onStats, patch, projectId],
@@ -462,6 +494,13 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   )
 
   const autosave = useChapterAutosave(flushSave, reportSaveError)
+
+  const retrySave = useCallback(() => {
+    patch({ saveError: null })
+    // autosave.retry() 会清掉失败阻断并重新排空队列：失败那份草稿仍是 latestDraft，
+    // 所以这里重试的是最新键入内容，而不是失败那一刻的旧快照。
+    void autosave.retry().catch((error) => reportSaveError(error))
+  }, [autosave, patch, reportSaveError])
 
   const applyCanonicalChapterMutation = useCallback(
     (
@@ -1453,6 +1492,16 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const chapterWords = state.activeChapter?.wordCount || 0
   const fontStack = fontStackFor(fontFamily)
 
+  // 计划 P0.2：状态栏只呈现用户能理解的结果。在途优先于失败（正在重试时不该再挂着旧错误），
+  // 失败优先于脏（未落库的内容需要显式回应）。
+  const saveState: SaveState = state.saveInFlight
+    ? 'saving'
+    : state.saveError
+      ? 'error'
+      : state.isSaved
+        ? 'saved'
+        : 'unsaved'
+
   const prevChapter = useCallback(() => {
     if (currentChapterIndex > 0) selectChapter(linearChapters[currentChapterIndex - 1])
   }, [currentChapterIndex, linearChapters, selectChapter])
@@ -1508,6 +1557,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     hasPending: () => autosave.hasPending() || canonicalMutationPending.current > 0,
     handleEditorUpdate,
     save,
+    retrySave,
     setGhostText,
     setSidebar: (v: boolean) => patch({ isSidebarOpen: v }),
     setShowFindReplace: (v: boolean) => patch({ showFindReplace: v }),
@@ -1555,6 +1605,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     wordTarget,
     showStatsBar,
     defaultTypewriter,
+    saveState,
     ghostTextRef,
     actions,
     updateSettings,

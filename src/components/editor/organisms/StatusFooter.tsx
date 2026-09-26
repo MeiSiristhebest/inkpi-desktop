@@ -1,5 +1,5 @@
 import React from 'react'
-import type { EditorModel } from '../hooks/useChapterEditorModel'
+import type { EditorModel, SaveState } from '../hooks/useChapterEditorModel'
 
 interface StatusFooterProps {
   model: EditorModel
@@ -11,6 +11,25 @@ interface StatusFooterProps {
   onReconnect?: () => void
 }
 
+/**
+ * 保存状态的可理解用词（收口计划 P0.2）：状态栏不出现 revision、debounce、generation
+ * 等内部概念。「保存失败 · 重试」渲染成按钮，重试的是防抖队列里最新那份草稿。
+ */
+const SAVE_STATE_VIEW: Record<SaveState, { label: string; hint: string; tone: string }> = {
+  saved: { label: '已保存', hint: '内容已保存到本地工作区', tone: '' },
+  unsaved: {
+    label: '未保存',
+    hint: '有改动等待自动保存，按 ⌘S 立即保存',
+    tone: 'text-[var(--ink-text-muted)]',
+  },
+  saving: { label: '正在保存…', hint: '正在写入本地工作区', tone: 'text-[var(--ink-text-muted)]' },
+  error: {
+    label: '保存失败 · 重试',
+    hint: '上次保存失败，点击重试',
+    tone: 'text-[var(--ink-danger)]',
+  },
+}
+
 /** 底部状态栏：只呈现写作进度、连接和保存状态。 */
 export const StatusFooter: React.FC<StatusFooterProps> = ({
   model,
@@ -18,7 +37,10 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
   isReconnecting = false,
   onReconnect,
 }) => {
-  const { chapterWords, wordTarget, totalWords, isSaved } = model
+  const { chapterWords, wordTarget, totalWords, saveState, saveError } = model
+  const saveView = SAVE_STATE_VIEW[saveState]
+  const saveHint =
+    saveState === 'error' && saveError ? `${saveView.hint}：${saveError}` : saveView.hint
   const connectionLabel = isConnected ? '已连接' : isReconnecting ? '连接中…' : '离线'
   const connectionDescription = isConnected
     ? '已连接 InkPi Daemon，点击重连'
@@ -81,11 +103,23 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
         <span
           data-testid="editor-status-save-state"
           data-status-kind="save"
-          aria-label={isSaved ? '内容已保存' : '内容未保存'}
-          className={`editor-status-save-state ${isSaved ? '' : 'text-[var(--ink-text-muted)]'}`}
-          title={isSaved ? '已保存' : '未保存，按 ⌘S 保存'}
+          data-save-state={saveState}
+          role="status"
+          aria-label={saveHint}
+          className={`editor-status-save-state ${saveView.tone}`}
+          title={saveHint}
         >
-          {isSaved ? '已保存' : '未保存'}
+          {saveState === 'error' ? (
+            <button
+              type="button"
+              onClick={() => model.actions.retrySave()}
+              className="cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink-text)] transition-colors"
+            >
+              {saveView.label}
+            </button>
+          ) : (
+            saveView.label
+          )}
         </span>
       </div>
     </footer>

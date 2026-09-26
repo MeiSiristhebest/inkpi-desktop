@@ -16,6 +16,8 @@ import type { ContinuityDiagnosticMarker } from '../../ai/results/continuityDiag
 import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
 import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diagnostics'
 import { draftJournal } from '../../services/draftJournal'
+import { chapterMutationService } from '../../services/defaultChapterMutationService'
+import type { ChapterMutationExecutionResult } from '../../services/chapterMutationService'
 
 // RichEditor 依赖 useSettings（§12.3：Provider 内才能使用），统一在此包裹 SettingsProvider。
 // rerender 也会落到 Provider 之外，故对 rerender 一并包裹。
@@ -156,6 +158,7 @@ beforeEach(async () => {
     'p-split',
     'p-stat',
     'p-hist',
+    'p-save-states',
   ]
   for (const pid of testProjectIds) {
     await db.put('projects', {
@@ -211,6 +214,60 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     )
   }, 10000)
 
+  it('surfaces saving, failed and retry save states in the footer with user-facing words', async () => {
+    // 收口计划 P0.2：把「React 脏 / 防抖排队 / 已 durable」三种内部状态翻成用户能读懂的
+    // 「未保存 / 正在保存… / 已保存」，失败必须显式可见并能重试，而不是退回一个永不消退的脏标记。
+    h.getText = () => '重试后的正文'
+    h.getHTML = () => '<p>重试后的正文</p>'
+    const realMutate = chapterMutationService.mutate.bind(chapterMutationService)
+    let releaseSave: ((result: ChapterMutationExecutionResult) => void) | undefined
+    const mutateSpy = vi.spyOn(chapterMutationService, 'mutate').mockImplementation(
+      () =>
+        new Promise<ChapterMutationExecutionResult>((resolve) => {
+          releaseSave = resolve
+        }),
+    )
+
+    try {
+      render(<RichEditor projectId="p-save-states" />)
+      await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+      const saveState = () => screen.getByTestId('editor-status-save-state')
+      expect(saveState()).toHaveAttribute('data-save-state', 'saved')
+
+      act(() => {
+        h.capturedOnUpdate?.()
+      })
+      // 键入本身只是脏：落库还没开始，不能谎报「正在保存」
+      expect(saveState()).toHaveAttribute('data-save-state', 'unsaved')
+
+      await waitFor(() => expect(mutateSpy).toHaveBeenCalled(), { timeout: 8000 })
+      expect(saveState()).toHaveAttribute('data-save-state', 'saving')
+      expect(saveState()).toHaveTextContent('正在保存…')
+
+      releaseSave?.({ success: false, conflict: false, error: '磁盘写入失败' })
+      await waitFor(() => expect(saveState()).toHaveAttribute('data-save-state', 'error'), {
+        timeout: 8000,
+      })
+      expect(saveState()).toHaveTextContent('保存失败 · 重试')
+      expect(saveState().getAttribute('title')).toContain('磁盘写入失败')
+      // 失败不落库：权威存储里仍是原始内容，UI 与 durable 事实一致
+      const before = await db.getAll('chapters')
+      expect(before.find((c) => c.title === '第001章 寒潭惊变')?.content).not.toBe(
+        '<p>重试后的正文</p>',
+      )
+
+      mutateSpy.mockImplementation(realMutate)
+      fireEvent.click(within(saveState()).getByRole('button', { name: '保存失败 · 重试' }))
+      await waitFor(() => expect(saveState()).toHaveAttribute('data-save-state', 'saved'), {
+        timeout: 8000,
+      })
+      // 「已保存」必须对应真实 durable 落库，且重试的是最新那份草稿
+      const after = await db.getAll('chapters')
+      expect(after.find((c) => c.title === '第001章 寒潭惊变')?.content).toBe('<p>重试后的正文</p>')
+    } finally {
+      mutateSpy.mockRestore()
+    }
+  }, 30000)
   it('auto-format applies full-width indent via editor.setContent', async () => {
     render(<RichEditor projectId="p-fmt" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
