@@ -15,6 +15,7 @@ import {
 } from '../domain/seed'
 import { LEGACY_PROJECT_ID } from '../config'
 import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
+import { resolveResumeChapterTitle } from '../lib/resumePointer'
 
 // ─────────────────────────────────────────────────────────────
 // 项目应用服务（原 projectManager）
@@ -35,6 +36,8 @@ export interface ProjectStats {
   chapters: number
   volumes: number
   lastUpdated: number
+  /** 上次在编辑器里打开的章节标题；没有指针或章节已删除时不给。 */
+  resumeChapterTitle?: string
 }
 
 export interface WorkspaceStats {
@@ -45,7 +48,7 @@ export interface WorkspaceStats {
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
-/** 单项目聚合统计：字数 / 章节数 / 卷数 / 最近更新时间（全部取自真实数据） */
+/** 单项目聚合统计：字数 / 章节数 / 卷数 / 最近更新时间 / 续写章节（全部取自真实数据） */
 export async function loadProjectStats(projectId: string): Promise<ProjectStats> {
   const [vols, pc] = await Promise.all([
     projectRepo.getAllVolumes(),
@@ -57,6 +60,7 @@ export async function loadProjectStats(projectId: string): Promise<ProjectStats>
     chapters: pc.length,
     volumes: pv.length,
     lastUpdated: pc.reduce((m, c) => Math.max(m, c.updatedAt || 0), 0),
+    resumeChapterTitle: await resolveResumeChapterTitle(projectId, pc),
   }
 }
 
@@ -74,6 +78,7 @@ export async function loadStatsForProjects(
       chapters: pc.length,
       volumes: pv.length,
       lastUpdated: pc.reduce((m, c) => Math.max(m, c.updatedAt || 0), 0),
+      resumeChapterTitle: await resolveResumeChapterTitle(p.id, pc),
     }
   }
   return map

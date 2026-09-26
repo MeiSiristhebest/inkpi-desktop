@@ -55,6 +55,12 @@ export const ProjectCard = ({
   const vols = stats?.volumes ?? 0
   const chs = stats?.chapters ?? 0
   const wordsWan = ((stats?.words ?? 0) / 10000).toFixed(1)
+  // 打开项目时编辑器本来就会回到上次写作的那一章（P1.3），卡片把这件事说出口。
+  const openLabel = stats?.resumeChapterTitle
+    ? `继续《${stats.resumeChapterTitle}》`
+    : chs > 0
+      ? '继续写作'
+      : '打开项目'
 
   return (
     <motion.div
@@ -165,12 +171,13 @@ export const ProjectCard = ({
           <motion.button
             type="button"
             onClick={onOpen}
-            title={chs > 0 ? '继续写作' : '打开项目'}
+            title={openLabel}
             {...gesture.button}
             transition={spring.snappy}
-            className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer max-w-[14rem]"
           >
-            <FolderOpen size={13} /> {chs > 0 ? '继续写作' : '打开项目'}
+            <FolderOpen size={13} className="shrink-0" />
+            <span className="truncate">{openLabel}</span>
           </motion.button>
         </div>
       </div>

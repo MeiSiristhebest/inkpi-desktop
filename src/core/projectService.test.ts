@@ -83,6 +83,23 @@ describe('projectService — 工作区聚合统计', () => {
     expect(map.pX.volumes).toBe(1)
   })
 
+  it('带上上次打开的章节，让书架说得出继续写哪一章（P1.3）', async () => {
+    await seed('pR', [10, 20, 30])
+    localStorage.setItem('inkpi_last_active_chapter:pR', 'c-pR-1')
+    const projects: ProjectRecord[] = [
+      { id: 'pR', name: 'pR', genre: '仙侠修真', intro: '', createdAt: 1, updatedAt: 1 },
+    ]
+
+    const map = await loadStatsForProjects(projects)
+    expect(map.pR.resumeChapterTitle).toBe('第002章')
+
+    // 指针指向已被删除的章节时不编造，回到通用文案（与编辑器自己的处理一致）
+    localStorage.setItem('inkpi_last_active_chapter:pR', 'c-deleted')
+    const stale = await loadStatsForProjects(projects)
+    expect(stale.pR.resumeChapterTitle).toBeUndefined()
+    localStorage.removeItem('inkpi_last_active_chapter:pR')
+  })
+
   it('createProject defaults to pure blank project (INV-05)', async () => {
     const p = await createProject('纯净新书', '科幻灵异', '一本完全崭新的小说')
     expect(p.templateType).toBe('blank')
