@@ -5,32 +5,8 @@ import { factionMatrixEngine } from '../engine/FactionMatrixEngine'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { Shield } from 'lucide-react'
 
-const DEFAULT_DEMO_FACTIONS: FactionNode[] = [
-  {
-    id: 'f-xuanjian',
-    name: '未命名势力',
-    type: 'righteous',
-    powerTier: '未指定',
-    protagonistReputation: 35,
-  },
-  {
-    id: 'f-zixia',
-    name: '未命名势力B',
-    type: 'righteous',
-    powerTier: '未指定',
-    protagonistReputation: 15,
-  },
-  {
-    id: 'f-xuesha',
-    name: '未命名势力C',
-    type: 'demonic',
-    powerTier: '未指定',
-    protagonistReputation: -45,
-  },
-]
-
 export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
-  const [factions, setFactions] = useState<FactionNode[]>(DEFAULT_DEMO_FACTIONS)
+  const [factions, setFactions] = useState<FactionNode[]>([])
 
   const loadData = useCallback(async () => {
     try {
@@ -45,11 +21,10 @@ export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId })
           protagonistReputation: Number(e.attributes?.reputation ?? 10),
         }))
 
-      if (codexFactions.length >= 2) {
-        setFactions(codexFactions)
-      }
+      setFactions(codexFactions)
     } catch (e) {
       console.error('Failed to load drawer factions:', e)
+      setFactions([])
     }
   }, [projectId])
 
@@ -74,6 +49,11 @@ export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId })
           主角当前声望天平：
         </span>
         <div className="space-y-1.5">
+          {factions.length === 0 && (
+            <p className="text-[11px] text-[var(--ink-text-faint)] leading-snug">
+              设定库里还没有势力条目。声望天平只显示你自己登记的势力，不用示例数据填充。
+            </p>
+          )}
           {factions.map((f) => {
             const rep = factionMatrixEngine.getReputationLevel(f.protagonistReputation)
             return (
