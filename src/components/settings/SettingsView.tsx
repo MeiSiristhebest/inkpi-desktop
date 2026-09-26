@@ -1641,7 +1641,8 @@ const AboutTab: FC = () => (
           </div>
         </div>
         <p className="text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
-          数据本地优先，绝不离开你的设备；AI 仅在显式配置模型并运行 Daemon 时联网。
+          InkPi 以本地数据为主。使用外部 AI
+          模型时，为完成请求所需的上下文会发送给你选择的模型提供商。
         </p>
       </div>
     </Section>

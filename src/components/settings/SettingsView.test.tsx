@@ -166,6 +166,19 @@ describe('SettingsView', () => {
     expect(screen.getByText('统一设置中心')).toBeInTheDocument()
   })
 
+  it('关于：隐私说明只承诺实际行为，不承诺数据绝不离开设备（P3.15）', () => {
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('关于'))
+
+    expect(
+      screen.getByText(
+        'InkPi 以本地数据为主。使用外部 AI 模型时，为完成请求所需的上下文会发送给你选择的模型提供商。',
+      ),
+    ).toBeInTheDocument()
+    // 反例锚点：这句话此前就在同一个段落里，而 AI 请求确实会把上下文交给外部提供商。
+    expect(screen.queryByText(/绝不离开/)).not.toBeInTheDocument()
+  })
+
   it('每个设置标签下的控件都能被读屏器念出名称（P4.4）', () => {
     const { container } = renderSettings({ open: true, onClose: vi.fn() })
     let visited = 0
