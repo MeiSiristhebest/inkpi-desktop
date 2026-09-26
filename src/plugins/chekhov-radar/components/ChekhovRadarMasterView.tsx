@@ -8,6 +8,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Crosshair,
   Flame,
@@ -22,6 +24,7 @@ import {
 
 export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('chekhov-radar')
   const [guns, setGuns] = useState<ChekhovGunRecord[]>([])
   const [chapters, setChapters] = useState<any[]>([])
   const [maxChapterOrder, setMaxChapterOrder] = useState<number>(1)
@@ -79,11 +82,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
     const analysisInput = { chapterSamples: chaptersSnippet }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('chekhov-radar', analysisInput)
-        .catch((error) => console.error('Chekhov Radar plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const stats = useMemo(() => {
@@ -157,6 +156,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         <div className="flex items-center gap-2 self-start md:self-auto">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiScanGuns}
               className="px-3 py-1.5 text-xs font-semibold bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
@@ -164,6 +164,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               <span>AI 逆向扫描伏笔</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={() => setIsCreating(true)}
             className="px-3.5 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"

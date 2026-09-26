@@ -14,11 +14,14 @@ import { codexApplicationService } from '../../../services/domainApplicationServ
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Shield, Zap, CheckCircle2, AlertTriangle, GitBranch, Bot, Plus } from 'lucide-react'
 
 export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('faction-matrix')
   const [factions, setFactions] = useState<FactionNode[]>([])
   const [diplomacies, setDiplomacies] = useState<FactionDiplomacyRecord[]>([])
   const [newFactionName, setNewFactionName] = useState('')
@@ -106,11 +109,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       })),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('faction-matrix', analysisInput)
-        .catch((error) => console.error('Faction Matrix plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const getStance = (idA: string, idB: string): FactionStance => {
@@ -189,6 +188,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         <div className="flex items-center gap-2">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiFactionAnalysis}
               className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1 cursor-pointer"
             >
@@ -196,6 +196,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               AI 地缘博弈推演
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={() => setIsAddingFaction(!isAddingFaction)}
             className="px-3 py-1.5 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"

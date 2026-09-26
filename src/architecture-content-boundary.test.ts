@@ -49,6 +49,14 @@ const AI_BOUNDARY_ARGUMENTS = new Map<string, number>([
   ['runTask', 0],
 ])
 
+/**
+ * §P1.12: plugin views now hand their task input to the shared AI task seam as
+ * `aiTask.run(payload)`.  `run` is far too generic a method name to register as
+ * a boundary, so match the whole receiver chain instead of losing those 22
+ * call sites from the taint audit.
+ */
+const AI_BOUNDARY_CHAIN_ARGUMENTS = new Map<string, number>([['aiTask.run', 0]])
+
 const DIRECT_MODEL_METHODS = new Set([
   'complete',
   'createChatCompletion',
@@ -410,6 +418,9 @@ function auditTaintedBoundaries(parsed: ParsedSource): BoundaryAudit {
       const boundary = functionName(node.expression)
       const argumentIndex = boundary ? AI_BOUNDARY_ARGUMENTS.get(boundary) : undefined
       if (argumentIndex !== undefined) report(node, boundary, argumentIndex)
+      const chain = propertyChain(node.expression).join('.')
+      const chainArgumentIndex = AI_BOUNDARY_CHAIN_ARGUMENTS.get(chain)
+      if (chainArgumentIndex !== undefined) report(node, chain, chainArgumentIndex)
     }
 
     ts.forEachChild(node, (child) => visit(child, environment))
@@ -706,7 +717,8 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
         audit.boundaryCalls > 0 && sources[index].relativeFile.startsWith('src/plugins/'),
     )
 
-    expect(pluginBoundaryFiles.length).toBeGreaterThan(0)
+    // 22 plugin views on the §P1.12 task seam + the six Runtime tool/workflow views.
+    expect(pluginBoundaryFiles.length).toBeGreaterThanOrEqual(28)
     expect(violations, `raw representation at AI boundaries:\n${violations.join('\n')}`).toEqual([])
   })
 
@@ -737,6 +749,27 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
       }
     `)
     expect(auditTaintedBoundaries(safe).violations).toEqual([])
+
+    const seam = parseFixture(`
+      function dispatch(chapter: { content: string }) {
+        const rawChapter = chapter.content
+        const aiTask = usePluginAiTask('demo')
+        aiTask.run({ text: rawChapter })
+      }
+    `)
+    const seamAudit = auditTaintedBoundaries(seam)
+    expect(seamAudit.boundaryCalls).toBe(1)
+    expect(seamAudit.violations).toHaveLength(1)
+    expect(seamAudit.violations[0]).toContain('aiTask.run')
+
+    const safeSeam = parseFixture(`
+      function dispatch(chapter: { id: string; content: string }) {
+        const text = semanticTextFromContent(chapter.id, chapter.content)
+        const aiTask = usePluginAiTask('demo')
+        aiTask.run({ text })
+      }
+    `)
+    expect(auditTaintedBoundaries(safeSeam).violations).toEqual([])
   })
 
   it('proves the legacy gate catches provider, prompt, old interface, and delayed-call fixtures', () => {

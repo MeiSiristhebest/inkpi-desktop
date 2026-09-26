@@ -19,9 +19,12 @@ import {
 } from 'lucide-react'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 
 export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('scene-beats')
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
@@ -68,11 +71,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         : '',
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('scene-beats', analysisInput)
-        .catch((error) => console.error('Scene Beats plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleCreatePlanFromTemplate = async (
@@ -164,6 +163,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         <div className="flex items-center gap-2">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiGenerateBeats}
               className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
@@ -171,6 +171,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <span>AI 场景四幕节拍推演</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={() => handleCreatePlanFromTemplate('climax_burst')}
             className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"

@@ -7,11 +7,14 @@ import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodex
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Swords, ShieldAlert, Flame, Zap, BookmarkCheck, Sparkles, Bot } from 'lucide-react'
 
 export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('combat-sandbox')
   const [selectedDuelId, setSelectedDuelId] = useState<string>('')
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
@@ -78,11 +81,7 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       ),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('combat-sandbox', analysisInput)
-        .catch((error) => console.error('Combat Sandbox plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const breachAudit: PowerBreachAlert = useMemo(() => {
@@ -165,12 +164,14 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiCombatRecommend}
               className="px-3.5 py-1.5 text-xs font-semibold bg-[var(--ink-accent)] text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
             >
               <Bot className="w-4 h-4" /> AI 四段高燃拆招推演
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSaveDuel}
             className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"

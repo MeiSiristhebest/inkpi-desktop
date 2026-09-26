@@ -7,6 +7,8 @@ import { indexedDbDialogueVoiceprintRepository } from '../../../adapters/indexed
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Mic,
   Users,
@@ -21,6 +23,7 @@ import {
 
 export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('dialogue-distiller')
   const [characterNames, setCharacterNames] = useState<string[]>([])
   const [voiceprints, setVoiceprints] = useState<CharacterVoiceprint[]>([])
   const [chapters, setChapters] = useState<any[]>([])
@@ -120,11 +123,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
       text: semanticTextFromContent('dialogue-distiller-ai-input', extractText).slice(0, 2000),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('dialogue-distiller', analysisInput)
-        .catch((error) => console.error('Dialogue Distiller plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const triggerCompare = (nameA: string, nameB: string, currentVps = voiceprints) => {
@@ -230,6 +229,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
               </button>
               {hostContext?.aiAssistant?.isAvailable && (
                 <button
+                  disabled={aiTask.isRunning}
                   onClick={handleAiDialogueCheck}
                   className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
                 >
@@ -237,6 +237,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
                   AI 去千人一面鉴别
                 </button>
               )}
+              <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
             </div>
           </div>
 

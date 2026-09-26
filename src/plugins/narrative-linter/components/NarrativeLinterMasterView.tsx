@@ -7,9 +7,12 @@ import { CheckCircle2, AlertCircle, Wrench, BookOpen, Bot, Zap } from 'lucide-re
 import { clock } from '../../../adapters/clock'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 
 export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('narrative-linter')
   const [engine] = useState(() => new NarrativeLinterEngine())
   const [rules, setRules] = useState(() => NarrativeLinterEngine.getDefaultRules())
   const [chapters, setChapters] = useState<any[]>([])
@@ -99,11 +102,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
       ).slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('narrative-linter', analysisInput)
-        .catch((error) => console.error('Narrative Linter plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const toggleRule = (ruleId: string) => {
@@ -217,12 +216,13 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 <button
                   className="px-3 py-1 bg-[var(--ink-accent)] text-white rounded text-xs font-semibold hover:opacity-90 transition flex items-center gap-1 cursor-pointer"
                   onClick={handleAiDeepLint}
-                  disabled={!text.trim()}
+                  disabled={!text.trim() || aiTask.isRunning}
                 >
                   <Bot className="w-3 h-3" />
                   AI 叙事深度体检
                 </button>
               )}
+              <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
             </div>
           </div>
 

@@ -7,11 +7,14 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { GitMerge, Plus, AlertCircle, RefreshCw, Bot } from 'lucide-react'
 
 export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('sub-plot-braid')
   const [strands, setStrands] = useState<SubPlotStrand[]>([])
   const [maxChapterOrder, setMaxChapterOrder] = useState<number>(1)
   const [loading, setLoading] = useState(true)
@@ -57,11 +60,7 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
     const analysisInput = { currentMaxChapter: maxChapterOrder, strands: strandSummaries }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('sub-plot-braid', analysisInput)
-        .catch((error) => console.error('Sub Plot Braid plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const healthMetrics = useMemo(() => {
@@ -124,6 +123,7 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         <div className="flex items-center gap-2">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiSubPlotScan}
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
@@ -131,6 +131,7 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               AI 支线交织收敛排查
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-3 py-1.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"

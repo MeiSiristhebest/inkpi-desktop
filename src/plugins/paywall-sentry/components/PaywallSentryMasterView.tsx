@@ -8,6 +8,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   ShieldCheck,
   Flame,
@@ -20,6 +22,7 @@ import {
 
 export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('paywall-sentry')
   const [chapters, setChapters] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filterRating, setFilterRating] = useState<string>('all')
@@ -53,11 +56,7 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
     const analysisInput = { chapterEndings: summaries }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('paywall-sentry', analysisInput)
-        .catch((error) => console.error('Paywall Sentry plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const auditResults: PaywallAuditResult[] = useMemo(() => {
@@ -146,6 +145,7 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiPaywallRecommend}
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
@@ -153,6 +153,7 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               AI 黄金卡点深度推演
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={refreshChapters}
             className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"

@@ -5,6 +5,8 @@ import type { SensitiveWord, RegexRule, GenreStyle, SafeGateScanResult } from '.
 import { SafeGateEngine } from '../engine/SafeGateEngine'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import seedWordsRed from '../data/seed-words-red.json'
 import seedWordsYellow from '../data/seed-words-yellow.json'
 import seedWordsBlue from '../data/seed-words-blue.json'
@@ -34,6 +36,7 @@ const DEMO_FALLBACK_TEXT = `林枫手持利刃杀入敌阵，刹那间血肉横�
 
 export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('safe-gate')
   const [engine] = useState(() => {
     const eng = new SafeGateEngine()
     eng.build(ALL_WORDS, regexRules as RegexRule[])
@@ -112,11 +115,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       genre,
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('safe-gate', analysisInput)
-        .catch((error) => console.error('Safe Gate plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -179,6 +178,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiDeepSafeAudit}
               className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
@@ -186,6 +186,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
               <span>AI 隐晦谐音与风控初审</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleBatchReplace}
             disabled={scanResult.isClean}

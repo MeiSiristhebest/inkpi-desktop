@@ -5,10 +5,13 @@ import type { WaterAuditReport } from '../types'
 import { waterMeterEngine } from '../engine/WaterMeterEngine'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Zap, BookOpen, Bot, Scissors, FileText, Sparkles, Droplet } from 'lucide-react'
 
 export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('water-meter')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
   const [inputText, setInputText] = useState('')
@@ -73,11 +76,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       ).slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('water-meter', analysisInput)
-        .catch((error) => console.error('Water Meter plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleApplyClean = () => {
@@ -135,6 +134,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiDeepWaterAudit}
               className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
             >
@@ -142,6 +142,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <span>AI 剧情动能深度诊断</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
         </div>
       </div>
 

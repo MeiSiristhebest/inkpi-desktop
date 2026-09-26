@@ -9,9 +9,12 @@ import { Award, Sparkles, Send, Bot, BookOpen } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 
 export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('gold-chapters-eval')
   const [chaptersText, setChaptersText] = useState('')
   const [evaluations, setEvaluations] = useState<GoldChapterEvalRecord[]>([])
 
@@ -63,11 +66,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
       ),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('gold-chapters-eval', analysisInput)
-        .catch((error) => console.error('Gold Chapters plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSave = async () => {
@@ -104,6 +103,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
         {hostContext?.aiAssistant?.isAvailable && (
           <button
+            disabled={aiTask.isRunning}
             onClick={handleAiGoldAudit}
             className="px-3.5 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
@@ -111,6 +111,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
             AI 主编级开篇签约初审
           </button>
         )}
+        <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

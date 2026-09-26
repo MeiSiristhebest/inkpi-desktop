@@ -9,10 +9,13 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Anchor, Copy, Check, Plus, Trash2, Sparkles, Zap, BookOpen, Bot } from 'lucide-react'
 
 export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('reader-hook')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [testText, setTestText] = useState(
@@ -103,11 +106,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       ),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('reader-hook', analysisInput)
-        .catch((error) => console.error('Reader Hook plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSaveHook = async () => {
@@ -202,6 +201,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 </button>
                 {hostContext?.aiAssistant?.isAvailable && (
                   <button
+                    disabled={aiTask.isRunning}
                     onClick={handleAiDeepAudit}
                     className="px-2.5 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
                   >
@@ -209,6 +209,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     AI 深度审读
                   </button>
                 )}
+                <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
               </div>
             </div>
 

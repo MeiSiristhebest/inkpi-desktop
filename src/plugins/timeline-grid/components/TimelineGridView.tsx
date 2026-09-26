@@ -12,6 +12,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Plus, GitBranch, X, Check, Trash2, Bot, Sparkles } from 'lucide-react'
 
 export const DEFAULT_THREADS: Omit<NarrativeThread, 'projectId'>[] = [
@@ -74,6 +76,7 @@ export const DEMO_NODES: Omit<TimelineNode, 'projectId' | 'createdAt' | 'updated
 
 export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('timeline-grid')
   const [threads, setThreads] = useState<NarrativeThread[]>([])
   const [nodes, setNodes] = useState<TimelineNode[]>([])
   const [chaptersList, setChaptersList] = useState<any[]>([])
@@ -127,11 +130,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
     const analysisInput = { chapterSamples: chaptersSummary }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('timeline-grid', analysisInput)
-        .catch((error) => console.error('Timeline Grid plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   // 基础骨架建立：基于作品建立真实三线骨架
@@ -199,12 +198,14 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
         <div className="flex items-center gap-3">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiExtractTimeline}
               className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] text-xs font-medium flex items-center gap-1.5 cursor-pointer"
             >
               <Bot className="w-3.5 h-3.5 text-indigo-400" /> AI 逆向提取大纲
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={() => setMaxChapter((prev) => prev + 2)}
             className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs cursor-pointer"

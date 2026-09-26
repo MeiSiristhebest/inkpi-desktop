@@ -8,10 +8,13 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Sparkles, Plus, Trash2, Activity, Flame, ChevronDown, ChevronUp, Bot } from 'lucide-react'
 
 export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('expectation-engine')
   const [contracts, setContracts] = useState<ExpectationContract[]>([])
   const [, setChapters] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,11 +84,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       })),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('expectation-engine', analysisInput)
-        .catch((error) => console.error('Expectation Engine plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -158,6 +157,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
           <div className="flex items-center gap-2">
             {hostContext?.aiAssistant?.isAvailable && (
               <button
+                disabled={aiTask.isRunning}
                 onClick={handleAiExpectationAudit}
                 className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
               >
@@ -165,6 +165,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                 <span>AI 爽点爆发期深度推演</span>
               </button>
             )}
+            <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
             <button
               onClick={() => setShowGoldenThree(!showGoldenThree)}
               className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5 transition-colors cursor-pointer"

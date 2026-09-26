@@ -9,6 +9,8 @@ import { promiseApplicationService } from '../../../services/domainApplicationSe
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Plus, Search, Sparkles, Edit2, Trash2, Bot } from 'lucide-react'
 
@@ -65,6 +67,7 @@ export const DEMO_PROMISES: Omit<
 
 export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('promise-ledger')
   const [entries, setEntries] = useState<PromiseLedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | PromiseStatus | 'overdue'>('all')
@@ -107,11 +110,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
     const analysisInput = { currentChapter, promises: entrySummaries }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('promise-ledger', analysisInput)
-        .catch((error) => console.error('Promise Ledger plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -227,6 +226,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiLedgerAudit}
               className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
@@ -234,6 +234,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
               <span>AI 伏笔死锁排查</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
 
           <button
             onClick={() => setEditingEntry({})}

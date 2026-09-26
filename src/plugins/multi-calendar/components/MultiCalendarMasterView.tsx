@@ -14,6 +14,8 @@ import type { ChapterRecord } from '../../../types'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -28,6 +30,7 @@ import {
 
 export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('multi-calendar')
   const [record, setRecord] = useState<MultiCalendarProjectRecord | null>(null)
   const [calendars, setCalendars] = useState<CalendarDefinition[]>(
     MultiCalendarEngine.DEFAULT_CALENDARS,
@@ -97,11 +100,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
     const analysisInput = { chapterSamples: chaptersText }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('multi-calendar', analysisInput)
-        .catch((error) => console.error('Multi Calendar plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   // 历法换算计算
@@ -190,6 +189,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiChronologyScan}
               className="px-3 py-1.5 text-xs font-semibold bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
@@ -197,6 +197,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               <span>AI 章节时空逆向排查</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSaveAll}
             className="px-3.5 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"

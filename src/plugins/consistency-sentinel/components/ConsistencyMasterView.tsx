@@ -8,6 +8,8 @@ import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodex
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   ShieldAlert,
   Save,
@@ -23,6 +25,7 @@ import {
 
 export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('consistency-sentinel')
   const [system, setSystem] = useState<PowerTierSystem>(() => consistencyEngine.getDefaultSystem())
   const [savedSuccess, setSavedSuccess] = useState(false)
   const [chapters, setChapters] = useState<any[]>([])
@@ -99,11 +102,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       ),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('consistency-sentinel', analysisInput)
-        .catch((error) => console.error('Consistency Sentinel plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleApplyPreset = (preset: PresetTierSystem) => {
@@ -339,12 +338,14 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               </button>
               {hostContext?.aiAssistant?.isAvailable && (
                 <button
+                  disabled={aiTask.isRunning}
                   onClick={handleAiConsistencyAudit}
                   className="px-3 py-1 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer shadow-xs"
                 >
                   <Bot className="w-3.5 h-3.5" /> AI 战力与设定深度排查
                 </button>
               )}
+              <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
             </div>
           </div>
 

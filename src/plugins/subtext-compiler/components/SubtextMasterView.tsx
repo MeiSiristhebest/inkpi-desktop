@@ -5,12 +5,15 @@ import { SubtextCompilerEngine } from '../engine/SubtextCompilerEngine'
 import type { SubtextDialogueRecord } from '../types'
 import { MessageSquareQuote, Layers, Send, Bot } from 'lucide-react'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { semanticTextFromContent } from '../../../domain/content'
 
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('subtext-compiler')
   const [spoken, setSpoken] = useState('你走吧，我一个人也可以很好。')
   const [speakerName, setSpeakerName] = useState('苏雨柔')
   const [emotion, setEmotion] = useState<
@@ -25,11 +28,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
       spoken: semanticTextFromContent('subtext-compiler-spoken', spoken),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('subtext-compiler', analysisInput)
-        .catch((error) => console.error('Subtext Compiler plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const loadList = async () => {
@@ -127,12 +126,14 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
           {hostContext?.aiAssistant?.isAvailable && (
             <button
               onClick={handleAiSubtextCompile}
-              className="px-3 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs mr-2"
+              disabled={aiTask.isRunning}
+              className="px-3 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs mr-2"
             >
               <Bot className="w-3.5 h-3.5" />
               AI 潜台词与微表情深度编译
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSave}
             className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs flex items-center justify-center gap-1.5 transition"

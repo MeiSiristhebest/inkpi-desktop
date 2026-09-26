@@ -8,10 +8,13 @@ import { indexedDbEmotionAuditRepository } from '../../../adapters/indexedDbEmot
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Activity, AlertTriangle, BookmarkCheck, RefreshCw, Bot } from 'lucide-react'
 
 export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('emotion-curve')
   const [chapters, setChapters] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
@@ -59,11 +62,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
     const analysisInput = { chapterEmotionSummaries: summaries }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('emotion-curve', analysisInput)
-        .catch((error) => console.error('Emotion Curve plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSaveSnapshot = async (ev: ChapterEmotionEvaluation) => {
@@ -106,6 +105,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiEmotionDeepAudit}
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
@@ -113,6 +113,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               AI 抑扬张弛深度评估
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={loadChapters}
             className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"

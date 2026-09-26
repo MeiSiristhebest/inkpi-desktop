@@ -15,6 +15,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Network,
   Plus,
@@ -28,6 +30,7 @@ import {
 
 export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('clue-weaver')
   const [clues, setClues] = useState<ClueItem[]>([])
   const [cognitions, setCognitions] = useState<ClueCognitionRecord[]>([])
   const [characters, setCharacters] = useState<Array<{ id: string; name: string }>>([])
@@ -121,11 +124,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       text: semanticTextFromContent(`clue-weaver-${selectedChapterId}`, scanText).slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('clue-weaver', analysisInput)
-        .catch((error) => console.error('Clue Weaver plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -396,6 +395,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 </button>
                 {hostContext?.aiAssistant?.isAvailable && (
                   <button
+                    disabled={aiTask.isRunning}
                     onClick={handleAiDeepLeakAudit}
                     className="px-2.5 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
                   >
@@ -403,6 +403,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     AI 信息差深查
                   </button>
                 )}
+                <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
               </div>
             </div>
 

@@ -8,6 +8,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Users,
   AlertTriangle,
@@ -20,6 +22,7 @@ import {
 
 export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('reader-simulator')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -80,11 +83,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       ],
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      await hostContext.aiAssistant
-        .runPluginTask('reader-simulator', analysisInput)
-        .catch((error) => console.error('Reader Simulator plugin task failed:', error))
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSaveSimulation = async () => {
@@ -128,6 +127,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiReaderSimulate}
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
@@ -135,6 +135,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
               AI 读者多视点段评模拟
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSaveSimulation}
             className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"
