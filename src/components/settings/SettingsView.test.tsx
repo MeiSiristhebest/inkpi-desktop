@@ -121,13 +121,44 @@ describe('SettingsView', () => {
     )
   })
 
-  it('连接：修改 Daemon 地址会持久化', async () => {
+  it('高级：修改 Daemon 地址会持久化（P3.13 从「连接」里分出来的）', async () => {
     renderSettings({ open: true, onClose: vi.fn() })
-    fireEvent.click(screen.getByText('连接'))
+    fireEvent.click(screen.getByText('高级'))
     expect(screen.getByLabelText('Daemon WebSocket 地址')).toBeInTheDocument()
     const input = screen.getByPlaceholderText('ws://127.0.0.1:8849')
     fireEvent.change(input, { target: { value: 'ws://127.0.0.1:9999' } })
     await waitFor(() => expect(readStored().daemonWsUrl).toBe('ws://127.0.0.1:9999'))
+  })
+
+  it('连接页只讲三项状态：自建地址与数据存储不再混在这里（P3.13）', () => {
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('连接'))
+
+    expect(screen.getByText('系统运行状态')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Daemon WebSocket 地址')).not.toBeInTheDocument()
+    expect(screen.queryByText('本地数据存储')).not.toBeInTheDocument()
+  })
+
+  it('隐私与数据：按真实落点分别说明正文、设置与密钥存在哪里（P3.13）', () => {
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('隐私与数据'))
+
+    expect(screen.getByText('正文、章节与设定')).toBeInTheDocument()
+    expect(screen.getByText('应用设置')).toBeInTheDocument()
+    expect(screen.getByText('模型 API 密钥')).toBeInTheDocument()
+    expect(screen.getByText(/操作系统凭据管理器/)).toBeInTheDocument()
+  })
+
+  it('隐私与数据：只承诺实际行为，不承诺数据绝不离开设备（P3.15）', () => {
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('隐私与数据'))
+
+    expect(
+      screen.getByText('使用外部 AI 模型时，为完成请求所需的上下文会发送给你选择的模型提供商。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/最多附带最近 6 轮上文/)).toBeInTheDocument()
+    // 反例锚点：这句话此前就在同一个段落里，而 AI 请求确实会把上下文交给外部提供商。
+    expect(screen.queryByText(/绝不离开/)).not.toBeInTheDocument()
   })
 
   it('连接：三组状态各自独立，没接线时显示未知而不是绿色已就绪（P1.18）', () => {
@@ -159,24 +190,21 @@ describe('SettingsView', () => {
     await waitFor(() => expect(readStored().paragraphIndent).toBe('space2'))
   })
 
-  it('关于：展示「内置功能一览」而非裸文本', async () => {
+  it('关于：把数据去向交给「隐私与数据」，自己只留版本与架构（P3.13）', () => {
     renderSettings({ open: true, onClose: vi.fn() })
     fireEvent.click(screen.getByText('关于'))
+
     expect(screen.getByText('内置功能一览')).toBeInTheDocument()
     expect(screen.getByText('统一设置中心')).toBeInTheDocument()
+    expect(screen.getByText('本地 IndexedDB')).toBeInTheDocument()
+    expect(screen.queryByText(/为完成请求所需的上下文/)).not.toBeInTheDocument()
   })
 
-  it('关于：隐私说明只承诺实际行为，不承诺数据绝不离开设备（P3.15）', () => {
+  it('侧栏分成三层，而不是十个标签挤在同一个「功能偏好」下（P3.13）', () => {
     renderSettings({ open: true, onClose: vi.fn() })
-    fireEvent.click(screen.getByText('关于'))
-
-    expect(
-      screen.getByText(
-        'InkPi 以本地数据为主。使用外部 AI 模型时，为完成请求所需的上下文会发送给你选择的模型提供商。',
-      ),
-    ).toBeInTheDocument()
-    // 反例锚点：这句话此前就在同一个段落里，而 AI 请求确实会把上下文交给外部提供商。
-    expect(screen.queryByText(/绝不离开/)).not.toBeInTheDocument()
+    expect(screen.getByText('功能偏好')).toBeInTheDocument()
+    expect(screen.getByText('能力与连接')).toBeInTheDocument()
+    expect(screen.getByText('系统')).toBeInTheDocument()
   })
 
   it('每个设置标签下的控件都能被读屏器念出名称（P4.4）', () => {
@@ -184,7 +212,7 @@ describe('SettingsView', () => {
     let visited = 0
     // 只覆盖真正承载表单控件的标签：快捷键/关于是只读清单，插件管理渲染的是动作按钮，
     // 三者都不含 input/select/switch，纳入门控只会变成空转断言。
-    for (const tab of ['外观', '编辑器', '写作与习惯', '连接']) {
+    for (const tab of ['外观', '编辑器', '写作与习惯', '连接', '高级']) {
       fireEvent.click(screen.getByText(tab))
       for (const el of container.querySelectorAll<HTMLElement>(
         'input, select, textarea, [role="switch"], [role="radiogroup"]',

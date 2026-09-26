@@ -24,6 +24,8 @@ import {
   Keyboard,
   ChevronDown,
   RotateCcw,
+  ShieldCheck,
+  Terminal,
 } from 'lucide-react'
 import { PluginSettingsView } from '../plugins/PluginSettingsView'
 import { WritingHabitsTab } from './WritingHabitsTab'
@@ -41,6 +43,7 @@ import {
   type ThemeSkin,
 } from '../../core/settings'
 import { MODEL_CATALOG, catalogUpdatedAtLabel, type CatalogMeta } from '../../core/modelCatalog'
+import { ASSISTANT_HISTORY_TURN_LIMIT } from '../../ai/context/requestScope'
 import { readCatalogMeta, writeCatalogMeta } from '../../adapters/localStorageCatalogMetaStore'
 import { ProviderDetailView } from './ProviderDetailView'
 import {
@@ -62,23 +65,95 @@ import {
 } from './SettingsShared'
 
 type TabKey =
-  'appearance' | 'editor' | 'writing' | 'shortcuts' | 'plugins' | 'ai' | 'connection' | 'about'
+  | 'appearance'
+  | 'editor'
+  | 'writing'
+  | 'shortcuts'
+  | 'plugins'
+  | 'ai'
+  | 'connection'
+  | 'privacy'
+  | 'advanced'
+  | 'about'
 
-const TABS: { key: TabKey; label: string; desc: string; icon: FC<{ className?: string }> }[] = [
-  { key: 'appearance', label: '外观', desc: '主题配色、皮肤与界面缩放', icon: Palette },
-  { key: 'editor', label: '编辑器', desc: '正文字体、字号与排版规范', icon: Type },
+interface TabDescriptor {
+  key: TabKey
+  label: string
+  desc: string
+  icon: FC<{ className?: string }>
+  /** 侧栏分组：新增标签只要声明归属，就会落进对应层，不需要再手改导航 */
+  group: string
+}
+
+const TABS: TabDescriptor[] = [
+  {
+    key: 'appearance',
+    label: '外观',
+    desc: '主题配色、皮肤与界面缩放',
+    icon: Palette,
+    group: '功能偏好',
+  },
+  {
+    key: 'editor',
+    label: '编辑器',
+    desc: '正文字体、字号与排版规范',
+    icon: Type,
+    group: '功能偏好',
+  },
   {
     key: 'writing',
     label: '写作与习惯',
     desc: '自动滚屏、实体高亮、久坐与分章提醒',
     icon: Feather,
+    group: '功能偏好',
   },
-  { key: 'shortcuts', label: '快捷键', desc: '键盘键位映射与盲操快捷键', icon: Keyboard },
-  { key: 'plugins', label: '插件管理', desc: '小说工作台扩展与实验能力', icon: Puzzle },
-  { key: 'ai', label: '自定义 AI 模型', desc: '大模型提供商、密钥与参数', icon: Sparkles },
-  { key: 'connection', label: '连接', desc: '本地 Daemon 与服务通信', icon: Wifi },
-  { key: 'about', label: '关于', desc: '系统架构、版本与开源致谢', icon: Info },
+  {
+    key: 'shortcuts',
+    label: '快捷键',
+    desc: '键盘键位映射与盲操快捷键',
+    icon: Keyboard,
+    group: '功能偏好',
+  },
+  {
+    key: 'plugins',
+    label: '插件管理',
+    desc: '小说工作台扩展与实验能力',
+    icon: Puzzle,
+    group: '能力与连接',
+  },
+  {
+    key: 'ai',
+    label: '自定义 AI 模型',
+    desc: '大模型提供商、密钥与参数',
+    icon: Sparkles,
+    group: '能力与连接',
+  },
+  {
+    key: 'connection',
+    label: '连接',
+    desc: 'Runtime、AI 与供应商三项独立状态',
+    icon: Wifi,
+    group: '能力与连接',
+  },
+  {
+    key: 'privacy',
+    label: '隐私与数据',
+    desc: '正文、设置与密钥分别存放在哪里',
+    icon: ShieldCheck,
+    group: '能力与连接',
+  },
+  {
+    key: 'advanced',
+    label: '高级',
+    desc: '自建 Daemon 等开发者向配置',
+    icon: Terminal,
+    group: '系统',
+  },
+  { key: 'about', label: '关于', desc: '系统架构、版本与开源致谢', icon: Info, group: '系统' },
 ]
+
+// 顺序即 TABS 里首次出现的顺序：单一来源，不再另立一份分组清单。
+const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))]
 
 interface ThemeCardItem {
   v: ThemeMode
@@ -352,50 +427,54 @@ export const SettingsView: FC<SettingsViewProps> = ({
         <aside
           className={`${
             isExpanded ? 'w-64' : 'w-56'
-          } shrink-0 border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] p-3 space-y-1 overflow-y-auto select-none transition-all flex flex-col justify-between`}
+          } shrink-0 border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] p-3 overflow-y-auto select-none transition-all flex flex-col`}
         >
-          <div className="space-y-1">
-            <div className="px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
-              功能偏好
-            </div>
-            {TABS.map((t) => {
-              const Icon = t.icon
-              const active = tab === t.key
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={`w-full text-left p-2 rounded-xl transition-all duration-150 cursor-pointer flex items-center gap-2.5 ${
-                    active
-                      ? 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border-strong)] shadow-xs text-[var(--ink-text)]'
-                      : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-transparent'
-                  }`}
-                >
-                  <div
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                      active
-                        ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-                        : 'bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className={`text-[12.5px] leading-tight ${
-                        active ? 'font-semibold text-[var(--ink-text)]' : 'font-medium'
+          <div className="space-y-3">
+            {TAB_GROUPS.map((group) => (
+              <div key={group} className="space-y-1">
+                <div className="px-2.5 py-1 text-[11px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
+                  {group}
+                </div>
+                {TABS.filter((t) => t.group === group).map((t) => {
+                  const Icon = t.icon
+                  const active = tab === t.key
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setTab(t.key)}
+                      className={`w-full text-left p-2 rounded-xl transition-all duration-150 cursor-pointer flex items-center gap-2.5 ${
+                        active
+                          ? 'bg-[var(--ink-bg-elevated)] border border-[var(--ink-border-strong)] shadow-xs text-[var(--ink-text)]'
+                          : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-transparent'
                       }`}
                     >
-                      {t.label}
-                    </div>
-                    <div className="text-[10px] text-[var(--ink-text-faint)] truncate mt-0.5">
-                      {t.desc}
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
+                      <div
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                          active
+                            ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
+                            : 'bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={`text-[12.5px] leading-tight ${
+                            active ? 'font-semibold text-[var(--ink-text)]' : 'font-medium'
+                          }`}
+                        >
+                          {t.label}
+                        </div>
+                        <div className="text-[10px] text-[var(--ink-text-faint)] truncate mt-0.5">
+                          {t.desc}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
           </div>
         </aside>
 
@@ -419,11 +498,12 @@ export const SettingsView: FC<SettingsViewProps> = ({
             {tab === 'connection' && (
               <ConnectionTab
                 settings={settings}
-                update={update}
                 runtimeState={runtimeState}
                 onReconnect={onReconnect}
               />
             )}
+            {tab === 'privacy' && <PrivacyTab />}
+            {tab === 'advanced' && <AdvancedTab settings={settings} update={update} />}
             {tab === 'about' && <AboutTab />}
           </div>
         </main>
@@ -1439,11 +1519,9 @@ const ReadinessCard: FC<{
 
 const ConnectionTab: FC<{
   settings: AppSettings
-  update: (p: Partial<AppSettings>) => void
   runtimeState: RuntimeReadiness
   onReconnect?: () => void
-}> = ({ settings, update, runtimeState, onReconnect }) => {
-  const daemonUrlId = useId()
+}> = ({ settings, runtimeState, onReconnect }) => {
   const model = settings.aiModel
   const providerBaseUrl = model
     ? model.baseUrl?.trim() || PROVIDER_META[model.provider]?.defaultBaseUrl?.trim()
@@ -1488,7 +1566,7 @@ const ConnectionTab: FC<{
       desc="Runtime、AI 与供应商是三件事，各自独立判断；没有真实信号时显示「未知」而不是绿色。"
     >
       <div className="px-5 py-4 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <ReadinessCard
             title="Runtime"
             label={RUNTIME_VIEW[runtimeState].label}
@@ -1537,39 +1615,92 @@ const ConnectionTab: FC<{
               </button>
             }
           />
-          <div className="p-3.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs">
-            <div className="font-semibold text-[var(--ink-text)] text-[12.5px]">本地数据存储</div>
-            <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5 leading-relaxed">
-              正文与设定写入本机 IndexedDB，离线可写，不随上述三项状态变化。
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+// ── 隐私与数据 ────────────────────────────────────────────
+// 每一条都要对应一个真实的落点或真实的发送边界；不写「绝不上传」这类无法验证的承诺。
+const DATA_LOCATIONS: { title: string; desc: string }[] = [
+  {
+    title: '正文、章节与设定',
+    desc: '写入本机 IndexedDB 的域事件日志与投影，离线可读可写，不受 Runtime 或供应商是否在线影响。',
+  },
+  {
+    title: '应用设置',
+    desc: '先写 localStorage 立即生效，再向 IndexedDB 镜像一份；启动时以镜像回读对齐。',
+  },
+  {
+    title: '模型 API 密钥',
+    desc: '桌面端交给操作系统凭据管理器保存，写入设置存储前先剥离；浏览器预览模式只留在当前会话内存，刷新即失。',
+  },
+]
+
+const PrivacyTab: FC = () => (
+  <>
+    <Section
+      title="数据存放位置"
+      desc="写作数据全部留在本机，但三类数据的落点并不相同，分开说明比一句「本地存储」更有用。"
+    >
+      <div className="divide-y divide-[var(--ink-border)]">
+        {DATA_LOCATIONS.map((item) => (
+          <div key={item.title} className="px-5 py-3">
+            <div className="text-[12.5px] font-semibold text-[var(--ink-text)]">{item.title}</div>
+            <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5 leading-snug">
+              {item.desc}
             </div>
           </div>
-        </div>
+        ))}
+      </div>
+    </Section>
 
-        {/* 高级开发者网络设置（折叠收拢，不骚扰普通用户） */}
-        <details className="group border-t border-[var(--ink-border)] pt-3.5">
-          <summary className="cursor-pointer text-[12px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] select-none font-medium">
-            高级开发者选项（自建远端 Daemon 守护进程地址）
-          </summary>
-          <div className="pt-3 space-y-2">
-            <label className={fieldLabel} htmlFor={daemonUrlId}>
-              Daemon WebSocket 地址
-            </label>
-            <input
-              id={daemonUrlId}
-              className={inputCls}
-              value={settings.daemonWsUrl}
-              onChange={(e) => update({ daemonWsUrl: e.target.value })}
-              placeholder="ws://127.0.0.1:8849"
-            />
-            <p className="text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
-              默认{' '}
-              <code className="px-1.5 py-0.5 rounded bg-[var(--ink-bg-elevated)]">
-                ws://127.0.0.1:8849
-              </code>{' '}
-              与桌面端内置进程对齐。
-            </p>
-          </div>
-        </details>
+    <Section
+      title="AI 上下文出境范围"
+      desc="使用外部 AI 模型时，为完成请求所需的上下文会发送给你选择的模型提供商。"
+    >
+      <div className="px-5 py-3.5 space-y-2 text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
+        <p>
+          助手对话每次最多附带最近 {ASSISTANT_HISTORY_TURN_LIMIT}{' '}
+          轮上文，外加当前章节、选中文本与相关设定条目。
+        </p>
+        <p>发送前助手面板会逐项披露这一批内容，披露口径与真正发出的请求同源。</p>
+      </div>
+    </Section>
+  </>
+)
+
+// ── 高级（开发者向：自建远端 Daemon）──────────────────────
+const AdvancedTab: FC<{
+  settings: AppSettings
+  update: (p: Partial<AppSettings>) => void
+}> = ({ settings, update }) => {
+  const daemonUrlId = useId()
+
+  return (
+    <Section
+      title="自建远端 Daemon"
+      desc="用内置进程的默认地址即可；只有把 Runtime 跑在别处时才需要改这里。"
+    >
+      <div className="px-5 py-4 space-y-2">
+        <label className={fieldLabel} htmlFor={daemonUrlId}>
+          Daemon WebSocket 地址
+        </label>
+        <input
+          id={daemonUrlId}
+          className={inputCls}
+          value={settings.daemonWsUrl}
+          onChange={(e) => update({ daemonWsUrl: e.target.value })}
+          placeholder="ws://127.0.0.1:8849"
+        />
+        <p className="text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
+          默认{' '}
+          <code className="px-1.5 py-0.5 rounded bg-[var(--ink-bg-elevated)]">
+            ws://127.0.0.1:8849
+          </code>{' '}
+          与桌面端内置进程对齐。
+        </p>
       </div>
     </Section>
   )
@@ -1599,7 +1730,7 @@ const ABOUT_FEATURES: { title: string; desc: string }[] = [
   },
   {
     title: '统一设置中心',
-    desc: '外观 / 编辑器 / 自定义 AI 模型 / 连接，全部本地优先持久化。',
+    desc: '外观 / 编辑器 / AI 模型 / 连接 / 隐私与数据 / 高级，全部本地优先持久化。',
   },
 ]
 
@@ -1641,8 +1772,7 @@ const AboutTab: FC = () => (
           </div>
         </div>
         <p className="text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
-          InkPi 以本地数据为主。使用外部 AI
-          模型时，为完成请求所需的上下文会发送给你选择的模型提供商。
+          数据存储位置与 AI 上下文的出境范围统一写在「隐私与数据」。
         </p>
       </div>
     </Section>
