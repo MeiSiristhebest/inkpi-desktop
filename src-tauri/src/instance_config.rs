@@ -175,6 +175,25 @@ impl ResolvedInstanceConfig {
         args
     }
 
+    /// Where the sidecar's own stdout/stderr go. A daemon that dies during
+    /// startup is otherwise silent: the window opens and the SPA merely fails to
+    /// connect, so the child's output has to land in a file the user can open.
+    pub(crate) fn daemon_log_path(&self) -> PathBuf {
+        let dir = self
+            .profile_dir
+            .clone()
+            .or_else(|| {
+                self.state_db
+                    .as_ref()
+                    .and_then(|db| db.parent().map(Path::to_path_buf))
+            })
+            .unwrap_or_else(std::env::temp_dir);
+        match &self.instance_id {
+            Some(instance_id) => dir.join(format!("daemon-{instance_id}.log")),
+            None => dir.join("daemon.log"),
+        }
+    }
+
     pub(crate) fn environment_overrides(&self) -> Vec<(&'static str, String)> {
         let mut variables = Vec::new();
         if let Some(profile) = &self.profile {
@@ -296,6 +315,56 @@ mod tests {
             .into_iter()
             .map(|(key, value)| (key.to_string(), value))
             .collect()
+    }
+
+    #[test]
+    fn daemon_log_path_prefers_the_profile_dir_and_keeps_instances_apart() {
+        let args = [
+            "--profile",
+            "writer-a",
+            "--state-db",
+            r"C:\InkPi\elsewhere\state.sqlite",
+            "--instance-id",
+            "desktop-a",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+        let config = InstanceConfig::from_args_and_env(&args, |_| None).expect("explicit config");
+        let resolved = config
+            .resolve(Some(Path::new(r"C:\InkPi\app-data")))
+            .expect("explicit resolution");
+
+        assert_eq!(
+            resolved.daemon_log_path(),
+            Path::new(r"C:\InkPi\app-data\profiles\writer-a").join("daemon-desktop-a.log")
+        );
+    }
+
+    #[test]
+    fn daemon_log_path_follows_an_explicit_state_db_when_no_profile_is_set() {
+        let args = ["--state-db", r"C:\InkPi\writer-b\state.sqlite"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let config = InstanceConfig::from_args_and_env(&args, |_| None).expect("state-db config");
+        let resolved = config.resolve(None).expect("state-db resolution");
+
+        assert_eq!(
+            resolved.daemon_log_path(),
+            Path::new(r"C:\InkPi\writer-b").join("daemon.log")
+        );
+    }
+
+    #[test]
+    fn daemon_log_path_falls_back_to_the_temp_dir_for_the_default_single_instance() {
+        let config = InstanceConfig::from_args_and_env(&[], |_| None).expect("default config");
+        let resolved = config.resolve(None).expect("default resolution");
+
+        assert_eq!(
+            resolved.daemon_log_path(),
+            std::env::temp_dir().join("daemon.log")
+        );
     }
 
     #[test]
