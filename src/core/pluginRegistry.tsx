@@ -11,6 +11,7 @@ import type { DesktopPlugin, DesktopPluginCategory } from '../types/plugin'
 import { ALL_LAZY_PLUGINS } from './pluginDefinitions'
 import { indexedDbSettingsKVRepository } from '../adapters/indexedDbSettingsKVRepository'
 import { localStorageKeyValueStore } from '../adapters/localStorageKeyValueStore'
+import { projectEnabledPluginIds } from './defaultCommands'
 
 export const STORAGE_KEY_ENABLED_PLUGINS = 'inkpi_enabled_plugins_v2'
 
@@ -148,6 +149,12 @@ export const PluginProvider: FC<{ workspaceId?: string; children: ReactNode }> =
       cancelled = true
     }
   }, [workspaceId])
+
+  // P2.9: 把启用集合投影给命令层，使禁用的插件既不在导航/抽屉里，也不再从命令面板可被呼出。
+  useEffect(() => {
+    projectEnabledPluginIds(enabledIds)
+    return () => projectEnabledPluginIds(null)
+  }, [enabledIds])
 
   const enablePlugin = useCallback(
     (id: string) => {
