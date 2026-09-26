@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type FC } from 'react'
+import { useState, useEffect, useCallback, useMemo, useId, type FC, type ReactNode } from 'react'
 import {
   Settings as Gear,
   Palette,
@@ -11,7 +11,6 @@ import {
   Puzzle,
   Maximize2,
   Minimize2,
-  CheckCircle2,
   Sun,
   Moon,
   Laptop,
@@ -43,6 +42,13 @@ import {
 import { MODEL_CATALOG, catalogUpdatedAtLabel, type CatalogMeta } from '../../core/modelCatalog'
 import { readCatalogMeta, writeCatalogMeta } from '../../adapters/localStorageCatalogMetaStore'
 import { ProviderDetailView } from './ProviderDetailView'
+import {
+  classifyProbeStatus,
+  deriveAiReadiness,
+  type AiReadiness,
+  type ProviderReadiness,
+  type RuntimeReadiness,
+} from './connectionReadiness'
 import {
   Section,
   Row,
@@ -269,9 +275,21 @@ const FONT_MAX = 36
 interface SettingsViewProps {
   open: boolean
   onClose: () => void
+  /**
+   * Daemon/Runtime 的真实连接状态（P1.18）。由组合根透传；
+   * 不接线时连接页显示「未知」，不得显示绿色「已就绪」。
+   */
+  runtimeState?: RuntimeReadiness
+  /** 手动重连 Daemon，缺省时连接页只读展示状态 */
+  onReconnect?: () => void
 }
 
-export const SettingsView: FC<SettingsViewProps> = ({ open, onClose }) => {
+export const SettingsView: FC<SettingsViewProps> = ({
+  open,
+  onClose,
+  runtimeState = 'unknown',
+  onReconnect,
+}) => {
   const [settings, update] = useSettings()
   const [tab, setTab] = useState<TabKey>('appearance')
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
@@ -412,7 +430,14 @@ export const SettingsView: FC<SettingsViewProps> = ({ open, onClose }) => {
               {tab === 'shortcuts' && <ShortcutsTab />}
               {tab === 'plugins' && <PluginSettingsView />}
               {tab === 'ai' && <AiTab settings={settings} update={update} />}
-              {tab === 'connection' && <ConnectionTab settings={settings} update={update} />}
+              {tab === 'connection' && (
+                <ConnectionTab
+                  settings={settings}
+                  update={update}
+                  runtimeState={runtimeState}
+                  onReconnect={onReconnect}
+                />
+              )}
               {tab === 'about' && <AboutTab />}
             </div>
           </main>
@@ -1356,63 +1381,214 @@ const AiTab: FC<{
   )
 }
 
+const RUNTIME_VIEW: Record<RuntimeReadiness, { label: string; hint: string; dot: string }> = {
+  online: {
+    label: '在线',
+    hint: 'Daemon 已连接，AI 与同步可用',
+    dot: 'bg-emerald-500',
+  },
+  connecting: {
+    label: '连接中…',
+    hint: '正在与 Daemon 握手，完成前 AI 请求可能失败',
+    dot: 'bg-[var(--ink-text-faint)]',
+  },
+  offline: {
+    label: '离线',
+    hint: 'Daemon 未运行：AI 与同步不可用，正文仍安全保存在本机',
+    dot: 'bg-[var(--ink-danger)]',
+  },
+  unknown: {
+    label: '未知',
+    hint: '宿主没有把连接状态接到这里，这里不做猜测',
+    dot: 'bg-[var(--ink-text-faint)]',
+  },
+}
+
+const AI_VIEW: Record<AiReadiness, { label: string; hint: string; dot: string }> = {
+  ready: { label: '可用', hint: '已绑定模型且凭据齐备', dot: 'bg-emerald-500' },
+  degraded: {
+    label: '配置不完整',
+    hint: '缺少服务地址或 API Key，AI 请求会失败',
+    dot: 'bg-[var(--ink-danger)]',
+  },
+  unavailable: {
+    label: '未配置',
+    hint: '尚未绑定模型，AI 走离线回显',
+    dot: 'bg-[var(--ink-text-faint)]',
+  },
+}
+
+const PROVIDER_VIEW: Record<ProviderReadiness, { label: string; dot: string }> = {
+  unknown: { label: '未检测', dot: 'bg-[var(--ink-text-faint)]' },
+  probing: { label: '检测中…', dot: 'bg-[var(--ink-text-faint)]' },
+  healthy: { label: '可达', dot: 'bg-emerald-500' },
+  'auth-error': { label: '鉴权失败', dot: 'bg-[var(--ink-danger)]' },
+  unreachable: { label: '无法访问', dot: 'bg-[var(--ink-danger)]' },
+}
+
+const ReadinessCard: FC<{
+  title: string
+  label: string
+  hint: string
+  dot: string
+  action?: ReactNode
+}> = ({ title, label, hint, dot, action }) => (
+  <div className="p-3.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] flex items-start gap-3">
+    <span
+      aria-hidden
+      className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${dot}`}
+      data-testid={`readiness-dot-${title}`}
+    />
+    <div className="text-xs flex-1 min-w-0">
+      <div className="font-semibold text-[var(--ink-text)] text-[12.5px]">
+        {title}
+        <span className="ml-1.5 font-normal text-[11.5px]">{label}</span>
+      </div>
+      <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5 leading-relaxed">
+        {hint}
+      </div>
+    </div>
+    {action}
+  </div>
+)
+
 const ConnectionTab: FC<{
   settings: AppSettings
   update: (p: Partial<AppSettings>) => void
-}> = ({ settings, update }) => (
-  <Section
-    title="系统运行状态"
-    desc="检查本地写作沙盒与数据通道。正常使用无需任何配置，核心服务开箱即用。"
-  >
-    <div className="px-5 py-4 space-y-4">
-      {/* 消费级安全状态展示卡片 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="p-3.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] flex items-start gap-3">
-          <CheckCircle2 className="w-4.5 h-4.5 text-emerald-500 mt-0.5 shrink-0" />
-          <div className="text-xs">
-            <div className="font-semibold text-[var(--ink-text)] text-[12.5px]">本地写作引擎</div>
-            <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5">
-              内置轻量沙盒环境已就绪
-            </div>
-          </div>
-        </div>
+  runtimeState: RuntimeReadiness
+  onReconnect?: () => void
+}> = ({ settings, update, runtimeState, onReconnect }) => {
+  const daemonUrlId = useId()
+  const model = settings.aiModel
+  const providerBaseUrl = model
+    ? model.baseUrl?.trim() || PROVIDER_META[model.provider]?.defaultBaseUrl?.trim()
+    : undefined
+  const aiState = deriveAiReadiness(settings)
 
-        <div className="p-3.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] flex items-start gap-3">
-          <CheckCircle2 className="w-4.5 h-4.5 text-emerald-500 mt-0.5 shrink-0" />
-          <div className="text-xs">
-            <div className="font-semibold text-[var(--ink-text)] text-[12.5px]">本地数据存储</div>
-            <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5">
-              IndexedDB 离线优先，不离开设备
-            </div>
-          </div>
-        </div>
-      </div>
+  // 探测结果绑定到当时的配置指纹：改了模型/地址/密钥就自动回到「未检测」，
+  // 否则屏幕上会留着一个已经不代表现状的绿色结论（INV-09）。
+  const probeSignature = `${model?.id ?? ''}|${providerBaseUrl ?? ''}|${model?.apiKey ? 'key' : 'nokey'}`
+  const [probe, setProbe] = useState<{
+    signature: string
+    state: ProviderReadiness
+    detail?: string
+  } | null>(null)
 
-      {/* 高级开发者网络设置（折叠收拢，不骚扰普通用户） */}
-      <details className="group border-t border-[var(--ink-border)] pt-3.5">
-        <summary className="cursor-pointer text-[12px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] select-none font-medium">
-          高级开发者选项（自建远端 Daemon 守护进程地址）
-        </summary>
-        <div className="pt-3 space-y-2">
-          <div className={fieldLabel}>Daemon WebSocket 地址</div>
-          <input
-            className={inputCls}
-            value={settings.daemonWsUrl}
-            onChange={(e) => update({ daemonWsUrl: e.target.value })}
-            placeholder="ws://127.0.0.1:8849"
+  const probeMatch = probe && probe.signature === probeSignature ? probe : null
+  const providerState: ProviderReadiness = probeMatch?.state ?? 'unknown'
+  const providerView = PROVIDER_VIEW[providerState]
+
+  const handleProbe = async () => {
+    if (!model || !providerBaseUrl) return
+    setProbe({ signature: probeSignature, state: 'probing' })
+    try {
+      const { status, latency } = await probeModelEndpoint(providerBaseUrl, model.apiKey)
+      setProbe({
+        signature: probeSignature,
+        state: classifyProbeStatus(status),
+        detail: `HTTP ${status} · ${latency} ms`,
+      })
+    } catch (error) {
+      setProbe({
+        signature: probeSignature,
+        state: 'unreachable',
+        detail: error instanceof Error ? error.name : String(error),
+      })
+    }
+  }
+
+  return (
+    <Section
+      title="系统运行状态"
+      desc="Runtime、AI 与供应商是三件事，各自独立判断；没有真实信号时显示「未知」而不是绿色。"
+    >
+      <div className="px-5 py-4 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <ReadinessCard
+            title="Runtime"
+            label={RUNTIME_VIEW[runtimeState].label}
+            hint={RUNTIME_VIEW[runtimeState].hint}
+            dot={RUNTIME_VIEW[runtimeState].dot}
+            action={
+              onReconnect ? (
+                <button
+                  type="button"
+                  onClick={onReconnect}
+                  className="shrink-0 px-2.5 py-1 rounded-lg text-[11.5px] border border-[var(--ink-border)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:border-[var(--ink-accent)] transition-colors cursor-pointer"
+                >
+                  重连
+                </button>
+              ) : undefined
+            }
           />
-          <p className="text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
-            默认{' '}
-            <code className="px-1.5 py-0.5 rounded bg-[var(--ink-bg-elevated)]">
-              ws://127.0.0.1:8849
-            </code>{' '}
-            与桌面端内置进程对齐。
-          </p>
+          <ReadinessCard
+            title="AI"
+            label={AI_VIEW[aiState].label}
+            hint={
+              model
+                ? `${PROVIDER_META[model.provider]?.label ?? model.provider} · ${AI_VIEW[aiState].hint}`
+                : AI_VIEW[aiState].hint
+            }
+            dot={AI_VIEW[aiState].dot}
+          />
+          <ReadinessCard
+            title="Provider"
+            label={providerView.label}
+            hint={
+              probeMatch?.detail ??
+              (providerBaseUrl
+                ? `探测端点 ${providerBaseUrl}`
+                : '还没有可探测的服务端点，请先在「自定义 AI 模型」里绑定')
+            }
+            dot={providerView.dot}
+            action={
+              <button
+                type="button"
+                onClick={handleProbe}
+                disabled={!providerBaseUrl || providerState === 'probing'}
+                className="shrink-0 px-2.5 py-1 rounded-lg text-[11.5px] border border-[var(--ink-border)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:border-[var(--ink-accent)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                检测
+              </button>
+            }
+          />
+          <div className="p-3.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs">
+            <div className="font-semibold text-[var(--ink-text)] text-[12.5px]">本地数据存储</div>
+            <div className="text-[11.5px] text-[var(--ink-text-faint)] mt-0.5 leading-relaxed">
+              正文与设定写入本机 IndexedDB，离线可写，不随上述三项状态变化。
+            </div>
+          </div>
         </div>
-      </details>
-    </div>
-  </Section>
-)
+
+        {/* 高级开发者网络设置（折叠收拢，不骚扰普通用户） */}
+        <details className="group border-t border-[var(--ink-border)] pt-3.5">
+          <summary className="cursor-pointer text-[12px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] select-none font-medium">
+            高级开发者选项（自建远端 Daemon 守护进程地址）
+          </summary>
+          <div className="pt-3 space-y-2">
+            <label className={fieldLabel} htmlFor={daemonUrlId}>
+              Daemon WebSocket 地址
+            </label>
+            <input
+              id={daemonUrlId}
+              className={inputCls}
+              value={settings.daemonWsUrl}
+              onChange={(e) => update({ daemonWsUrl: e.target.value })}
+              placeholder="ws://127.0.0.1:8849"
+            />
+            <p className="text-[11.5px] leading-relaxed text-[var(--ink-text-faint)]">
+              默认{' '}
+              <code className="px-1.5 py-0.5 rounded bg-[var(--ink-bg-elevated)]">
+                ws://127.0.0.1:8849
+              </code>{' '}
+              与桌面端内置进程对齐。
+            </p>
+          </div>
+        </details>
+      </div>
+    </Section>
+  )
+}
 
 // ── 关于 ──────────────────────────────────────────────────
 const ABOUT_FEATURES: { title: string; desc: string }[] = [

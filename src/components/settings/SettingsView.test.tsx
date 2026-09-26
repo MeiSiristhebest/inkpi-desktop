@@ -7,11 +7,16 @@ import { db } from '../../db/indexedDB'
 
 // 与 App 一致的装配：SettingsProvider 提供设置单一来源，ThemeController 负责把主题副作用写到 <html data-theme>。
 // 仅渲染 SettingsView 本身不会触发 data-theme 写入（副作用已隔离到 ThemeController）。
-const renderSettings = (props: { open: boolean; onClose: () => void }) =>
+const renderSettings = (
+  props: { open: boolean; onClose: () => void } & Partial<{
+    runtimeState: 'online' | 'connecting' | 'offline' | 'unknown'
+    onReconnect: () => void
+  }>,
+) =>
   render(
     <SettingsProvider>
       <ThemeController />
-      <SettingsView open={props.open} onClose={props.onClose} />
+      <SettingsView open={props.open} onClose={props.onClose} {...props} />
     </SettingsProvider>,
   )
 
@@ -93,9 +98,32 @@ describe('SettingsView', () => {
   it('连接：修改 Daemon 地址会持久化', async () => {
     renderSettings({ open: true, onClose: vi.fn() })
     fireEvent.click(screen.getByText('连接'))
+    expect(screen.getByLabelText('Daemon WebSocket 地址')).toBeInTheDocument()
     const input = screen.getByPlaceholderText('ws://127.0.0.1:8849')
     fireEvent.change(input, { target: { value: 'ws://127.0.0.1:9999' } })
     await waitFor(() => expect(readStored().daemonWsUrl).toBe('ws://127.0.0.1:9999'))
+  })
+
+  it('连接：三组状态各自独立，没接线时显示未知而不是绿色已就绪（P1.18）', () => {
+    renderSettings({ open: true, onClose: vi.fn() })
+    fireEvent.click(screen.getByText('连接'))
+
+    expect(screen.queryByText(/已就绪/)).not.toBeInTheDocument()
+    expect(screen.getByText('未知')).toBeInTheDocument() // Runtime：宿主未透传状态
+    expect(screen.getByText('未配置')).toBeInTheDocument() // AI：还没有绑定模型
+    expect(screen.getByText('未检测')).toBeInTheDocument() // Provider：没发过真实请求
+    expect(screen.getByRole('button', { name: '检测' })).toBeDisabled()
+  })
+
+  it('连接：Runtime 离线时如实说明后果，并给出重连入口', () => {
+    const onReconnect = vi.fn()
+    renderSettings({ open: true, onClose: vi.fn(), runtimeState: 'offline', onReconnect })
+    fireEvent.click(screen.getByText('连接'))
+
+    expect(screen.getByText('离线')).toBeInTheDocument()
+    expect(screen.getByText(/Daemon 未运行/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重连' }))
+    expect(onReconnect).toHaveBeenCalledTimes(1)
   })
 
   it('编辑器：切换段落缩进方式会持久化到 paragraphIndent', async () => {

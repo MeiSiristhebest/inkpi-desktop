@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, Suspense, type FC, type React
 import { PanelRight, Maximize2, Minimize2, Home, PanelLeftOpen, Sparkles } from 'lucide-react'
 import { RichEditor, type RichEditorProps } from '../components/editor/RichEditor'
 import { SettingsView } from '../components/settings/SettingsView'
+import { deriveRuntimeReadiness } from '../components/settings/connectionReadiness'
 import { DashboardView } from '../components/dashboard/DashboardView'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { PluginSuspenseFallback } from './components/PluginSuspenseFallback'
@@ -553,7 +554,12 @@ export const Engine: FC<EngineProps> = ({
         </button>
       )}
 
-      <SettingsView open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsView
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        runtimeState={deriveRuntimeReadiness({ isConnected, isReconnecting })}
+        onReconnect={onReconnect}
+      />
       <CommandPaletteModal
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
