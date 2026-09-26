@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   loadProjects,
+  loadArchivedProjects,
   createProject,
   importProject,
   createDemoProject,
   exportProject,
+  exportManuscript,
   deleteProject,
   updateProject,
+  removeProjectFromLibrary,
+  restoreProjectToLibrary,
 } from '../core/projectService'
 import type { ProjectRecord } from '../types'
 
@@ -18,6 +22,7 @@ import type { ProjectRecord } from '../types'
  */
 export interface ProjectLibrary {
   projects: ProjectRecord[]
+  archivedProjects: ProjectRecord[]
   activeProjectId: string | null
   setActiveProjectId: (id: string | null) => void
   createProject: (
@@ -28,17 +33,32 @@ export interface ProjectLibrary {
   ) => Promise<void>
   importProject: (file: File) => Promise<void>
   createDemo: () => Promise<void>
+  /** 完整工作区备份（含设定/时间线/插件/AI 数据） */
   exportProject: (id: string) => Promise<void>
+  /** 纯正文导出，不含任何中间状态 */
+  exportManuscript: (id: string) => Promise<void>
   updateProject: (project: ProjectRecord) => Promise<void>
+  /** 永久删除：级联清除全部工作区数据，不可撤销 */
   deleteProject: (id: string) => Promise<void>
+  /** 移出作品库：只隐藏书架条目，数据完整保留 */
+  removeFromLibrary: (id: string) => Promise<void>
+  /** 把已移出的作品放回书架 */
+  restoreToLibrary: (id: string) => Promise<void>
 }
 
 export function useProjectLibrary(): ProjectLibrary {
   const [projects, setProjects] = useState<ProjectRecord[]>([])
+  const [archivedProjects, setArchivedProjects] = useState<ProjectRecord[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     loadProjects().then((list) => setProjects(list))
+    loadArchivedProjects().then(setArchivedProjects)
+  }, [])
+
+  const refreshLibrary = useCallback(async () => {
+    setProjects(await loadProjects())
+    setArchivedProjects(await loadArchivedProjects())
   }, [])
 
   const handleCreateProject = useCallback(
@@ -72,6 +92,10 @@ export function useProjectLibrary(): ProjectLibrary {
     await exportProject(id)
   }, [])
 
+  const handleExportManuscript = useCallback(async (id: string) => {
+    await exportManuscript(id)
+  }, [])
+
   const handleUpdateProject = useCallback(async (project: ProjectRecord) => {
     await updateProject(project)
     setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)))
@@ -81,20 +105,42 @@ export function useProjectLibrary(): ProjectLibrary {
     async (id: string) => {
       await deleteProject(id)
       setProjects((prev) => prev.filter((p) => p.id !== id))
+      setArchivedProjects((prev) => prev.filter((p) => p.id !== id))
       if (activeProjectId === id) setActiveProjectId(null)
     },
     [activeProjectId],
   )
 
+  const handleRemoveFromLibrary = useCallback(
+    async (id: string) => {
+      await removeProjectFromLibrary(id)
+      await refreshLibrary()
+      if (activeProjectId === id) setActiveProjectId(null)
+    },
+    [activeProjectId, refreshLibrary],
+  )
+
+  const handleRestoreToLibrary = useCallback(
+    async (id: string) => {
+      await restoreProjectToLibrary(id)
+      await refreshLibrary()
+    },
+    [refreshLibrary],
+  )
+
   return {
     projects,
+    archivedProjects,
     activeProjectId,
     setActiveProjectId,
     createProject: handleCreateProject,
     importProject: handleImportProject,
     createDemo: handleCreateDemo,
     exportProject: handleExportProject,
+    exportManuscript: handleExportManuscript,
     updateProject: handleUpdateProject,
     deleteProject: handleDeleteProject,
+    removeFromLibrary: handleRemoveFromLibrary,
+    restoreToLibrary: handleRestoreToLibrary,
   }
 }

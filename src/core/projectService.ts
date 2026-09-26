@@ -114,9 +114,51 @@ async function migrateLegacyIfNeeded(): Promise<void> {
   await projectRepo.saveProject(migrated)
 }
 
+/**
+ * 同一毫秒内的连续两次写会让领域日志的 change-set id（`project-<id>-<rev>-<occurredAt>`）
+ * 撞上同一个键却带着不同 checksum，被仓储层判为 id collision 而拒绝写入。
+ * updatedAt 就是那个 occurredAt，所以必须在旧值之上严格递增。
+ */
+function nextUpdatedAt(previous: number): number {
+  return Math.max(clock.now(), previous + 1)
+}
+
 export async function loadProjects(): Promise<ProjectRecord[]> {
   await migrateLegacyIfNeeded()
-  return projectRepo.getAllProjects()
+  const all = await projectRepo.getAllProjects()
+  // 「移出作品库」只隐藏，不删除：archivedAt 有值的作品由 loadArchivedProjects 呈现。
+  return all.filter((project) => !project.archivedAt)
+}
+
+/** 已移出作品库、但数据仍完整保留的作品（可恢复）。 */
+export async function loadArchivedProjects(): Promise<ProjectRecord[]> {
+  await migrateLegacyIfNeeded()
+  const all = await projectRepo.getAllProjects()
+  return all
+    .filter((project) => !!project.archivedAt)
+    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0))
+}
+
+/**
+ * 移出作品库（P0.8）：非破坏操作，只隐藏书架条目。
+ * 正文、设定、时间线、插件数据与 AI 产物一律不动，可随时恢复。
+ */
+export async function removeProjectFromLibrary(projectId: string): Promise<void> {
+  const project = await projectRepo.getProject(projectId)
+  if (!project) return
+  const now = nextUpdatedAt(project.updatedAt)
+  await projectRepo.saveProject({ ...project, updatedAt: now, archivedAt: now })
+}
+
+/** 把作品放回书架。 */
+export async function restoreProjectToLibrary(projectId: string): Promise<void> {
+  const project = await projectRepo.getProject(projectId)
+  if (!project) return
+  await projectRepo.saveProject({
+    ...project,
+    updatedAt: nextUpdatedAt(project.updatedAt),
+    archivedAt: null,
+  })
 }
 
 export async function getProject(id: string): Promise<ProjectRecord | undefined> {
@@ -192,7 +234,25 @@ export async function exportProject(projectId: string): Promise<void> {
   )
 }
 
-/** 删除/永久清除工作区数据（级联清除卷章与领域插件数据） */
+/**
+ * 导出纯正文（Manuscript Export，P0.6）：只有分卷与章节文本，
+ * 不含设定/时间线/插件/AI 状态 —— 与「完整备份」是两种产物，不可互换命名。
+ */
+export async function exportManuscript(projectId: string): Promise<void> {
+  const archive = await workspaceLifecycleService.exportManuscript(projectId)
+  if (!archive) return
+
+  const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' })
+  fileDownloader.downloadBlob(
+    `${archive.project.name || 'inkpi-project'}-manuscript-${new Date(clock.now()).toISOString().slice(0, 10)}.json`,
+    blob,
+  )
+}
+
+/**
+ * 永久删除工作区（P0.8）：级联清除卷章、设定、时间线、插件与 AI 数据，不可撤销。
+ * 「移出作品库」请走 removeProjectFromLibrary，它不碰数据。
+ */
 export async function deleteProject(projectId: string): Promise<void> {
   await workspaceLifecycleService.purgeWorkspace(projectId)
 }

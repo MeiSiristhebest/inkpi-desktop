@@ -12,6 +12,11 @@ export interface ProjectRecord {
   features?: string[]
   createdAt: number
   updatedAt: number
+  /**
+   * 移出作品库的时间戳。数据仍然完整保留，只是不在书架列出；
+   * 与「永久删除」（purge，不可撤销）是两件事，见 INV-04 / P0.8。
+   */
+  archivedAt?: number | null
 }
 
 export interface VolumeRecord {

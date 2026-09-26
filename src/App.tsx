@@ -222,14 +222,18 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
 
   const {
     projects,
+    archivedProjects,
     activeProjectId,
     setActiveProjectId,
     createProject,
     importProject,
     createDemo,
     exportProject,
+    exportManuscript,
     updateProject,
     deleteProject,
+    removeFromLibrary,
+    restoreToLibrary,
   } = library
 
   const ai = useAiConversation(
@@ -321,13 +325,17 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
           <ErrorBoundary label="书架">
             <Bookshelf
               projects={projects}
+              archivedProjects={archivedProjects}
               onOpenProject={setActiveProjectId}
               onCreateProject={createProject}
               onImportProject={importProject}
               onCreateDemo={createDemo}
               onExportProject={exportProject}
+              onExportManuscript={exportManuscript}
               onUpdateProject={updateProject}
               onDeleteProject={deleteProject}
+              onRemoveFromLibrary={removeFromLibrary}
+              onRestoreToLibrary={restoreToLibrary}
             />
           </ErrorBoundary>
         </motion.div>

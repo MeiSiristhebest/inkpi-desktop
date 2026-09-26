@@ -17,6 +17,8 @@ interface ProjectCardProps {
   onCloseMenu: () => void
   onStartEdit: () => void
   onExport: () => void
+  onExportManuscript: () => void
+  onRemoveFromLibrary: () => void
   onDelete: () => void
   onSaveEdit: (form: ProjectEditFormValues) => void
   onCancelEdit: () => void
@@ -38,6 +40,8 @@ export const ProjectCard = ({
   onCloseMenu,
   onStartEdit,
   onExport,
+  onExportManuscript,
+  onRemoveFromLibrary,
   onDelete,
   onSaveEdit,
   onCancelEdit,
@@ -99,6 +103,8 @@ export const ProjectCard = ({
                   onClose={onCloseMenu}
                   onEdit={onStartEdit}
                   onExport={onExport}
+                  onExportManuscript={onExportManuscript}
+                  onRemoveFromLibrary={onRemoveFromLibrary}
                   onDelete={onDelete}
                 />
               )}
@@ -147,7 +153,7 @@ export const ProjectCard = ({
           <motion.button
             type="button"
             onClick={onExport}
-            title="导出 JSON 备份"
+            title="导出完整备份（含设定/时间线/插件/AI 数据）"
             {...gesture.iconButton}
             transition={spring.snappy}
             className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] border border-transparent hover:border-[var(--ink-border)] flex items-center justify-center transition-colors cursor-pointer"

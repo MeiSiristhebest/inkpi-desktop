@@ -1,10 +1,18 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { db } from '../db/indexedDB'
+import { blobFileDownloader } from '../adapters/blobFileDownloader'
 import {
   createProject,
   createDemoProject,
   loadWorkspaceStats,
   loadStatsForProjects,
+  loadProjects,
+  loadArchivedProjects,
+  removeProjectFromLibrary,
+  restoreProjectToLibrary,
+  deleteProject,
+  exportProject,
+  exportManuscript,
 } from './projectService'
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 
@@ -98,5 +106,97 @@ describe('projectService — 工作区聚合统计', () => {
     expect(p.templateType).toBe('demo')
     const ws = await loadWorkspaceStats([p])
     expect(ws.totalChapters).toBe(3)
+  })
+})
+
+describe('projectService — 移出作品库与永久删除是两条独立路径（P0.8 / INV-04）', () => {
+  it('移出作品库只隐藏书架条目，卷章数据一条不少', async () => {
+    const p = await createProject('暂时收起来', '都市', '')
+    const chapters = await db.getAll<ChapterRecord>('chapters')
+    const volumes = await db.getAll<VolumeRecord>('volumes')
+
+    await removeProjectFromLibrary(p.id)
+
+    expect((await loadProjects()).map((x) => x.id)).not.toContain(p.id)
+    const archived = await loadArchivedProjects()
+    expect(archived.map((x) => x.id)).toContain(p.id)
+    expect(archived.find((x) => x.id === p.id)?.archivedAt).toBeGreaterThan(0)
+
+    // 关键：移出后持久化数据仍在真实 store 里，而不是被顺手清掉
+    expect((await db.getAll('projects')).find((x) => x.id === p.id)).toBeDefined()
+    expect(
+      (await db.getAll<ChapterRecord>('chapters')).filter((c) => c.projectId === p.id),
+    ).toHaveLength(chapters.filter((c) => c.projectId === p.id).length)
+    expect(
+      (await db.getAll<VolumeRecord>('volumes')).filter((v) => v.projectId === p.id),
+    ).toHaveLength(volumes.filter((v) => v.projectId === p.id).length)
+  })
+
+  it('放回书架后重新出现在 loadProjects，archivedAt 被清空', async () => {
+    const p = await createProject('再写一本', '科幻', '')
+    await removeProjectFromLibrary(p.id)
+    await restoreProjectToLibrary(p.id)
+
+    expect((await loadProjects()).map((x) => x.id)).toContain(p.id)
+    expect((await loadArchivedProjects()).map((x) => x.id)).not.toContain(p.id)
+    expect((await db.get<ProjectRecord>('projects', p.id))?.archivedAt).toBeNull()
+  })
+
+  it('永久删除才会真正清除 projects 记录与级联卷章', async () => {
+    const p = await createProject('彻底删掉', '历史', '')
+    await deleteProject(p.id)
+
+    expect(await db.get('projects', p.id)).toBeUndefined()
+    expect(
+      (await db.getAll<ChapterRecord>('chapters')).filter((c) => c.projectId === p.id),
+    ).toHaveLength(0)
+    expect(
+      (await db.getAll<VolumeRecord>('volumes')).filter((v) => v.projectId === p.id),
+    ).toHaveLength(0)
+  })
+})
+
+describe('projectService — 两种导出的范围必须不同（P0.6 / INV-04）', () => {
+  it('完整备份含领域数据，纯正文导出只有卷章与项目元数据', async () => {
+    const p = await createProject('双导出', '玄幻', '')
+    await db.put('codexEntities', {
+      id: `ent-${p.id}`,
+      projectId: p.id,
+      name: '林凡',
+      category: 'character',
+    })
+
+    const downloads: { filename: string; blob: Blob }[] = []
+    const spy = vi
+      .spyOn(blobFileDownloader, 'downloadBlob')
+      .mockImplementation((filename: string, blob: Blob) => {
+        downloads.push({ filename, blob })
+      })
+
+    try {
+      await exportProject(p.id)
+      await exportManuscript(p.id)
+    } finally {
+      spy.mockRestore()
+      await db.delete('codexEntities', `ent-${p.id}`)
+    }
+
+    expect(downloads).toHaveLength(2)
+    const [backup, manuscript] = downloads
+    expect(backup.filename).toContain('-workspace-backup-')
+    expect(manuscript.filename).toContain('-manuscript-')
+
+    const backupJson = JSON.parse(await backup.blob.text())
+    const manuscriptJson = JSON.parse(await manuscript.blob.text())
+
+    expect(backupJson.manifest.archiveType).toBe('inkpi-workspace-backup')
+    expect(Object.keys(backupJson.domainData ?? {})).toContain('codexEntities')
+
+    expect(manuscriptJson.manifest.archiveType).toBe('manuscript-export')
+    expect(manuscriptJson.domainData).toBeUndefined()
+    expect(manuscriptJson.localStorageData).toBeUndefined()
+    expect(manuscriptJson.chapters.length).toBeGreaterThan(0)
+    // 正文导出不得夹带别的作品
+    expect(manuscriptJson.volumes.every((v: VolumeRecord) => v.projectId === p.id)).toBe(true)
   })
 })
