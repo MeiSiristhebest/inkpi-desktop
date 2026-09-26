@@ -24,6 +24,7 @@ import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegist
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
 import { commandRegistry } from './commandRegistry'
 import { matchesEditorShortcut, shortcutLabel } from './editorShortcuts'
+import { createMenuCommandRouter, subscribeDesktopMenu } from './desktopMenu'
 import { CommandPaletteModal } from '../components/CommandPaletteModal'
 import {
   type InspectorState,
@@ -210,6 +211,40 @@ export const Engine: FC<EngineProps> = ({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [activeWritingCtx])
+
+  // 原生菜单命令（§P4.7）：Windows 菜单只发命令 id，前端把它翻译回注册表里的同一条
+  // chord 再派发，因此点击菜单项与按快捷键命中的是上面那些完全相同的 handler。
+  // 路由器负责处理方不在场的页签：先切回正文编辑器，挂载完成后补发。
+  const menuRouterRef = useRef<ReturnType<typeof createMenuCommandRouter> | null>(null)
+  menuRouterRef.current ??= createMenuCommandRouter({
+    isEditorActive: () => activeTabRef.current === 'editor',
+    openEditor: () => navigateToViewRef.current('editor'),
+  })
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    let disposed = false
+    void subscribeDesktopMenu((id) => {
+      menuRouterRef.current?.handle(id)
+    })
+      .then((dispose) => {
+        if (disposed) dispose()
+        else unlisten = dispose
+      })
+      .catch((error: unknown) => {
+        console.error('[InkPi Desktop] 原生菜单订阅失败，菜单项不会有任何反应', error)
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
+
+  // 页签变化后补发被推迟的菜单命令：父组件的 effect 跑在编辑器子树之后，
+  // 此时 RichEditor 的 window keydown 监听器已经挂上。
+  useEffect(() => {
+    menuRouterRef.current?.flush()
+  }, [activeTabId])
 
   useEffect(() => {
     const handleViewportResize = () => {

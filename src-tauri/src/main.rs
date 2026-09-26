@@ -12,6 +12,7 @@ use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
 mod instance_config;
+mod menu;
 mod secret_store;
 
 use instance_config::InstanceConfig;
@@ -227,10 +228,22 @@ fn main() {
             secret_store::secret_store_set,
             secret_store::secret_store_remove,
         ])
+        // 菜单命令一律以 id 转发给前端，由前端翻译回 editorShortcuts 里的那条 chord，
+        // 因此原生侧不复制第二份按键绑定（见 src/menu.rs 顶部注释）。
+        .on_menu_event(|app, event| {
+            use tauri::Emitter;
+            let id = event.id().as_ref().to_string();
+            if menu::is_command_id(&id) {
+                if let Err(error) = app.emit(menu::MENU_EVENT, id) {
+                    eprintln!("[inkpi-desktop] 菜单命令转发失败: {error}");
+                }
+            }
+        })
         .setup(|app| {
             spawn_daemon(app.handle()).map_err(|message| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
             })?;
+            menu::install(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())
