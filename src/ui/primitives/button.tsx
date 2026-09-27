@@ -2,6 +2,13 @@ import { Button as ButtonPrimitive } from '@base-ui/react/button'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
+// Button 门面：新增代码的按钮入口。
+//
+// 现存 473 个 raw <button> 刻意不批量迁移：实测它们的皮肤是遗留 `--ink-*` 任意值手写
+// 变体（358 种去重后各异的 className 骨架），而下面的 base 会追加 h-8 / justify-center /
+// whitespace-nowrap / active:translate-y-px / [&_svg:not([class*='size-'])]:size-4。
+// cn 只消解同组冲突，这些附加项会直接改像素——所以整批替换是重新设计，不是重构，
+// 需要视觉回归基线之后再做。可及名称等无视觉风险的缺陷已单独修掉。
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
