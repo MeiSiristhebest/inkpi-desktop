@@ -4,6 +4,7 @@ import { AftermathMasterView } from './AftermathMasterView'
 import { AftermathDrawer } from './AftermathDrawer'
 import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { codexApplicationService } from '../../../services/domainApplicationServices'
 import type { CodexEntity } from '../../living-codex/types'
 
 const makeEntity = (patch: Partial<CodexEntity> & { id: string; name: string }): CodexEntity => ({
@@ -99,6 +100,54 @@ describe('AftermathSync UI Components', () => {
     expect(saved[0].chapterId).toBe('ch-manual')
     // 本面板没有选定章节，就不该冒认「第 1 章」。
     expect(saved[0].chapterOrder).toBeUndefined()
+  })
+
+  // 同一份正文反复扫描只能记一条：以前每扫一次就发一个新 id，列表里会刷出好几份同样的待审阅回写。
+  it('scanning the same text twice records the change once', async () => {
+    await indexedDbCodexEntityRepository.save(
+      makeEntity({ id: 'e-lin', name: '林凡', attributes: { realm: '练气九层' } }),
+    )
+
+    render(<AftermathMasterView projectId="p1" />)
+    await screen.findByText(/对照名单/)
+    fireEvent.change(screen.getByPlaceholderText(/粘贴你写完的章节正文/), {
+      target: { value: '林凡盘膝而坐，轰然一声巨响，林凡一举迈入筑基初期！' },
+    })
+    fireEvent.click(screen.getByText('扫描章节设定变迁'))
+    await screen.findByText(/新增 1 条待审阅补丁/)
+
+    fireEvent.click(screen.getByText('扫描章节设定变迁'))
+
+    expect(await screen.findByText(/1 条变迁此前已经记录过，列表保持原样/)).toBeInTheDocument()
+    expect(await indexedDbAftermathRepository.getAll('p1')).toHaveLength(1)
+  })
+
+  // §P2.12：总线注释里的这条联动现在由订阅证明，所以从真实发布入口（应用服务）验证，不手工 emit。
+  it('picks up a codex entity saved by another panel while this one is open', async () => {
+    await indexedDbCodexEntityRepository.save(
+      makeEntity({ id: 'e-lin', name: '林凡', attributes: { realm: '练气九层' } }),
+    )
+
+    render(<AftermathMasterView projectId="p1" />)
+    await screen.findByText(/对照名单：本书设定库中的 1 个角色\/物品/)
+
+    await codexApplicationService.saveEntity(
+      makeEntity({ id: 'e-su', name: '苏雨柔' }),
+      'author-confirmed',
+    )
+
+    await waitFor(() =>
+      expect(screen.getByText(/对照名单：本书设定库中的 2 个角色\/物品/)).toBeInTheDocument(),
+    )
+
+    // 别的作品保存实体不能刷新本书的对照名单。
+    await codexApplicationService.saveEntity(
+      makeEntity({ id: 'e-other', name: '旁人', projectId: 'p2' }),
+      'author-confirmed',
+    )
+    await waitFor(() =>
+      expect(screen.getByText(/对照名单：本书设定库中的 2 个角色\/物品/)).toBeInTheDocument(),
+    )
   })
 
   // 批准的回写必须落在设定库读取的键上，否则同一条变更会被反复提案。

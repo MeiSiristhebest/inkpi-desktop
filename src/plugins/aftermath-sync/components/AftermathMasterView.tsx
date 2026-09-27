@@ -1,8 +1,9 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { codexApplicationService } from '../../../services/domainApplicationServices'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 import { reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 import { AftermathEngine } from '../engine/AftermathEngine'
 import type { AftermathPatchRecord, EntityCandidate } from '../types'
@@ -28,6 +29,14 @@ const ATTRIBUTE_WRITE_KEYS: Record<string, string> = {
   所有权归属: '当前持有者',
 }
 
+/** 「谁发生了什么变迁」的判定口径：正文反复扫描必须落到同一个键，否则列表会被重复补丁刷满。 */
+const patchIdentity = (p: {
+  entityId: string
+  changeType: string
+  propertyName: string
+  afterValue: string
+}) => `${p.entityId}|${p.changeType}|${p.propertyName}|${p.afterValue}`
+
 export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [patches, setPatches] = useState<AftermathPatchRecord[]>([])
   // 空白起步：示例正文会被当成作者已写的字数上报（INV-09）。
@@ -40,7 +49,7 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     setPatches(all)
   }
 
-  const loadRoster = async () => {
+  const loadRoster = useCallback(async () => {
     const all = await indexedDbCodexEntityRepository.getAll()
     // 名单只取本书设定库里真实存在的角色与物品，绝不现场编一个「未指定角色」。
     setRoster(
@@ -48,12 +57,20 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
         .filter((e) => e.projectId === projectId && ['character', 'item'].includes(e.category))
         .map(toEntityCandidate),
     )
-  }
+  }, [projectId])
 
   useEffect(() => {
     loadPatches().catch(console.error)
     loadRoster().catch(console.error)
   }, [projectId])
+
+  // §P2.12：总线注释里的 codexApplicationService -> aftermath-sync 必须真的连通。作者可能在设定库
+  // 面板改完实体就切回来扫描，对照名单停在挂载那一刻的快照上就会把已录的实体再提案一遍。
+  useEffect(() => {
+    return pluginEventBus.scopedBus(projectId).on('CODEX_ENTITY_TOUCHED', () => {
+      loadRoster().catch(console.error)
+    })
+  }, [projectId, loadRoster])
 
   useEffect(() => {
     onStats?.({
@@ -77,7 +94,18 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     // 'ch-manual' 表示「从本面板手工扫描」；没有真实章序就不传，补丁记录里该字段本就是可选的。
     const res = AftermathEngine.analyzeChapter(chapterText, 'ch-manual', undefined, roster)
 
-    for (const p of res.patches) {
+    // 同一份正文反复扫描得到的是同一批变迁。以前每次都发一个新 id 存进去，于是同一条回写在
+    // 审阅列表里刷出好几份，批准其中一份后其余几份还挂着「待审阅」。
+    const existing = await indexedDbAftermathRepository.getAll(projectId)
+    const seen = new Set(existing.map(patchIdentity))
+    const fresh = res.patches.filter((p) => {
+      const key = patchIdentity(p)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    for (const p of fresh) {
       const record: AftermathPatchRecord = {
         ...p,
         id: idGenerator.generate('patch'),
@@ -89,8 +117,14 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     }
     if (res.patches.length === 0) {
       setScanNotice('扫描完成：正文里没有命中可对照实体的状态变迁')
+    } else if (fresh.length === 0) {
+      setScanNotice(`扫描完成：${res.patches.length} 条变迁此前已经记录过，列表保持原样`)
     } else {
-      setScanNotice(`扫描完成：新增 ${res.patches.length} 条待审阅补丁`)
+      const skipped = res.patches.length - fresh.length
+      setScanNotice(
+        `扫描完成：新增 ${fresh.length} 条待审阅补丁` +
+          (skipped > 0 ? `（另有 ${skipped} 条已记录过，未重复添加）` : ''),
+      )
     }
     await loadPatches()
   }
