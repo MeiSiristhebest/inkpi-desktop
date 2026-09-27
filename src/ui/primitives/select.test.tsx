@@ -65,4 +65,39 @@ describe('Select 门面', () => {
     expect(cls).toContain('h-7')
     expect(cls).not.toContain('h-8')
   })
+
+  it('触发器带 data-value，让断言能盯住原始值而不是显示标签', () => {
+    render(<Select value="draft" onValueChange={vi.fn()} options={OPTS} aria-label="章节状态" />)
+    expect(screen.getByRole('combobox', { name: '章节状态' })).toHaveAttribute(
+      'data-value',
+      'draft',
+    )
+  })
+
+  it('size 是唯一密度入口：sm 收高度也收字号', () => {
+    render(<Select value="draft" onValueChange={vi.fn()} options={OPTS} size="sm" aria-label="x" />)
+    const cls = screen.getByRole('combobox').className
+    expect(cls).toContain('h-7')
+    expect(cls).toContain('text-xs')
+    expect(cls).not.toContain('text-sm')
+  })
+
+  it('<optgroup> 子节点折叠成带标题的分组，组内选项照样可选', async () => {
+    const onValueChange = vi.fn()
+    render(
+      <Select value="c1" onValueChange={onValueChange} aria-label="分卷章节">
+        <optgroup label="第一卷">
+          <option value="c1">第一章</option>
+        </optgroup>
+        <optgroup label="第二卷">
+          <option value="c2">第二章</option>
+        </optgroup>
+      </Select>,
+    )
+    await userEvent.click(screen.getByRole('combobox', { name: '分卷章节' }))
+    expect(await screen.findByText('第一卷')).toBeInTheDocument()
+    expect(screen.getByText('第二卷')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('option', { name: '第二章' }))
+    expect(onValueChange).toHaveBeenCalledWith('c2')
+  })
 })
