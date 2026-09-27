@@ -172,6 +172,7 @@ export const ContextMenu = ({
           {it.groupLabel && (
             <div
               role="presentation"
+              data-testid="context-menu-group-label"
               className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-text-faint)] truncate"
             >
               {it.groupLabel}

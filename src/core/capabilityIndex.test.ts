@@ -1,8 +1,8 @@
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ALL_PLUGIN_DEFINITIONS } from './pluginDefinitions'
-import { CAPABILITY_REGISTRY } from './capabilityRegistry'
+import { ALL_LAZY_PLUGINS, ALL_PLUGIN_DEFINITIONS } from './pluginDefinitions'
+import { CAPABILITY_REGISTRY, PLUGIN_DRAWER_CAPABILITY_ORDER } from './capabilityRegistry'
 import { capabilityFor } from './capabilityIndex'
 
 /**
@@ -48,7 +48,24 @@ describe('capability coverage', () => {
       expect(surfaces, definition.id).toContain('navigation')
       expect(surfaces, definition.id).toContain('canvas')
       expect(surfaces, definition.id).toContain('command')
-      expect(surfaces.includes('drawer')).toBe(Boolean(definition.loadDrawerSnippetView))
+      expect(surfaces.includes('drawer')).toBe(Boolean(definition.drawer))
+    }
+  })
+
+  it('files every drawer under one of the three capability categories (§P2.8)', () => {
+    const declared = ALL_PLUGIN_DEFINITIONS.flatMap((definition) =>
+      definition.drawer ? [definition.drawer.kind] : [],
+    )
+    expect(declared.length).toBeGreaterThan(0)
+    // 三类都必须真的有抽屉：少一类就说明分组标题已经变成空壳。
+    expect(new Set(declared)).toEqual(new Set(PLUGIN_DRAWER_CAPABILITY_ORDER))
+    for (const definition of ALL_PLUGIN_DEFINITIONS) {
+      if (!definition.drawer) continue
+      expect(PLUGIN_DRAWER_CAPABILITY_ORDER, definition.id).toContain(definition.drawer.kind)
+    }
+    // 工具栏是在「已物化」的插件上挑抽屉的：物化时漏传 kind，声明得再对也不会出现在候选里。
+    for (const plugin of ALL_LAZY_PLUGINS) {
+      expect(Boolean(plugin.drawerCapability), plugin.id).toBe(Boolean(plugin.drawerSnippetView))
     }
   })
 

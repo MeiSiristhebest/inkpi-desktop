@@ -1,4 +1,4 @@
-import type { DesktopPluginCategory } from '../types/plugin'
+import type { DesktopPluginCategory, PluginDrawerCapability } from '../types/plugin'
 
 export type CapabilityMaturity =
   | 'production' // 成熟稳定的正典功能（如 Living Codex, Promise Ledger, Timeline Grid, Diff Reviewer）
@@ -499,4 +499,39 @@ export const CAPABILITY_REGISTRY = {
 
 export function getCapability(id: string): CapabilityDescriptor | undefined {
   return CAPABILITY_REGISTRY[id as keyof typeof CAPABILITY_REGISTRY]
+}
+
+/**
+ * 抽屉的三类能力形态（§P2.8）。抽屉不按插件数排列，按「作者此刻要做什么」排列：
+ * 对照设定、动一次稿、还是让系统挑毛病。注册表里每个抽屉都必须落到其中一类，
+ * 所以写作台的抽屉选择器就按这三类分组，打开后的抽屉标题也说明它是哪一类。
+ */
+export const PLUGIN_DRAWER_CAPABILITIES: {
+  id: PluginDrawerCapability
+  label: string
+  hint: string
+}[] = [
+  {
+    id: 'context-inspector',
+    label: '上下文检视',
+    hint: '对照当前正文查看设定、伏笔与状态，不改动稿子',
+  },
+  {
+    id: 'quick-action',
+    label: '快捷动作',
+    hint: '生成或改写正文，结果仍需你确认采纳',
+  },
+  {
+    id: 'live-diagnostic',
+    label: '实时诊断',
+    hint: '持续检查当前正文，把问题列成清单',
+  },
+]
+
+/** 数组顺序即分组展示顺序，也是「同一类内部按注册表原序」的前提。 */
+export const PLUGIN_DRAWER_CAPABILITY_ORDER: PluginDrawerCapability[] =
+  PLUGIN_DRAWER_CAPABILITIES.map((capability) => capability.id)
+
+export function drawerCapabilityLabel(capability: PluginDrawerCapability): string {
+  return PLUGIN_DRAWER_CAPABILITIES.find((item) => item.id === capability)?.label ?? capability
 }

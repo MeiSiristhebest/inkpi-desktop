@@ -40,21 +40,33 @@ import { spring, gesture } from '../../../motion'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { ChapterStatus } from '../../../types'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
-import { useOptionalPluginRegistry, PLUGIN_CATEGORIES } from '../../../core/pluginRegistry'
-import type { DesktopPlugin } from '../../../types/plugin'
+import { useOptionalPluginRegistry } from '../../../core/pluginRegistry'
+import {
+  PLUGIN_DRAWER_CAPABILITY_ORDER,
+  drawerCapabilityLabel,
+} from '../../../core/capabilityRegistry'
+import type { DesktopPlugin, PluginDrawerCapability } from '../../../types/plugin'
 import { shortcutHint } from '../../../core/editorShortcuts'
 
-const CATEGORY_ORDER = PLUGIN_CATEGORIES.map((c) => c.id)
+/** 已经声明了能力类别的抽屉插件：分组只需要这一个前提，所以把它写进类型而不是靠断言。 */
+type CategorizedDrawerPlugin = DesktopPlugin & { drawerCapability: PluginDrawerCapability }
 
-function categoryLabel(category: DesktopPlugin['category']): string {
-  return PLUGIN_CATEGORIES.find((c) => c.id === category)?.label ?? category
-}
-
-/** 抽屉候选按插件套件连续排列，分组小标题才成立；同套件内保持注册表原序（sort 稳定）。 */
-function sortDrawerPlugins(plugins: DesktopPlugin[]): DesktopPlugin[] {
-  return [...plugins].sort(
-    (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
-  )
+/**
+ * 抽屉候选按三类能力连续排列（§P2.8），分组小标题才成立；同类内保持注册表原序（sort 稳定）。
+ * 没声明能力类别的插件不进候选：注册表里每个抽屉都成对声明了 kind（catalog 测试兜住），
+ * 所以这里不是在猜它是哪类，而是不给「无类别抽屉」编一个分组名。
+ */
+function collectDrawerPlugins(activePlugins: DesktopPlugin[]): CategorizedDrawerPlugin[] {
+  return activePlugins
+    .filter(
+      (plugin): plugin is CategorizedDrawerPlugin =>
+        Boolean(plugin.drawerSnippetView) && Boolean(plugin.drawerCapability),
+    )
+    .sort(
+      (a, b) =>
+        PLUGIN_DRAWER_CAPABILITY_ORDER.indexOf(a.drawerCapability) -
+        PLUGIN_DRAWER_CAPABILITY_ORDER.indexOf(b.drawerCapability),
+    )
 }
 
 interface EditorToolbarProps {
@@ -141,10 +153,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   }
 
   // §P2.8：抽屉不是「每个插件一个抽屉」，也不允许由工具栏猜一个。
-  // Puzzle 按钮只做一件事——把当前启用且真的带随动抽屉的插件摊开，由作者明确选一个。
-  const drawerPlugins: DesktopPlugin[] = sortDrawerPlugins(
-    (registry?.activePlugins ?? []).filter((p) => Boolean(p.drawerSnippetView)),
-  )
+  // Puzzle 按钮只做一件事——把当前启用、真的带随动抽屉、且已归入三类能力之一的插件摊开，由作者明确选一个。
+  const drawerPlugins = collectDrawerPlugins(registry?.activePlugins ?? [])
   const openDrawerPlugin =
     drawerPlugins.find((p) => p.id === host?.activeDrawerPluginId) ?? undefined
   const drawerMenuItems: ContextMenuItem[] = [
@@ -159,13 +169,15 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         ]
       : []),
     ...drawerPlugins.map((plugin, index) => {
-      const startsGroup = index === 0 || drawerPlugins[index - 1].category !== plugin.category
+      // 相邻同类才成组：分组标题只在这一类的第一个条目上出现。
+      const startsGroup =
+        index === 0 || drawerPlugins[index - 1].drawerCapability !== plugin.drawerCapability
       return {
         key: `drawer:${plugin.id}`,
         label: plugin.name,
         description: plugin.description,
         icon: <plugin.icon className="w-3.5 h-3.5" />,
-        groupLabel: startsGroup ? categoryLabel(plugin.category) : undefined,
+        groupLabel: startsGroup ? drawerCapabilityLabel(plugin.drawerCapability) : undefined,
         dividerBefore: startsGroup && index > 0,
         onClick: () => host?.openDrawer(plugin.id),
       }

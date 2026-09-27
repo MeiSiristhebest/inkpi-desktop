@@ -13,7 +13,7 @@ import type { CapabilitySurface } from './capabilityRegistry'
  */
 function derivePluginCapability(definition: PluginStaticDefinition): CapabilityDescriptor {
   const surfaces: CapabilitySurface[] = ['navigation', 'canvas']
-  if (definition.loadDrawerSnippetView) surfaces.push('drawer')
+  if (definition.drawer) surfaces.push('drawer')
   surfaces.push('command')
   return {
     id: definition.id,

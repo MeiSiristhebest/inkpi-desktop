@@ -1,5 +1,5 @@
 import { lazy, type ComponentType } from 'react'
-import type { DesktopPlugin, DesktopPluginCategory } from '../types/plugin'
+import type { DesktopPlugin, DesktopPluginCategory, PluginDrawerCapability } from '../types/plugin'
 import { provideLivingCodexContext } from '../plugins/living-codex/contextProvider'
 import { provideConsistencyContext } from '../plugins/consistency-sentinel/contextProvider'
 import {
@@ -57,7 +57,14 @@ export interface PluginStaticDefinition {
   tags?: string[]
   enabledByDefault?: boolean
   loadMainView: () => Promise<{ default: ComponentType<any> }>
-  loadDrawerSnippetView?: () => Promise<{ default: ComponentType<any> }>
+  /**
+   * 抽屉不是「每个插件一个抽屉」（§P2.8）：带抽屉的插件必须说明这个抽屉属于三类能力里的哪一类。
+   * kind 与 load 成对出现，好让「注册了一个没有类别的抽屉」在类型上就无法表达。
+   */
+  drawer?: {
+    kind: PluginDrawerCapability
+    load: () => Promise<{ default: ComponentType<any> }>
+  }
   contextProvider?: DesktopPlugin['contextProvider']
 }
 
@@ -75,8 +82,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     contextProvider: provideLivingCodexContext,
     loadMainView: () =>
       import('../plugins/living-codex').then((m) => ({ default: m.CodexMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/living-codex').then((m) => ({ default: m.CodexWriterDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () => import('../plugins/living-codex').then((m) => ({ default: m.CodexWriterDrawer })),
+    },
   },
   {
     id: 'promise-ledger',
@@ -89,8 +98,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: BookOpen,
     loadMainView: () =>
       import('../plugins/promise-ledger').then((m) => ({ default: m.LedgerMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/promise-ledger').then((m) => ({ default: m.LedgerWriterDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/promise-ledger').then((m) => ({ default: m.LedgerWriterDrawer })),
+    },
   },
   {
     id: 'timeline-grid',
@@ -114,8 +126,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     enabledByDefault: false,
     icon: ShieldCheck,
     loadMainView: () => import('../plugins/safe-gate').then((m) => ({ default: m.SafeGateView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/safe-gate').then((m) => ({ default: m.SafeGateDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () => import('../plugins/safe-gate').then((m) => ({ default: m.SafeGateDrawer })),
+    },
   },
   {
     id: 'scene-beats',
@@ -128,8 +142,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Heart,
     loadMainView: () =>
       import('../plugins/scene-beats').then((m) => ({ default: m.SceneBeatsMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/scene-beats').then((m) => ({ default: m.SceneBeatsDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () => import('../plugins/scene-beats').then((m) => ({ default: m.SceneBeatsDrawer })),
+    },
   },
   {
     id: 'describe-palette',
@@ -142,8 +158,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Palette,
     loadMainView: () =>
       import('../plugins/describe-palette').then((m) => ({ default: m.DescribePaletteView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/describe-palette').then((m) => ({ default: m.DescribePaletteDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/describe-palette').then((m) => ({ default: m.DescribePaletteDrawer })),
+    },
   },
   {
     id: 'name-forge',
@@ -155,8 +174,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     enabledByDefault: false,
     icon: Sparkles,
     loadMainView: () => import('../plugins/name-forge').then((m) => ({ default: m.NameForgeView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/name-forge').then((m) => ({ default: m.NameForgeDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () => import('../plugins/name-forge').then((m) => ({ default: m.NameForgeDrawer })),
+    },
   },
   {
     id: 'expectation-engine',
@@ -169,8 +190,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Award,
     loadMainView: () =>
       import('../plugins/expectation-engine').then((m) => ({ default: m.ExpectationMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/expectation-engine').then((m) => ({ default: m.ExpectationDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/expectation-engine').then((m) => ({ default: m.ExpectationDrawer })),
+    },
   },
   {
     id: 'consistency-sentinel',
@@ -184,8 +208,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     contextProvider: provideConsistencyContext,
     loadMainView: () =>
       import('../plugins/consistency-sentinel').then((m) => ({ default: m.ConsistencyMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/consistency-sentinel').then((m) => ({ default: m.ConsistencyDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/consistency-sentinel').then((m) => ({ default: m.ConsistencyDrawer })),
+    },
   },
   {
     id: 'sprint-arena',
@@ -198,8 +225,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Flame,
     loadMainView: () =>
       import('../plugins/sprint-arena').then((m) => ({ default: m.SprintArenaMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/sprint-arena').then((m) => ({ default: m.SprintArenaDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () => import('../plugins/sprint-arena').then((m) => ({ default: m.SprintArenaDrawer })),
+    },
   },
   {
     id: 'reader-hook',
@@ -212,8 +241,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Anchor,
     loadMainView: () =>
       import('../plugins/reader-hook').then((m) => ({ default: m.ReaderHookMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/reader-hook').then((m) => ({ default: m.ReaderHookDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () => import('../plugins/reader-hook').then((m) => ({ default: m.ReaderHookDrawer })),
+    },
   },
   {
     id: 'clue-weaver',
@@ -226,8 +257,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: GitBranch,
     loadMainView: () =>
       import('../plugins/clue-weaver').then((m) => ({ default: m.ClueWeaverMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/clue-weaver').then((m) => ({ default: m.ClueWeaverDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () => import('../plugins/clue-weaver').then((m) => ({ default: m.ClueWeaverDrawer })),
+    },
   },
   {
     id: 'water-meter',
@@ -240,8 +273,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Droplet,
     loadMainView: () =>
       import('../plugins/water-meter').then((m) => ({ default: m.WaterMeterMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/water-meter').then((m) => ({ default: m.WaterMeterDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () => import('../plugins/water-meter').then((m) => ({ default: m.WaterMeterDrawer })),
+    },
   },
   {
     id: 'volume-master',
@@ -254,8 +289,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: BookMarked,
     loadMainView: () =>
       import('../plugins/volume-master').then((m) => ({ default: m.VolumeMasterMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/volume-master').then((m) => ({ default: m.VolumeMasterDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/volume-master').then((m) => ({ default: m.VolumeMasterDrawer })),
+    },
   },
   {
     id: 'dialogue-distiller',
@@ -270,8 +308,13 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
       import('../plugins/dialogue-distiller').then((m) => ({
         default: m.DialogueDistillerMasterView,
       })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/dialogue-distiller').then((m) => ({ default: m.DialogueDistillerDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/dialogue-distiller').then((m) => ({
+          default: m.DialogueDistillerDrawer,
+        })),
+    },
   },
   {
     id: 'faction-matrix',
@@ -284,8 +327,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Users,
     loadMainView: () =>
       import('../plugins/faction-matrix').then((m) => ({ default: m.FactionMatrixMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/faction-matrix').then((m) => ({ default: m.FactionMatrixDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/faction-matrix').then((m) => ({ default: m.FactionMatrixDrawer })),
+    },
   },
   {
     id: 'paywall-sentry',
@@ -298,8 +344,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: DollarSign,
     loadMainView: () =>
       import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/paywall-sentry').then((m) => ({ default: m.PaywallSentryDrawer })),
+    },
   },
 
   {
@@ -313,8 +362,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Printer,
     loadMainView: () =>
       import('../plugins/press-forge').then((m) => ({ default: m.PressForgeMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/press-forge').then((m) => ({ default: m.PressForgeDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () => import('../plugins/press-forge').then((m) => ({ default: m.PressForgeDrawer })),
+    },
   },
   {
     id: 'emotion-curve',
@@ -327,8 +378,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: TrendingUp,
     loadMainView: () =>
       import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/emotion-curve').then((m) => ({ default: m.EmotionCurveDrawer })),
+    },
   },
 
   {
@@ -342,8 +396,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Lightbulb,
     loadMainView: () =>
       import('../plugins/brainstorm-spark').then((m) => ({ default: m.BrainstormSparkMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/brainstorm-spark').then((m) => ({ default: m.BrainstormSparkDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/brainstorm-spark').then((m) => ({ default: m.BrainstormSparkDrawer })),
+    },
   },
   {
     id: 'reader-simulator',
@@ -356,8 +413,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: UserCheck,
     loadMainView: () =>
       import('../plugins/reader-simulator').then((m) => ({ default: m.ReaderSimulatorMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/reader-simulator').then((m) => ({ default: m.ReaderSimulatorDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/reader-simulator').then((m) => ({ default: m.ReaderSimulatorDrawer })),
+    },
   },
   {
     id: 'chekhov-radar',
@@ -370,8 +430,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Crosshair,
     loadMainView: () =>
       import('../plugins/chekhov-radar').then((m) => ({ default: m.ChekhovRadarMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/chekhov-radar').then((m) => ({ default: m.ChekhovRadarDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/chekhov-radar').then((m) => ({ default: m.ChekhovRadarDrawer })),
+    },
   },
   {
     id: 'rhythm-metronome',
@@ -384,8 +447,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Music,
     loadMainView: () =>
       import('../plugins/rhythm-metronome').then((m) => ({ default: m.RhythmMetronomeMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/rhythm-metronome').then((m) => ({ default: m.RhythmMetronomeDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/rhythm-metronome').then((m) => ({ default: m.RhythmMetronomeDrawer })),
+    },
   },
   {
     id: 'geography-map',
@@ -398,8 +464,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: MapPin,
     loadMainView: () =>
       import('../plugins/geography-map').then((m) => ({ default: m.GeographyMapMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/geography-map').then((m) => ({ default: m.GeographyMapDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/geography-map').then((m) => ({ default: m.GeographyMapDrawer })),
+    },
   },
   {
     id: 'combat-sandbox',
@@ -412,8 +481,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Swords,
     loadMainView: () =>
       import('../plugins/combat-sandbox').then((m) => ({ default: m.CombatSandboxMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/combat-sandbox').then((m) => ({ default: m.CombatSandboxDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/combat-sandbox').then((m) => ({ default: m.CombatSandboxDrawer })),
+    },
   },
   {
     id: 'multi-calendar',
@@ -426,8 +498,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Calendar,
     loadMainView: () =>
       import('../plugins/multi-calendar').then((m) => ({ default: m.MultiCalendarMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/multi-calendar').then((m) => ({ default: m.MultiCalendarDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/multi-calendar').then((m) => ({ default: m.MultiCalendarDrawer })),
+    },
   },
   {
     id: 'pov-guard',
@@ -440,8 +515,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Eye,
     loadMainView: () =>
       import('../plugins/pov-guard').then((m) => ({ default: m.PovGuardMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/pov-guard').then((m) => ({ default: m.PovGuardDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () => import('../plugins/pov-guard').then((m) => ({ default: m.PovGuardDrawer })),
+    },
   },
   {
     id: 'narrative-linter',
@@ -454,8 +531,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: AlertCircle,
     loadMainView: () =>
       import('../plugins/narrative-linter').then((m) => ({ default: m.NarrativeLinterMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/narrative-linter').then((m) => ({ default: m.NarrativeLinterDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/narrative-linter').then((m) => ({ default: m.NarrativeLinterDrawer })),
+    },
   },
   {
     id: 'diff-reviewer',
@@ -468,8 +548,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: GitCompare,
     loadMainView: () =>
       import('../plugins/diff-reviewer').then((m) => ({ default: m.DiffReviewerMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/diff-reviewer').then((m) => ({ default: m.DiffReviewerDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/diff-reviewer').then((m) => ({ default: m.DiffReviewerDrawer })),
+    },
   },
   {
     id: 'iron-chamber',
@@ -482,8 +565,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Lock,
     loadMainView: () =>
       import('../plugins/iron-chamber').then((m) => ({ default: m.IronChamberMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/iron-chamber').then((m) => ({ default: m.IronChamberDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () => import('../plugins/iron-chamber').then((m) => ({ default: m.IronChamberDrawer })),
+    },
   },
   {
     id: 'soundscape',
@@ -496,8 +581,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Headphones,
     loadMainView: () =>
       import('../plugins/soundscape').then((m) => ({ default: m.SoundscapeMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/soundscape').then((m) => ({ default: m.SoundscapeDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () => import('../plugins/soundscape').then((m) => ({ default: m.SoundscapeDrawer })),
+    },
   },
   {
     id: 'scrapbook-recycler',
@@ -510,8 +597,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Recycle,
     loadMainView: () =>
       import('../plugins/scrapbook-recycler').then((m) => ({ default: m.ScrapbookMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/scrapbook-recycler').then((m) => ({ default: m.ScrapbookDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/scrapbook-recycler').then((m) => ({ default: m.ScrapbookDrawer })),
+    },
   },
   {
     id: 'aftermath-sync',
@@ -524,8 +614,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: RefreshCw,
     loadMainView: () =>
       import('../plugins/aftermath-sync').then((m) => ({ default: m.AftermathMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/aftermath-sync').then((m) => ({ default: m.AftermathDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () => import('../plugins/aftermath-sync').then((m) => ({ default: m.AftermathDrawer })),
+    },
   },
   {
     id: 'subtext-compiler',
@@ -538,8 +630,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: EyeOff,
     loadMainView: () =>
       import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () => import('../plugins/subtext-compiler').then((m) => ({ default: m.SubtextDrawer })),
+    },
   },
 
   {
@@ -553,8 +647,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Activity,
     loadMainView: () =>
       import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () => import('../plugins/rhythm-radar').then((m) => ({ default: m.RhythmRadarDrawer })),
+    },
   },
 
   {
@@ -568,8 +664,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: UserX,
     loadMainView: () =>
       import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/shadow-reader').then((m) => ({ default: m.ShadowReaderDrawer })),
+    },
   },
 
   {
@@ -583,8 +682,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Split,
     loadMainView: () =>
       import('../plugins/multiverse-whatif').then((m) => ({ default: m.MultiverseMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/multiverse-whatif').then((m) => ({ default: m.MultiverseDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/multiverse-whatif').then((m) => ({ default: m.MultiverseDrawer })),
+    },
   },
   {
     id: 'voice-preview',
@@ -597,8 +699,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Mic,
     loadMainView: () =>
       import('../plugins/voice-preview').then((m) => ({ default: m.VoicePreviewMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/voice-preview').then((m) => ({ default: m.VoicePreviewDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/voice-preview').then((m) => ({ default: m.VoicePreviewDrawer })),
+    },
   },
   {
     id: 'storyboard-gen',
@@ -611,8 +716,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Film,
     loadMainView: () =>
       import('../plugins/storyboard-gen').then((m) => ({ default: m.StoryboardMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/storyboard-gen').then((m) => ({ default: m.StoryboardDrawer })),
+    drawer: {
+      kind: 'quick-action',
+      load: () =>
+        import('../plugins/storyboard-gen').then((m) => ({ default: m.StoryboardDrawer })),
+    },
   },
   {
     id: 'archetype-cards',
@@ -625,8 +733,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Dna,
     loadMainView: () =>
       import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/archetype-cards').then((m) => ({ default: m.ArchetypeDrawer })),
+    },
   },
   {
     id: 'author-ops',
@@ -639,8 +750,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: TrendingUp,
     loadMainView: () =>
       import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () => import('../plugins/author-ops').then((m) => ({ default: m.AuthorOpsDrawer })),
+    },
   },
   {
     id: 'gold-chapters-eval',
@@ -653,8 +766,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Award,
     loadMainView: () =>
       import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersDrawer })),
+    drawer: {
+      kind: 'live-diagnostic',
+      load: () =>
+        import('../plugins/gold-chapters-eval').then((m) => ({ default: m.GoldChaptersDrawer })),
+    },
   },
   {
     id: 'memory-palace',
@@ -667,8 +783,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: Sparkles,
     loadMainView: () =>
       import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/memory-palace').then((m) => ({ default: m.MemoryPalaceDrawer })),
+    },
   },
   {
     id: 'sub-plot-braid',
@@ -681,8 +800,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
     icon: GitMerge,
     loadMainView: () =>
       import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidMasterView })),
-    loadDrawerSnippetView: () =>
-      import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidDrawer })),
+    drawer: {
+      kind: 'context-inspector',
+      load: () =>
+        import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidDrawer })),
+    },
   },
 ]
 
@@ -691,7 +813,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
  */
 export function materializeLazyPlugin(def: PluginStaticDefinition): DesktopPlugin {
   const LazyMainView = lazy(def.loadMainView)
-  const LazyDrawer = def.loadDrawerSnippetView ? lazy(def.loadDrawerSnippetView) : undefined
+  const LazyDrawer = def.drawer ? lazy(def.drawer.load) : undefined
 
   return {
     id: def.id,
@@ -705,6 +827,7 @@ export function materializeLazyPlugin(def: PluginStaticDefinition): DesktopPlugi
     enabledByDefault: def.enabledByDefault,
     mainView: LazyMainView,
     drawerSnippetView: LazyDrawer,
+    drawerCapability: def.drawer?.kind,
     contextProvider: def.contextProvider,
   }
 }

@@ -8,16 +8,8 @@ const { useOptionalPluginRegistry, useOptionalPluginHostContext } = vi.hoisted((
   useOptionalPluginHostContext: vi.fn(),
 }))
 
-const PLUGIN_CATEGORIES = vi.hoisted(() => [
-  { id: 'all', label: '全部插件' },
-  { id: 'lore', label: '设定与世界书' },
-  { id: 'review', label: '质检与门禁' },
-])
-
-vi.mock('../../../core/pluginRegistry', () => ({
-  useOptionalPluginRegistry,
-  PLUGIN_CATEGORIES,
-}))
+// 抽屉分组用的是能力注册表里的三类，所以 capabilityRegistry 保持真实实现。
+vi.mock('../../../core/pluginRegistry', () => ({ useOptionalPluginRegistry }))
 vi.mock('../../../core/pluginHostContext', () => ({ useOptionalPluginHostContext }))
 
 const View = () => <div>view</div>
@@ -33,12 +25,39 @@ const codexPlugin = {
   icon: Icon,
   mainView: View,
   drawerSnippetView: DrawerView,
+  drawerCapability: 'context-inspector',
 }
 
 const linterPlugin = {
   id: 'narrative-linter',
   name: '叙事体检',
   description: '口癖、重复句式与节奏问题清单',
+  version: '1.0.0',
+  category: 'review',
+  icon: Icon,
+  mainView: View,
+  drawerSnippetView: DrawerView,
+  drawerCapability: 'live-diagnostic',
+}
+
+// 与 linterPlugin 同一套件（review）：只有按能力分类才会跟它分成两组。
+const forgePlugin = {
+  id: 'name-forge',
+  name: '起名姬',
+  description: '人物、门派与地名候选',
+  version: '1.0.0',
+  category: 'review',
+  icon: Icon,
+  mainView: View,
+  drawerSnippetView: DrawerView,
+  drawerCapability: 'quick-action',
+}
+
+// 有抽屉但没归类：不进候选，也不给它编一个分组名（§P2.8 要求作者明确选一类）。
+const unclassifiedPlugin = {
+  id: 'legacy-drawer',
+  name: '未归类抽屉',
+  description: '历史遗留',
   version: '1.0.0',
   category: 'review',
   icon: Icon,
@@ -88,6 +107,14 @@ function trigger() {
   return screen.getByTestId('editor-toolbar-drawer-trigger')
 }
 
+/** 菜单里实际渲染出来的分组小标题，顺序即作者看到的分组顺序。 */
+function groupLabels(): string[] {
+  return screen
+    .getAllByTestId('context-menu-group-label')
+    .map((node) => node.textContent ?? '')
+    .filter(Boolean)
+}
+
 /** Puzzle 按钮位于工具栏右端的「工作台功能」组里，该组只在有聚焦/全屏/右栏回调时渲染。 */
 function renderToolbar() {
   return render(
@@ -98,7 +125,7 @@ function renderToolbar() {
 describe('EditorToolbar 插件抽屉选择器（P2.8）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockRegistry([chartPlugin, codexPlugin, linterPlugin])
+    mockRegistry([chartPlugin, codexPlugin, linterPlugin, forgePlugin, unclassifiedPlugin])
   })
 
   it('点击 Puzzle 只摊开候选，不再打开「第一个有抽屉的插件」', () => {
@@ -109,12 +136,15 @@ describe('EditorToolbar 插件抽屉选择器（P2.8）', () => {
 
     expect(host.openDrawer).not.toHaveBeenCalled()
     const items = screen.getAllByRole('menuitem')
-    expect(items).toHaveLength(2)
+    expect(items).toHaveLength(3)
     expect(items[0]).toHaveTextContent('活体世界书')
-    expect(items[1]).toHaveTextContent('叙事体检')
-    // 分组小标题证明候选是按套件排序后展示的，而不是注册表顺序上的第一个命中
-    expect(screen.getByText('设定与世界书')).toBeInTheDocument()
-    expect(screen.getByText('质检与门禁')).toBeInTheDocument()
+    expect(items[1]).toHaveTextContent('起名姬')
+    expect(items[2]).toHaveTextContent('叙事体检')
+    // 起名姬与叙事体检同属 review 套件，注册表顺序也是体检在前：
+    // 候选仍按三类能力重排，说明分组的依据是能力，不是插件套件，也不是注册表顺序。
+    expect(groupLabels()).toEqual(['上下文检视', '快捷动作', '实时诊断'])
+    // 没归类的抽屉不得混进候选
+    expect(screen.queryByText('未归类抽屉')).not.toBeInTheDocument()
   })
 
   it('条目会说明这个抽屉是什么，选择由作者做出', () => {
@@ -124,6 +154,19 @@ describe('EditorToolbar 插件抽屉选择器（P2.8）', () => {
 
     expect(screen.getByText('人物、地点与设定的实时随动档案')).toBeInTheDocument()
     expect(screen.getByText('口癖、重复句式与节奏问题清单')).toBeInTheDocument()
+  })
+
+  it('没有归入三类能力的抽屉不进候选', () => {
+    // 注册表要求抽屉与能力类别成对声明，所以这不是在猜它属于哪一类，
+    // 而是不给一个没有归类的抽屉编出分组标题（INV-09：展示出去的话必须真成立）。
+    mockHost(null)
+    mockRegistry([unclassifiedPlugin, codexPlugin])
+    renderToolbar()
+    fireEvent.click(trigger())
+
+    expect(screen.queryByText('未归类抽屉')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
+    expect(groupLabels()).toEqual(['上下文检视'])
   })
 
   it('选中某个条目才打开那个插件的抽屉，且菜单收起', () => {
@@ -186,6 +229,6 @@ describe('EditorToolbar 插件抽屉选择器（P2.8）', () => {
     expect(document.activeElement).toBe(items[1])
 
     fireEvent.keyDown(items[1], { key: 'Enter' })
-    expect(host.openDrawer).toHaveBeenCalledWith('narrative-linter')
+    expect(host.openDrawer).toHaveBeenCalledWith('name-forge')
   })
 })
