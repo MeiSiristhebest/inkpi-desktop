@@ -9,8 +9,8 @@ const RULE =
 /**
  * INV-05：只有作者确认过的力量体系才是事实。工作区没有记录时，内置修真阶梯只能作为
  * 明确标注的候选预设进入上下文；以高优先级注入会让模型把「练气→渡劫」当成这本西幻
- * 书的世界观去做一致性判定。这里刻意不走 getDefaultSystem()：它返回引擎内缓存的
- * customSystem，可能属于另一个工作区（INV-03）。
+ * 书的世界观去做一致性判定。体系一律按 request.projectId 从仓库读，引擎侧不留任何
+ * 跨工作区可变缓存可读（INV-03）。
  */
 export async function provideConsistencyContext(
   request: PluginContextRequest,

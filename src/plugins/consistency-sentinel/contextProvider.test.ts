@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PowerTierSystem } from '../../ports/powerTierRepository'
 
 const { getPowerTierSystem } = vi.hoisted(() => ({ getPowerTierSystem: vi.fn() }))
@@ -27,10 +27,6 @@ function payload(fragment: { data: unknown }): Record<string, unknown> {
 
 beforeEach(() => {
   getPowerTierSystem.mockReset()
-})
-
-afterEach(() => {
-  consistencyEngine.setCustomSystem(null)
 })
 
 describe('provideConsistencyContext', () => {
@@ -96,9 +92,11 @@ describe('provideConsistencyContext', () => {
     )
   })
 
-  it('does not leak another workspace cached as the engine custom system', async () => {
-    consistencyEngine.setCustomSystem(system({ projectId: 'ws-2', tiers: ['青铜', '白银'] }))
-    getPowerTierSystem.mockResolvedValue(null)
+  it('does not let another workspace author their system into this one', async () => {
+    // 仓库按 projectId 取值：ws-2 记录了自己的阶梯，ws-1 来取必须是空的。
+    getPowerTierSystem.mockImplementation((projectId: string) =>
+      Promise.resolve(projectId === 'ws-2' ? system({ projectId: 'ws-2' }) : null),
+    )
 
     const fragment = await provideConsistencyContext({
       projectId: 'ws-1',
@@ -106,8 +104,9 @@ describe('provideConsistencyContext', () => {
       activeChapterId: 'ch-1',
     })
 
+    expect(getPowerTierSystem).toHaveBeenCalledWith('ws-1')
     expect(payload(fragment).candidateTiers).toEqual(consistencyEngine.getPresetSystems()[0].tiers)
-    expect(payload(fragment).candidateTiers).not.toContain('白银')
+    expect(payload(fragment).candidateTiers).not.toContain('星痕')
   })
 
   it('degrades to an unavailable fragment rather than a fabricated world rule', async () => {

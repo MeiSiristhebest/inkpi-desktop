@@ -40,28 +40,24 @@ const ACTIVE_SUBJECT_VERBS = [
 ]
 
 export class ConsistencyEngine {
-  private customSystem: PowerTierSystem | null = null
   // 缓存传递闭包结果，避免双重循环中对同个系统重复执行 O(n^3) Warshall 计算
   private closureCache = new Map<string, Map<string, Set<string>>>()
-
-  public setCustomSystem(system: PowerTierSystem | null): void {
-    this.customSystem = system
-  }
 
   public getPresetSystems(): PresetTierSystem[] {
     return presetTiersData as PresetTierSystem[]
   }
 
-  public getDefaultSystem(): PowerTierSystem {
-    if (this.customSystem) {
-      return this.customSystem
-    }
-    const preset = presetTiersData[0] as PresetTierSystem
+  /**
+   * 工作区还没有作者确认过的力量体系时，UI 从这个空体系起步（§P2.4）。
+   * 过去这里会退回 presetTiersData[0]，等于替所有西幻/科幻作者默认选了一套修真阶梯，
+   * 预置体系只能由作者显式点「套用」进入。
+   */
+  public emptySystem(projectId: string): PowerTierSystem {
     return {
-      projectId: 'default',
-      systemName: preset.name,
-      tiers: [...preset.tiers],
-      specialModifiers: [...preset.modifiers],
+      projectId,
+      systemName: '',
+      tiers: [],
+      specialModifiers: [],
       updatedAt: 0,
     }
   }

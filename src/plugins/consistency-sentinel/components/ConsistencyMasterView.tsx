@@ -10,6 +10,7 @@ import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import {
   ShieldAlert,
   Save,
@@ -26,7 +27,9 @@ import {
 export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
   const aiTask = usePluginAiTask('consistency-sentinel')
-  const [system, setSystem] = useState<PowerTierSystem>(() => consistencyEngine.getDefaultSystem())
+  const [system, setSystem] = useState<PowerTierSystem>(() =>
+    consistencyEngine.emptySystem(projectId),
+  )
   const [savedSuccess, setSavedSuccess] = useState(false)
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
@@ -34,6 +37,8 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   // 巡检区状态
   const [auditText, setAuditText] = useState('')
   const [violations, setViolations] = useState<ConsistencyViolation[]>([])
+  // 「自洽」只能是对某一段已巡检文本的结论，不能是刚打开页面时的默认态。
+  const [scannedText, setScannedText] = useState<string | null>(null)
   const [entityCount, setEntityCount] = useState(0)
 
   const presets = consistencyEngine.getPresetSystems()
@@ -49,9 +54,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       if (existing) {
         setSystem(existing)
       } else {
-        const def = consistencyEngine.getDefaultSystem()
-        def.projectId = projectId
-        setSystem(def)
+        setSystem(consistencyEngine.emptySystem(projectId))
       }
 
       const projectEntities = allCodex.filter((e) => e.projectId === projectId)
@@ -143,6 +146,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   const handleRunAudit = async () => {
     if (!auditText.trim()) {
       setViolations([])
+      setScannedText(null)
       return
     }
     const allCodex = await indexedDbCodexEntityRepository.getAll()
@@ -167,6 +171,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     const deceasedViolations = consistencyEngine.scanTextForDeceased(auditText, deceased)
 
     setViolations([...powerViolations, ...deceasedViolations])
+    setScannedText(auditText)
   }
 
   return (
@@ -208,7 +213,9 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               <span>战力阶梯偏序体系</span>
             </span>
             <span className="text-[10px] text-[var(--ink-text-muted)]">
-              {system.tiers.length} 个阶层
+              {system.tiers.length === 0
+                ? '未配置：不替本书选流派'
+                : `${system.tiers.length} 个阶层`}
             </span>
           </div>
 
@@ -311,6 +318,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               <span className="text-[var(--ink-text-muted)]">
                 · 已绑定世界观实体: {entityCount} 个
               </span>
+              <ScoreProvenanceBadge source="rule" detail="按阶梯顺序与已故标注做规则匹配" />
             </div>
             <div className="flex items-center gap-2">
               {chapters.length > 0 && (
@@ -367,11 +375,29 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-[var(--ink-text-muted)]">
                 <span>巡检发现的逻辑违规与硬伤：({violations.length})</span>
-                {violations.length === 0 && auditText.trim() && (
-                  <span className="text-emerald-500 font-medium flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> 设定完全自洽，未发现越阶或吃书矛盾
-                  </span>
+                {violations.length === 0 && auditText.trim() && scannedText === null && (
+                  <span>尚未巡检，点「立即巡检」后才有结论</span>
                 )}
+                {violations.length === 0 &&
+                  auditText.trim() &&
+                  scannedText !== null &&
+                  scannedText !== auditText && <span>正文已改动，结论已过期</span>}
+                {violations.length === 0 &&
+                  scannedText === auditText &&
+                  auditText.trim() &&
+                  system.tiers.length === 0 && (
+                    <span className="text-amber-500 font-medium">
+                      未套用战力阶梯，本次只巡检死者复生一类问题
+                    </span>
+                  )}
+                {violations.length === 0 &&
+                  scannedText === auditText &&
+                  auditText.trim() &&
+                  system.tiers.length > 0 && (
+                    <span className="text-emerald-500 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> 已巡检段落内未发现越阶或吃书矛盾
+                    </span>
+                  )}
               </div>
 
               {violations.map((v) => (

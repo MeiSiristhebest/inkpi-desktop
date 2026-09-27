@@ -6,10 +6,13 @@ import { indexedDbPowerTierRepository } from '../../../adapters/indexedDbPowerTi
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { clock } from '../../../adapters/clock'
 import { pluginEventBus } from '../../../core/pluginEventBus'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { ShieldAlert, CheckCircle2 } from 'lucide-react'
 
 export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
-  const [system, setSystem] = useState<PowerTierSystem>(() => consistencyEngine.getDefaultSystem())
+  const [system, setSystem] = useState<PowerTierSystem>(() =>
+    consistencyEngine.emptySystem(projectId),
+  )
   const [entities, setEntities] = useState<
     { name: string; realm?: string; isDeceased?: boolean }[]
   >([])
@@ -99,9 +102,11 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
             <span>设定自洽哨兵</span>
           </div>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text-muted)]">
-            体系: {system.tiers.length} 阶
+            {system.tiers.length === 0 ? '未配置阶梯' : `体系: ${system.tiers.length} 阶`}
           </span>
         </div>
+
+        <ScoreProvenanceBadge source="rule" detail="对当前正文跑规则匹配" />
 
         {violations.length > 0 ? (
           <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 space-y-0.5">
@@ -109,6 +114,15 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
               <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
               <span>发现 {violations.length} 处潜在逻辑吃书！</span>
             </div>
+          </div>
+        ) : system.tiers.length === 0 ? (
+          <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center gap-1 text-[11px]">
+            <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+            <span>未套用战力阶梯，越阶倒错无法判定</span>
+          </div>
+        ) : !currentText || currentText.trim().length < 5 ? (
+          <div className="p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text-muted)] flex items-center gap-1 text-[11px]">
+            <span>等待正文，随动巡检尚未开始</span>
           </div>
         ) : (
           <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center gap-1 text-[11px]">
@@ -122,7 +136,9 @@ export const ConsistencyDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
         {violations.length === 0 ? (
           <div className="text-center py-10 text-[var(--ink-text-muted)] text-[11px]">
-            正文中未检测到越阶倒错或死者复活等逻辑硬伤。
+            {system.tiers.length === 0
+              ? '未套用战力阶梯，这里只巡检已标注为已故的角色。'
+              : '正文中未检测到越阶倒错或死者复活等逻辑硬伤。'}
           </div>
         ) : (
           violations.map((v) => (
