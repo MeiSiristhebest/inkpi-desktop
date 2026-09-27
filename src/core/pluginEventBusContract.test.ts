@@ -59,6 +59,33 @@ function publishersByEvent(): Map<string, string[]> {
   return publishers
 }
 
+/** name -> 在产物代码里真的订阅了这个事件的文件。连接只能由订阅证明，不能由注释证明。 */
+function subscribersByEvent(): Map<string, string[]> {
+  const subscribers = new Map<string, string[]>()
+  for (const file of productionSources(SRC_ROOT)) {
+    const source = readFileSync(file, 'utf8')
+    for (const match of source.matchAll(/\.on\(\s*'([A-Z][A-Z_]+)'/g)) {
+      const list = subscribers.get(match[1]) ?? []
+      list.push(file.slice(SRC_ROOT.length + 1).replace(/\\/g, '/'))
+      subscribers.set(match[1], list)
+    }
+  }
+  return subscribers
+}
+
+/** 联合类型里用箭头声明了「谁 -> 谁」的那些事件名（连接真假由下面的门控判定）。 */
+function eventsClaimingARoute(): string[] {
+  const union = /export type PluginEventType =([\s\S]*?)\n\n/.exec(BUS_SOURCE)?.[1]
+  if (!union) throw new Error('找不到 PluginEventType 联合类型，扫描规则需要跟着文件结构更新')
+  return union
+    .split('\n')
+    .flatMap((line) => {
+      const match = /\|\s*'([A-Z][A-Z_]+)'(.*)$/.exec(line)
+      return match && match[2].includes('->') ? [match[1]] : []
+    })
+    .sort()
+}
+
 describe('plugin event bus contract (§P2.12)', () => {
   it('names and payload shapes are the same set in both directions', () => {
     expect(payloadInterfaceKeys().sort()).toEqual(declaredEventNames().sort())
@@ -83,5 +110,20 @@ describe('plugin event bus contract (§P2.12)', () => {
     expect(publishers.get('CODEX_ENTITY_TOUCHED')).toEqual([
       'services/domainApplicationServices.ts',
     ])
+  })
+
+  it('注释里画出的每条联动箭头，都要有产物代码真的订阅它', () => {
+    const subscribers = subscribersByEvent()
+    const claimed = eventsClaimingARoute()
+    // 以前这里写着 living-codex -> aftermath-sync，而 aftermath-sync 一处都没订阅过。
+    expect(claimed.filter((name) => !subscribers.has(name))).toEqual([])
+    // 扫描不能是空转：4 条箭头是真的声明在联合类型上，第 5 个事件只有发布者、没冒充连接。
+    expect(claimed).toEqual([
+      'CHAPTER_CONTENT_AUDITED',
+      'CODEX_ENTITY_TOUCHED',
+      'FORESHADOW_PLANTED',
+      'POWER_BREACH_DETECTED',
+    ])
+    expect(subscribers.has('UNIFIED_CHAPTER_EVALUATED')).toBe(false)
   })
 })

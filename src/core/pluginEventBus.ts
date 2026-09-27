@@ -7,11 +7,13 @@
  */
 
 export type PluginEventType =
-  | 'POWER_BREACH_DETECTED' // combat-sandbox -> consistency-sentinel
-  | 'FORESHADOW_PLANTED' // chekhov-radar -> promise-ledger
-  | 'CODEX_ENTITY_TOUCHED' // living-codex -> aftermath-sync
-  | 'CHAPTER_CONTENT_AUDITED' // water-meter / reader-hook -> emotion-curve
-  | 'UNIFIED_CHAPTER_EVALUATED' // 章节质量统一评估流 (rhythm-radar + reader-hook + paywall-sentry)
+  | 'POWER_BREACH_DETECTED' // combat-sandbox -> consistency-sentinel 的巡检抽屉
+  | 'FORESHADOW_PLANTED' // chekhov-radar -> promise-ledger 的记账抽屉
+  | 'CODEX_ENTITY_TOUCHED' // codexApplicationService -> aftermath-sync 的对照名单
+  | 'CHAPTER_CONTENT_AUDITED' // water-meter / reader-hook -> emotion-curve 的曲线抽屉
+  // 综合评估结果由 evaluateChapter 的返回值直接交给调用方，这条广播目前没有面板订阅它，
+  // 章节质量面板也还没接上这个评估器，所以这里不许补一个箭头把连接说成已经存在。
+  | 'UNIFIED_CHAPTER_EVALUATED'
 
 export interface PluginEventPayloads {
   POWER_BREACH_DETECTED: {
