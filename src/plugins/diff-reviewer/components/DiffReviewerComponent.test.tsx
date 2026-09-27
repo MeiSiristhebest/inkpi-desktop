@@ -23,9 +23,40 @@ describe('DiffReviewer UI Components', () => {
     expect(screen.getByText(/双栏 Plan\/Apply 审校与合并器/)).toBeDefined()
   })
 
-  it('DiffReviewerDrawer renders correctly with stats', () => {
+  it('DiffReviewerDrawer reports real facts and never invents revision hunks', async () => {
     render(<DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />)
     expect(screen.getByText(/双栏审校随动/)).toBeDefined()
+    expect(screen.getByText(/已保存稿 8 字/)).toBeDefined()
+    // §P2.3/INV-05：随动面板以前用正则改写正文造出一份假 diff，再报「N 处修订分块」。
+    expect(screen.queryByText(/处修订分块/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/新增字行/)).not.toBeInTheDocument()
+    expect(screen.getByText(/还没有打开章节/)).toBeInTheDocument()
+  })
+
+  it('DiffReviewerDrawer lists only real proposal-ledger records for the chapter', async () => {
+    const chapter = {
+      id: 'diff-reviewer-drawer-chapter',
+      projectId: 'p1',
+      volumeId: 'v1',
+      title: '第一章',
+      content: '林凡走在大街上。',
+      wordCount: 8,
+      order: 1,
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+
+    render(
+      <DesktopPluginHostProvider projectId="p1" activeChapter={chapter}>
+        <DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />
+      </DesktopPluginHostProvider>,
+    )
+
+    // 账本里确实没有这一章的写回记录，那就直说，而不是造出差异来填。
+    expect(await screen.findByText(/本章还没有审校写回记录/)).toBeInTheDocument()
+    expect(screen.queryByText(/处修订分块/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Hunk #1/)).not.toBeInTheDocument()
   })
 
   it('starts blank and refuses to compute from two empty panels', async () => {
