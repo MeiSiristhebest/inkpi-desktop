@@ -79,5 +79,9 @@ describe('plugin event bus contract (§P2.12)', () => {
       'plugins/reader-hook/engine/ReaderHookEngine.ts',
       'plugins/water-meter/engine/WaterMeterEngine.ts',
     ])
+    // §P2.12 的正身：组件里重新写一个 emit 就要让这条门失败。
+    expect(publishers.get('CODEX_ENTITY_TOUCHED')).toEqual([
+      'services/domainApplicationServices.ts',
+    ])
   })
 })

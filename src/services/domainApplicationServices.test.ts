@@ -6,6 +6,7 @@ import {
   legacyDomainApplicationService,
 } from './domainApplicationServices'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
+import { pluginEventBus, type PluginEventPayloads } from '../core/pluginEventBus'
 import { indexedDbStoryStateStore } from '../adapters/indexedDbStoryStateStore'
 import { storyStateMaterializer } from './storyStateMaterializer'
 import type { CodexEntity } from '../plugins/living-codex/types'
@@ -188,6 +189,43 @@ describe('DomainApplicationServices & StoryState Integration', () => {
     )
     expect(entityChange).toBeDefined()
     expect(entityChange.changes[0].operation).toBe('upsert')
+  })
+
+  it('codexApplicationService.saveEntity publishes CODEX_ENTITY_TOUCHED once for the write it made (§P2.12)', async () => {
+    // 独立的 workspaceId：总线带 replay 缓冲区，同文件早先的写入不能串到这次的计数里。
+    const eventProject = `${workspaceId}-entity-updated`
+    const received: Array<PluginEventPayloads['CODEX_ENTITY_TOUCHED']> = []
+    const unsubscribe = pluginEventBus
+      .scopedBus(eventProject)
+      .on('CODEX_ENTITY_TOUCHED', (payload) => {
+        received.push(payload)
+      })
+
+    await codexApplicationService.saveEntity(
+      {
+        id: 'ent-published',
+        projectId: eventProject,
+        name: '青冥剑',
+        aliases: [],
+        category: 'item',
+        attributes: {},
+        relations: [],
+        summary: '本命法器',
+        createdAt: 100,
+        updatedAt: 100,
+      },
+      'author-confirmed',
+    )
+
+    unsubscribe()
+    expect(received).toEqual([
+      {
+        projectId: eventProject,
+        entityId: 'ent-published',
+        entityName: '青冥剑',
+        category: 'item',
+      },
+    ])
   })
 
   it('untrusted / legacy entity without provenance materializes with hypothesis factLevel (fail-closed INV-05)', async () => {

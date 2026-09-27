@@ -3,7 +3,6 @@ import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { codexApplicationService } from '../../../services/domainApplicationServices'
-import { pluginEventBus } from '../../../core/pluginEventBus'
 import { AftermathEngine } from '../engine/AftermathEngine'
 import type { AftermathPatchRecord } from '../types'
 import { GitPullRequest, Check, X, Sparkles } from 'lucide-react'
@@ -85,12 +84,6 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           updatedAt: clock.now(),
         }
         await codexApplicationService.saveEntity(updatedEntity, 'author-confirmed')
-        pluginEventBus.scopedBus(projectId).emit('CODEX_ENTITY_TOUCHED', {
-          projectId,
-          entityId: targetEntity.id,
-          entityName: targetEntity.name,
-          category: targetEntity.category || 'character',
-        })
       }
     }
 

@@ -6,6 +6,7 @@ import { db } from '../db/indexedDB'
 import { storyStateMaterializer } from './storyStateMaterializer'
 import { clock } from '../adapters/clock'
 import { appendIndexedDbDomainChange } from '../adapters/indexedDbDomainChangeAppender'
+import { pluginEventBus } from '../core/pluginEventBus'
 import type { Provenance } from '../domain/story/provenance'
 
 export type DomainWriteIntent =
@@ -118,6 +119,14 @@ export const codexApplicationService = {
     })
 
     await storyStateMaterializer.materialize(workspaceId).catch(() => undefined)
+
+    // §P2.12：EntityUpdated 只由这条权威写入口发布，此前 10 个调用方里只有 2 个真的广播过。
+    pluginEventBus.scopedBus(workspaceId).emit('CODEX_ENTITY_TOUCHED', {
+      projectId: workspaceId,
+      entityId: withProvenance.id,
+      entityName: withProvenance.name,
+      category: withProvenance.category,
+    })
   },
 
   async deleteEntity(id: string, workspaceId: string): Promise<void> {

@@ -392,15 +392,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         updatedAt: clock.now(),
       }
       await codexApplicationService.saveEntity(merged, 'author-confirmed')
-
-      scopedBus.emit('CODEX_ENTITY_TOUCHED', {
-        projectId,
-        entityId: merged.id,
-        entityName: merged.name,
-        category: merged.category || 'entity',
-      })
     },
-    [projectId, scopedBus],
+    [],
   )
 
   const contextValue: DesktopPluginHostContextValue = useMemo(
