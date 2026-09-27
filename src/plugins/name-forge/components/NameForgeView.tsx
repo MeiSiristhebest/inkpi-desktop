@@ -20,6 +20,7 @@ import {
   BookmarkCheck,
   RefreshCw,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 const CATEGORY_TABS: { id: NameCategory; label: string; icon: typeof User }[] = [
   { id: 'character_cn', label: '修仙东方人名', icon: User },
@@ -136,6 +137,7 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
               规避死板字词拼接，结合汉语平仄音律与经典奇幻文法，一键联动 Living Codex 活体世界观
             </p>
+            <ScoreProvenanceBadge source="rule" detail="按声调与用字规则打分" />
           </div>
 
           <button

@@ -21,6 +21,7 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -157,6 +158,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             微观单章 3~5 场戏戏剧弧，目标/冲突/高潮四段式与字数预算动态映射
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按对话/叙述占比与句长特征判定" />
         </div>
 
         {/* 预置模板快速新建 */}

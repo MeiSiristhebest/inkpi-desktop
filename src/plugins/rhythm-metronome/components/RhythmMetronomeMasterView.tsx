@@ -5,6 +5,7 @@ import type { RhythmCadenceRecord } from '../../../ports/rhythmCadenceRepository
 import { indexedDbRhythmCadenceRepository } from '../../../adapters/indexedDbRhythmCadenceRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import {
   Activity,
   Zap,
@@ -100,8 +101,14 @@ export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = ({ projectI
             商业网文黄金节拍器与高潮推进节律仪 (Rhythm Metronome)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            黄金 3-15-50 章三层嵌套自驱推进力学模型，杜绝水文烂尾与主线拖沓停滞。
+            黄金 3-15-50 章三层嵌套推进模型，把主线停滞与水文信号摊给你看。
           </p>
+          <div className="mt-1.5">
+            <ScoreProvenanceBadge
+              source="rule"
+              detail="健康分由章数与你设定的节拍长度算出，不含读者数据"
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

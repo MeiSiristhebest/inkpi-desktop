@@ -9,6 +9,7 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -130,6 +131,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
             ESLint
             风格的网文工业级质量管线，直连真实章节，拦截副词堆叠、窒息长句、百科说教与现代热梗
           </p>
+          <ScoreProvenanceBadge source="rule" detail="100 减去规则命中数加权" />
         </div>
 
         <div className="flex items-center gap-4">

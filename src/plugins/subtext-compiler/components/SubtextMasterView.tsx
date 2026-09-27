@@ -10,6 +10,7 @@ import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { semanticTextFromContent } from '../../../domain/content'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -78,6 +79,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             遵循海明威“冰山理论”，将白开水对白解耦为“表面台词 + 水下潜台词 + 肢体微反应”三轨立体架构
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按固定分级表判定，不是模型推断" />
         </div>
       </div>
 

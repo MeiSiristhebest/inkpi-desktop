@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -118,6 +119,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             四大心智原形预演本章发布后的真实段评、防踩毒防暴毙、逻辑抓虫与防杠审查。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按读者弃书词表匹配，不含真实读者行为数据" />
         </div>
         <div className="flex items-center gap-2">
           {savedSuccessMsg && (

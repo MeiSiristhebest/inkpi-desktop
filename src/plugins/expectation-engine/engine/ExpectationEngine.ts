@@ -234,7 +234,7 @@ export class ExpectationEngine {
     const c3Passed = c3Crisis || c3Hook
     const c3Feedback = c3Passed
       ? '第三章成功展开主线危机并立下中长期悬念钩子，留存能力极高。'
-      : '第三章未抛出核心主线悬念或生死倒计时大钩子，读者次日追读率可能受损。'
+      : '第三章未抛出核心主线悬念或生死倒计时大钩子，属于潜在追读流失信号。'
 
     let score = 50
     if (c1Passed) score += 20

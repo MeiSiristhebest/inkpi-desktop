@@ -20,6 +20,7 @@ import {
   BookOpen,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -185,6 +186,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             提取多角色台词指纹，直连全书章节与百科角色，拦截语言同质化硬伤
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按台词文本的字面相似度统计" />
         </div>
 
         {/* 章节来源快速切换 */}

@@ -9,6 +9,7 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 type CanonChapter = { index: number; title: string; summary: string; entities: string[] }
 
@@ -151,6 +152,7 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             设定剧情分支分歧奇点，推演“如果主角未救女配/错失机缘”的因果涟漪与蝴蝶效应
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按分支正文的词集重合度推算" />
         </div>
         <div className="flex items-center gap-2">
           <button

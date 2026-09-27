@@ -3,6 +3,7 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { NarrativeLinterEngine } from '../engine/NarrativeLinterEngine'
 import type { LintSummary } from '../types'
 import { CheckCircle2, AlertCircle } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const NarrativeLinterDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const [engine] = useState(() => new NarrativeLinterEngine())
@@ -31,6 +32,8 @@ export const NarrativeLinterDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
           </span>
         )}
       </div>
+
+      <ScoreProvenanceBadge source="rule" detail="对当前正文实时跑规则清单" />
 
       {!summary || summary.totalIssues === 0 ? (
         <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-center text-xs">

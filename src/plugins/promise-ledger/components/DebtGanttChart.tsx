@@ -1,6 +1,7 @@
 import { type FC } from 'react'
 import type { PromiseLedgerEntry } from '../types'
 import { ledgerEngine } from '../engine/LedgerEngine'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 interface DebtGanttChartProps {
   entries: PromiseLedgerEntry[]
@@ -50,6 +51,8 @@ export const DebtGanttChart: FC<DebtGanttChartProps> = ({
           </span>
         </div>
       </div>
+
+      <ScoreProvenanceBadge source="rule" detail="按登记的兑现期限推算" />
 
       <div className="min-w-[640px] relative pt-6 pb-2">
         {/* 章节刻度标尺 */}

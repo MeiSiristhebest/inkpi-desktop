@@ -11,6 +11,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Swords, ShieldAlert, Flame, Zap, BookmarkCheck, Sparkles, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -154,6 +155,7 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             境界天梯压制矩阵、越级代价配平算子与四段博弈微观拆招链，从第一性原理杜绝战力崩塌与报菜名。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按力量层级差与词条配置的固定公式推算" />
         </div>
 
         <div className="flex items-center gap-2">

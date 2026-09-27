@@ -4,6 +4,7 @@ import { indexedDbAuthorOpsRepository } from '../../../adapters/indexedDbAuthorO
 import { AuthorOpsEngine } from '../engine/AuthorOpsEngine'
 import type { AuthorOpsProfileRecord, MetricLogEntry } from '../types'
 import { TrendingDown, Award, UserCheck, AlertTriangle, Save } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { clock } from '../../../adapters/clock'
 
 export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
@@ -119,6 +120,12 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             追读流失断崖差分分析、毒点应对干预方案、官方商业合作名片生成
           </p>
+          <div className="mt-1.5">
+            <ScoreProvenanceBadge
+              source="user"
+              detail="留存率与均订由作者手工录入，差分只读这张台账"
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -151,6 +158,10 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                 <AlertTriangle className="w-5 h-5 text-rose-600" />
                 <span>严重追读流失断崖警告 (单章留存骤降 &ge; 12%)</span>
               </div>
+              <ScoreProvenanceBadge
+                source="inference"
+                detail="原因只是候选推测，读者反馈不在本机"
+              />
               <div className="space-y-2 text-xs">
                 {dropAnalyses
                   .filter((d) => d.isSevereCliff)
@@ -163,10 +174,10 @@ export const AuthorOpsMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                         <span>
                           第 {cliff.dropOffChapter} 章：留存骤降 {cliff.gradientLoss}%
                         </span>
-                        <span className="text-rose-500 font-normal">疑似踩雷毒点</span>
+                        <span className="text-rose-500 font-normal">推测踩雷毒点</span>
                       </div>
                       <div className="mt-1 text-slate-600 dark:text-slate-300">
-                        原因判定：{cliff.probableReason}
+                        推测原因：{cliff.probableReason}
                       </div>
                       <div className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
                         应对策略：{cliff.recommendedCounterAction}

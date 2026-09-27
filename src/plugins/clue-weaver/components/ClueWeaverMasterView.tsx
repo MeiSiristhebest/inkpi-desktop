@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -224,6 +225,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             掌控“谁知道什么”，杜绝全知视角泄露，精准量化多角色情报博弈优势差
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按线索条目的收录与回收计数推算" />
         </div>
       </div>
 

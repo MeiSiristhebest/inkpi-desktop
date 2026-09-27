@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -151,6 +152,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             第一幕挂在墙上的枪，第三幕必须响。防止百万字长篇因伏笔遗忘、死锁锈蚀而烂尾。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按伏笔标注的回收比例统计" />
         </div>
 
         <div className="flex items-center gap-2 self-start md:self-auto">

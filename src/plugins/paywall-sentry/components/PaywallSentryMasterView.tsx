@@ -10,6 +10,7 @@ import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import {
   ShieldCheck,
   Flame,
@@ -101,7 +102,7 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       case 'prime_paywall':
         return (
           <span className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 flex items-center gap-1">
-            <Flame className="w-3.5 h-3.5" /> 黄金卡点 (首订巅峰)
+            <Flame className="w-3.5 h-3.5" /> 黄金卡点 (强断章信号)
           </span>
         )
       case 'acceptable':
@@ -119,7 +120,7 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       case 'toxic_drop':
         return (
           <span className="px-2 py-0.5 text-xs font-medium rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 flex items-center gap-1">
-            <Skull className="w-3.5 h-3.5" /> 暴跌流失风险
+            <Skull className="w-3.5 h-3.5" /> 暴跌流失风险信号
           </span>
         )
     }
@@ -131,11 +132,17 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
             <Flame className="w-6 h-6 text-amber-500" />
-            付费卡点与首订转化哨兵 (Paywall Sentry)
+            付费卡点与断章势能哨兵 (Paywall Sentry)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            基于势能指数 PPI 算法，全书章节付费转化潜力与黄金断章点雷达扫描。
+            按章尾悬念、欲望期待、战力高潮与疲劳流失四类文本特征，逐章扫描断章位置的潜在风险信号。
           </p>
+          <div className="mt-1.5">
+            <ScoreProvenanceBadge
+              source="rule"
+              detail="PPI 由本页四类特征加权算出，不含读者真实付费数据"
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {savedSuccessMsg && (
@@ -210,7 +217,7 @@ export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
                 <div className="flex items-baseline gap-2 mb-3">
                   <span className="text-2xl font-black text-amber-500">{r.ppiScore}</span>
-                  <span className="text-xs text-slate-400">PPI 势能分 / 100</span>
+                  <span className="text-xs text-slate-400">PPI 规则评分 / 100</span>
                   <span className="text-xs text-slate-400 ml-auto">{r.wordCount} 字</span>
                 </div>
 

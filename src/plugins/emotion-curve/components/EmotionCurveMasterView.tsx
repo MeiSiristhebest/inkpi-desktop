@@ -11,6 +11,7 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Activity, AlertTriangle, BookmarkCheck, RefreshCw, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -96,6 +97,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             双极六维情绪心电图分析，量化“打压蓄势 vs 爆发释放”张弛起伏，防止连续致郁或审美疲劳。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按情绪词密度与起伏计分" />
         </div>
         <div className="flex items-center gap-2">
           {savedSuccessMsg && (

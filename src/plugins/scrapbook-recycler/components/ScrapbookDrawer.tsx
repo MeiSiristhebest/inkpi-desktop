@@ -4,6 +4,7 @@ import { indexedDbScrapbookRepository } from '../../../adapters/indexedDbScrapbo
 import { ScrapbookEngine } from '../engine/ScrapbookEngine'
 import type { ScrapbookFragmentRecord, ScrapRecommendation } from '../types'
 import { Archive, Sparkles } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ScrapbookDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [fragments, setFragments] = useState<ScrapbookFragmentRecord[]>([])
@@ -42,6 +43,7 @@ export const ScrapbookDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curre
         </div>
       ) : (
         <div className="space-y-2">
+          <ScoreProvenanceBadge source="rule" detail="按关键词命中匹配素材库条目" />
           <div className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-amber-500" />
             <span>智能语义召回灵感:</span>

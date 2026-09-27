@@ -16,6 +16,7 @@ import {
   RotateCcw,
   CheckCircle2,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 const EMPTY_CELLS: GeoMapGridRecord['occupiedCells'] = []
 
@@ -130,6 +131,7 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             2D 离散拓扑网格画板、行军阻尼时间测算与无飞地拓扑校验，从物理距离根除时间线 Bug。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="在作者标注的地点与路线上做确定性推导" />
         </div>
 
         <div className="flex items-center gap-2">

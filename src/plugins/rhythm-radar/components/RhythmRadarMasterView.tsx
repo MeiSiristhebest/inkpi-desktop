@@ -6,6 +6,7 @@ import type { RhythmRadarReportRecord } from '../types'
 import { Activity, Zap, Anchor, Sparkles } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const RhythmRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [chapterText, setChapterText] = useState(
@@ -58,6 +59,7 @@ export const RhythmRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             测算全卷情感极性与叙事密度张力曲线，智能推荐生死/反转/高潮/颠覆 4 大黄金断章切口
           </p>
+          <ScoreProvenanceBadge source="rule" detail="动作/唤起/冲突三类词频加权，权重固定" />
         </div>
       </div>
 

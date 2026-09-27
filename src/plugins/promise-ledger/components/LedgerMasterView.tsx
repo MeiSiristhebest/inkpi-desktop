@@ -13,6 +13,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Plus, Search, Sparkles, Edit2, Trash2, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const DEMO_PROMISES: Omit<
   PromiseLedgerEntry,
@@ -195,6 +196,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             Plant（埋设）→ Progress（发酵）→ Payoff（回收）生命周期管理与超期红线预警
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按台账条目的到期与回收状态计分" />
         </div>
 
         {/* 核心叙事健康度指示盘 */}

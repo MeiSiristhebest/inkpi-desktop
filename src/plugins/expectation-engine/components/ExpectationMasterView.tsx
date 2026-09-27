@@ -11,6 +11,7 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Sparkles, Plus, Trash2, Activity, Flame, ChevronDown, ChevronUp, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -152,6 +153,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
             <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
               监控压抑爆发比（SPR），杜绝虐主弃书与审美疲劳，闭环追踪读者核心爽点契约
             </p>
+            <ScoreProvenanceBadge source="rule" detail="基准 50 分，按契约与cue词命中加减" />
           </div>
 
           <div className="flex items-center gap-2">

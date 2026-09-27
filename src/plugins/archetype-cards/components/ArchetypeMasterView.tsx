@@ -4,6 +4,7 @@ import { ArchetypeEngine } from '../engine/ArchetypeEngine'
 import type { NarrativeArchetypeRecord, ArchetypeCategory, ChemistryResult } from '../types'
 import { Dna, Shuffle, Users, Swords } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const [engine] = useState(() => new ArchetypeEngine())
@@ -42,6 +43,7 @@ export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => 
             收录 36 经典戏剧人格原型、MBTI 16 极性张力对与 12
             大英雄之旅母题，一键抽取注入对手戏戏剧张力
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按角色在场景里的出现与对立关系计分" />
         </div>
         <div className="flex items-center gap-2">
           <select

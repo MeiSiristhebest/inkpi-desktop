@@ -11,6 +11,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Save, CheckCircle2, Layers, BookOpen, Target, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -170,6 +171,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             掌控长篇分卷宏观戏剧弧，分配大高潮爆发点，杜绝中后期战力通胀与水文崩盘
           </p>
+          <ScoreProvenanceBadge source="rule" detail="对各章字数做线性拟合后打分" />
         </div>
 
         <div className="flex items-center gap-2">

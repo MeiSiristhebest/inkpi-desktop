@@ -336,7 +336,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'paywall-sentry',
     name: '上架卡点哨兵',
-    description: 'PPI 付费卡点势能指数评估与毒点弃书风险预警',
+    description: '按章尾文本特征评估断章势能，标出潜在弃书风险信号',
     version: '1.0.0',
     category: 'rhythm',
     tags: ['首订', '上架卡点', '悬念留白', '防流失'],

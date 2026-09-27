@@ -192,7 +192,7 @@ export class ReaderHookEngine {
       feedback = '顶级断章！章尾张力拉满，冲突未决，极强激发读者追更欲望。'
     } else if (score >= 70) {
       rating = 'cliffhanger'
-      feedback = '合格断章。具备良好戏剧冲突与悬念，追读转化率可期。'
+      feedback = '合格断章。戏剧冲突与悬念特征齐备。'
     } else if (score >= 50) {
       rating = 'moderate'
       feedback = '常规平稳留白。剧情推进尚可，但章尾缺乏不可调和的即时危机感。'

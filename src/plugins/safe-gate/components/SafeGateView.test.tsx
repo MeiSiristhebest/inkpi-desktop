@@ -29,6 +29,6 @@ describe('SafeGateView — 敏感词审查与文学平替主视口', () => {
     fireEvent.click(screen.getByText('一键文学平替'))
     // 平替后原词消失，出现合规状态
     expect(screen.getByText('此分类下无敏感风险')).toBeInTheDocument()
-    expect(screen.getByText('审查合规')).toBeInTheDocument()
+    expect(screen.getByText('未命中本地词库')).toBeInTheDocument()
   })
 })

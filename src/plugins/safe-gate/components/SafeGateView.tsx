@@ -23,6 +23,7 @@ import {
   BookOpen,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsRed as SensitiveWord[]),
@@ -157,8 +158,12 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            红线（涉政/违规）+ 黄线（暴力/擦边）+ 蓝线（平台出戏/粗鄙），智能推荐文风自适应平替
+            红线（涉政/违规）+ 黄线（暴力/擦边）+ 蓝线（平台出戏/粗鄙），按词库命中给出文学平替
           </p>
+          <ScoreProvenanceBadge
+            source="rule"
+            detail="按关键词与正则规则命中判定，未接平台审核接口"
+          />
         </div>
 
         {/* 统计指标卡片 */}
@@ -318,7 +323,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             <span>审查结果与文学平替方案</span>
             {scanResult.isClean ? (
               <span className="text-emerald-500 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> 审查合规
+                <ShieldCheck className="w-3.5 h-3.5" /> 未命中本地词库
               </span>
             ) : (
               <span className="text-rose-500 flex items-center gap-1">
@@ -333,7 +338,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                 <ShieldCheck className="w-8 h-8 mx-auto text-emerald-500 mb-2 opacity-80" />
                 <p className="font-medium text-emerald-500">此分类下无敏感风险</p>
                 <p className="text-[10px] text-[var(--ink-text-faint)] mt-1">
-                  当前文本已符合文风与平台安全标准
+                  当前文本未命中该分级的本地词库条目
                 </p>
               </div>
             ) : (
@@ -385,7 +390,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                           key={i}
                           onClick={() => handleSingleReplace(v.id, sug.replacement)}
                           className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] text-[11px] font-medium transition-colors flex items-center gap-1"
-                          title={`置信度 ${Math.round(sug.confidence * 100)}%`}
+                          title={`规则权重 ${Math.round(sug.confidence * 100)}%`}
                         >
                           <Sparkles className="w-2.5 h-2.5 text-[var(--ink-accent)]" />
                           <span>{sug.replacement}</span>

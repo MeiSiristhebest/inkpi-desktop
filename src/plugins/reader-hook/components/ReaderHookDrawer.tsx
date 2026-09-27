@@ -3,6 +3,7 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { readerHookEngine } from '../engine/ReaderHookEngine'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { Anchor, Copy, Check, Sparkles } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ReaderHookDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const [inputText, setInputText] = useState('')
@@ -33,6 +34,8 @@ export const ReaderHookDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
           {currentText ? `正文随动感知` : '手动分析模式'}
         </span>
       </div>
+
+      <ScoreProvenanceBadge source="rule" detail="对当前正文的断章特征当场计分" />
 
       <div className="space-y-2">
         <label className="text-[11px] text-[var(--ink-text-muted)] block">
