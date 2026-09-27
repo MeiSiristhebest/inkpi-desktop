@@ -15,7 +15,8 @@ export class AftermathEngine {
   public static analyzeChapter(
     chapterText: string,
     chapterId: string,
-    chapterOrder: number,
+    // 允许 undefined：从面板手工扫描时并没有真实的章序，写死一个数字就是在伪造归属。
+    chapterOrder: number | undefined,
     knownEntities: EntityCandidate[],
   ): AftermathAnalysisResult {
     const lines = chapterText

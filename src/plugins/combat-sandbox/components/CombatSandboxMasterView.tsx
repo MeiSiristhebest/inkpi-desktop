@@ -4,6 +4,7 @@ import { CombatSandboxEngine } from '../engine/CombatSandboxEngine'
 import type { CombatDuelRecord, CombatActionBeat, PowerBreachAlert } from '../types'
 import { indexedDbCombatSandboxRepository } from '../../../adapters/indexedDbCombatSandboxRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { indexedDbPowerTierRepository } from '../../../adapters/indexedDbPowerTierRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
@@ -19,36 +20,47 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const [selectedDuelId, setSelectedDuelId] = useState<string>('')
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
-  // 对决配置状态
-  const [protagonistName, setProtagonistName] = useState('主角')
-  const [protagonistRank, setProtagonistRank] = useState(10) // 基础段位
-  const [enemyName, setEnemyName] = useState('死敌')
-  const [enemyRank, setEnemyRank] = useState(20) // 越级敌手
-  const [stakes, setStakes] = useState('生死存亡与秘境至宝夺取')
+  // 对决配置状态：一律从空白开始。§P2.4 禁止在作者没配置时替他选一套修真阶梯、
+  // 两个代号角色和一副"生死存亡"的赌注，再据此给出战力结论。
+  const [powerTiers, setPowerTiers] = useState<string[]>([])
+  const [protagonistName, setProtagonistName] = useState('')
+  const [protagonistRank, setProtagonistRank] = useState(0)
+  const [enemyName, setEnemyName] = useState('')
+  const [enemyRank, setEnemyRank] = useState(0)
+  const [stakes, setStakes] = useState('')
 
   // 越级补偿要素
-  const [assets, setAssets] = useState<string[]>(['天阶雷法属性克制', '本命法宝舍命自爆'])
+  const [assets, setAssets] = useState<string[]>([])
   const [newAssetInput, setNewAssetInput] = useState('')
 
   // 四段博弈拆招动作列表
-  const [beats, setBeats] = useState<CombatActionBeat[]>(
-    () => CombatSandboxEngine.generateFourPhaseTemplate('主角', '死敌').beats,
-  )
+  const [beats, setBeats] = useState<CombatActionBeat[]>([])
+
+  const ladder = useMemo(() => CombatSandboxEngine.buildLadder(powerTiers), [powerTiers])
+  const duelConfigured =
+    ladder.length > 0 &&
+    protagonistRank > 0 &&
+    enemyRank > 0 &&
+    protagonistName.trim().length > 0 &&
+    enemyName.trim().length > 0
 
   const loadData = async () => {
-    const [all, allCodex] = await Promise.all([
+    const [all, allCodex, system] = await Promise.all([
       indexedDbCombatSandboxRepository.getAll(projectId),
       indexedDbCodexEntityRepository.getAll(),
+      indexedDbPowerTierRepository.get(projectId),
     ])
+
+    setPowerTiers(system?.tiers ?? [])
 
     const chars = allCodex
       .filter((e) => e.projectId === projectId && e.category === 'character')
       .map((e) => e.name)
 
-    if (chars.length >= 2 && protagonistName === '主角' && enemyName === '死敌') {
+    // 只借用作者自己建档的角色名，不替他生成拆招正文
+    if (chars.length >= 2 && !protagonistName && !enemyName) {
       setProtagonistName(chars[0])
       setEnemyName(chars[1])
-      setBeats(CombatSandboxEngine.generateFourPhaseTemplate(chars[0], chars[1]).beats)
     }
 
     if (all.length > 0 && !selectedDuelId) {
@@ -70,6 +82,8 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
   // AI 战斗拆招与越级绝杀推演
   const handleAiCombatRecommend = async () => {
+    // 没配置就不发这次昂贵调用：发出去的话题里只有空名字和 0 号序位，模型只能瞎编
+    if (!duelConfigured) return
     const analysisInput = {
       protagonist: {
         name: semanticTextFromContent('combat-sandbox-protagonist', protagonistName),
@@ -85,15 +99,17 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     await aiTask.run(analysisInput)
   }
 
-  const breachAudit: PowerBreachAlert = useMemo(() => {
+  const breachAudit: PowerBreachAlert | null = useMemo(() => {
+    if (!duelConfigured) return null
     return CombatSandboxEngine.auditPowerBreach({
       protagonistRank,
       enemyRank,
       compensatoryAssets: assets,
     })
-  }, [protagonistRank, enemyRank, assets])
+  }, [duelConfigured, protagonistRank, enemyRank, assets])
 
   const handleRegenerateTemplate = () => {
+    if (!protagonistName.trim() || !enemyName.trim()) return
     const tpl = CombatSandboxEngine.generateFourPhaseTemplate(protagonistName, enemyName)
     setBeats(tpl.beats)
   }
@@ -109,19 +125,18 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }
 
   const handleSaveDuel = async () => {
+    if (!duelConfigured || !breachAudit) return
     const id = selectedDuelId || idGenerator.generate('duel')
+    const tierName = (rank: number) =>
+      ladder.find((t) => t.rankValue === rank)?.name ?? '自定义序位'
     const record: CombatDuelRecord = {
       id,
       projectId,
       protagonistName,
-      protagonistTier:
-        CombatSandboxEngine.DEFAULT_TIERS.find((t) => t.rankValue === protagonistRank)?.name ||
-        '自定义境界',
+      protagonistTier: tierName(protagonistRank),
       protagonistRankValue: protagonistRank,
       enemyName,
-      enemyTier:
-        CombatSandboxEngine.DEFAULT_TIERS.find((t) => t.rankValue === enemyRank)?.name ||
-        '自定义境界',
+      enemyTier: tierName(enemyRank),
       enemyRankValue: enemyRank,
       stakes,
       beats,
@@ -131,6 +146,13 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     }
 
     await indexedDbCombatSandboxRepository.save(record)
+    // 越级事实只有在对决被存档后才成立，事件也在这里发（P2.12：事实由权威写入路径发布）
+    CombatSandboxEngine.publishBreachAlert({
+      projectId,
+      protagonistName,
+      enemyName,
+      alert: breachAudit,
+    })
     setSavedSuccessMsg('对决拆招沙盘已成功保存！')
     setSelectedDuelId(id)
     await loadData()
@@ -150,10 +172,11 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
             <Swords className="w-6 h-6 text-amber-500" />
-            东方玄幻战力与拆招沙盘 (Combat Sandbox)
+            战力与拆招沙盘 (Combat Sandbox)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            境界天梯压制矩阵、越级代价配平算子与四段博弈微观拆招链，从第一性原理杜绝战力崩塌与报菜名。
+            力量阶梯压制矩阵、越级代价配平与四段博弈微观拆招链。阶梯取自你在「战力阶梯」里的设定；
+            没有设定就没有结论。
           </p>
           <ScoreProvenanceBadge source="rule" detail="按力量层级差与词条配置的固定公式推算" />
         </div>
@@ -166,9 +189,10 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
-              disabled={aiTask.isRunning}
+              disabled={aiTask.isRunning || !duelConfigured}
+              title={duelConfigured ? undefined : '先配置战力阶梯并填好对阵双方'}
               onClick={handleAiCombatRecommend}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-[var(--ink-accent)] text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90"
+              className="px-3.5 py-1.5 text-xs font-semibold bg-[var(--ink-accent)] text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Bot className="w-4 h-4" /> AI 四段高燃拆招推演
             </button>
@@ -176,47 +200,57 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSaveDuel}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+            disabled={!duelConfigured}
+            className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <BookmarkCheck className="w-4 h-4" /> 保存对决演武
           </button>
         </div>
       </div>
 
-      {/* 战力崩坏巡检看板 */}
-      <div
-        className={`p-4 rounded-xl border transition flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-          breachAudit.riskLevel === 'CRITICAL_COLLAPSE'
-            ? 'bg-rose-50/50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-200'
-            : breachAudit.riskLevel === 'WARNING'
-              ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-900 text-amber-800 dark:text-amber-200'
-              : 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
-        }`}
-      >
-        <div className="space-y-1">
-          <div className="font-bold text-sm flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5" />
-            战力巡检状态：
-            {breachAudit.riskLevel === 'CRITICAL_COLLAPSE'
-              ? '严重越级崩坏（差阶过大且无代价）'
-              : breachAudit.riskLevel === 'WARNING'
-                ? '越级挑战需补充伏笔代价'
-                : '战力体系严谨合理'}
-          </div>
-          <p className="text-xs opacity-90 leading-relaxed">{breachAudit.diagnostic}</p>
+      {/* 战力崩坏巡检看板：没配置就没有结论，包括"看起来没问题"这个结论 */}
+      {!duelConfigured || !breachAudit ? (
+        <div className="p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+          <ShieldAlert className="w-5 h-5 shrink-0" />
+          {ladder.length === 0
+            ? '本书还没有战力阶梯。先去「战力阶梯与设定巡检哨兵」定义或套用流派预设，这里才有阶梯可算。'
+            : '填写对阵双方的名字、各自阶梯与底牌后，才会给出越级代价结论。'}
         </div>
-
-        {breachAudit.compensatoryFactorsNeeded.length > 0 && (
-          <div className="text-xs bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-lg border border-current/20 space-y-1 shrink-0">
-            <div className="font-bold">推荐补充的破局要素：</div>
-            {breachAudit.compensatoryFactorsNeeded.map((f, i) => (
-              <div key={i} className="text-[11px] flex items-center gap-1">
-                • {f}
-              </div>
-            ))}
+      ) : (
+        <div
+          className={`p-4 rounded-xl border transition flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+            breachAudit.riskLevel === 'CRITICAL_COLLAPSE'
+              ? 'bg-rose-50/50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-200'
+              : breachAudit.riskLevel === 'WARNING'
+                ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-900 text-amber-800 dark:text-amber-200'
+                : 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
+          }`}
+        >
+          <div className="space-y-1">
+            <div className="font-bold text-sm flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5" />
+              战力巡检状态：
+              {breachAudit.riskLevel === 'CRITICAL_COLLAPSE'
+                ? '严重越级崩坏（差阶过大且无代价）'
+                : breachAudit.riskLevel === 'WARNING'
+                  ? '越级挑战需补充伏笔代价'
+                  : '战力体系严谨合理'}
+            </div>
+            <p className="text-xs opacity-90 leading-relaxed">{breachAudit.diagnostic}</p>
           </div>
-        )}
-      </div>
+
+          {breachAudit.compensatoryFactorsNeeded.length > 0 && (
+            <div className="text-xs bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-lg border border-current/20 space-y-1 shrink-0">
+              <div className="font-bold">推荐补充的破局要素：</div>
+              {breachAudit.compensatoryFactorsNeeded.map((f, i) => (
+                <div key={i} className="text-[11px] flex items-center gap-1">
+                  • {f}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 对抗双方基础参数设置 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -230,21 +264,23 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               <label className="block mb-1 text-slate-500">角色名：</label>
               <input
                 type="text"
+                aria-label="主角名"
                 value={protagonistName}
                 onChange={(e) => setProtagonistName(e.target.value)}
                 className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold"
               />
             </div>
             <div>
-              <label className="block mb-1 text-slate-500">实力境界梯队：</label>
+              <label className="block mb-1 text-slate-500">实力阶梯：</label>
               <select
                 value={protagonistRank}
                 onChange={(e) => setProtagonistRank(Number(e.target.value))}
                 className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold"
               >
-                {CombatSandboxEngine.DEFAULT_TIERS.map((t) => (
+                <option value={0}>（选择阶梯位置）</option>
+                {ladder.map((t) => (
                   <option key={t.rankValue} value={t.rankValue}>
-                    {t.name} (能级 {t.rankValue})
+                    {t.name}（序位 {t.rankValue}）
                   </option>
                 ))}
               </select>
@@ -298,21 +334,23 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               <label className="block mb-1 text-slate-500">对手名：</label>
               <input
                 type="text"
+                aria-label="对手名"
                 value={enemyName}
                 onChange={(e) => setEnemyName(e.target.value)}
                 className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold"
               />
             </div>
             <div>
-              <label className="block mb-1 text-slate-500">实力境界梯队：</label>
+              <label className="block mb-1 text-slate-500">实力阶梯：</label>
               <select
                 value={enemyRank}
                 onChange={(e) => setEnemyRank(Number(e.target.value))}
                 className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold"
               >
-                {CombatSandboxEngine.DEFAULT_TIERS.map((t) => (
+                <option value={0}>（选择阶梯位置）</option>
+                {ladder.map((t) => (
                   <option key={t.rankValue} value={t.rankValue}>
-                    {t.name} (能级 {t.rankValue})
+                    {t.name}（序位 {t.rankValue}）
                   </option>
                 ))}
               </select>
@@ -341,68 +379,78 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           </div>
           <button
             onClick={handleRegenerateTemplate}
-            className="text-xs px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+            disabled={!protagonistName.trim() || !enemyName.trim()}
+            className="text-xs px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            根据角色一键重置模板
+            按双方名字重置四段模板
           </button>
         </div>
 
-        <div className="space-y-3">
-          {beats.map((beat, idx) => (
-            <div
-              key={idx}
-              className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 space-y-2 text-xs"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-amber-600 dark:text-amber-400">
-                  第 {idx + 1} 阶段：
-                  {beat.phase === 'probing'
-                    ? '起手试探 (Probing)'
-                    : beat.phase === 'escalation'
-                      ? '变招施压 (Escalation)'
-                      : beat.phase === 'climax_strike'
-                        ? '祭出绝命杀招 (Climax Strike)'
-                        : '暗藏底牌掀桌反杀 (Reversal Turn)'}
-                </span>
-                <span className="text-slate-400 font-medium">发起方: {beat.attacker}</span>
-              </div>
+        {beats.length === 0 ? (
+          <div className="p-6 text-center rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-400">
+            还没有拆招链。填好双方名字后点上面的重置，模板里的招式名与战场会留〔待填〕槽位，
+            由你决定这一战到底用什么打。
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {beats.map((beat, idx) => (
+              <div
+                key={idx}
+                className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 space-y-2 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-600 dark:text-amber-400">
+                    第 {idx + 1} 阶段：
+                    {beat.phase === 'probing'
+                      ? '起手试探 (Probing)'
+                      : beat.phase === 'escalation'
+                        ? '变招施压 (Escalation)'
+                        : beat.phase === 'climax_strike'
+                          ? '祭出绝命杀招 (Climax Strike)'
+                          : '暗藏底牌掀桌反杀 (Reversal Turn)'}
+                  </span>
+                  <span className="text-slate-400 font-medium">发起方: {beat.attacker}</span>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">施展招式/法宝：</label>
-                  <input
-                    type="text"
-                    value={beat.moveName}
-                    onChange={(e) => handleBeatChange(idx, 'moveName', e.target.value)}
-                    className="w-full p-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">
-                    博弈细节与走位：
-                  </label>
-                  <input
-                    type="text"
-                    value={beat.tacticDescription}
-                    onChange={(e) => handleBeatChange(idx, 'tacticDescription', e.target.value)}
-                    className="w-full p-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">
-                    战局后果/伤害结算：
-                  </label>
-                  <input
-                    type="text"
-                    value={beat.damageOrConsequence}
-                    onChange={(e) => handleBeatChange(idx, 'damageOrConsequence', e.target.value)}
-                    className="w-full p-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-0.5">
+                      施展招式/法宝：
+                    </label>
+                    <input
+                      type="text"
+                      value={beat.moveName}
+                      onChange={(e) => handleBeatChange(idx, 'moveName', e.target.value)}
+                      className="w-full p-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-0.5">
+                      博弈细节与走位：
+                    </label>
+                    <input
+                      type="text"
+                      value={beat.tacticDescription}
+                      onChange={(e) => handleBeatChange(idx, 'tacticDescription', e.target.value)}
+                      className="w-full p-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-0.5">
+                      战局后果/伤害结算：
+                    </label>
+                    <input
+                      type="text"
+                      value={beat.damageOrConsequence}
+                      onChange={(e) => handleBeatChange(idx, 'damageOrConsequence', e.target.value)}
+                      className="w-full p-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

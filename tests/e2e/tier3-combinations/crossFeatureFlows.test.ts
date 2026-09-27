@@ -23,7 +23,10 @@ import type { CodexEntity } from '../../../src/plugins/living-codex/types'
 import type { DiffReviewRecord } from '../../../src/ports/diffReviewRepository'
 import type { CombatDuelRecord } from '../../../src/ports/combatSandboxRepository'
 import type { TimelineNode, NarrativeThread } from '../../../src/plugins/timeline-grid/types'
-import type { ChapterChronologyEvent, MultiCalendarProjectRecord } from '../../../src/ports/multiCalendarRepository'
+import type {
+  ChapterChronologyEvent,
+  MultiCalendarProjectRecord,
+} from '../../../src/ports/multiCalendarRepository'
 import type { EmotionAuditRecord } from '../../../src/ports/emotionAuditRepository'
 
 type TestRecord = {
@@ -300,12 +303,9 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     })
 
     const alert = CombatSandboxEngine.auditPowerBreach({
-      projectId,
       protagonistRank: 10,
       enemyRank: 40,
       compensatoryAssets: [],
-      protagonistName: entity.name,
-      enemyName: '黑煞魔尊',
     })
     const template = CombatSandboxEngine.generateFourPhaseTemplate(entity.name, '黑煞魔尊')
     const duel: CombatDuelRecord = {
@@ -326,6 +326,13 @@ describe('Tier 3: Cross-Feature Workflows', () => {
       updatedAt: Date.now(),
     }
     await indexedDbCombatSandboxRepository.save(duel)
+    // 对决落库是这个事实的权威写入点，越级事件由它发布（§P2.12）
+    CombatSandboxEngine.publishBreachAlert({
+      projectId,
+      protagonistName: entity.name,
+      enemyName: '黑煞魔尊',
+      alert,
+    })
     await finished
 
     const mutation = await harness.mutateActiveChapter({
@@ -362,7 +369,7 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     await indexedDbProjectRepository.saveChapter(chapter)
     await indexedDbCodexEntityRepository.save(entity)
 
-    const [ancient, dynasty] = MultiCalendarEngine.DEFAULT_CALENDARS
+    const [ancient, dynasty] = MultiCalendarEngine.GENRE_PRESET_CALENDARS
     const sourceDate = { year: 1001, month: 1, day: 1 }
     const conversion = MultiCalendarEngine.convertCalendarDate({
       sourceCalendar: ancient,

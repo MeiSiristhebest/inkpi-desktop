@@ -10,20 +10,14 @@ import { Lightbulb, Sparkles, BookmarkCheck } from 'lucide-react'
 export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const [historySparks, setHistorySparks] = useState<BrainstormSpark[]>([])
   const [dilemmaType, setDilemmaType] = useState<DilemmaType>('dead_end')
-  const [coreProblem, setCoreProblem] = useState('主角身处敌宗禁地，退路被元婴大阵彻底锁死')
-  const [currentSituation, setCurrentSituation] = useState('四面受伏，警钟长鸣，灵力即将枯竭')
-  const [protagonistGoal, setProtagonistGoal] = useState('保全性命并带走九叶仙草逃离禁地')
-  const [enemyAdvantage, setEnemyAdvantage] = useState('宗门主场压制，人多势众且有护宗大阵')
+  // §P2.4：作者什么都没配时不替他选流派，四项困境要素一律从空白起步。
+  const [coreProblem, setCoreProblem] = useState('')
+  const [currentSituation, setCurrentSituation] = useState('')
+  const [protagonistGoal, setProtagonistGoal] = useState('')
+  const [enemyAdvantage, setEnemyAdvantage] = useState('')
 
-  const [generatedSolutions, setGeneratedSolutions] = useState<SparkSolution[]>(() =>
-    BrainstormSparkEngine.generateSolutions({
-      dilemmaType: 'dead_end',
-      coreProblem: '主角身处敌宗禁地，退路被元婴大阵彻底锁死',
-      currentSituation: '四面受伏，警钟长鸣，灵力即将枯竭',
-      protagonistGoal: '保全性命并带走九叶仙草逃离禁地',
-      enemyAdvantage: '宗门主场压制，人多势众且有护宗大阵',
-    }),
-  )
+  // 旧实现在挂载时就用示例困境跑引擎，八条仙侠味「破局方案」会先于作者输入出现（INV-05）。
+  const [generatedSolutions, setGeneratedSolutions] = useState<SparkSolution[]>([])
 
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
@@ -36,7 +30,22 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
     loadHistory()
   }, [projectId])
 
+  // 留空时引擎会自行补「死局受制」这类套话，那等于把引擎编的情节当成作者的设定，所以四项都要填。
+  const emptyFields: string[] = []
+  if (!coreProblem.trim()) emptyFields.push('当前核心死局')
+  if (!currentSituation.trim()) emptyFields.push('危机现状与紧迫感')
+  if (!protagonistGoal.trim()) emptyFields.push('主角破局目标')
+  if (!enemyAdvantage.trim()) emptyFields.push('敌方压倒性优势')
+  const missingHint = emptyFields.length
+    ? `填写困境后再生成：${emptyFields.join('、')} 尚未填写`
+    : null
+
   const handleGenerate = () => {
+    if (missingHint) {
+      // 拒绝推演时把旧卡片一起撤下：界面不能留着与当前输入无关的结论（INV-09）。
+      setGeneratedSolutions([])
+      return
+    }
     const res = BrainstormSparkEngine.generateSolutions({
       dilemmaType,
       coreProblem,
@@ -48,6 +57,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
   }
 
   const handleSaveSpark = async (sol: SparkSolution) => {
+    if (missingHint || generatedSolutions.length === 0) return
     const record: BrainstormSpark = {
       id: idGenerator.generate('spark'),
       projectId,
@@ -122,6 +132,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
               type="text"
               value={coreProblem}
               onChange={(e) => setCoreProblem(e.target.value)}
+              placeholder="例：主角被困在一处既打不过也退不走的死地"
               className="w-full p-2 bg-slate-50 dark:bg-slate-900 border rounded"
             />
           </div>
@@ -131,6 +142,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
               type="text"
               value={enemyAdvantage}
               onChange={(e) => setEnemyAdvantage(e.target.value)}
+              placeholder="例：对方握着主角无法正面抗衡的人数与规矩"
               className="w-full p-2 bg-slate-50 dark:bg-slate-900 border rounded"
             />
           </div>
@@ -143,6 +155,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
               type="text"
               value={currentSituation}
               onChange={(e) => setCurrentSituation(e.target.value)}
+              placeholder="例：合围还在收紧，能用的筹码已经见底"
               className="w-full p-2 bg-slate-50 dark:bg-slate-900 border rounded"
             />
           </div>
@@ -152,12 +165,16 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
               type="text"
               value={protagonistGoal}
               onChange={(e) => setProtagonistGoal(e.target.value)}
+              placeholder="例：活着脱身，同时不丢掉最关键的那一样东西"
               className="w-full p-2 bg-slate-50 dark:bg-slate-900 border rounded"
             />
           </div>
         </div>
 
-        <div className="flex justify-end pt-1">
+        <div className="flex items-center justify-end gap-3 pt-1">
+          {missingHint && (
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">{missingHint}</span>
+          )}
           <button
             onClick={handleGenerate}
             className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-sm transition"
@@ -168,62 +185,75 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
         </div>
       </div>
 
-      {/* 8大破局方案展示 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {generatedSolutions.map((sol) => (
-          <div
-            key={sol.operatorId}
-            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-400 dark:hover:border-amber-500 transition"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="font-bold text-sm text-slate-900 dark:text-white">
-                  {sol.operatorName}
-                </span>
-                <span
-                  className={`px-2 py-0.5 text-[10px] rounded font-semibold ${
-                    sol.twistImpact === 'earthshaking'
-                      ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                  }`}
-                >
-                  {sol.twistImpact === 'earthshaking' ? '剧震级反转' : '精彩顿挫'}
-                </span>
-              </div>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 italic">
-                {sol.corePrinciple}
-              </p>
-
-              <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 leading-relaxed mb-3">
-                <div className="font-semibold text-slate-900 dark:text-white mb-1">推演情节：</div>
-                {sol.concretePlot}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px] mb-3">
-                <div className="text-emerald-600 dark:text-emerald-400">
-                  <span className="font-semibold">优势：</span>
-                  {sol.pros}
-                </div>
-                <div className="text-rose-600 dark:text-rose-400">
-                  <span className="font-semibold">隐患：</span>
-                  {sol.cons}
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-              <button
-                onClick={() => handleSaveSpark(sol)}
-                className="px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded flex items-center gap-1 transition"
+      {/* 8大破局方案展示：只有作者填齐困境并点过推演之后才有内容 */}
+      {generatedSolutions.length === 0 ? (
+        <div className="p-8 border rounded-xl text-center text-slate-400 text-xs bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+          未配置困境：填齐上方四项再点「推演」，这里不会替你编故事
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-[11px] text-slate-400">
+            以下是内置八大算子的模板文案，只喂了你填写的困境；套话部分请按本书口径改写。
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {generatedSolutions.map((sol) => (
+              <div
+                key={sol.operatorId}
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-400 dark:hover:border-amber-500 transition"
               >
-                <BookmarkCheck className="w-3.5 h-3.5" />
-                采纳为备选灵感
-              </button>
-            </div>
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="font-bold text-sm text-slate-900 dark:text-white">
+                      {sol.operatorName}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 text-[10px] rounded font-semibold ${
+                        sol.twistImpact === 'earthshaking'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                      }`}
+                    >
+                      {sol.twistImpact === 'earthshaking' ? '剧震级反转' : '精彩顿挫'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 italic">
+                    {sol.corePrinciple}
+                  </p>
+
+                  <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200 leading-relaxed mb-3">
+                    <div className="font-semibold text-slate-900 dark:text-white mb-1">
+                      推演情节：
+                    </div>
+                    {sol.concretePlot}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] mb-3">
+                    <div className="text-emerald-600 dark:text-emerald-400">
+                      <span className="font-semibold">优势：</span>
+                      {sol.pros}
+                    </div>
+                    <div className="text-rose-600 dark:text-rose-400">
+                      <span className="font-semibold">隐患：</span>
+                      {sol.cons}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                  <button
+                    onClick={() => handleSaveSpark(sol)}
+                    className="px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded flex items-center gap-1 transition"
+                  >
+                    <BookmarkCheck className="w-3.5 h-3.5" />
+                    采纳为备选灵感
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

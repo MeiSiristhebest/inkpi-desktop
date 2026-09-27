@@ -18,7 +18,8 @@ export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
     load()
   }, [projectId])
 
-  const calendars = record?.calendars || MultiCalendarEngine.DEFAULT_CALENDARS
+  // §P2.4：没有作者定义过的历法就是没有，不能退回内置的修真双历来凑一个"当前世界历法"
+  const calendars = record?.calendars || []
   const events = record?.chronologyEvents || []
   const audit = MultiCalendarEngine.validateChronology(events)
   const detectedDate = DATE_TERM.exec(currentText ?? '')?.[0]?.trim() ?? null
@@ -47,29 +48,40 @@ export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
       )}
 
       {/* 编年史单调性状态条 */}
-      <div
-        className={`p-2.5 rounded-lg border text-[11px] space-y-1 ${
-          audit.hasParadox
-            ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
-            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-        }`}
-      >
-        <div className="font-bold flex items-center gap-1">
-          {audit.hasParadox ? (
-            <AlertTriangle className="w-3.5 h-3.5" />
-          ) : (
-            <CheckCircle2 className="w-3.5 h-3.5" />
-          )}
-          全书时间线流动自检：
+      {events.length === 0 ? (
+        <div className="p-2.5 rounded-lg border border-dashed border-[var(--ink-border)] text-[11px] text-[var(--ink-text-muted)]">
+          全书尚未登记任何章节时间点，暂无时间线可自检。
         </div>
-        <p className="text-[10px] opacity-90">{audit.diagnostic}</p>
-      </div>
+      ) : (
+        <div
+          className={`p-2.5 rounded-lg border text-[11px] space-y-1 ${
+            audit.hasParadox
+              ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+          }`}
+        >
+          <div className="font-bold flex items-center gap-1">
+            {audit.hasParadox ? (
+              <AlertTriangle className="w-3.5 h-3.5" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            )}
+            全书时间线流动自检：
+          </div>
+          <p className="text-[10px] opacity-90">{audit.diagnostic}</p>
+        </div>
+      )}
 
       {/* 并行历法速查卡片 */}
       <div className="space-y-1.5">
         <div className="font-semibold text-[11px] text-[var(--ink-text-muted)]">
-          当前世界并行的历法体系：
+          本书已定义的历法：
         </div>
+        {calendars.length === 0 && (
+          <div className="p-2 rounded border border-dashed border-[var(--ink-border)] text-[10px] text-[var(--ink-text-muted)]">
+            尚未定义任何历法。历法属于世界设定，需要你在大纲视图里新建，或显式套用流派预设。
+          </div>
+        )}
         <div className="space-y-1.5">
           {calendars.map((cal) => (
             <div

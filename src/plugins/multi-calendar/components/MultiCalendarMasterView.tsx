@@ -32,24 +32,30 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const hostContext = useOptionalPluginHostContext()
   const aiTask = usePluginAiTask('multi-calendar')
   const [record, setRecord] = useState<MultiCalendarProjectRecord | null>(null)
-  const [calendars, setCalendars] = useState<CalendarDefinition[]>(
-    MultiCalendarEngine.DEFAULT_CALENDARS,
-  )
+  // §P2.4：历法属于本书的世界设定。空工作区一律从空白开始，内置的修真双历只能由作者点「套用」拿到，
+  // 不能在「用户没配置」时被当成默认历法写进档案。
+  const [calendars, setCalendars] = useState<CalendarDefinition[]>([])
   const [events, setEvents] = useState<ChapterChronologyEvent[]>([])
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
   // 跨历法换算器表单状态
-  const [sourceCalId, setSourceCalId] = useState<string>('cal_ancient')
-  const [targetCalId, setTargetCalId] = useState<string>('cal_dynasty')
-  const [inputYear, setInputYear] = useState<number>(1001)
+  const [sourceCalId, setSourceCalId] = useState<string>('')
+  const [targetCalId, setTargetCalId] = useState<string>('')
+  const [inputYear, setInputYear] = useState<number>(1)
   const [inputMonth, setInputMonth] = useState<number>(1)
   const [inputDay, setInputDay] = useState<number>(1)
+
+  // 新建历法表单
+  const [newCalName, setNewCalName] = useState('')
+  const [newCalMonths, setNewCalMonths] = useState<number>(12)
+  const [newCalDays, setNewCalDays] = useState<number>(30)
+  const [newCalEpochOffset, setNewCalEpochOffset] = useState<number>(0)
 
   // 章节时间登记表单
   const [chapters, setChapters] = useState<ChapterRecord[]>([])
   const [eventChapterId, setEventChapterId] = useState<string>('')
-  const [eventCalId, setEventCalId] = useState<string>('cal_ancient')
-  const [eventYear, setEventYear] = useState<number>(100)
+  const [eventCalId, setEventCalId] = useState<string>('')
+  const [eventYear, setEventYear] = useState<number>(1)
   const [eventMonth, setEventMonth] = useState<number>(1)
   const [eventDay, setEventDay] = useState<number>(1)
   const [eventSummary, setEventSummary] = useState<string>('')
@@ -70,16 +76,6 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       setRecord(existing)
       setCalendars(existing.calendars)
       setEvents(existing.chronologyEvents)
-    } else {
-      const initial: MultiCalendarProjectRecord = {
-        id: idGenerator.generate('calproj'),
-        projectId,
-        calendars: MultiCalendarEngine.DEFAULT_CALENDARS,
-        chronologyEvents: [],
-        updatedAt: clock.now(),
-      }
-      setRecord(initial)
-      setCalendars(initial.calendars)
     }
   }, [projectId, eventChapterId])
 
@@ -103,10 +99,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     await aiTask.run(analysisInput)
   }
 
-  // 历法换算计算
+  // 历法换算计算：不足两套历法时不给出任何换算结果，而不是拿内置双历凑一个数
   const conversionResult = useMemo(() => {
     const sCal = calendars.find((c) => c.id === sourceCalId) || calendars[0]
-    const tCal = calendars.find((c) => c.id === targetCalId) || calendars[1] || calendars[0]
+    const tCal = calendars.find((c) => c.id === targetCalId) || calendars[1]
+    if (!sCal || !tCal || sCal.id === tCal.id) return null
     return MultiCalendarEngine.convertCalendarDate({
       sourceCalendar: sCal,
       targetCalendar: tCal,
@@ -119,10 +116,32 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     return MultiCalendarEngine.validateChronology(events)
   }, [events])
 
+  const handleApplyCalendarPreset = () => {
+    setCalendars(MultiCalendarEngine.GENRE_PRESET_CALENDARS.map((c) => ({ ...c })))
+  }
+
+  const handleAddCalendar = () => {
+    const name = newCalName.trim()
+    if (!name) return
+    const months = Math.max(1, Math.round(newCalMonths))
+    setCalendars([
+      ...calendars,
+      {
+        id: idGenerator.generate('cal'),
+        name,
+        epochOffsetDays: Math.round(newCalEpochOffset),
+        monthsPerYear: months,
+        daysPerMonth: Array.from({ length: months }, () => Math.max(1, Math.round(newCalDays))),
+      },
+    ])
+    setNewCalName('')
+  }
+
   const handleAddEvent = (e: React.FormEvent) => {
     e.preventDefault()
     const targetChap = chapters.find((c) => c.id === eventChapterId)
-    const cal = calendars.find((c) => c.id === eventCalId) || calendars[0]
+    const cal = calendars.find((c) => c.id === eventCalId)
+    if (!cal) return
     const absDay = MultiCalendarEngine.toAbsoluteDay(cal, {
       year: eventYear,
       month: eventMonth,
@@ -155,14 +174,15 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }
 
   const handleSaveAll = async () => {
-    if (!record) return
     const updated: MultiCalendarProjectRecord = {
-      ...record,
+      id: record?.id || idGenerator.generate('calproj'),
+      projectId,
       calendars,
       chronologyEvents: events,
       updatedAt: clock.now(),
     }
     await indexedDbMultiCalendarRepository.save(updated)
+    setRecord(updated)
     setSavedSuccessMsg('跨历法时间轴档案已成功保存！')
     setTimeout(() => setSavedSuccessMsg(null), 2500)
   }
@@ -207,28 +227,117 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         </div>
       </div>
 
-      {/* 倒流悖论预警条 */}
-      <div
-        className={`p-3.5 rounded-xl border text-xs flex items-center justify-between transition ${
-          chronologyAudit.hasParadox
-            ? 'bg-rose-50/60 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-200'
-            : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          {chronologyAudit.hasParadox ? (
-            <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" />
-          ) : (
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-          )}
-          <span className="font-bold">{chronologyAudit.diagnostic}</span>
+      {/* 历法定义：本书用几套历法、各套怎么走，只有作者能说 */}
+      <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+        <div className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+          <CalendarIcon className="w-4 h-4 text-indigo-500" />
+          本书历法体系（{calendars.length} 套）
         </div>
-        {chronologyAudit.hasParadox && (
-          <span className="font-semibold px-2 py-0.5 rounded bg-rose-500 text-white text-[11px]">
-            {chronologyAudit.paradoxCount} 处悖论待修复
-          </span>
+
+        {calendars.length === 0 ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            尚未定义历法。这里不替你选：新建一本新书时是空白的，因为历法属于世界设定而不是软件默认值。
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5 text-xs">
+            {calendars.map((c) => (
+              <span
+                key={c.id}
+                className="px-2 py-1 rounded border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300"
+              >
+                {c.name} · {c.monthsPerYear} 月/年 · 元年偏移 {c.epochOffsetDays} 天
+              </span>
+            ))}
+          </div>
         )}
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end text-xs">
+          <div>
+            <label className="block mb-1 text-slate-500">历法名称：</label>
+            <input
+              type="text"
+              value={newCalName}
+              onChange={(e) => setNewCalName(e.target.value)}
+              placeholder="例如：圣历、共和历"
+              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-slate-500">一年月数：</label>
+            <input
+              type="number"
+              min={1}
+              value={newCalMonths}
+              onChange={(e) => setNewCalMonths(Number(e.target.value))}
+              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-slate-500">每月天数：</label>
+            <input
+              type="number"
+              min={1}
+              value={newCalDays}
+              onChange={(e) => setNewCalDays(Number(e.target.value))}
+              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+            />
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              value={newCalEpochOffset}
+              onChange={(e) => setNewCalEpochOffset(Number(e.target.value))}
+              title="元年相对基准纪元的偏移天数"
+              placeholder="元年偏移天数"
+              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+            />
+            <button
+              onClick={handleAddCalendar}
+              aria-label="添加自定义历法"
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <button
+          onClick={handleApplyCalendarPreset}
+          className="px-3 py-1.5 text-xs font-medium rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-indigo-500 transition"
+        >
+          套用「东方玄幻双历」预设（上古灵历 + 大炎皇统历）
+        </button>
       </div>
+
+      {/* 倒流悖论预警条 */}
+      {events.length === 0 ? (
+        <div className="p-3.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+          <Clock className="w-4 h-4 shrink-0" />
+          尚未登记任何章节时间点，因此既没有悖论，也没有「时间线正常」这个结论。
+        </div>
+      ) : (
+        <div
+          className={`p-3.5 rounded-xl border text-xs flex items-center justify-between transition ${
+            chronologyAudit.hasParadox
+              ? 'bg-rose-50/60 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-200'
+              : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {chronologyAudit.hasParadox ? (
+              <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+            )}
+            <span className="font-bold">{chronologyAudit.diagnostic}</span>
+          </div>
+          {chronologyAudit.hasParadox && (
+            <span className="font-semibold px-2 py-0.5 rounded bg-rose-500 text-white text-[11px]">
+              {chronologyAudit.paradoxCount} 处悖论待修复
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 跨历法实时对账换算器 */}
       <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
@@ -245,6 +354,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               onChange={(e) => setSourceCalId(e.target.value)}
               className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
             >
+              {calendars.length === 0 && <option value="">（尚未定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -294,6 +404,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               onChange={(e) => setTargetCalId(e.target.value)}
               className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
             >
+              {calendars.length === 0 && <option value="">（尚未定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -303,16 +414,22 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           </div>
 
           {/* 换算结果卡片 */}
-          <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 text-indigo-800 dark:text-indigo-300">
-            <div className="text-[10px] text-indigo-500">折合标量天数与对应日期：</div>
-            <div className="font-bold text-xs mt-0.5">
-              {conversionResult.targetDate.year} 年 {conversionResult.targetDate.month} 月{' '}
-              {conversionResult.targetDate.day} 日
+          {conversionResult ? (
+            <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 text-indigo-800 dark:text-indigo-300">
+              <div className="text-[10px] text-indigo-500">折合标量天数与对应日期：</div>
+              <div className="font-bold text-xs mt-0.5">
+                {conversionResult.targetDate.year} 年 {conversionResult.targetDate.month} 月{' '}
+                {conversionResult.targetDate.day} 日
+              </div>
+              <div className="text-[10px] opacity-75">
+                绝对第 {conversionResult.absoluteDayIndex} 天
+              </div>
             </div>
-            <div className="text-[10px] opacity-75">
-              绝对第 {conversionResult.absoluteDayIndex} 天
+          ) : (
+            <div className="p-2.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-[11px] text-slate-500">
+              至少定义两套不同的历法才能换算。
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -349,6 +466,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               onChange={(e) => setEventCalId(e.target.value)}
               className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
             >
+              {calendars.length === 0 && <option value="">（先在上方定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -394,7 +512,8 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           <div>
             <button
               type="submit"
-              className="w-full p-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition flex items-center justify-center gap-1"
+              disabled={calendars.length === 0}
+              className="w-full p-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium transition flex items-center justify-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" /> 登记时间锚点
             </button>

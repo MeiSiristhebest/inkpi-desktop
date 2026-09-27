@@ -2,9 +2,12 @@ import type { CalendarDefinition, ChapterChronologyEvent, ChronologyAuditResult 
 
 export class MultiCalendarEngine {
   /**
-   * 默认内置两套经典并行历法系统
+   * 东方玄幻流派的历法预设（上古灵历 + 大炎皇统历）。
+   *
+   * §P2.4：它是「流派预设」，不是「默认值」——只有作者显式点套用才允许进入本书档案。
+   * 曾经它被当成缺省历法直接写进每个新工作区，等于替所有书选定了仙侠纪元。
    */
-  static readonly DEFAULT_CALENDARS: CalendarDefinition[] = [
+  static readonly GENRE_PRESET_CALENDARS: CalendarDefinition[] = [
     {
       id: 'cal_ancient',
       name: '上古灵历',
