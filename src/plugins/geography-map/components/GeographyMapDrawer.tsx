@@ -3,6 +3,7 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { GeoMapGridRecord } from '../types'
 import { indexedDbGeoMapRepository } from '../../../adapters/indexedDbGeoMapRepository'
 import { MapPin, Compass, Mountain, Flag } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 export const GeographyMapDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [mapRecord, setMapRecord] = useState<GeoMapGridRecord | null>(null)
@@ -84,11 +85,9 @@ export const GeographyMapDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
             if (c.terrainType === 'city') color = 'bg-purple-500/60'
             if (c.terrainType === 'barrier') color = 'bg-rose-500/60'
             return (
-              <div
-                key={`${c.x}-${c.y}`}
-                className={`w-full aspect-square rounded-xs ${color}`}
-                title={`(${c.x},${c.y}) ${c.terrainType}`}
-              />
+              <Tooltip key={`${c.x}-${c.y}`} content={`(${c.x},${c.y}) ${c.terrainType}`}>
+                <div className={`w-full aspect-square rounded-xs ${color}`} />
+              </Tooltip>
             )
           })}
         </div>

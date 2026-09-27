@@ -10,6 +10,7 @@ import { ProjectCard } from './organisms/ProjectCard'
 import { ProjectDeleteDialog } from './organisms/ProjectDeleteDialog'
 import { ProjectArchiveDialog } from './organisms/ProjectArchiveDialog'
 import type { ProjectEditFormValues } from './organisms/ProjectEditForm'
+import { Tooltip } from '../../ui/primitives'
 
 interface BookshelfProps {
   projects: ProjectRecord[]
@@ -236,15 +237,16 @@ export const Bookshelf = ({
                     >
                       <ArchiveRestore size={12} /> 放回书架
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingProject(p)}
-                      title="永久删除（不可撤销）"
-                      aria-label={`永久删除 ${p.name}`}
-                      className="inline-flex items-center justify-center w-6.5 h-6.5 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-danger)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <Tooltip content="永久删除（不可撤销）">
+                      <button
+                        type="button"
+                        onClick={() => setDeletingProject(p)}
+                        aria-label={`永久删除 ${p.name}`}
+                        className="inline-flex items-center justify-center w-6.5 h-6.5 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-danger)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </Tooltip>
                   </span>
                 </li>
               ))}

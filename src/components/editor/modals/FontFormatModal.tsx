@@ -3,7 +3,7 @@ import { Bold, Underline } from 'lucide-react'
 import { Modal } from '../../../ui/molecules/Modal'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { FontKind } from '../../../core/settings'
-import { Select } from '../../../ui/primitives'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 interface FontFormatModalProps {
   onClose: () => void
@@ -97,40 +97,42 @@ export const FontFormatModal: React.FC<FontFormatModalProps> = ({ onClose, model
             </Select>
 
             {/* 加粗 (Bold) */}
-            <button
-              type="button"
-              onClick={() => {
-                if (editor && !editor.isDestroyed && editor.chain) {
-                  editor.chain().focus().toggleBold().run()
-                }
-              }}
-              className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
-                isBold
-                  ? 'bg-[var(--ink-bg-active)] border-[var(--ink-accent)] text-[var(--ink-accent)] font-bold'
-                  : 'border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-              }`}
-              title="加粗"
-            >
-              <Bold className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip content="加粗">
+              <button
+                type="button"
+                onClick={() => {
+                  if (editor && !editor.isDestroyed && editor.chain) {
+                    editor.chain().focus().toggleBold().run()
+                  }
+                }}
+                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                  isBold
+                    ? 'bg-[var(--ink-bg-active)] border-[var(--ink-accent)] text-[var(--ink-accent)] font-bold'
+                    : 'border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+                }`}
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
 
             {/* 下划线 (Underline) */}
-            <button
-              type="button"
-              onClick={() => {
-                if (editor && !editor.isDestroyed && editor.chain) {
-                  editor.chain().focus().toggleUnderline?.().run()
-                }
-              }}
-              className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
-                isUnderline
-                  ? 'bg-[var(--ink-bg-active)] border-[var(--ink-accent)] text-[var(--ink-accent)]'
-                  : 'border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-              }`}
-              title="下划线"
-            >
-              <Underline className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip content="下划线">
+              <button
+                type="button"
+                onClick={() => {
+                  if (editor && !editor.isDestroyed && editor.chain) {
+                    editor.chain().focus().toggleUnderline?.().run()
+                  }
+                }}
+                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                  isUnderline
+                    ? 'bg-[var(--ink-bg-active)] border-[var(--ink-accent)] text-[var(--ink-accent)]'
+                    : 'border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+                }`}
+              >
+                <Underline className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
           </div>
 
           {/* 2. 字号滑块 */}

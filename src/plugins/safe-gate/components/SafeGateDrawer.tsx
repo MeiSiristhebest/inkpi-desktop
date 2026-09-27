@@ -8,6 +8,7 @@ import seedWordsBlue from '../data/seed-words-blue.json'
 import regexRules from '../data/regex-rules.json'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { ShieldCheck, ShieldAlert, Sparkles, Check } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsRed as SensitiveWord[]),
@@ -121,19 +122,19 @@ export const SafeGateDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) =>
               <div className="text-[10px] text-[var(--ink-text-muted)]">推荐文学平替：</div>
               <div className="flex flex-wrap gap-1">
                 {v.suggestions.map((sug, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleCopy(sug.replacement)}
-                    className="px-1.5 py-0.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[10px] text-[var(--ink-text)] transition-colors flex items-center gap-1"
-                    title="点击复制该平替词"
-                  >
-                    {copiedText === sug.replacement ? (
-                      <Check className="w-2.5 h-2.5 text-emerald-500" />
-                    ) : (
-                      <Sparkles className="w-2.5 h-2.5 text-[var(--ink-accent)]" />
-                    )}
-                    <span>{sug.replacement}</span>
-                  </button>
+                  <Tooltip key={i} content="点击复制该平替词">
+                    <button
+                      onClick={() => handleCopy(sug.replacement)}
+                      className="px-1.5 py-0.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[10px] text-[var(--ink-text)] transition-colors flex items-center gap-1"
+                    >
+                      {copiedText === sug.replacement ? (
+                        <Check className="w-2.5 h-2.5 text-emerald-500" />
+                      ) : (
+                        <Sparkles className="w-2.5 h-2.5 text-[var(--ink-accent)]" />
+                      )}
+                      <span>{sug.replacement}</span>
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
             </div>

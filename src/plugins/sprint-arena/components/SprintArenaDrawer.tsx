@@ -7,6 +7,7 @@ import { webAudioSynthesizer } from '../../../adapters/webAudioSynthesizer'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { Flame, Play, Square, Volume2, VolumeX, Zap } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 const FLOW_LEVEL_NAMES: Record<FlowStateLevel, string> = {
   idle: '静止待命',
@@ -140,17 +141,18 @@ export const SprintArenaDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
             <Flame className="w-3.5 h-3.5 text-orange-500" />
             <span>心流极速码字冲刺</span>
           </div>
-          <button
-            onClick={() => setSoundType(soundType === 'none' ? 'mechanical' : 'none')}
-            className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)]"
-            title={soundType === 'none' ? '开启按键音效' : '静音'}
-          >
-            {soundType === 'none' ? (
-              <VolumeX className="w-3.5 h-3.5" />
-            ) : (
-              <Volume2 className="w-3.5 h-3.5 text-orange-500" />
-            )}
-          </button>
+          <Tooltip content={soundType === 'none' ? '开启按键音效' : '静音'}>
+            <button
+              onClick={() => setSoundType(soundType === 'none' ? 'mechanical' : 'none')}
+              className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)]"
+            >
+              {soundType === 'none' ? (
+                <VolumeX className="w-3.5 h-3.5" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-orange-500" />
+              )}
+            </button>
+          </Tooltip>
         </div>
 
         {/* 冲刺状态控制 */}

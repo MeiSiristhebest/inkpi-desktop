@@ -45,7 +45,8 @@ describe('ProjectCard 续写入口（P1.3 / P3.7）', () => {
     })
     const cta = screen.getByRole('button', { name: /继续《第002章》/ })
     expect(cta).toBeInTheDocument()
-    expect(cta.getAttribute('title')).toBe('继续《第002章》')
+    // max-w + truncate 只是视觉裁切，DOM 里的章节名必须完整（可访问名取的就是这段文字）
+    expect(cta).toHaveTextContent('继续《第002章》')
     expect(screen.queryByRole('button', { name: '继续写作' })).toBeNull()
   })
 

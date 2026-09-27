@@ -4,7 +4,7 @@ import type { PromiseLedgerEntry, PromiseTier, PromiseStatus } from '../types'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { X, Check } from 'lucide-react'
-import { Select } from '../../../ui/primitives'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 interface PromiseEntryEditorProps {
   entry: Partial<PromiseLedgerEntry>
@@ -147,9 +147,9 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
             />
           </div>
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1" title="距埋设多少章后告警">
-              软预警跨度(章)
-            </label>
+            <Tooltip content="距埋设多少章后告警">
+              <label className="block text-[var(--ink-text-muted)] mb-1">软预警跨度(章)</label>
+            </Tooltip>
             <input
               type="number"
               min="1"
@@ -159,12 +159,9 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
             />
           </div>
           <div>
-            <label
-              className="block text-[var(--ink-text-muted)] mb-1"
-              title="距埋设多少章内必须回收"
-            >
-              硬红线跨度(章)
-            </label>
+            <Tooltip content="距埋设多少章内必须回收">
+              <label className="block text-[var(--ink-text-muted)] mb-1">硬红线跨度(章)</label>
+            </Tooltip>
             <input
               type="number"
               min="1"

@@ -24,7 +24,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsRed as SensitiveWord[]),
@@ -383,15 +383,15 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {v.suggestions.map((sug, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleSingleReplace(v.id, sug.replacement)}
-                          className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] text-[11px] font-medium transition-colors flex items-center gap-1"
-                          title={`规则权重 ${Math.round(sug.confidence * 100)}%`}
-                        >
-                          <Sparkles className="w-2.5 h-2.5 text-[var(--ink-accent)]" />
-                          <span>{sug.replacement}</span>
-                        </button>
+                        <Tooltip key={i} content={`规则权重 ${Math.round(sug.confidence * 100)}%`}>
+                          <button
+                            onClick={() => handleSingleReplace(v.id, sug.replacement)}
+                            className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] text-[11px] font-medium transition-colors flex items-center gap-1"
+                          >
+                            <Sparkles className="w-2.5 h-2.5 text-[var(--ink-accent)]" />
+                            <span>{sug.replacement}</span>
+                          </button>
+                        </Tooltip>
                       ))}
                     </div>
                   </div>

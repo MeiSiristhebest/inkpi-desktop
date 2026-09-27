@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { FloatingWordCountWidget } from './FloatingWordCountWidget'
+import { TooltipProvider } from '../../../ui/primitives'
 import { STORAGE_KEY_WIDGET_POS, getInitialWidgetPosition } from './floatingWordCountWidgetPosition'
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
 import type { WordCountConfig } from '../modals/WordCountPanelModal'
@@ -85,7 +87,7 @@ describe('FloatingWordCountWidget layout and position persistence', () => {
     )
 
     // 打开菜单
-    const menuButton = screen.getByTitle('设置')
+    const menuButton = screen.getByRole('button', { name: '设置' })
     fireEvent.click(menuButton)
 
     // 确认菜单中出现“切换排版”及 布局1、布局2、布局3 按钮
@@ -97,21 +99,27 @@ describe('FloatingWordCountWidget layout and position persistence', () => {
     expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ layout: 'layout1' }))
   })
 
-  it('三种排版里同一个字数只有一个名字，并写明统计口径（P3.9）', () => {
+  it('三种排版里同一个字数只有一个名字，并写明统计口径（P3.9）', async () => {
     for (const layout of ['layout1', 'layout2', 'layout3'] as const) {
       const { unmount } = render(
-        <FloatingWordCountWidget
-          stats={mockStats}
-          config={{ ...mockConfig, layout }}
-          onOpenSettings={vi.fn()}
-          onClose={vi.fn()}
-        />,
+        <TooltipProvider delay={0}>
+          <FloatingWordCountWidget
+            stats={mockStats}
+            config={{ ...mockConfig, layout }}
+            onOpenSettings={vi.fn()}
+            onClose={vi.fn()}
+          />
+        </TooltipProvider>,
       )
 
-      // 半圆环与数据行都读 stats.sessionWords，必须共用同一个标签与同一段口径说明
-      expect(screen.getAllByText(SESSION_WORDS_LABEL).length).toBeGreaterThan(0)
+      // 半圆环与数据行都读 stats.sessionWords，必须共用同一个标签
+      const ruleHosts = screen.getAllByText(SESSION_WORDS_LABEL)
+      expect(ruleHosts.length).toBeGreaterThan(0)
       expect(screen.queryByText('本次码字')).toBeNull()
-      expect(screen.getAllByTitle(SESSION_WORDS_RULE).length).toBeGreaterThan(0)
+      // 口径说明现在由提示门面承担：悬停标签应看到同一段 SESSION_WORDS_RULE
+      await userEvent.hover(ruleHosts[0])
+      expect(await screen.findByText(SESSION_WORDS_RULE)).toBeInTheDocument()
+      await userEvent.unhover(ruleHosts[0])
       unmount()
     }
   })

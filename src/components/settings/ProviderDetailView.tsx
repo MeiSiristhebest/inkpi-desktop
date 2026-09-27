@@ -15,7 +15,7 @@ import {
 import { fetchModelIds } from '../../adapters/modelProviderProbe'
 import { fieldLabel, inputCls, PrimaryButton, SecondaryButton, Switch } from './SettingsShared'
 import { spring, variants, gesture } from '../../motion'
-import { Select } from '../../ui/primitives'
+import { Tooltip, Select } from '../../ui/primitives'
 
 export interface ProviderDetailViewProps {
   initialConfig?: ModelConfig | null
@@ -424,18 +424,19 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
           {/* 标题栏 */}
           <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-[var(--ink-border)]">
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleSelectAll}
-                title={allVisibleSelected ? '取消全选' : '全选'}
-                className="w-4 h-4 rounded border border-[var(--ink-border-strong)] flex items-center justify-center cursor-pointer bg-[var(--ink-bg)] text-[var(--ink-text)]"
-              >
-                {allVisibleSelected ? (
-                  <Check className="w-3 h-3" />
-                ) : someVisibleSelected ? (
-                  <span className="w-2 h-0.5 bg-[var(--ink-accent)] rounded-full" />
-                ) : null}
-              </button>
+              <Tooltip content={allVisibleSelected ? '取消全选' : '全选'}>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="w-4 h-4 rounded border border-[var(--ink-border-strong)] flex items-center justify-center cursor-pointer bg-[var(--ink-bg)] text-[var(--ink-text)]"
+                >
+                  {allVisibleSelected ? (
+                    <Check className="w-3 h-3" />
+                  ) : someVisibleSelected ? (
+                    <span className="w-2 h-0.5 bg-[var(--ink-accent)] rounded-full" />
+                  ) : null}
+                </button>
+              </Tooltip>
               <span className="text-[13px] font-semibold text-[var(--ink-text)]">该服务的模型</span>
               <SecondaryButton
                 onClick={handleFetchList}
@@ -594,17 +595,18 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleModel(modelId)
-                          }}
-                          className="p-1 rounded text-[var(--ink-text-faint)] hover:text-rose-500 cursor-pointer"
-                          title="移除此模型"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip content="移除此模型">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleModel(modelId)
+                            }}
+                            className="p-1 rounded text-[var(--ink-text-faint)] hover:text-rose-500 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
 

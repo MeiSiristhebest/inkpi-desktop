@@ -5,7 +5,7 @@ import { useTableViewModel } from '../../hooks/useTableViewModel'
 import { Plus, Trash2, Edit2, X, Check } from 'lucide-react'
 import { confirmDialog } from '../../adapters/confirmDialog'
 import { Modal } from '../../ui/molecules/Modal'
-import { Select } from '../../ui/primitives'
+import { Tooltip, Select } from '../../ui/primitives'
 
 export interface TableViewProps {
   projectId: string
@@ -100,20 +100,22 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => setEditingRow({ ...row })}
-                            className="p-1 rounded hover:bg-[var(--ink-border)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
-                            title="编辑"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(row.id)}
-                            className="p-1 rounded hover:bg-red-500/10 text-[var(--ink-text-muted)] hover:text-red-500"
-                            title="删除"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <Tooltip content="编辑">
+                            <button
+                              onClick={() => setEditingRow({ ...row })}
+                              className="p-1 rounded hover:bg-[var(--ink-border)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content="删除">
+                            <button
+                              onClick={() => handleDelete(row.id)}
+                              className="p-1 rounded hover:bg-red-500/10 text-[var(--ink-text-muted)] hover:text-red-500"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>

@@ -5,6 +5,7 @@ import { useCardViewModel } from '../../hooks/useCardViewModel'
 import { Plus, User, Edit2, Trash2, X, Check } from 'lucide-react'
 import { confirmDialog } from '../../adapters/confirmDialog'
 import { Modal } from '../../ui/molecules/Modal'
+import { Tooltip } from '../../ui/primitives'
 
 export interface CardViewProps {
   projectId: string
@@ -84,20 +85,22 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
                         className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <button
-                          onClick={() => setEditingCard({ ...card })}
-                          className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
-                          title="编辑卡片"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(card.id)}
-                          className="p-1 rounded hover:bg-red-500/10 text-[var(--ink-text-muted)] hover:text-red-500"
-                          title="删除卡片"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip content="编辑卡片">
+                          <button
+                            onClick={() => setEditingCard({ ...card })}
+                            className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="删除卡片">
+                          <button
+                            onClick={() => handleDelete(card.id)}
+                            className="p-1 rounded hover:bg-red-500/10 text-[var(--ink-text-muted)] hover:text-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
 

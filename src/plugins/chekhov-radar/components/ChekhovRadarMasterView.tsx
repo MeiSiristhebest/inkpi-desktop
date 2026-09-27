@@ -22,7 +22,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -374,13 +374,14 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               {/* 操作区 */}
               <div className="flex items-center gap-2 text-xs self-end md:self-auto">
                 {gun.status !== 'fired' && (
-                  <button
-                    onClick={() => handleUpdateStatus(gun, 'fired')}
-                    className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition flex items-center gap-1"
-                    title="在本章引爆这柄枪"
-                  >
-                    <Flame className="w-3.5 h-3.5" /> 响枪引爆
-                  </button>
+                  <Tooltip content="在本章引爆这柄枪">
+                    <button
+                      onClick={() => handleUpdateStatus(gun, 'fired')}
+                      className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition flex items-center gap-1"
+                    >
+                      <Flame className="w-3.5 h-3.5" /> 响枪引爆
+                    </button>
+                  </Tooltip>
                 )}
                 {gun.status === 'dormant' && (
                   <button
@@ -391,21 +392,23 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                   </button>
                 )}
                 {gun.status !== 'abandoned' && (
-                  <button
-                    onClick={() => handleUpdateStatus(gun, 'abandoned')}
-                    className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition"
-                    title="废弃该伏笔"
-                  >
-                    废弃
-                  </button>
+                  <Tooltip content="废弃该伏笔">
+                    <button
+                      onClick={() => handleUpdateStatus(gun, 'abandoned')}
+                      className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition"
+                    >
+                      废弃
+                    </button>
+                  </Tooltip>
                 )}
-                <button
-                  onClick={() => handleDelete(gun.id)}
-                  className="p-1 rounded text-slate-400 hover:text-red-500 transition"
-                  title="删除记录"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <Tooltip content="删除记录">
+                  <button
+                    onClick={() => handleDelete(gun.id)}
+                    className="p-1 rounded text-slate-400 hover:text-red-500 transition"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             </div>
           ))

@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Activity,
 } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 const SENSE_TABS: { id: SenseType | 'all'; label: string; icon: typeof Eye; color: string }[] = [
   { id: 'all', label: '全部感官', icon: Palette, color: 'text-zinc-400' },
@@ -120,13 +121,14 @@ export const DescribePaletteView: FC<DesktopPluginViewProps> = () => {
                 <ChevronDown className="w-3 h-3 ml-0.5" />
               )}
             </button>
-            <button
-              onClick={handleRandomInspire}
-              className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"
-              title="随机抽取一组灵感修辞"
-            >
-              <Dices className="w-3.5 h-3.5 text-amber-500" /> 灵感摇号
-            </button>
+            <Tooltip content="随机抽取一组灵感修辞">
+              <button
+                onClick={handleRandomInspire}
+                className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"
+              >
+                <Dices className="w-3.5 h-3.5 text-amber-500" /> 灵感摇号
+              </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -367,27 +369,28 @@ export const DescribePaletteView: FC<DesktopPluginViewProps> = () => {
                       ))}
                     </div>
 
-                    <button
-                      onClick={() => handleCopy(snippet)}
-                      className={`p-1.5 rounded-md flex items-center gap-1 transition-colors ${
-                        isCopied
-                          ? 'bg-emerald-500/20 text-emerald-500 font-semibold'
-                          : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] group-hover:text-[var(--ink-text)]'
-                      }`}
-                      title="复制金句"
-                    >
-                      {isCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span className="text-[10px]">已复制</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span className="text-[10px]">复制</span>
-                        </>
-                      )}
-                    </button>
+                    <Tooltip content="复制金句">
+                      <button
+                        onClick={() => handleCopy(snippet)}
+                        className={`p-1.5 rounded-md flex items-center gap-1 transition-colors ${
+                          isCopied
+                            ? 'bg-emerald-500/20 text-emerald-500 font-semibold'
+                            : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] group-hover:text-[var(--ink-text)]'
+                        }`}
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span className="text-[10px]">已复制</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span className="text-[10px]">复制</span>
+                          </>
+                        )}
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               )

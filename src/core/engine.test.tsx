@@ -90,7 +90,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
   it('toggles the left navigation panel', () => {
     render(<Engine projectId="p1" />)
     expect(screen.getByText('InkPi')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('收起导航'))
+    fireEvent.click(screen.getByRole('button', { name: '收起导航' }))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTestId('sidebar-nav-compact-toggle'))
     expect(screen.getByText('InkPi')).toBeInTheDocument()
@@ -99,7 +99,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
   it('keeps one compact navigation toggle when the left panel is collapsed', () => {
     render(<Engine projectId="p1" />)
     expect(screen.queryByTestId('sidebar-nav-compact-toggle')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('收起导航'))
+    fireEvent.click(screen.getByRole('button', { name: '收起导航' }))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
     const compactToggle = screen.getByTestId('sidebar-nav-compact-toggle')
     expect(compactToggle).toHaveAttribute('aria-label', '展开导航')
@@ -140,18 +140,18 @@ describe('Engine — 主视口路由与多栏布局', () => {
   it('toggles the right info panel', () => {
     render(<Engine projectId="p1" defaultRightOpen={true} />)
     expect(screen.getByText('文档信息')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('收起信息栏'))
+    fireEvent.click(screen.getByRole('button', { name: '收起信息栏' }))
     expect(screen.queryByText('文档信息')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('展开信息栏'))
+    fireEvent.click(screen.getByRole('button', { name: '展开信息栏' }))
     expect(screen.getByText('文档信息')).toBeInTheDocument()
   })
 
   it('shows focus toggle only in the editor view', () => {
     render(<Engine projectId="p1" />)
     // 默认即为正文写作，显示聚焦按钮
-    expect(screen.getByTitle('聚焦模式（仅留写作画布）')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '聚焦模式（仅留写作画布）' })).toBeInTheDocument()
 
-    const btn = screen.getByTitle('聚焦模式（仅留写作画布）')
+    const btn = screen.getByRole('button', { name: '聚焦模式（仅留写作画布）' })
     fireEvent.click(btn)
     expect(btn.className).toMatch(/text-\[var\(--ink-accent\)\]/)
     // 退出聚焦模式，恢复侧栏导航
@@ -159,17 +159,19 @@ describe('Engine — 主视口路由与多栏布局', () => {
 
     // 切换至非编辑器视图（如写作面板）后隐藏
     fireEvent.click(screen.getByText('写作面板'))
-    expect(screen.queryByTitle('聚焦模式（仅留写作画布）')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: '聚焦模式（仅留写作画布）' }),
+    ).not.toBeInTheDocument()
   })
 
   it('hides the side panels in fullscreen mode', () => {
     render(<Engine projectId="p1" defaultRightOpen={true} />)
     expect(screen.getByText('InkPi')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('全屏 / 退出全屏'))
+    fireEvent.click(screen.getByRole('button', { name: '全屏 / 退出全屏' }))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
     expect(screen.queryByText('文档信息')).not.toBeInTheDocument()
     expect(screen.queryByTestId('sidebar-nav-compact-toggle')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('全屏 / 退出全屏'))
+    fireEvent.click(screen.getByRole('button', { name: '全屏 / 退出全屏' }))
     expect(screen.getByText('InkPi')).toBeInTheDocument()
   })
 
@@ -211,7 +213,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.queryByText('文档信息')).not.toBeInTheDocument()
     expect(screen.queryByText('自定义AI面板')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByTitle('展开信息栏'))
+    fireEvent.click(screen.getByRole('button', { name: '展开信息栏' }))
     expect(screen.getByText('自定义AI面板')).toBeInTheDocument()
   })
 
@@ -229,7 +231,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
 
     // 聚焦模式仅在正文写作视图下可用
     fireEvent.click(screen.getAllByText('正文写作')[0])
-    fireEvent.click(screen.getByTitle('聚焦模式（仅留写作画布）'))
+    fireEvent.click(screen.getByRole('button', { name: '聚焦模式（仅留写作画布）' }))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
     expect(screen.queryByText('文档信息')).not.toBeInTheDocument()
 
@@ -242,7 +244,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
     render(<Engine projectId="p1" />)
     expect(screen.getByText('InkPi')).toBeInTheDocument()
     // 侧栏可折叠为窄边栏（按钮在侧边栏自身 header 上）
-    fireEvent.click(screen.getByTitle('收起导航'))
+    fireEvent.click(screen.getByRole('button', { name: '收起导航' }))
     expect(screen.queryByText('InkPi')).not.toBeInTheDocument()
     // 窄边栏上的展开按钮可重新唤出
     fireEvent.click(screen.getByTestId('sidebar-nav-compact-toggle'))
@@ -267,10 +269,10 @@ describe('Engine — 主视口路由与多栏布局', () => {
     render(<Engine projectId="p1" />)
     fireEvent.click(screen.getByText('设置'))
     expect(screen.getAllByText('外观').length).toBeGreaterThanOrEqual(1)
-    fireEvent.click(screen.getByTitle('关闭 (Esc)'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭 (Esc)' }))
 
     // 快捷键进入聚焦模式
-    fireEvent.click(screen.getByTitle('聚焦模式（仅留写作画布）'))
+    fireEvent.click(screen.getByRole('button', { name: '聚焦模式（仅留写作画布）' }))
     const exitBtn = screen.getByText(/退出聚焦/)
     expect(exitBtn).toBeInTheDocument()
     fireEvent.click(exitBtn)

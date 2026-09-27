@@ -25,7 +25,8 @@ describe('DescribePaletteDrawer — 修辞调色盘随动抽屉', () => {
     const searchInput = screen.getByPlaceholderText(/搜索修辞关键词/)
     fireEvent.change(searchInput, { target: { value: '剑芒' } })
 
-    const copyBtn = screen.getAllByTitle('复制此句')[0]
+    // 名称取按钮上真正可见的「复制」；「复制此句」只是提示文案，不参与命名
+    const copyBtn = screen.getAllByRole('button', { name: '复制' })[0]
     fireEvent.click(copyBtn)
 
     expect(copySpy).toHaveBeenCalled()

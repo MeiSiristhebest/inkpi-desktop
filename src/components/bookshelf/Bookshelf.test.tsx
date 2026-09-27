@@ -36,7 +36,7 @@ describe('Bookshelf (InkPi 主页)', () => {
     )
     expect(screen.getByText('吞天神脉')).toBeInTheDocument()
     expect(screen.getByText('废脉？我吞的就是天！')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('打开项目'))
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }))
     expect(onOpen).toHaveBeenCalledWith('p1')
   })
 
@@ -60,7 +60,7 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(screen.getByText('上次编辑 2 小时前')).toBeInTheDocument()
     expect(screen.queryByText(/更新于/)).not.toBeInTheDocument()
     // 章数尚未加载完时不承诺"继续写作"，等 stats 到位再换文案
-    expect(screen.getByTitle('打开项目')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '打开项目' })).toBeInTheDocument()
   })
 
   it('书名之外全是可选：不展开「更多设置」就按摘要念出的默认值创建（§P3.6）', async () => {
@@ -192,12 +192,14 @@ describe('Bookshelf (InkPi 主页)', () => {
       />,
     )
 
-    fireEvent.click(screen.getByTitle('导出完整备份（含设定/时间线/插件/AI 数据）'))
+    fireEvent.click(
+      screen.getByRole('button', { name: '导出完整备份（含设定/时间线/插件/AI 数据）' }),
+    )
     expect(onExport).toHaveBeenCalledWith('p1')
 
-    // 打开更多操作菜单触发编辑
-    fireEvent.click(screen.getByTitle('更多操作'))
-    fireEvent.click(screen.getByTitle('编辑信息'))
+    // 打开更多操作菜单触发编辑（菜单条目是 menuitem，不是 button）
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '编辑信息' }))
     fireEvent.change(screen.getByDisplayValue('吞天神脉'), { target: { value: '吞天神脉·第二部' } })
     fireEvent.change(screen.getByDisplayValue('东方玄幻'), { target: { value: '仙侠修真' } })
     fireEvent.change(screen.getByDisplayValue('测试简介'), { target: { value: '全新篇章开启' } })
@@ -214,21 +216,22 @@ describe('Bookshelf (InkPi 主页)', () => {
     )
 
     // 两种导出是两个产物：菜单里各占一项，回调互不复用
-    fireEvent.click(screen.getByTitle('更多操作'))
-    fireEvent.click(screen.getByTitle('导出正文'))
+    // 「更多操作」是按钮，菜单里的条目是 menuitem，确认弹窗的按钮才回到 button 角色
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '导出正文' }))
     expect(onExportManuscript).toHaveBeenCalledWith('p1')
 
     // 移出作品库：只隐藏，绝不能顺带触发 purge
-    fireEvent.click(screen.getByTitle('更多操作'))
-    fireEvent.click(screen.getByTitle('移出作品库'))
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '移出作品库' }))
     expect(screen.getByRole('heading', { name: '移出作品库' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '移出作品库' }))
     await waitFor(() => expect(onRemoveFromLibrary).toHaveBeenCalledWith('p1'))
     expect(onDelete).not.toHaveBeenCalled()
 
     // 永久删除：必须二次确认，且确认文案如实说明清除范围
-    fireEvent.click(screen.getByTitle('更多操作'))
-    fireEvent.click(screen.getByTitle('永久删除'))
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '永久删除' }))
     expect(screen.getByText('永久删除作品')).toBeInTheDocument()
     expect(screen.getByText(/不可撤销/)).toBeInTheDocument()
     expect(onDelete).not.toHaveBeenCalled()

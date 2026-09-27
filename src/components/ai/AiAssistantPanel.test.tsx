@@ -68,7 +68,7 @@ describe('AiAssistantPanel Component', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onSend).toHaveBeenCalled()
 
-    const closeBtn = screen.getByTitle('收起')
+    const closeBtn = screen.getByRole('button', { name: '收起' })
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
   })

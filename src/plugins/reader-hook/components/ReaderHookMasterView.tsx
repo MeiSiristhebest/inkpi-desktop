@@ -13,7 +13,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Anchor, Copy, Check, Plus, Trash2, Sparkles, Zap, BookOpen, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -340,13 +340,14 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                       </div>
                       <p className="text-[11px] text-[var(--ink-text)] truncate">{h.hookText}</p>
                     </div>
-                    <button
-                      onClick={() => handleDeleteHook(h.id)}
-                      className="text-[var(--ink-text-muted)] hover:text-rose-500 p-1"
-                      title="删除"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <Tooltip content="删除">
+                      <button
+                        onClick={() => handleDeleteHook(h.id)}
+                        className="text-[var(--ink-text-muted)] hover:text-rose-500 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </Tooltip>
                   </div>
                 ))}
               </div>
@@ -376,17 +377,18 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     >
                       载入测算
                     </button>
-                    <button
-                      onClick={() => handleCopy(tpl.id, tpl.example)}
-                      className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
-                      title="复制例句"
-                    >
-                      {copiedId === tpl.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                    <Tooltip content="复制例句">
+                      <button
+                        onClick={() => handleCopy(tpl.id, tpl.example)}
+                        className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+                      >
+                        {copiedId === tpl.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
                 <p className="text-[11px] text-[var(--ink-text-muted)]">{tpl.description}</p>

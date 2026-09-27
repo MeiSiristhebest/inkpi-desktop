@@ -10,6 +10,7 @@ import {
   type ToolingCombo,
 } from '../../../domain/project/projectDefaults'
 import { readCoverImage } from '../coverUpload'
+import { Tooltip } from '../../../ui/primitives'
 
 interface CreateProjectPanelProps {
   onClose: () => void
@@ -90,32 +91,34 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
       <div className="flex gap-5 flex-col sm:flex-row">
         {/* 封面：选了就会存进项目记录，卡片与字数浮窗都读它 */}
         <div className="shrink-0">
-          <div
-            onClick={() => coverInputRef.current?.click()}
-            className="group relative w-[88px] h-[123px] rounded-lg border border-dashed border-[var(--ink-border-strong)] hover:border-[var(--ink-accent)]/50 bg-[var(--ink-bg-panel)] overflow-hidden transition-colors flex items-center justify-center cursor-pointer select-none"
-            title="上传封面（可选，2MB 以内）"
-          >
-            {cover ? (
-              <>
-                <img src={cover} alt="封面预览" className="w-full h-full object-cover" />
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setCover('')
-                  }}
-                  className="absolute top-1 right-1 p-0.5 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="移除封面"
-                >
-                  <X size={11} />
-                </span>
-              </>
-            ) : (
-              <div className="flex flex-col items-center gap-1.5 text-[var(--ink-text-muted)] group-hover:text-[var(--ink-accent)] transition-colors">
-                <ImageIcon size={20} />
-                <span className="text-[10px]">上传封面</span>
-              </div>
-            )}
-          </div>
+          <Tooltip content="上传封面（可选，2MB 以内）">
+            <div
+              onClick={() => coverInputRef.current?.click()}
+              className="group relative w-[88px] h-[123px] rounded-lg border border-dashed border-[var(--ink-border-strong)] hover:border-[var(--ink-accent)]/50 bg-[var(--ink-bg-panel)] overflow-hidden transition-colors flex items-center justify-center cursor-pointer select-none"
+            >
+              {cover ? (
+                <>
+                  <img src={cover} alt="封面预览" className="w-full h-full object-cover" />
+                  <Tooltip content="移除封面">
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCover('')
+                      }}
+                      className="absolute top-1 right-1 p-0.5 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X size={11} />
+                    </span>
+                  </Tooltip>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-[var(--ink-text-muted)] group-hover:text-[var(--ink-accent)] transition-colors">
+                  <ImageIcon size={20} />
+                  <span className="text-[10px]">上传封面</span>
+                </div>
+              )}
+            </div>
+          </Tooltip>
           <input
             ref={coverInputRef}
             type="file"

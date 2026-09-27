@@ -48,7 +48,7 @@ describe('SelectionToolbar', () => {
   it('空选区时不渲染任何工具按钮（返回 null，避免 DOM 冲突）', () => {
     const { editor } = makeEditor({ from: 0, to: 0 })
     render(<SelectionToolbar editor={editor} containerRef={containerRef} />)
-    expect(screen.queryByTitle('加粗')).toBeNull()
+    expect(screen.queryByRole('button', { name: '加粗' })).toBeNull()
   })
 
   it('有选区时渲染加粗/斜体/AI 润色，且触发 selectionUpdate 后能正确显示', () => {
@@ -56,15 +56,15 @@ describe('SelectionToolbar', () => {
     render(<SelectionToolbar editor={editor} containerRef={containerRef} />)
 
     // 初始仍不渲染
-    expect(screen.queryByTitle('加粗')).toBeNull()
+    expect(screen.queryByRole('button', { name: '加粗' })).toBeNull()
 
     // 模拟编辑器发出选区变化事件
     act(() => {
       handlers['selectionUpdate']?.()
     })
 
-    expect(screen.getByTitle('加粗')).toBeInTheDocument()
-    expect(screen.getByTitle('斜体')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '加粗' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '斜体' })).toBeInTheDocument()
     expect(screen.getByText('AI 润色')).toBeInTheDocument()
   })
 
@@ -73,7 +73,7 @@ describe('SelectionToolbar', () => {
     delete editor.on
     delete editor.off
     render(<SelectionToolbar editor={editor} containerRef={containerRef} />)
-    expect(screen.queryByTitle('加粗')).toBeNull()
+    expect(screen.queryByRole('button', { name: '加粗' })).toBeNull()
   })
 
   it('creates a proposal and applies Accept then Undo through the editor boundary', async () => {

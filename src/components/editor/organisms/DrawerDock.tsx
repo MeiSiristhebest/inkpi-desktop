@@ -4,6 +4,7 @@ import { useOptionalPluginRegistry } from '../../../core/pluginRegistry'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { PLUGIN_DRAWER_CAPABILITIES } from '../../../core/capabilityRegistry'
 import { IconButton } from '../../../ui/atoms/IconButton'
+import { Tooltip } from '../../../ui/primitives'
 
 interface DrawerDockProps {
   projectId: string
@@ -53,13 +54,14 @@ export const DrawerDock: FC<DrawerDockProps> = ({ projectId, currentText }) => {
               </span>
             )}
           </div>
-          <IconButton
-            onClick={() => host.closeDrawer()}
-            title="关闭插件抽屉"
-            className="hover:bg-[var(--ink-bg-hover)]"
-          >
-            <X className="w-3.5 h-3.5" />
-          </IconButton>
+          <Tooltip content="关闭插件抽屉">
+            <IconButton
+              onClick={() => host.closeDrawer()}
+              className="hover:bg-[var(--ink-bg-hover)]"
+            >
+              <X className="w-3.5 h-3.5" />
+            </IconButton>
+          </Tooltip>
         </div>
         {capability && (
           <p className="mt-0.5 text-[10px] leading-snug text-[var(--ink-text-muted)]">

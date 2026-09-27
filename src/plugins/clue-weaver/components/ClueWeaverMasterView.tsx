@@ -28,7 +28,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -304,16 +304,17 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                         className="p-2.5 text-center font-medium text-[var(--ink-text)] min-w-[140px]"
                       >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="truncate" title={c.title}>
-                            {c.title}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteClue(c.id)}
-                            className="text-[var(--ink-text-muted)] hover:text-rose-500 p-0.5"
-                            title="删除线索"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          <Tooltip content={c.title}>
+                            <span className="truncate">{c.title}</span>
+                          </Tooltip>
+                          <Tooltip content="删除线索">
+                            <button
+                              onClick={() => handleDeleteClue(c.id)}
+                              className="text-[var(--ink-text-muted)] hover:text-rose-500 p-0.5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </th>
                     ))}

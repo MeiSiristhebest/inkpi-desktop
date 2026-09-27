@@ -17,7 +17,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 const EMPTY_CELLS: GeoMapGridRecord['occupiedCells'] = []
 
@@ -215,13 +215,14 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           >
             10 km / 格 (洲陆宏观)
           </button>
-          <button
-            onClick={handleResetMap}
-            className="p-1.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            title="清空重置画板"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
+          <Tooltip content="清空重置画板">
+            <button
+              onClick={handleResetMap}
+              className="p-1.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -257,28 +258,31 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               }
 
               return (
-                <button
+                <Tooltip
                   key={`${cell.x}-${cell.y}`}
-                  onClick={(e) => handleCellClick(cell.x, cell.y, e.shiftKey)}
-                  className={`w-12 h-12 md:w-14 md:h-14 rounded-lg border flex flex-col items-center justify-center text-[10px] font-bold transition transform active:scale-95 relative ${bgClass} ${
-                    isStart || isTarget ? 'ring-2 ring-blue-600 ring-offset-1' : ''
-                  }`}
-                  title={`坐标(${cell.x},${cell.y}) - 地形: ${cell.terrainType}`}
+                  content={`坐标(${cell.x},${cell.y}) - 地形: ${cell.terrainType}`}
                 >
-                  {isStart ? (
-                    <span className="text-[10px] bg-blue-600 text-white px-1 rounded">起</span>
-                  ) : isTarget ? (
-                    <span className="text-[10px] bg-rose-600 text-white px-1 rounded">终</span>
-                  ) : cell.terrainType === 'city' ? (
-                    <Flag className="w-3.5 h-3.5" />
-                  ) : cell.terrainType === 'mountain' ? (
-                    <Mountain className="w-3.5 h-3.5" />
-                  ) : (
-                    <span>
-                      {cell.x},{cell.y}
-                    </span>
-                  )}
-                </button>
+                  <button
+                    onClick={(e) => handleCellClick(cell.x, cell.y, e.shiftKey)}
+                    className={`w-12 h-12 md:w-14 md:h-14 rounded-lg border flex flex-col items-center justify-center text-[10px] font-bold transition transform active:scale-95 relative ${bgClass} ${
+                      isStart || isTarget ? 'ring-2 ring-blue-600 ring-offset-1' : ''
+                    }`}
+                  >
+                    {isStart ? (
+                      <span className="text-[10px] bg-blue-600 text-white px-1 rounded">起</span>
+                    ) : isTarget ? (
+                      <span className="text-[10px] bg-rose-600 text-white px-1 rounded">终</span>
+                    ) : cell.terrainType === 'city' ? (
+                      <Flag className="w-3.5 h-3.5" />
+                    ) : cell.terrainType === 'mountain' ? (
+                      <Mountain className="w-3.5 h-3.5" />
+                    ) : (
+                      <span>
+                        {cell.x},{cell.y}
+                      </span>
+                    )}
+                  </button>
+                </Tooltip>
               )
             })}
           </div>

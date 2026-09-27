@@ -6,6 +6,7 @@ import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import { GLOBAL_HIT_LABEL } from '../globalSearch'
 import { WRITE_ORIGIN_META } from '../writeOrigin'
+import { Tooltip } from '../../../ui/primitives'
 
 interface FindReplaceBarProps {
   model: EditorModel
@@ -132,22 +133,24 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
                   : '—'}
               </span>
 
-              <IconButton
-                onClick={handlePrevMatch}
-                disabled={matchPositions.length === 0}
-                title="上一项"
-                className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
-              >
-                <ArrowUp className="w-3.5 h-3.5" />
-              </IconButton>
-              <IconButton
-                onClick={handleNextMatch}
-                disabled={matchPositions.length === 0}
-                title="下一项"
-                className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
-              >
-                <ArrowDown className="w-3.5 h-3.5" />
-              </IconButton>
+              <Tooltip content="上一项">
+                <IconButton
+                  onClick={handlePrevMatch}
+                  disabled={matchPositions.length === 0}
+                  className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
+                >
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip content="下一项">
+                <IconButton
+                  onClick={handleNextMatch}
+                  disabled={matchPositions.length === 0}
+                  className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
+                >
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </IconButton>
+              </Tooltip>
             </div>
 
             {/* 替换按钮 */}
@@ -221,13 +224,14 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
           </div>
         )}
 
-        <IconButton
-          onClick={() => actions.setShowFindReplace(false)}
-          title="关闭"
-          className="cursor-pointer ml-1"
-        >
-          <X className="w-3.5 h-3.5" />
-        </IconButton>
+        <Tooltip content="关闭">
+          <IconButton
+            onClick={() => actions.setShowFindReplace(false)}
+            className="cursor-pointer ml-1"
+          >
+            <X className="w-3.5 h-3.5" />
+          </IconButton>
+        </Tooltip>
       </div>
 
       {/* 全书检索命中结果面板（就地直接呈现，无需弹出孤立 Modal 破坏视线） */}

@@ -71,6 +71,7 @@ import {
   fieldLabel,
   inputCls,
 } from './SettingsShared'
+import { Tooltip } from '../../ui/primitives'
 
 type TabKey =
   | 'appearance'
@@ -445,21 +446,23 @@ export const SettingsView: FC<SettingsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            title={isExpanded ? '还原为窗口' : '展开为全景整页'}
-            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-          >
-            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={onClose}
-            title="关闭 (Esc)"
-            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <Tooltip content={isExpanded ? '还原为窗口' : '展开为全景整页'}>
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
+            >
+              {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+          </Tooltip>
+          <Tooltip content="关闭 (Esc)">
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </header>
 
@@ -1453,32 +1456,39 @@ const AiTab: FC<{
                         设为默认
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setEditingTarget(m)}
-                      className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
-                      title="编辑此服务"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleQuickSpeedTest(m.baseUrl || pMeta?.defaultBaseUrl, m.apiKey, cardKey)
-                      }
-                      className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
-                      title="测试连通性"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteProvider(m)}
-                      className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-rose-500 hover:bg-rose-500/10 active:scale-95 transition-all duration-150 cursor-pointer"
-                      title="删除此服务"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <Tooltip content="编辑此服务">
+                      <button
+                        type="button"
+                        onClick={() => setEditingTarget(m)}
+                        className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="测试连通性">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickSpeedTest(
+                            m.baseUrl || pMeta?.defaultBaseUrl,
+                            m.apiKey,
+                            cardKey,
+                          )
+                        }
+                        className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="删除此服务">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProvider(m)}
+                        className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-rose-500 hover:bg-rose-500/10 active:scale-95 transition-all duration-150 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </Tooltip>
                     <Switch
                       checked={isEnabled}
                       onChange={() => handleToggleEnabled(m)}

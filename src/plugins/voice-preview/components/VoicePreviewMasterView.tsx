@@ -6,6 +6,7 @@ import type { VoiceCastProfileRecord } from '../types'
 import { Volume2, Play, Square, Mic, Sliders, Users, Sparkles } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { Tooltip } from '../../../ui/primitives'
 
 const DEFAULT_CHAPTER_TEXT = `【示例文本】请在此粘贴章节正文，系统将基于台词结构生成拟真配音脚本。`
 
@@ -202,14 +203,15 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                       “{line.dialogueText}”
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayLine(line.dialogueText)}
-                    className="p-1.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition"
-                    title="单独试听该句"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content="单独试听该句">
+                    <button
+                      type="button"
+                      onClick={() => handlePlayLine(line.dialogueText)}
+                      className="p-1.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               ))}
             </div>

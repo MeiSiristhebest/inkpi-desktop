@@ -5,7 +5,7 @@ import { TemplatePickerModal } from './TemplatePickerModal'
 import { countTemplates } from '../content/characterPresets'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clock } from '../../../adapters/clock'
-import { Select } from '../../../ui/primitives'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 interface CodexEntityEditorProps {
   entity: Partial<CodexEntity> | null
@@ -106,22 +106,24 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
       <div className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)]">
         <span className="text-[13px] font-medium">{entity?.id ? '编辑实体档案' : '新建实体'}</span>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setIsTemplateModalOpen(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-accent)] border border-[var(--ink-accent)]/20 text-[11px] font-medium hover:bg-[var(--ink-accent)]/10"
-            title={`从 ${countTemplates()} 份人设与世界观模版里挑一份起点`}
-          >
-            <Sparkles className="w-3 h-3" />
-            <span>模版库</span>
-          </button>
-          {entity?.id && onDelete && (
+          <Tooltip content={`从 ${countTemplates()} 份人设与世界观模版里挑一份起点`}>
             <button
-              onClick={() => onDelete(entity.id!)}
-              className="p-1 rounded text-red-500 hover:bg-red-500/10"
-              title="删除实体"
+              onClick={() => setIsTemplateModalOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-accent)] border border-[var(--ink-accent)]/20 text-[11px] font-medium hover:bg-[var(--ink-accent)]/10"
             >
-              <Trash2 className="w-4 h-4" />
+              <Sparkles className="w-3 h-3" />
+              <span>模版库</span>
             </button>
+          </Tooltip>
+          {entity?.id && onDelete && (
+            <Tooltip content="删除实体">
+              <button
+                onClick={() => onDelete(entity.id!)}
+                className="p-1 rounded text-red-500 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
           <button
             onClick={handleSubmit}

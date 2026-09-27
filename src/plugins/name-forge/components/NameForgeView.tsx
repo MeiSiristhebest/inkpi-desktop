@@ -21,7 +21,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 const CATEGORY_TABS: { id: NameCategory; label: string; icon: typeof User }[] = [
   { id: 'character_cn', label: '修仙东方人名', icon: User },
@@ -314,49 +314,51 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                 </div>
 
                 <div className="flex items-center justify-between pt-3 mt-3 border-t border-[var(--ink-border)]/40 text-xs">
-                  <button
-                    onClick={() => handleSaveToCodex(item)}
-                    className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 transition-colors ${
-                      isSaved
-                        ? 'bg-emerald-500/20 text-emerald-500 font-medium'
-                        : 'bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-accent)]'
-                    }`}
-                    title="收录至活体世界观图谱"
-                  >
-                    {isSaved ? (
-                      <>
-                        <BookmarkCheck className="w-3.5 h-3.5" />
-                        <span>已收录图谱</span>
-                      </>
-                    ) : (
-                      <>
-                        <BookmarkPlus className="w-3.5 h-3.5" />
-                        <span>收录至图谱</span>
-                      </>
-                    )}
-                  </button>
+                  <Tooltip content="收录至活体世界观图谱">
+                    <button
+                      onClick={() => handleSaveToCodex(item)}
+                      className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 transition-colors ${
+                        isSaved
+                          ? 'bg-emerald-500/20 text-emerald-500 font-medium'
+                          : 'bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-accent)]'
+                      }`}
+                    >
+                      {isSaved ? (
+                        <>
+                          <BookmarkCheck className="w-3.5 h-3.5" />
+                          <span>已收录图谱</span>
+                        </>
+                      ) : (
+                        <>
+                          <BookmarkPlus className="w-3.5 h-3.5" />
+                          <span>收录至图谱</span>
+                        </>
+                      )}
+                    </button>
+                  </Tooltip>
 
-                  <button
-                    onClick={() => handleCopy(item)}
-                    className={`p-1.5 rounded-lg flex items-center gap-1 transition-colors ${
-                      isCopied
-                        ? 'bg-emerald-500/20 text-emerald-500 font-semibold'
-                        : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] group-hover:text-[var(--ink-text)]'
-                    }`}
-                    title="复制名称"
-                  >
-                    {isCopied ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span className="text-[11px]">已复制</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span className="text-[11px]">复制</span>
-                      </>
-                    )}
-                  </button>
+                  <Tooltip content="复制名称">
+                    <button
+                      onClick={() => handleCopy(item)}
+                      className={`p-1.5 rounded-lg flex items-center gap-1 transition-colors ${
+                        isCopied
+                          ? 'bg-emerald-500/20 text-emerald-500 font-semibold'
+                          : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] group-hover:text-[var(--ink-text)]'
+                      }`}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">已复制</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">复制</span>
+                        </>
+                      )}
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             )

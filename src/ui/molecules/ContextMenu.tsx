@@ -181,11 +181,12 @@ export const ContextMenu = ({
           {it.dividerBefore && (
             <div className="border-t border-[var(--ink-border)] my-1" role="separator" />
           )}
+          {/* 菜单条目不带提示：label 与 description 已经全部可见，
+              再挂一层气泡只会在键盘焦点落到首项时把同样的字重复一遍。 */}
           <button
             type="button"
             role={it.checked === undefined ? 'menuitem' : 'menuitemradio'}
             aria-checked={it.checked}
-            title={it.description ? `${it.label}：${it.description}` : it.label}
             aria-disabled={false}
             onClick={() => handleItemClick(idx, it)}
             className={`w-full px-3 py-1.5 text-left flex gap-2 cursor-pointer ${

@@ -37,7 +37,8 @@ describe('DescribePaletteView — 五感微观修辞调色盘主视口', () => {
     const copySpy = vi.spyOn(clipboardWriter, 'writeText').mockResolvedValue()
     render(<DescribePaletteView projectId="p1" />)
 
-    const copyButtons = screen.getAllByTitle('复制金句')
+    // 「复制金句」是提示文案，按钮真正的名字是可见的「复制」
+    const copyButtons = screen.getAllByRole('button', { name: '复制' })
     fireEvent.click(copyButtons[0])
 
     expect(copySpy).toHaveBeenCalled()

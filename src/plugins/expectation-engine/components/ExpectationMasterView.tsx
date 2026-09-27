@@ -12,7 +12,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Sparkles, Plus, Trash2, Activity, Flame, ChevronDown, ChevronUp, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -371,13 +371,14 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                       >
                         {c.title}
                       </h4>
-                      <button
-                        onClick={() => handleDeleteContract(c.id)}
-                        className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
-                        title="删除契约"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip content="删除契约">
+                        <button
+                          onClick={() => handleDeleteContract(c.id)}
+                          className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                     </div>
 
                     <div className="flex items-center gap-1 text-amber-500 text-xs mb-2">

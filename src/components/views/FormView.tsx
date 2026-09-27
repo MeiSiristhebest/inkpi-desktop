@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import type { FormDataRepository } from '../../ports/formDataRepository'
 import { useFormViewModel } from '../../hooks/useFormViewModel'
 import { Save } from 'lucide-react'
+import { Tooltip } from '../../ui/primitives'
 
 export interface FormViewProps {
   projectId: string
@@ -66,12 +67,11 @@ export const FormView: React.FC<FormViewProps> = ({ projectId, tabId, tabMeta, r
                       <label className="text-xs font-medium text-[var(--ink-text)] flex items-center justify-between">
                         <span>{field.name}</span>
                         {field.desc && (
-                          <span
-                            className="text-[10px] text-[var(--ink-text-faint)] truncate max-w-[200px]"
-                            title={field.desc}
-                          >
-                            {field.desc}
-                          </span>
+                          <Tooltip content={field.desc}>
+                            <span className="text-[10px] text-[var(--ink-text-faint)] truncate max-w-[200px]">
+                              {field.desc}
+                            </span>
+                          </Tooltip>
                         )}
                       </label>
                       <input

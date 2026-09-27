@@ -4,6 +4,7 @@ import { ReaderSimulatorEngine } from '../engine/ReaderSimulatorEngine'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { Users, AlertTriangle, ShieldCheck, Copy, Check, MessageSquare } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip } from '../../../ui/primitives'
 
 export const ReaderSimulatorDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
@@ -129,17 +130,18 @@ export const ReaderSimulatorDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
                     <span className="text-[9px] text-[var(--ink-text-muted)]">
                       点赞: {c.upvotes}
                     </span>
-                    <button
-                      onClick={() => handleCopyComment(c.commentText, idx)}
-                      className="p-1 rounded hover:bg-[var(--ink-bg-panel)] text-[var(--ink-text-muted)] transition"
-                      title="复制本章说"
-                    >
-                      {copiedIndex === idx ? (
-                        <Check className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </button>
+                    <Tooltip content="复制本章说">
+                      <button
+                        onClick={() => handleCopyComment(c.commentText, idx)}
+                        className="p-1 rounded hover:bg-[var(--ink-bg-panel)] text-[var(--ink-text-muted)] transition"
+                      >
+                        {copiedIndex === idx ? (
+                          <Check className="w-3 h-3 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               ))}

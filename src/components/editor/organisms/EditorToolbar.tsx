@@ -47,7 +47,7 @@ import {
 } from '../../../core/capabilityRegistry'
 import type { DesktopPlugin, PluginDrawerCapability } from '../../../types/plugin'
 import { shortcutHint } from '../../../core/editorShortcuts'
-import { Select } from '../../../ui/primitives'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 /** 已经声明了能力类别的抽屉插件：分组只需要这一个前提，所以把它写进类型而不是靠断言。 */
 type CategorizedDrawerPlugin = DesktopPlugin & { drawerCapability: PluginDrawerCapability }
@@ -198,36 +198,41 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       {/* 左侧：返回作品库 + 翻章导航 + 目录展开 + 章节标题输入 + 状态选择器 */}
       <div className="editor-toolbar-left flex items-center gap-1.5 min-w-0 flex-1">
         {onHome && (
-          <IconButton onClick={onHome} title="返回作品库">
-            <Home className="w-4 h-4" />
-          </IconButton>
+          <Tooltip content="返回作品库">
+            <IconButton onClick={onHome}>
+              <Home className="w-4 h-4" />
+            </IconButton>
+          </Tooltip>
         )}
 
-        <IconButton
-          onClick={() => actions.prevChapter()}
-          disabled={currentChapterIndex <= 0}
-          title="上一章（快速切章）"
-          className="disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </IconButton>
-        <IconButton
-          onClick={() => actions.nextChapter()}
-          disabled={currentChapterIndex < 0 || currentChapterIndex >= linearChapters.length - 1}
-          title="下一章（快速切章）"
-          className="disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </IconButton>
+        <Tooltip content="上一章（快速切章）">
+          <IconButton
+            onClick={() => actions.prevChapter()}
+            disabled={currentChapterIndex <= 0}
+            className="disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip content="下一章（快速切章）">
+          <IconButton
+            onClick={() => actions.nextChapter()}
+            disabled={currentChapterIndex < 0 || currentChapterIndex >= linearChapters.length - 1}
+            className="disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </IconButton>
+        </Tooltip>
 
         {!isSidebarOpen && (
-          <IconButton
-            onClick={() => actions.setSidebar(true)}
-            title={shortcutHint('展开目录', 'toggleChapterTree')}
-            className="text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]"
-          >
-            <PanelLeftOpen className="w-4 h-4" />
-          </IconButton>
+          <Tooltip content={shortcutHint('展开目录', 'toggleChapterTree')}>
+            <IconButton
+              onClick={() => actions.setSidebar(true)}
+              className="text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </IconButton>
+          </Tooltip>
         )}
 
         {/* 目录折叠后显示「第X卷 · 第X章」定位 */}
@@ -277,127 +282,140 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         {/* 常用文字样式与排版胶囊群（Apple 式收拢） */}
         <div className="editor-toolbar-inline-controls hidden sm:flex items-center gap-1 border-l border-[var(--ink-border)] pl-2 ml-1">
           {/* 写作背景与网格线（使用正规 Lucide 图标，绝不使用任何 Emoji） */}
-          <button
-            type="button"
-            onClick={() => actions.setShowBackgroundModal(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer font-medium"
-            title="写作背景底色与稿纸网格线"
-          >
-            <Palette className="w-3.5 h-3.5 text-amber-500" />
-            <span className="editor-toolbar-inline-label">背景</span>
-          </button>
+          <Tooltip content="写作背景底色与稿纸网格线">
+            <button
+              type="button"
+              onClick={() => actions.setShowBackgroundModal(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer font-medium"
+            >
+              <Palette className="w-3.5 h-3.5 text-amber-500" />
+              <span className="editor-toolbar-inline-label">背景</span>
+            </button>
+          </Tooltip>
 
           {/* 引用名内联高亮开关 */}
           {onToggleEntityHighlight && (
-            <button
-              type="button"
-              onClick={onToggleEntityHighlight}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] transition-colors cursor-pointer font-medium ${
-                entityHighlightEnabled
-                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold'
-                  : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-              }`}
-              title={entityHighlightEnabled ? '点击关闭正文实体高亮' : '点击开启正文实体高亮'}
+            <Tooltip
+              content={entityHighlightEnabled ? '点击关闭正文实体高亮' : '点击开启正文实体高亮'}
             >
-              <PencilLine className="w-3.5 h-3.5" />
-              <span className="editor-toolbar-inline-label">高亮</span>
-            </button>
+              <button
+                type="button"
+                onClick={onToggleEntityHighlight}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] transition-colors cursor-pointer font-medium ${
+                  entityHighlightEnabled
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold'
+                    : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                }`}
+              >
+                <PencilLine className="w-3.5 h-3.5" />
+                <span className="editor-toolbar-inline-label">高亮</span>
+              </button>
+            </Tooltip>
           )}
 
           {/* 本章引用侧栏开关 */}
           {onToggleReferencesSidebar && (
-            <button
-              type="button"
-              onClick={onToggleReferencesSidebar}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] transition-colors cursor-pointer font-medium ${
-                showReferencesSidebar
-                  ? 'bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] font-semibold'
-                  : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-              }`}
-              title="展开/收起本章引用侧栏（角色与设定条目）"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span className="editor-toolbar-inline-label">引用</span>
-            </button>
+            <Tooltip content="展开/收起本章引用侧栏（角色与设定条目）">
+              <button
+                type="button"
+                onClick={onToggleReferencesSidebar}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] transition-colors cursor-pointer font-medium ${
+                  showReferencesSidebar
+                    ? 'bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] font-semibold'
+                    : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span className="editor-toolbar-inline-label">引用</span>
+              </button>
+            </Tooltip>
           )}
 
           <div className="w-px h-3.5 bg-[var(--ink-border)] mx-0.5" />
 
           {/* 撤销 (Undo) */}
-          <motion.button
-            type="button"
-            onClick={() => {
-              if (editor && !editor.isDestroyed && editor.chain) {
-                editor.chain().focus().undo().run()
+          <Tooltip content={shortcutHint('撤销 / 返回上一步', 'undo')}>
+            <motion.button
+              type="button"
+              onClick={() => {
+                if (editor && !editor.isDestroyed && editor.chain) {
+                  editor.chain().focus().undo().run()
+                }
+              }}
+              disabled={
+                !editor || (typeof editor.can === 'function' ? !editor.can().undo() : false)
               }
-            }}
-            disabled={!editor || (typeof editor.can === 'function' ? !editor.can().undo() : false)}
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title={shortcutHint('撤销 / 返回上一步', 'undo')}
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </motion.button>
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </motion.button>
+          </Tooltip>
 
           {/* 重做 (Redo) */}
-          <motion.button
-            type="button"
-            onClick={() => {
-              if (editor && !editor.isDestroyed && editor.chain) {
-                editor.chain().focus().redo().run()
+          <Tooltip content={shortcutHint('重做 / 返回下一步', 'redo')}>
+            <motion.button
+              type="button"
+              onClick={() => {
+                if (editor && !editor.isDestroyed && editor.chain) {
+                  editor.chain().focus().redo().run()
+                }
+              }}
+              disabled={
+                !editor || (typeof editor.can === 'function' ? !editor.can().redo() : false)
               }
-            }}
-            disabled={!editor || (typeof editor.can === 'function' ? !editor.can().redo() : false)}
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            title={shortcutHint('重做 / 返回下一步', 'redo')}
-          >
-            <Redo2 className="w-3.5 h-3.5" />
-          </motion.button>
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </motion.button>
+          </Tooltip>
 
           <div className="w-px h-3.5 bg-[var(--ink-border)] mx-0.5" />
 
           {/* 加粗 (Bold) */}
-          <motion.button
-            type="button"
-            onClick={() => {
-              if (editor && !editor.isDestroyed && editor.chain) {
-                editor.chain().focus().toggleBold().run()
-              }
-            }}
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            className={`p-1 rounded transition-colors cursor-pointer ${
-              typeof editor?.isActive === 'function' && editor.isActive('bold')
-                ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)] font-bold'
-                : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-            }`}
-            title={shortcutHint('加粗', 'bold')}
-          >
-            <Bold className="w-3.5 h-3.5" />
-          </motion.button>
+          <Tooltip content={shortcutHint('加粗', 'bold')}>
+            <motion.button
+              type="button"
+              onClick={() => {
+                if (editor && !editor.isDestroyed && editor.chain) {
+                  editor.chain().focus().toggleBold().run()
+                }
+              }}
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              className={`p-1 rounded transition-colors cursor-pointer ${
+                typeof editor?.isActive === 'function' && editor.isActive('bold')
+                  ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)] font-bold'
+                  : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+              }`}
+            >
+              <Bold className="w-3.5 h-3.5" />
+            </motion.button>
+          </Tooltip>
 
           {/* 倾斜 (Italic) */}
-          <motion.button
-            type="button"
-            onClick={() => {
-              if (editor && !editor.isDestroyed && editor.chain) {
-                editor.chain().focus().toggleItalic().run()
-              }
-            }}
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            className={`p-1 rounded transition-colors cursor-pointer ${
-              typeof editor?.isActive === 'function' && editor.isActive('italic')
-                ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)]'
-                : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-            }`}
-            title={shortcutHint('倾斜', 'italic')}
-          >
-            <Italic className="w-3.5 h-3.5" />
-          </motion.button>
+          <Tooltip content={shortcutHint('倾斜', 'italic')}>
+            <motion.button
+              type="button"
+              onClick={() => {
+                if (editor && !editor.isDestroyed && editor.chain) {
+                  editor.chain().focus().toggleItalic().run()
+                }
+              }}
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              className={`p-1 rounded transition-colors cursor-pointer ${
+                typeof editor?.isActive === 'function' && editor.isActive('italic')
+                  ? 'bg-[var(--ink-bg-active)] text-[var(--ink-accent)]'
+                  : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+              }`}
+            >
+              <Italic className="w-3.5 h-3.5" />
+            </motion.button>
+          </Tooltip>
 
           {/* 隐藏保留用于向后兼容单测的选择器：它们是测试钩子而不是 UI，
               所以继续用原生 <select>（可被 getByTitle 直接命中），不进组件门面。 */}
@@ -440,38 +458,40 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         className="editor-toolbar-actions flex items-center gap-1 shrink-0 relative"
       >
         {hasGhostText && (
-          <button
-            type="button"
-            data-testid="editor-toolbar-ghost-action"
-            onClick={() => actions.acceptGhostText()}
-            aria-label="采纳续写建议"
-            title="采纳续写建议（Tab）"
-            className="editor-toolbar-action-button flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-            <span className="editor-toolbar-label">Tab 采纳续写</span>
-          </button>
+          <Tooltip content="采纳续写建议（Tab）">
+            <button
+              type="button"
+              data-testid="editor-toolbar-ghost-action"
+              onClick={() => actions.acceptGhostText()}
+              aria-label="采纳续写建议"
+              className="editor-toolbar-action-button flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="editor-toolbar-label">Tab 采纳续写</span>
+            </button>
+          </Tooltip>
         )}
 
         {/* 1. 排版与标点规整 */}
         <div className="relative">
-          <button
-            type="button"
-            data-testid="editor-toolbar-format-trigger"
-            aria-haspopup="menu"
-            aria-expanded={activeMenu === 'format'}
-            onClick={() => toggleMenu('format')}
-            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
-              activeMenu === 'format'
-                ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
-                : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-            }`}
-            title="排版与标点规范"
-          >
-            <AlignLeft className="w-3.5 h-3.5" />
-            <span className="editor-toolbar-label">排版</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
+          <Tooltip content="排版与标点规范">
+            <button
+              type="button"
+              data-testid="editor-toolbar-format-trigger"
+              aria-haspopup="menu"
+              aria-expanded={activeMenu === 'format'}
+              onClick={() => toggleMenu('format')}
+              className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+                activeMenu === 'format'
+                  ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
+                  : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+              }`}
+            >
+              <AlignLeft className="w-3.5 h-3.5" />
+              <span className="editor-toolbar-label">排版</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+          </Tooltip>
 
           {/* 排版下拉菜单 */}
           <div
@@ -484,34 +504,36 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <div className="px-2 py-1 text-[10px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
               正文排版方案
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                actions.setShowFontFormatModal(true)
-                setActiveMenu(null)
-              }}
-              title="正文字体、字号、行距与排版规范"
-              data-testid="editor-font-format-menu-item"
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <span className="w-3.5 text-center font-serif font-bold text-[12px]">T</span>
-              <span>字体、字号与行距</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                actions.autoFormat()
-                setActiveMenu(null)
-              }}
-              title="一键首行缩进排版"
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <AlignLeft className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                <span>经典出版（空两格）</span>
-              </div>
-              <span className="text-[10px] text-[var(--ink-text-faint)]">缩进</span>
-            </button>
+            <Tooltip content="正文字体、字号、行距与排版规范">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowFontFormatModal(true)
+                  setActiveMenu(null)
+                }}
+                data-testid="editor-font-format-menu-item"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <span className="w-3.5 text-center font-serif font-bold text-[12px]">T</span>
+                <span>字体、字号与行距</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="一键首行缩进排版">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.autoFormat()
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <AlignLeft className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
+                  <span>经典出版（空两格）</span>
+                </div>
+                <span className="text-[10px] text-[var(--ink-text-faint)]">缩进</span>
+              </button>
+            </Tooltip>
             <button
               type="button"
               onClick={() => {
@@ -560,41 +582,43 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <div className="px-2 py-1 text-[10px] font-semibold text-[var(--ink-text-faint)] uppercase tracking-wider">
               标点规范化
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                actions.punctuationFix()
-                setActiveMenu(null)
-              }}
-              title="标点规整"
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <PencilLine className="w-3.5 h-3.5 text-emerald-500" />
-                <span>标点智能规整（双引号/破折号）</span>
-              </div>
-            </button>
+            <Tooltip content="标点规整">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.punctuationFix()
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <PencilLine className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>标点智能规整（双引号/破折号）</span>
+                </div>
+              </button>
+            </Tooltip>
           </div>
         </div>
 
         {/* 2. 审校与体检 */}
         <div className="relative">
-          <button
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={activeMenu === 'proof'}
-            onClick={() => toggleMenu('proof')}
-            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
-              activeMenu === 'proof'
-                ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
-                : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-            }`}
-            title="审校与内容体检"
-          >
-            <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
-            <span className="editor-toolbar-label">审校</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
+          <Tooltip content="审校与内容体检">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={activeMenu === 'proof'}
+              onClick={() => toggleMenu('proof')}
+              className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+                activeMenu === 'proof'
+                  ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
+                  : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+              <span className="editor-toolbar-label">审校</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+          </Tooltip>
 
           <div
             className={`absolute right-0 top-full mt-1.5 z-50 min-w-[210px] p-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12px] transition-all backdrop-blur-md ${
@@ -603,51 +627,54 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 : 'opacity-0 scale-95 pointer-events-none'
             }`}
           >
-            <button
-              type="button"
-              onClick={() => {
-                actions.setShowSensitiveModal(true)
-                setActiveMenu(null)
-              }}
-              title="敏感词检测（本章）"
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
-              <span>敏感词即时检测（本章）</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                actions.setShowOveruseModal(true)
-                setActiveMenu(null)
-              }}
-              title="高频词与口癖点检"
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <BarChart3 className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-              <span>口癖与高频词点检</span>
-            </button>
+            <Tooltip content="敏感词检测（本章）">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowSensitiveModal(true)
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                <span>敏感词即时检测（本章）</span>
+              </button>
+            </Tooltip>
+            <Tooltip content="高频词与口癖点检">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowOveruseModal(true)
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
+                <span>口癖与高频词点检</span>
+              </button>
+            </Tooltip>
           </div>
         </div>
 
         {/* 3. 辅助与专注工具箱 */}
         <div className="relative">
-          <button
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={activeMenu === 'tools'}
-            onClick={() => toggleMenu('tools')}
-            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
-              activeMenu === 'tools' || showSplitView || showScratchpad
-                ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
-                : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-            }`}
-            title="创作辅助与沉浸工具"
-          >
-            <Columns2 className="w-3.5 h-3.5 text-blue-500" />
-            <span className="editor-toolbar-label">辅助</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
+          <Tooltip content="创作辅助与沉浸工具">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={activeMenu === 'tools'}
+              onClick={() => toggleMenu('tools')}
+              className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+                activeMenu === 'tools' || showSplitView || showScratchpad
+                  ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
+                  : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+              }`}
+            >
+              <Columns2 className="w-3.5 h-3.5 text-blue-500" />
+              <span className="editor-toolbar-label">辅助</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+          </Tooltip>
 
           <div
             className={`absolute right-0 top-full mt-1.5 z-50 min-w-[210px] p-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12px] transition-all backdrop-blur-md ${
@@ -656,96 +683,105 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 : 'opacity-0 scale-95 pointer-events-none'
             }`}
           >
-            <button
-              type="button"
-              onClick={() => {
-                actions.setShowSplitView(!showSplitView)
-                setActiveMenu(null)
-              }}
-              title="分屏对照阅读历史章节"
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer ${
-                showSplitView
-                  ? 'bg-[var(--ink-accent)] text-white'
-                  : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Columns2 className="w-3.5 h-3.5" />
-                <span>分屏 1:1 对照阅读</span>
-              </div>
-              {showSplitView && <span className="text-[10px]">开启中</span>}
-            </button>
+            <Tooltip content="分屏对照阅读历史章节">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowSplitView(!showSplitView)
+                  setActiveMenu(null)
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer ${
+                  showSplitView
+                    ? 'bg-[var(--ink-accent)] text-white'
+                    : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Columns2 className="w-3.5 h-3.5" />
+                  <span>分屏 1:1 对照阅读</span>
+                </div>
+                {showSplitView && <span className="text-[10px]">开启中</span>}
+              </button>
+            </Tooltip>
 
-            <button
-              type="button"
-              onClick={() => {
-                actions.setShowScratchpad(!showScratchpad)
-                setActiveMenu(null)
-              }}
-              title="行旁待办与备忘便签（导出自动滤除）"
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer ${
-                showScratchpad
-                  ? 'bg-amber-500 text-white'
-                  : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <StickyNote className="w-3.5 h-3.5" />
-                <span>本章伏笔与备忘便签</span>
-              </div>
-              {showScratchpad && <span className="text-[10px]">开启中</span>}
-            </button>
+            <Tooltip content="行旁待办与备忘便签（导出自动滤除）">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowScratchpad(!showScratchpad)
+                  setActiveMenu(null)
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer ${
+                  showScratchpad
+                    ? 'bg-amber-500 text-white'
+                    : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <StickyNote className="w-3.5 h-3.5" />
+                  <span>本章伏笔与备忘便签</span>
+                </div>
+                {showScratchpad && <span className="text-[10px]">开启中</span>}
+              </button>
+            </Tooltip>
 
             <div className="border-t border-[var(--ink-border)]/60 my-1" />
 
-            <button
-              type="button"
-              onClick={() => {
-                actions.setShowHistoryModal(true)
-                setActiveMenu(null)
-              }}
-              title="时光机 · 版本历史"
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <History className="w-3.5 h-3.5 text-purple-500" />
-              <span>时光机 · 版本历史与比对</span>
-            </button>
+            <Tooltip content="时光机 · 版本历史">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowHistoryModal(true)
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <History className="w-3.5 h-3.5 text-purple-500" />
+                <span>时光机 · 版本历史与比对</span>
+              </button>
+            </Tooltip>
 
-            <button
-              type="button"
-              onClick={() => {
-                actions.setShowLockModal(true)
-                setActiveMenu(null)
-              }}
-              title="小黑屋 · 强制专注码字"
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <Lock className="w-3.5 h-3.5 text-rose-500" />
-              <span>进入小黑屋码字</span>
-            </button>
+            <Tooltip content="小黑屋 · 强制专注码字">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.setShowLockModal(true)
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5 text-rose-500" />
+                <span>进入小黑屋码字</span>
+              </button>
+            </Tooltip>
           </div>
         </div>
 
         {/* 4. 统一查找替换入口 */}
-        <button
-          type="button"
-          className={`editor-toolbar-action-button editor-toolbar-find-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
-            showFindReplace
-              ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
-              : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-          }`}
-          onClick={() => actions.setShowFindReplace(!showFindReplace)}
-          title={shortcutHint('查找替换 / 全文检索', 'findReplace')}
-        >
-          <Search className="w-3.5 h-3.5" />
-          <span className="editor-toolbar-label">查找</span>
-        </button>
+        <Tooltip content={shortcutHint('查找替换 / 全文检索', 'findReplace')}>
+          <button
+            type="button"
+            className={`editor-toolbar-action-button editor-toolbar-find-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+              showFindReplace
+                ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
+                : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+            }`}
+            onClick={() => actions.setShowFindReplace(!showFindReplace)}
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span className="editor-toolbar-label">查找</span>
+          </button>
+        </Tooltip>
 
-        {/* 隐藏保留全书检索触发器（保证测试与全局快捷键兼容） */}
+        {/*
+          隐藏保留全书检索触发器（保证测试与全局快捷键兼容）。
+          它 `hidden + aria-hidden`，既看不见也进不了无障碍树，所以不挂提示：
+          门面只会给量得到可见文字的触发器补名，这里连元素本身都不存在。
+        */}
         <button
           type="button"
           onClick={() => actions.setShowGlobalSearch(true)}
-          title="全书检索（跨所有章节）"
+          data-testid="editor-global-search-trigger"
           className="hidden"
           aria-hidden="true"
         >
@@ -754,22 +790,23 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         {/* 5. 导出与分享下拉 */}
         <div className="relative">
-          <button
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={activeMenu === 'export'}
-            onClick={() => toggleMenu('export')}
-            className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
-              activeMenu === 'export'
-                ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
-                : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
-            }`}
-            title="导出与分享"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="editor-toolbar-label">导出</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
+          <Tooltip content="导出与分享">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={activeMenu === 'export'}
+              onClick={() => toggleMenu('export')}
+              className={`editor-toolbar-menu-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
+                activeMenu === 'export'
+                  ? 'bg-[var(--ink-bg-hover)] text-[var(--ink-text)] border-[var(--ink-border)]'
+                  : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="editor-toolbar-label">导出</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+          </Tooltip>
 
           <div
             className={`absolute right-0 top-full mt-1.5 z-50 min-w-[200px] p-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12px] transition-all backdrop-blur-md ${
@@ -778,53 +815,56 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 : 'opacity-0 scale-95 pointer-events-none'
             }`}
           >
-            <button
-              type="button"
-              onClick={() => {
-                actions.exportChapter('txt')
-                setActiveMenu(null)
-              }}
-              title="导出为 TXT"
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <FileText className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
-                <span>导出 TXT 文档</span>
-              </div>
-              <span className="text-[10px] text-[var(--ink-text-faint)]">.txt</span>
-            </button>
+            <Tooltip content="导出为 TXT">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.exportChapter('txt')
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
+                  <span>导出 TXT 文档</span>
+                </div>
+                <span className="text-[10px] text-[var(--ink-text-faint)]">.txt</span>
+              </button>
+            </Tooltip>
 
-            <button
-              type="button"
-              onClick={() => {
-                actions.exportChapter('md')
-                setActiveMenu(null)
-              }}
-              title="导出为 MD"
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <Code2 className="w-3.5 h-3.5 text-blue-500" />
-                <span>导出 Markdown</span>
-              </div>
-              <span className="text-[10px] text-[var(--ink-text-faint)]">.md</span>
-            </button>
+            <Tooltip content="导出为 MD">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.exportChapter('md')
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Code2 className="w-3.5 h-3.5 text-blue-500" />
+                  <span>导出 Markdown</span>
+                </div>
+                <span className="text-[10px] text-[var(--ink-text-faint)]">.md</span>
+              </button>
+            </Tooltip>
 
-            <button
-              type="button"
-              onClick={() => {
-                actions.exportChapter('html')
-                setActiveMenu(null)
-              }}
-              title="导出为 HTML"
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <FileCode className="w-3.5 h-3.5 text-amber-500" />
-                <span>导出 HTML 单页</span>
-              </div>
-              <span className="text-[10px] text-[var(--ink-text-faint)]">.html</span>
-            </button>
+            <Tooltip content="导出为 HTML">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.exportChapter('html')
+                  setActiveMenu(null)
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <FileCode className="w-3.5 h-3.5 text-amber-500" />
+                  <span>导出 HTML 单页</span>
+                </div>
+                <span className="text-[10px] text-[var(--ink-text-faint)]">.html</span>
+              </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -832,28 +872,30 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         {(onToggleFocus || onToggleFullscreen || onToggleRightPanel) && (
           <div className="flex items-center gap-0.5 border-l border-[var(--ink-border)] pl-1 ml-0.5">
             {onToggleFocus && (
-              <IconButton
-                onClick={onToggleFocus}
-                title={focusMode ? '退出聚焦模式 (Esc)' : '聚焦模式（仅留写作画布）'}
-                className={focusMode ? 'text-[var(--ink-accent)]' : ''}
-              >
-                <Focus className="w-3.5 h-3.5" />
-              </IconButton>
+              <Tooltip content={focusMode ? '退出聚焦模式 (Esc)' : '聚焦模式（仅留写作画布）'}>
+                <IconButton
+                  onClick={onToggleFocus}
+                  className={focusMode ? 'text-[var(--ink-accent)]' : ''}
+                >
+                  <Focus className="w-3.5 h-3.5" />
+                </IconButton>
+              </Tooltip>
             )}
 
             {onToggleFullscreen && (
-              <IconButton onClick={onToggleFullscreen} title="全屏 / 退出全屏">
-                {isFullscreen ? (
-                  <Minimize2 className="w-3.5 h-3.5" />
-                ) : (
-                  <Maximize2 className="w-3.5 h-3.5" />
-                )}
-              </IconButton>
+              <Tooltip content="全屏 / 退出全屏">
+                <IconButton onClick={onToggleFullscreen}>
+                  {isFullscreen ? (
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  )}
+                </IconButton>
+              </Tooltip>
             )}
             {onToggleRightPanel && (
-              <IconButton
-                onClick={onToggleRightPanel}
-                title={
+              <Tooltip
+                content={
                   hasAssistant
                     ? isRightOpen
                       ? '收起 AI 助手'
@@ -862,37 +904,44 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                       ? '收起信息栏'
                       : '展开信息栏'
                 }
-                className={isRightOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''}
               >
-                {hasAssistant ? (
-                  <Sparkles className="w-3.5 h-3.5" />
-                ) : (
-                  <PanelRight className="w-3.5 h-3.5" />
-                )}
-              </IconButton>
+                <IconButton
+                  onClick={onToggleRightPanel}
+                  className={isRightOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''}
+                >
+                  {hasAssistant ? (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  ) : (
+                    <PanelRight className="w-3.5 h-3.5" />
+                  )}
+                </IconButton>
+              </Tooltip>
             )}
 
             {host && (
               <div className="relative">
-                <IconButton
-                  data-testid="editor-toolbar-drawer-trigger"
-                  aria-haspopup="menu"
-                  aria-expanded={activeMenu === 'drawers'}
-                  aria-label="插件随动抽屉"
-                  onClick={() => toggleMenu('drawers')}
-                  title={
+                <Tooltip
+                  content={
                     openDrawerPlugin
                       ? `当前抽屉：${openDrawerPlugin.name}（可切换或关闭）`
                       : '选择要打开的插件抽屉'
                   }
-                  className={
-                    host.activeDrawerPluginId
-                      ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]'
-                      : ''
-                  }
                 >
-                  <Puzzle className="w-3.5 h-3.5" />
-                </IconButton>
+                  <IconButton
+                    data-testid="editor-toolbar-drawer-trigger"
+                    aria-haspopup="menu"
+                    aria-expanded={activeMenu === 'drawers'}
+                    aria-label="插件随动抽屉"
+                    onClick={() => toggleMenu('drawers')}
+                    className={
+                      host.activeDrawerPluginId
+                        ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]'
+                        : ''
+                    }
+                  >
+                    <Puzzle className="w-3.5 h-3.5" />
+                  </IconButton>
+                </Tooltip>
                 {activeMenu === 'drawers' && (
                   <>
                     <div

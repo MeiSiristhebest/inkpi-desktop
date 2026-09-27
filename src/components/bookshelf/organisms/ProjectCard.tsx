@@ -7,6 +7,7 @@ import { formatRelativeTime } from '../../../lib/relativeTime'
 import { spring, gesture, variants } from '../../../motion'
 import { ProjectContextMenu } from './ProjectContextMenu'
 import { ProjectEditForm, type ProjectEditFormValues } from './ProjectEditForm'
+import { Tooltip } from '../../../ui/primitives'
 
 interface ProjectCardProps {
   project: ProjectRecord
@@ -95,14 +96,15 @@ export const ProjectCard = ({
 
             {/* 右上角操作气泡菜单 */}
             <div className="relative" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={onToggleMenu}
-                title="更多操作"
-                className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <MoreVertical size={15} />
-              </button>
+              <Tooltip content="更多操作">
+                <button
+                  type="button"
+                  onClick={onToggleMenu}
+                  className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <MoreVertical size={15} />
+                </button>
+              </Tooltip>
 
               {isMenuOpen && (
                 <ProjectContextMenu
@@ -158,27 +160,29 @@ export const ProjectCard = ({
         </span>
 
         <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5">
-          <motion.button
-            type="button"
-            onClick={onExport}
-            title="导出完整备份（含设定/时间线/插件/AI 数据）"
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] border border-transparent hover:border-[var(--ink-border)] flex items-center justify-center transition-colors cursor-pointer"
-          >
-            <Upload size={13} />
-          </motion.button>
-          <motion.button
-            type="button"
-            onClick={onOpen}
-            title={openLabel}
-            {...gesture.button}
-            transition={spring.snappy}
-            className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer max-w-[14rem]"
-          >
-            <FolderOpen size={13} className="shrink-0" />
-            <span className="truncate">{openLabel}</span>
-          </motion.button>
+          <Tooltip content="导出完整备份（含设定/时间线/插件/AI 数据）">
+            <motion.button
+              type="button"
+              onClick={onExport}
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] border border-transparent hover:border-[var(--ink-border)] flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <Upload size={13} />
+            </motion.button>
+          </Tooltip>
+          <Tooltip content={openLabel}>
+            <motion.button
+              type="button"
+              onClick={onOpen}
+              {...gesture.button}
+              transition={spring.snappy}
+              className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer max-w-[14rem]"
+            >
+              <FolderOpen size={13} className="shrink-0" />
+              <span className="truncate">{openLabel}</span>
+            </motion.button>
+          </Tooltip>
         </div>
       </div>
     </motion.div>

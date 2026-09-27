@@ -90,7 +90,7 @@ describe('Engine — 聚焦模式只收起界面外壳（P3.11）', () => {
     expect(screen.getByText('章节目录')).toBeInTheDocument()
     expect(kernel).toEqual({ mounts: 1, unmounts: 0 })
 
-    fireEvent.click(screen.getByTitle('聚焦模式（仅留写作画布）'))
+    fireEvent.click(screen.getByRole('button', { name: '聚焦模式（仅留写作画布）' }))
 
     expect(screen.queryByTestId('sidebar-nav')).not.toBeInTheDocument()
     expect(screen.queryByTestId('project-engine-right-panel')).not.toBeInTheDocument()
@@ -108,7 +108,7 @@ describe('Engine — 聚焦模式只收起界面外壳（P3.11）', () => {
         rightPanel={<div data-testid="right-probe" />}
       />,
     )
-    fireEvent.click(screen.getByTitle('聚焦模式（仅留写作画布）'))
+    fireEvent.click(screen.getByRole('button', { name: '聚焦模式（仅留写作画布）' }))
     expect(screen.getByText(/退出聚焦/)).toBeInTheDocument()
 
     act(() => {

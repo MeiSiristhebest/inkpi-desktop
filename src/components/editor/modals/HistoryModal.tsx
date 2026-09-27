@@ -21,6 +21,7 @@ import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValu
 import type { KeyValueStore } from '../../../ports/keyValueStore'
 import type { IdGenerator } from '../../../ports/idGenerator'
 import type { Clock as ClockPort } from '../../../ports/clock'
+import { Tooltip } from '../../../ui/primitives'
 
 interface HistoryModalProps {
   chapter: ChapterRecord
@@ -169,13 +170,14 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
             版本时光机与差异比对 · {chapter.title}
           </h3>
         </div>
-        <button
-          onClick={onClose}
-          title="关闭"
-          className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <Tooltip content="关闭">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* 机制说明与操作条 */}
@@ -420,18 +422,19 @@ const SnapshotGroup: React.FC<SnapshotGroupProps> = ({
                   确认删除
                 </button>
               ) : (
-                <button
-                  type="button"
-                  title="删除此里程碑"
-                  aria-label={`删除里程碑 ${snap.name || ''}`.trim()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onArmDelete?.(snap.id ?? null)
-                  }}
-                  className="shrink-0 p-1 rounded text-[var(--ink-text-faint)] hover:text-rose-500 hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                <Tooltip content="删除此里程碑">
+                  <button
+                    type="button"
+                    aria-label={`删除里程碑 ${snap.name || ''}`.trim()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onArmDelete?.(snap.id ?? null)
+                    }}
+                    className="shrink-0 p-1 rounded text-[var(--ink-text-faint)] hover:text-rose-500 hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </Tooltip>
               ))}
           </div>
 

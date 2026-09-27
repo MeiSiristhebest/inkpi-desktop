@@ -15,7 +15,7 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Plus, GitBranch, X, Check, Trash2, Bot, Sparkles } from 'lucide-react'
-import { Select } from '../../../ui/primitives'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 export const DEFAULT_THREADS: Omit<NarrativeThread, 'projectId'>[] = [
   { id: 'thread-main', name: '主线 / 逆天修仙', color: '#3b82f6', characterIds: [], order: 0 },
@@ -334,21 +334,22 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                         ))}
 
                         {cellNodes.length === 0 && (
-                          <button
-                            onClick={() =>
-                              setEditingNode({
-                                threadId: thread.id,
-                                chapterOrder: ch,
-                                status: 'planned',
-                                prerequisites: [],
-                                emotionalPolarity: 0,
-                              })
-                            }
-                            className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[var(--ink-text-muted)] hover:text-[var(--ink-accent)]"
-                            title="在此章节添加事件节点"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
+                          <Tooltip content="在此章节添加事件节点">
+                            <button
+                              onClick={() =>
+                                setEditingNode({
+                                  threadId: thread.id,
+                                  chapterOrder: ch,
+                                  status: 'planned',
+                                  prerequisites: [],
+                                  emotionalPolarity: 0,
+                                })
+                              }
+                              className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[var(--ink-text-muted)] hover:text-[var(--ink-accent)]"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </Tooltip>
                         )}
                       </div>
                     )

@@ -15,6 +15,7 @@ import {
 import { previewChoiceLabel, reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 import { semanticTextFromContent } from '../../../domain/content'
 import { formatByPreset } from '../../../domain/text'
+import { Tooltip } from '../../../ui/primitives'
 
 export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const host = useOptionalPluginHostContext()
@@ -216,25 +217,27 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             </span>
           )}
           {host?.activeChapter && (
-            <button
-              onClick={() => void handleWriteback()}
-              disabled={writebackBusy || writebackProposal?.status === 'committed'}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
-              title="将审阅后的合稿结果记录为 Proposal，并通过 CAS 写回当前正文章节"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {writebackBusy ? '处理中…' : '写回正文章节 (Proposal/CAS)'}
-            </button>
+            <Tooltip content="将审阅后的合稿结果记录为 Proposal，并通过 CAS 写回当前正文章节">
+              <button
+                onClick={() => void handleWriteback()}
+                disabled={writebackBusy || writebackProposal?.status === 'committed'}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {writebackBusy ? '处理中…' : '写回正文章节 (Proposal/CAS)'}
+              </button>
+            </Tooltip>
           )}
           {writebackProposal?.status === 'committed' && (
-            <button
-              onClick={() => void handleUndo()}
-              disabled={writebackBusy}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
-              title="通过 Proposal Ledger 撤销上一次写回"
-            >
-              撤销写回
-            </button>
+            <Tooltip content="通过 Proposal Ledger 撤销上一次写回">
+              <button
+                onClick={() => void handleUndo()}
+                disabled={writebackBusy}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                撤销写回
+              </button>
+            </Tooltip>
           )}
           <button
             onClick={applyAll}

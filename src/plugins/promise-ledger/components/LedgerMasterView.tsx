@@ -14,6 +14,7 @@ import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel
 import { semanticTextFromContent } from '../../../domain/content'
 import { Plus, Search, Sparkles, Edit2, Trash2, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip } from '../../../ui/primitives'
 
 export const DEMO_PROMISES: Omit<
   PromiseLedgerEntry,
@@ -417,20 +418,22 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     <div className="pt-2 border-t border-[var(--ink-border)]/50 flex items-center justify-between text-[10px] text-[var(--ink-text-faint)]">
                       <span>埋设：第 {entry.plantChapter} 章</span>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setEditingEntry(entry)}
-                          className="hover:text-[var(--ink-text)]"
-                          title="编辑"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteEntry(entry.id)}
-                          className="hover:text-rose-400"
-                          title="删除"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip content="编辑">
+                          <button
+                            onClick={() => setEditingEntry(entry)}
+                            className="hover:text-[var(--ink-text)]"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="删除">
+                          <button
+                            onClick={() => handleDeleteEntry(entry.id)}
+                            className="hover:text-rose-400"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                   </div>

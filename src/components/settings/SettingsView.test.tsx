@@ -272,7 +272,7 @@ describe('SettingsView', () => {
   it('关闭按钮触发 onClose', () => {
     const onClose = vi.fn()
     renderSettings({ open: true, onClose })
-    fireEvent.click(screen.getByTitle('关闭 (Esc)'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭 (Esc)' }))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

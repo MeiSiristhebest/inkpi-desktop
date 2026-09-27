@@ -165,8 +165,9 @@ describe('ContextMenu primitive', () => {
     expect(menuitems).toHaveLength(2)
     expect(document.activeElement).toBe(menuitems[0])
     expect(menuitems[0]).toHaveAccessibleName(/^活体世界书/)
-    expect(menuitems[0]).toHaveAttribute('title', '活体世界书：人物与设定的实时档案')
-    expect(menuitems[1]).toHaveAttribute('title', '叙事体检')
+    // 条目不挂提示：label 与 description 本来就全部可见，再重复一遍只会挡住键盘焦点
+    expect(menuitems[0]).not.toHaveAttribute('title')
+    expect(menuitems[1]).not.toHaveAttribute('title')
 
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
     expect(document.activeElement).toBe(menuitems[1])

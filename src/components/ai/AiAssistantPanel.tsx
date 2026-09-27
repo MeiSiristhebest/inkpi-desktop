@@ -16,6 +16,7 @@ import {
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
 import type { StandardAiResult } from '../../types/aiResultLifecycle'
 import type { DomainSyncConflict } from '../../domain/sync/domainSyncService'
+import { Tooltip } from '../../ui/primitives'
 
 interface AiMessage {
   role: 'user' | 'assistant'
@@ -120,59 +121,57 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
         <div className="flex items-center gap-2">
           {/* Domain Sync State Indicator */}
           {domainSyncState === 'synced' && (
-            <span
-              title="领域数据已与 Daemon 保持权威同步"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-            >
-              <CheckCircle2 className="w-2.5 h-2.5" />
-              已同步
-            </span>
+            <Tooltip content="领域数据已与 Daemon 保持权威同步">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                <CheckCircle2 className="w-2.5 h-2.5" />
+                已同步
+              </span>
+            </Tooltip>
           )}
           {domainSyncState === 'syncing' && (
-            <span
-              title="正在与 Daemon 异步投影同步…"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse"
-            >
-              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-              正在同步
-            </span>
+            <Tooltip content="正在与 Daemon 异步投影同步…">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
+                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                正在同步
+              </span>
+            </Tooltip>
           )}
           {domainSyncState === 'pending' && (
-            <span
-              title="存在尚未推送到 Daemon 的本地领域修改"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              待同步
-            </span>
+            <Tooltip content="存在尚未推送到 Daemon 的本地领域修改">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                待同步
+              </span>
+            </Tooltip>
           )}
           {domainSyncState === 'conflict' && (
-            <button
-              type="button"
-              onClick={() => setShowConflictModal(true)}
-              title="存在领域投影版本冲突，点击查看详情"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
-            >
-              <AlertTriangle className="w-2.5 h-2.5" />
-              存在冲突
-            </button>
+            <Tooltip content="存在领域投影版本冲突，点击查看详情">
+              <button
+                type="button"
+                onClick={() => setShowConflictModal(true)}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
+              >
+                <AlertTriangle className="w-2.5 h-2.5" />
+                存在冲突
+              </button>
+            </Tooltip>
           )}
           {domainSyncState === 'offline' && (
-            <span
-              title="Daemon 离线，领域修改暂存于本地 IndexedDB"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]"
-            >
-              <CloudOff className="w-2.5 h-2.5" />
-              离线
-            </span>
+            <Tooltip content="Daemon 离线，领域修改暂存于本地 IndexedDB">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]">
+                <CloudOff className="w-2.5 h-2.5" />
+                离线
+              </span>
+            </Tooltip>
           )}
-          <button
-            onClick={onClose}
-            title="收起"
-            className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
+          <Tooltip content="收起">
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 

@@ -19,7 +19,7 @@ import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diag
 import { draftJournal } from '../../services/draftJournal'
 import { shortcutHint } from '../../core/editorShortcuts'
 import { chapterMutationService } from '../../services/defaultChapterMutationService'
-import { SESSION_WORDS_RULE } from './hooks/useWritingSessionStats'
+import { SESSION_WORDS_LABEL } from './hooks/useWritingSessionStats'
 import { WRITE_ORIGIN_META } from './writeOrigin'
 import type { ChapterMutationExecutionResult } from '../../services/chapterMutationService'
 
@@ -280,7 +280,8 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
         timeout: 8000,
       })
       expect(saveState()).toHaveTextContent('保存失败 · 重试')
-      expect(saveState().getAttribute('title')).toContain('磁盘写入失败')
+      // 失败原因此前挂在 title 上；门面迁走后它仍在可访问名称里（调用点自己写了 aria-label）
+      expect(saveState()).toHaveAccessibleName(/磁盘写入失败/)
       // 失败不落库：权威存储里仍是原始内容，UI 与 durable 事实一致
       const before = await db.getAll('chapters')
       expect(before.find((c) => c.title === '第001章 寒潭惊变')?.content).not.toBe(
@@ -308,7 +309,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       })
     })
     h.getText = () => '第一行\n第二行'
-    fireEvent.click(screen.getByTitle('一键首行缩进排版'))
+    fireEvent.click(screen.getByRole('button', { name: /经典出版（空两格）/ }))
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith(
         '<p>　　第一行</p><p>　　第二行</p>',
@@ -326,7 +327,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       })
     })
     h.getText = () => 'hi, there?'
-    fireEvent.click(screen.getByTitle('标点规整'))
+    fireEvent.click(screen.getByRole('button', { name: /标点智能规整/ }))
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　hi， there？</p>', {
         emitUpdate: false,
@@ -344,7 +345,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     h.getText = () => 'abc'
     h.getHTML = () => '<p>abc</p>'
-    fireEvent.click(screen.getByTitle(shortcutHint('查找替换 / 全文检索', 'findReplace')))
+    fireEvent.click(screen.getByRole('button', { name: '查找' }))
     fireEvent.change(screen.getByPlaceholderText('检索（文档内全文）'), { target: { value: 'a' } })
     fireEvent.change(screen.getByPlaceholderText('替换为（可选）'), { target: { value: 'X' } })
     fireEvent.click(screen.getByText('全部替换'))
@@ -360,7 +361,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<RichEditor projectId="p-exp" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('导出为 TXT'))
+    fireEvent.click(screen.getByRole('button', { name: /导出 TXT 文档/ }))
     expect(createSpy).toHaveBeenCalled()
     expect(clickSpy).toHaveBeenCalled()
     createSpy.mockRestore()
@@ -373,7 +374,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     // 默认展开：不显示面包屑
     expect(screen.queryByText(/第\d+卷 · 第\d+章/)).not.toBeInTheDocument()
     // 折叠目录：树完全隐藏，左上角显示「第X卷 · 第X章」
-    fireEvent.click(screen.getByTitle(shortcutHint('折叠目录', 'toggleChapterTree')))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('折叠目录', 'toggleChapterTree') }),
+    )
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     expect(screen.getByText(/第\d+卷 · 第\d+章/)).toBeInTheDocument()
   })
@@ -460,7 +463,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('creates a new chapter via the tree and writes it to IndexedDB', async () => {
     render(<RichEditor projectId="p-new" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle(shortcutHint('在当前卷新建章节', 'newChapter')))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('在当前卷新建章节', 'newChapter') }),
+    )
     await waitFor(async () => {
       const chs = await db.getAll('chapters')
       expect(chs.some((c) => c.title.startsWith('第') && c.title.includes('未命名'))).toBe(true)
@@ -470,8 +475,8 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('exposes 首行缩进 and 标点规整 as toolbar actions (appearance moved to unified Settings)', async () => {
     render(<RichEditor projectId="p-settings" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    expect(screen.getByTitle('一键首行缩进排版')).toBeInTheDocument()
-    expect(screen.getByTitle('标点规整')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /经典出版（空两格）/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /标点智能规整/ })).toBeInTheDocument()
     // 等待编辑器完成首章灌入，避免慢速 CI 上点击发生在 editorRef 建立之前。
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith(expect.any(String), {
@@ -480,7 +485,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     // 首行缩进走与工具栏相同的格式化逻辑
     h.getText = () => '独行'
-    fireEvent.click(screen.getByTitle('一键首行缩进排版'))
+    fireEvent.click(screen.getByRole('button', { name: /经典出版（空两格）/ }))
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　独行</p>', {
         emitUpdate: false,
@@ -495,16 +500,16 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.getAllByText('排版', { exact: true })).toHaveLength(1)
     expect(screen.queryByTestId('editor-font-format-menu-item')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByTitle('排版与标点规范'))
+    fireEvent.click(screen.getByTestId('editor-toolbar-format-trigger'))
     expect(screen.getByTestId('editor-font-format-menu-item')).toBeVisible()
   })
 
   it('toggles the find/replace bar open and closed', async () => {
     render(<RichEditor projectId="p-find2" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle(shortcutHint('查找替换 / 全文检索', 'findReplace')))
+    fireEvent.click(screen.getByRole('button', { name: '查找' }))
     expect(screen.getByPlaceholderText('检索（文档内全文）')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('关闭'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
     expect(screen.queryByPlaceholderText('检索（文档内全文）')).not.toBeInTheDocument()
   })
 
@@ -513,7 +518,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<RichEditor projectId="p-exp2" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('导出为 MD'))
+    fireEvent.click(screen.getByRole('button', { name: /导出 Markdown/ }))
     expect(createSpy).toHaveBeenCalled()
     expect(clickSpy).toHaveBeenCalled()
     createSpy.mockRestore()
@@ -525,7 +530,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<RichEditor projectId="p-exp3" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('导出为 HTML'))
+    fireEvent.click(screen.getByRole('button', { name: /导出 HTML 单页/ }))
     expect(createSpy).toHaveBeenCalled()
     expect(clickSpy).toHaveBeenCalled()
     createSpy.mockRestore()
@@ -543,7 +548,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       />,
     )
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('重连 InkPi Daemon'))
+    fireEvent.click(screen.getByRole('button', { name: /点击重连 InkPi Daemon/ }))
     expect(onReconnect).toHaveBeenCalled()
   })
 
@@ -555,9 +560,13 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('collapses and restores the chapter tree via the sidebar toggle', async () => {
     render(<RichEditor projectId="p-side" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle(shortcutHint('折叠目录', 'toggleChapterTree')))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('折叠目录', 'toggleChapterTree') }),
+    )
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle(shortcutHint('展开目录', 'toggleChapterTree')))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('展开目录', 'toggleChapterTree') }),
+    )
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
@@ -602,7 +611,8 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-origin" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     const counted = () => {
-      const label = screen.getAllByTitle(SESSION_WORDS_RULE)[0]
+      // 口径说明改由提示门面承担后，触发器上不再有原生 title，改按可见标签定位同一行
+      const label = screen.getAllByText(SESSION_WORDS_LABEL)[0]
       return Number((label.parentElement?.textContent ?? '').replace(/\D/g, ''))
     }
 
@@ -630,7 +640,8 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-rewrite" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     const counted = () => {
-      const label = screen.getAllByTitle(SESSION_WORDS_RULE)[0]
+      // 口径说明改由提示门面承担后，触发器上不再有原生 title，改按可见标签定位同一行
+      const label = screen.getAllByText(SESSION_WORDS_LABEL)[0]
       return Number((label.parentElement?.textContent ?? '').replace(/\D/g, ''))
     }
 
@@ -702,7 +713,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('opens the 全书检索 (cross-chapter) modal from the toolbar', async () => {
     render(<RichEditor projectId="p-global" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('全书检索（跨所有章节）'))
+    fireEvent.click(screen.getByTestId('editor-global-search-trigger'))
     expect(screen.getByPlaceholderText('检索全书所有章节…')).toBeInTheDocument()
   })
 
@@ -738,7 +749,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
     const footer = screen.getByTestId('editor-status-footer')
     expect(footer).not.toHaveTextContent(/限宽|较宽|铺满/)
-    expect(footer.querySelector('[title*="限宽"]')).not.toBeInTheDocument()
+    expect(within(footer).queryByRole('button', { name: /限宽/ })).not.toBeInTheDocument()
   })
 
   it('renders a word-target progress bar based on chapter word count', async () => {
@@ -859,7 +870,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
     const footer = screen.getByTestId('editor-status-footer')
     expect(footer).not.toHaveTextContent('打字机')
-    expect(footer.querySelector('[title*="打字机"]')).not.toBeInTheDocument()
+    expect(within(footer).queryByRole('button', { name: /打字机/ })).not.toBeInTheDocument()
     expect(onTypewriterChange).not.toHaveBeenCalled()
   })
 
@@ -867,14 +878,14 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-nav" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
-    const nextBtn = screen.getByTitle('下一章（快速切章）')
+    const nextBtn = screen.getByRole('button', { name: '下一章（快速切章）' })
     expect(nextBtn).toBeEnabled()
     fireEvent.click(nextBtn)
 
     const titleInput = screen.getByDisplayValue('第002章 锈剑之鸣')
     expect(titleInput).toBeInTheDocument()
 
-    const prevBtn = screen.getByTitle('上一章（快速切章）')
+    const prevBtn = screen.getByRole('button', { name: '上一章（快速切章）' })
     expect(prevBtn).toBeEnabled()
     fireEvent.click(prevBtn)
 
@@ -886,21 +897,21 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
     // 敏感词检测弹窗
-    fireEvent.click(screen.getByTitle('敏感词检测（本章）'))
+    fireEvent.click(screen.getByRole('button', { name: /敏感词即时检测/ }))
     expect(screen.getByText('本章敏感词即时检测')).toBeInTheDocument()
     fireEvent.click(
       screen.getByText('本章敏感词即时检测').parentElement!.parentElement!.querySelector('button')!,
     )
 
     // 时光机版本弹窗
-    fireEvent.click(screen.getByTitle('时光机 · 版本历史'))
+    fireEvent.click(screen.getByRole('button', { name: /时光机/ }))
     expect(screen.getByText(/版本时光机/)).toBeInTheDocument()
     fireEvent.click(
       screen.getByText(/版本时光机/).parentElement!.parentElement!.querySelector('button')!,
     )
 
-    // 小黑屋专注码字弹窗
-    fireEvent.click(screen.getByTitle('小黑屋 · 强制专注码字'))
+    // 小黑屋专注码字弹窗（条目名取菜单里可见的「进入小黑屋码字」）
+    fireEvent.click(screen.getByRole('button', { name: '进入小黑屋码字' }))
     expect(screen.getByText('小黑屋 · 强制专注码字')).toBeInTheDocument()
     fireEvent.click(screen.getByText('取消'))
   })
@@ -910,21 +921,21 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
     // 1. 打开分屏对照抽屉
-    fireEvent.click(screen.getByTitle('分屏对照阅读历史章节'))
+    fireEvent.click(screen.getByRole('button', { name: /分屏 1:1 对照阅读/ }))
     expect(screen.getByText('分屏对照参考台')).toBeInTheDocument()
     expect(screen.getByText(/对照面板仅供阅读与伏笔核验/)).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('关闭对照分屏'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭对照分屏' }))
     expect(screen.queryByText('分屏对照参考台')).not.toBeInTheDocument()
 
     // 2. 打开高频词口癖点检
-    fireEvent.click(screen.getByTitle('高频词与口癖点检'))
+    fireEvent.click(screen.getByRole('button', { name: /口癖与高频词点检/ }))
     expect(screen.getByText(/高频词与口癖点检/)).toBeInTheDocument()
     expect(screen.getByText(/有效词汇总数/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('完成'))
     expect(screen.queryByText(/有效词汇总数/)).not.toBeInTheDocument()
 
-    // 3. 打开行旁待办备忘便签
-    fireEvent.click(screen.getByTitle('行旁待办与备忘便签（导出自动滤除）'))
+    // 3. 打开行旁待办备忘便签（条目名取菜单里可见的「本章伏笔与备忘便签」）
+    fireEvent.click(screen.getByRole('button', { name: '本章伏笔与备忘便签' }))
     expect(screen.getByText('行旁待办与备忘录')).toBeInTheDocument()
     expect(screen.getByText(/此处备忘待办与正文物理隔离/)).toBeInTheDocument()
   })
@@ -1010,10 +1021,10 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
 
     // 敏感词检测弹窗
-    const sensitiveBtn = screen.getByTitle('敏感词检测（本章）')
+    const sensitiveBtn = screen.getByRole('button', { name: /敏感词即时检测/ })
     fireEvent.click(sensitiveBtn)
     expect(screen.getByText(/本章敏感词即时检测/)).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('关闭'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
   })
 
   it('triggers chapter deletion confirmation modal and cancels or deletes', async () => {

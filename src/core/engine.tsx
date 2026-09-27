@@ -36,6 +36,7 @@ import {
 } from '../types/inspectorState'
 import { useOptionalActiveWritingContext } from './activeWritingContext'
 import { useOptionalPluginHostContext } from './pluginHostContext'
+import { Tooltip } from '../ui/primitives'
 
 interface EngineProps {
   projectId: string
@@ -447,17 +448,18 @@ export const Engine: FC<EngineProps> = ({
 
       {/* 侧栏收起后只保留这一个全局展开按钮，避免与编辑器工具栏重复。 */}
       {!isFullscreen && !focusMode && !leftOpen && (
-        <button
-          type="button"
-          data-testid="sidebar-nav-compact-toggle"
-          aria-label="展开导航"
-          title="展开侧栏"
-          data-layout="compact-nav-toggle"
-          onClick={() => setLeftOpen(true)}
-          className="sidebar-nav-compact-toggle items-center justify-center w-7 h-7 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
-        >
-          <PanelLeftOpen className="w-4 h-4" />
-        </button>
+        <Tooltip content="展开侧栏">
+          <button
+            type="button"
+            data-testid="sidebar-nav-compact-toggle"
+            aria-label="展开导航"
+            data-layout="compact-nav-toggle"
+            onClick={() => setLeftOpen(true)}
+            className="sidebar-nav-compact-toggle items-center justify-center w-7 h-7 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
+          >
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
+        </Tooltip>
       )}
 
       {/* 主区 */}
@@ -467,46 +469,54 @@ export const Engine: FC<EngineProps> = ({
           <header className="h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)]">
             <div className="flex items-center gap-1 min-w-0">
               {onHome && (
-                <IconButton onClick={leaveWorkspace} title="返回作品库">
-                  <Home className="w-4 h-4" />
-                </IconButton>
+                <Tooltip content="返回作品库">
+                  <IconButton onClick={leaveWorkspace}>
+                    <Home className="w-4 h-4" />
+                  </IconButton>
+                </Tooltip>
               )}
               <span className="text-[13px] font-medium truncate">{viewTitle}</span>
             </div>
             <div className="flex items-center gap-0.5">
-              <IconButton onClick={() => setIsFullscreen((f) => !f)} title="全屏 / 退出全屏">
-                {isFullscreen ? (
-                  <Minimize2 className="w-4 h-4" />
-                ) : (
-                  <Maximize2 className="w-4 h-4" />
-                )}
-              </IconButton>
+              <Tooltip content="全屏 / 退出全屏">
+                <IconButton onClick={() => setIsFullscreen((f) => !f)}>
+                  {isFullscreen ? (
+                    <Minimize2 className="w-4 h-4" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4" />
+                  )}
+                </IconButton>
+              </Tooltip>
               {hasAssistant ? (
-                <IconButton
-                  onClick={() =>
-                    setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
-                  }
-                  title={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}
-                  className={
-                    isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
-                  }
-                >
-                  <Sparkles className="w-4 h-4" />
-                </IconButton>
+                <Tooltip content={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}>
+                  <IconButton
+                    onClick={() =>
+                      setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
+                    }
+                    className={
+                      isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
+                    }
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </IconButton>
+                </Tooltip>
               ) : (
-                <IconButton
-                  onClick={() =>
-                    setInspectorState((curr) =>
-                      curr.surface === 'closed' ? { surface: 'assistant' } : { surface: 'closed' },
-                    )
-                  }
-                  title={isRightPanelOpen ? '收起信息栏' : '展开信息栏'}
-                  className={
-                    isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
-                  }
-                >
-                  <PanelRight className="w-4 h-4" />
-                </IconButton>
+                <Tooltip content={isRightPanelOpen ? '收起信息栏' : '展开信息栏'}>
+                  <IconButton
+                    onClick={() =>
+                      setInspectorState((curr) =>
+                        curr.surface === 'closed'
+                          ? { surface: 'assistant' }
+                          : { surface: 'closed' },
+                      )
+                    }
+                    className={
+                      isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
+                    }
+                  >
+                    <PanelRight className="w-4 h-4" />
+                  </IconButton>
+                </Tooltip>
               )}
             </div>
           </header>
@@ -529,16 +539,17 @@ export const Engine: FC<EngineProps> = ({
                 className="project-engine-right-panel shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto relative group"
               >
                 {/* 拖拽手柄：左侧边线，向左拉加宽，带悬浮光标与最小宽度保护 */}
-                <div
-                  onMouseDown={onRightMouseDown}
-                  onDoubleClick={resetRightWidth}
-                  title="拖拽调整面板宽度（双击恢复默认）"
-                  className={`absolute top-0 left-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
-                    isRightDragging
-                      ? 'bg-[var(--ink-accent)] w-[3px]'
-                      : 'hover:bg-[var(--ink-accent)]/50'
-                  }`}
-                />
+                <Tooltip content="拖拽调整面板宽度（双击恢复默认）">
+                  <div
+                    onMouseDown={onRightMouseDown}
+                    onDoubleClick={resetRightWidth}
+                    className={`absolute top-0 left-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
+                      isRightDragging
+                        ? 'bg-[var(--ink-accent)] w-[3px]'
+                        : 'hover:bg-[var(--ink-accent)]/50'
+                    }`}
+                  />
+                </Tooltip>
                 <div className="h-full">
                   {renderInspector
                     ? renderInspector(inspectorState, () =>

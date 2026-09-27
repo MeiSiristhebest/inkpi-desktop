@@ -25,6 +25,7 @@ import {
   Check,
   Flame,
 } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 interface CodexMasterViewProps {
   projectId: string
@@ -229,35 +230,38 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
           </div>
 
           {/* 模版库按钮 */}
-          <button
-            onClick={() => setIsTemplateModalOpen(true)}
-            className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-card)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)]"
-            title={`浏览 ${countTemplates()} 份男女核心人设与世界观模版`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-            <span>模版库</span>
-          </button>
+          <Tooltip content={`浏览 ${countTemplates()} 份男女核心人设与世界观模版`}>
+            <button
+              onClick={() => setIsTemplateModalOpen(true)}
+              className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-card)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)]"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
+              <span>模版库</span>
+            </button>
+          </Tooltip>
 
           {/* 导出/备份 */}
           {entities.length > 0 && (
-            <button
-              onClick={handleExportJSON}
-              className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-              title="导出图谱 JSON 备份"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip content="导出图谱 JSON 备份">
+              <button
+                onClick={handleExportJSON}
+                className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
           )}
 
           {/* 清空图谱 */}
           {entities.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-red-500 hover:bg-red-500/10"
-              title="清空当前工程的世界观实体"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip content="清空当前工程的世界观实体">
+              <button
+                onClick={handleClearAll}
+                className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-red-500 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
           )}
 
           {/* 新建实体主按钮 */}

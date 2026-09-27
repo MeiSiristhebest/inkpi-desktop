@@ -9,7 +9,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Zap, BookOpen, Bot, Scissors, FileText, Sparkles, Droplet } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -228,14 +228,15 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 <FileText className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
                 正文待审段落（当前字数：{report.totalWordCount}）
               </span>
-              <button
-                onClick={handleApplyClean}
-                className="px-2.5 py-1 rounded bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-emerald-500 text-emerald-500 text-xs font-medium flex items-center gap-1"
-                title="自动剔除已识别出的所有假动作套话"
-              >
-                <Scissors className="w-3 h-3" />
-                一键剔除水词
-              </button>
+              <Tooltip content="自动剔除已识别出的所有假动作套话">
+                <button
+                  onClick={handleApplyClean}
+                  className="px-2.5 py-1 rounded bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-emerald-500 text-emerald-500 text-xs font-medium flex items-center gap-1"
+                >
+                  <Scissors className="w-3 h-3" />
+                  一键剔除水词
+                </button>
+              </Tooltip>
             </div>
 
             <textarea

@@ -81,15 +81,15 @@ describe('AiActivityCenter Component', () => {
     expect(screen.getByText('interrupted')).toBeInTheDocument()
     expect(screen.getByText('50%')).toBeInTheDocument()
 
-    const resumeBtn = screen.getByTitle('恢复任务')
+    const resumeBtn = screen.getByRole('button', { name: '恢复任务' })
     await fireEvent.click(resumeBtn)
     expect(onResume).toHaveBeenCalledWith('task-1')
 
     await vi.waitFor(() => {
-      expect(screen.getByTitle('忽略/移除')).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: '忽略/移除' })).not.toBeDisabled()
     })
 
-    const dismissBtn = screen.getByTitle('忽略/移除')
+    const dismissBtn = screen.getByRole('button', { name: '忽略/移除' })
     await fireEvent.click(dismissBtn)
     expect(onDismiss).toHaveBeenCalledWith('task-1')
   })

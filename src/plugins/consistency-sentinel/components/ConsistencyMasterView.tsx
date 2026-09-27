@@ -23,7 +23,7 @@ import {
   Bot,
   BookOpen,
 } from 'lucide-react'
-import { Select } from '../../../ui/primitives'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -253,13 +253,14 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                   <span className="font-semibold text-[var(--ink-text)]">
                     {idx + 1}. {tier}
                   </span>
-                  <button
-                    onClick={() => handleDeleteTier(idx)}
-                    className="text-[var(--ink-text-muted)] hover:text-rose-400 p-0.5"
-                    title="删除层级"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content="删除层级">
+                    <button
+                      onClick={() => handleDeleteTier(idx)}
+                      className="text-[var(--ink-text-muted)] hover:text-rose-400 p-0.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               ))}
             </div>

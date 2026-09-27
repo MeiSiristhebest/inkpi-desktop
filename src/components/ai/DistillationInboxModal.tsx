@@ -2,6 +2,7 @@ import { useState, type FC, useId } from 'react'
 import { Check, X, Edit2, AlertCircle, Quote, HelpCircle, GitMerge } from 'lucide-react'
 import { Modal } from '../../ui/molecules/Modal'
 import type { DistillationItem } from '../../ai/proposals/distillationReviewInbox'
+import { Tooltip } from '../../ui/primitives'
 
 interface DistillationInboxModalProps {
   items: DistillationItem[]
@@ -191,54 +192,59 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                       </>
                     ) : (
                       <>
-                        <button
-                          onClick={() => handleStartEdit(item)}
-                          title="编辑"
-                          aria-label="编辑"
-                          className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        {onKeepHypothesis && item.category === 'entity' && (
+                        <Tooltip content="编辑">
                           <button
-                            onClick={() => void handleHypothesis(item.id)}
-                            disabled={isProcessing}
-                            title="保留为推测 (非正典)"
-                            aria-label="保留为推测"
-                            className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                            onClick={() => handleStartEdit(item)}
+                            aria-label="编辑"
+                            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors"
                           >
-                            <HelpCircle className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
+                        </Tooltip>
+                        {onKeepHypothesis && item.category === 'entity' && (
+                          <Tooltip content="保留为推测 (非正典)">
+                            <button
+                              onClick={() => void handleHypothesis(item.id)}
+                              disabled={isProcessing}
+                              aria-label="保留为推测"
+                              className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                            >
+                              <HelpCircle className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
                         )}
                         {onMerge && item.category === 'entity' && (
-                          <button
-                            onClick={() => void handleMerge(item.id)}
-                            disabled={isProcessing}
-                            title="合并到已有实体"
-                            aria-label="合并已有实体"
-                            className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-500/10 transition-colors disabled:opacity-50"
-                          >
-                            <GitMerge className="w-3.5 h-3.5" />
-                          </button>
+                          <Tooltip content="合并到已有实体">
+                            <button
+                              onClick={() => void handleMerge(item.id)}
+                              disabled={isProcessing}
+                              aria-label="合并已有实体"
+                              className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-500/10 transition-colors disabled:opacity-50"
+                            >
+                              <GitMerge className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
                         )}
-                        <button
-                          onClick={() => void onReject(item.id)}
-                          title="拒绝"
-                          aria-label="拒绝"
-                          className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => void handleDirectAccept(item.id)}
-                          disabled={isProcessing}
-                          title="采纳为正史"
-                          aria-label="采纳"
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors disabled:opacity-50"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          采纳
-                        </button>
+                        <Tooltip content="拒绝">
+                          <button
+                            onClick={() => void onReject(item.id)}
+                            aria-label="拒绝"
+                            className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="采纳为正史">
+                          <button
+                            onClick={() => void handleDirectAccept(item.id)}
+                            disabled={isProcessing}
+                            aria-label="采纳"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors disabled:opacity-50"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            采纳
+                          </button>
+                        </Tooltip>
                       </>
                     )}
                   </div>

@@ -22,6 +22,7 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip } from '../../../ui/primitives'
 
 export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -201,13 +202,14 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         <div className="w-64 flex flex-col bg-[var(--ink-bg-panel)] overflow-hidden shrink-0">
           <div className="p-3 border-b border-[var(--ink-border)] text-xs font-semibold flex items-center justify-between text-[var(--ink-text-muted)]">
             <span>章节细纲列表 ({plans.length})</span>
-            <button
-              onClick={() => handleCreatePlanFromTemplate('climax_burst')}
-              className="hover:text-[var(--ink-accent)]"
-              title="新建细纲计划"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            <Tooltip content="新建细纲计划">
+              <button
+                onClick={() => handleCreatePlanFromTemplate('climax_burst')}
+                className="hover:text-[var(--ink-accent)]"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -230,16 +232,17 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                       {p.beats?.length || 0} 个节拍 · 目标 {p.targetWordCount} 字
                     </span>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeletePlan(p.id)
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400"
-                    title="删除"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content="删除">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeletePlan(p.id)
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               )
             })}
@@ -333,13 +336,14 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                           <span className="text-[11px] text-[var(--ink-text-muted)]">
                             建议字数：~{estWords} 字 ({Math.round(beat.budgetWordRatio * 100)}%)
                           </span>
-                          <button
-                            onClick={() => handleDeleteBeat(beat.id)}
-                            className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
-                            title="删除此节拍"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <Tooltip content="删除此节拍">
+                            <button
+                              onClick={() => handleDeleteBeat(beat.id)}
+                              className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </div>
 

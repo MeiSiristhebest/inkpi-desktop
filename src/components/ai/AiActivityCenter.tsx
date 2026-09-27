@@ -21,6 +21,7 @@ import {
   redactPluginValue as redactSensitive,
   redactSensitiveString,
 } from '../../core/pluginDataRedaction'
+import { Tooltip } from '../../ui/primitives'
 
 const STATUS_LABELS: Record<string, string> = {
   queued: '排队中',
@@ -197,34 +198,37 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                   {/* 快捷操作 */}
                   <div className="flex items-center gap-1 shrink-0">
                     {(isInterrupted || status === 'checkpointed') && onResume && (
-                      <button
-                        onClick={() => handleAction(taskId, onResume)}
-                        disabled={isProcessing}
-                        title="恢复任务"
-                        className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip content="恢复任务">
+                        <button
+                          onClick={() => handleAction(taskId, onResume)}
+                          disabled={isProcessing}
+                          className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                     )}
                     {isRunning && onCancel && (
-                      <button
-                        onClick={() => handleAction(taskId, onCancel)}
-                        disabled={isProcessing}
-                        title="取消任务"
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors disabled:opacity-40"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip content="取消任务">
+                        <button
+                          onClick={() => handleAction(taskId, onCancel)}
+                          disabled={isProcessing}
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors disabled:opacity-40"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                     )}
                     {onDismiss && (
-                      <button
-                        onClick={() => handleAction(taskId, onDismiss)}
-                        disabled={isProcessing}
-                        title="忽略/移除"
-                        className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] transition-colors disabled:opacity-40"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip content="忽略/移除">
+                        <button
+                          onClick={() => handleAction(taskId, onDismiss)}
+                          disabled={isProcessing}
+                          className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] transition-colors disabled:opacity-40"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                     )}
                   </div>
                 </div>

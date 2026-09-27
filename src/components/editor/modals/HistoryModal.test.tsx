@@ -87,9 +87,13 @@ describe('HistoryModal 里程碑与自动检查点分区', () => {
     )
     await waitFor(() => expect(screen.getByText('第一卷定稿')).toBeInTheDocument())
 
-    expect(screen.queryAllByTitle('删除此里程碑')).toHaveLength(1)
+    // 名称来自按钮自己的 aria-label（带快照名，读屏才知道删的是哪一条），
+    // 提示文案「删除此里程碑」只是它的可见描述，不再冒充名称。
+    expect(screen.queryAllByRole('button', { name: /^删除里程碑/ })).toHaveLength(1)
     fireEvent.click(
-      within(screen.getByRole('region', { name: '里程碑' })).getByTitle('删除此里程碑'),
+      within(screen.getByRole('region', { name: '里程碑' })).getByRole('button', {
+        name: /^删除里程碑/,
+      }),
     )
     fireEvent.click(screen.getByText('确认删除'))
 

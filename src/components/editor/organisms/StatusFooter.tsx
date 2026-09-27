@@ -1,6 +1,7 @@
 import React from 'react'
 import type { EditorModel, SaveState } from '../hooks/useChapterEditorModel'
 import { shortcutLabel } from '../../../core/editorShortcuts'
+import { Tooltip } from '../../../ui/primitives'
 
 interface StatusFooterProps {
   model: EditorModel
@@ -57,71 +58,75 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
       className="editor-status-footer h-8 min-h-8 max-h-8 flex-[0_0_2rem] min-w-0 flex flex-nowrap items-center justify-between gap-3 overflow-hidden px-4 border-t border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] text-[var(--ink-text-faint)] whitespace-nowrap"
     >
       <div className="editor-status-primary min-w-0 flex flex-1 items-center gap-4 overflow-hidden">
-        <span
-          data-testid="editor-chapter-progress"
-          data-status-kind="chapter-progress"
-          className="tabular-nums"
-          title="本章字数与每章目标"
-          aria-label={`本章进度 ${chapterWords.toLocaleString()} / ${wordTarget.toLocaleString()} 字`}
-        >
-          本章 {chapterWords.toLocaleString()} / {wordTarget.toLocaleString()} 字
-        </span>
-        <span
-          data-testid="editor-total-words"
-          data-status-kind="book-progress"
-          className="editor-total-words tabular-nums"
-          title="当前作品所有章节合计"
-          aria-label={`全书总字数 ${totalWords.toLocaleString()} 字`}
-        >
-          全书 {totalWords.toLocaleString()} 字
-        </span>
-
-        <button
-          type="button"
-          onClick={() => onReconnect?.()}
-          disabled={isReconnecting}
-          data-testid="editor-connection-status"
-          data-status-kind="connection"
-          aria-label={connectionDescription}
-          title="重连 InkPi Daemon"
-          className="flex items-center gap-1.5 hover:text-[var(--ink-text)] transition-colors cursor-pointer disabled:opacity-60"
-        >
+        <Tooltip content="本章字数与每章目标">
           <span
-            aria-hidden="true"
-            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-              isConnected
-                ? 'bg-[var(--ink-success)]'
-                : isReconnecting
-                  ? 'bg-amber-500 animate-pulse'
-                  : 'bg-[var(--ink-text-faint)]'
-            }`}
-          />
-          <span className="tabular-nums">{connectionLabel}</span>
-        </button>
+            data-testid="editor-chapter-progress"
+            data-status-kind="chapter-progress"
+            className="tabular-nums"
+            aria-label={`本章进度 ${chapterWords.toLocaleString()} / ${wordTarget.toLocaleString()} 字`}
+          >
+            本章 {chapterWords.toLocaleString()} / {wordTarget.toLocaleString()} 字
+          </span>
+        </Tooltip>
+        <Tooltip content="当前作品所有章节合计">
+          <span
+            data-testid="editor-total-words"
+            data-status-kind="book-progress"
+            className="editor-total-words tabular-nums"
+            aria-label={`全书总字数 ${totalWords.toLocaleString()} 字`}
+          >
+            全书 {totalWords.toLocaleString()} 字
+          </span>
+        </Tooltip>
+
+        <Tooltip content="重连 InkPi Daemon">
+          <button
+            type="button"
+            onClick={() => onReconnect?.()}
+            disabled={isReconnecting}
+            data-testid="editor-connection-status"
+            data-status-kind="connection"
+            aria-label={connectionDescription}
+            className="flex items-center gap-1.5 hover:text-[var(--ink-text)] transition-colors cursor-pointer disabled:opacity-60"
+          >
+            <span
+              aria-hidden="true"
+              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                isConnected
+                  ? 'bg-[var(--ink-success)]'
+                  : isReconnecting
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-[var(--ink-text-faint)]'
+              }`}
+            />
+            <span className="tabular-nums">{connectionLabel}</span>
+          </button>
+        </Tooltip>
       </div>
 
       <div className="editor-status-secondary min-w-0 flex shrink-0 items-center gap-3">
-        <span
-          data-testid="editor-status-save-state"
-          data-status-kind="save"
-          data-save-state={saveState}
-          role="status"
-          aria-label={saveHint}
-          className={`editor-status-save-state ${saveView.tone}`}
-          title={saveHint}
-        >
-          {saveState === 'error' ? (
-            <button
-              type="button"
-              onClick={() => model.actions.retrySave()}
-              className="cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink-text)] transition-colors"
-            >
-              {saveView.label}
-            </button>
-          ) : (
-            saveView.label
-          )}
-        </span>
+        <Tooltip content={saveHint}>
+          <span
+            data-testid="editor-status-save-state"
+            data-status-kind="save"
+            data-save-state={saveState}
+            role="status"
+            aria-label={saveHint}
+            className={`editor-status-save-state ${saveView.tone}`}
+          >
+            {saveState === 'error' ? (
+              <button
+                type="button"
+                onClick={() => model.actions.retrySave()}
+                className="cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink-text)] transition-colors"
+              >
+                {saveView.label}
+              </button>
+            ) : (
+              saveView.label
+            )}
+          </span>
+        </Tooltip>
       </div>
     </footer>
   )
