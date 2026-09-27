@@ -37,6 +37,7 @@ import { chapterMutationService } from '../../../services/defaultChapterMutation
 import type { ChapterMutation } from '../../../services/chapterMutationService'
 import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 import { collectGlobalSearchHits, type GlobalSearchHit } from '../globalSearch'
+import { WRITE_ORIGIN_META } from '../writeOrigin'
 
 export interface DraftRecoveryState {
   status: 'available' | 'recovered' | 'stale' | 'conflict'
@@ -1167,7 +1168,8 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const acceptGhostText = useCallback(() => {
     const ed = editorRef.current
     if (ed && !ed.isDestroyed && stateRef.current.ghostText) {
-      ed.commands.insertContent(stateRef.current.ghostText)
+      // 采纳的是 AI 的话，字数就该记在 AI 头上（§P3.10）。
+      ed.chain().insertContent(stateRef.current.ghostText).setMeta(WRITE_ORIGIN_META, 'ai').run()
       setGhostText('')
     }
   }, [editorRef, setGhostText])

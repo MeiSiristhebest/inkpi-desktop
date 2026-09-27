@@ -18,6 +18,8 @@ import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diag
 import { draftJournal } from '../../services/draftJournal'
 import { shortcutHint } from '../../core/editorShortcuts'
 import { chapterMutationService } from '../../services/defaultChapterMutationService'
+import { SESSION_WORDS_RULE } from './hooks/useWritingSessionStats'
+import { WRITE_ORIGIN_META } from './writeOrigin'
 import type { ChapterMutationExecutionResult } from '../../services/chapterMutationService'
 
 // RichEditor 依赖 useSettings（§12.3：Provider 内才能使用），统一在此包裹 SettingsProvider。
@@ -37,12 +39,40 @@ const render = (
 
 // 共享可变状态：在测试中动态改写 getHTML/getText/selectedText，并捕获 onUpdate 回调。
 const h = vi.hoisted(() => ({
-  capturedOnUpdate: null as null | (() => void),
+  capturedOnUpdate: null as null | ((props?: unknown) => void),
   getHTML: () => '<p>初始内容</p>',
   getText: () => '初始内容',
   selectedText: '',
+  chainCalls: [] as Array<[string, unknown[]]>,
 }))
 let editorInstance: any = null
+
+// TipTap 的 chain 每一步都返回同一条链，测试里按同样形状记录被调用的命令。
+const makeChainable = () => {
+  const chain: any = {}
+  for (const name of [
+    'focus',
+    'insertContent',
+    'insertContentAt',
+    'setContent',
+    'setTextSelection',
+    'scrollIntoView',
+    'setMeta',
+    'toggleBold',
+    'toggleItalic',
+    'command',
+  ]) {
+    chain[name] = (...args: unknown[]) => {
+      h.chainCalls.push([name, args])
+      return chain
+    }
+  }
+  chain.run = () => {
+    h.chainCalls.push(['run', []])
+    return true
+  }
+  return chain
+}
 
 const makeMockCommands = () => ({
   setContent: vi.fn(),
@@ -50,12 +80,7 @@ const makeMockCommands = () => ({
   setTextSelection: vi.fn(),
   scrollIntoView: vi.fn(),
   focus: () => ({ toggleBold: () => ({ run: () => {} }), toggleItalic: () => ({ run: () => {} }) }),
-  chain: () => ({
-    focus: () => ({
-      toggleBold: () => ({ run: () => {} }),
-      toggleItalic: () => ({ run: () => {} }),
-    }),
-  }),
+  chain: () => makeChainable(),
 })
 
 const makeMockEditor = () => {
@@ -65,6 +90,7 @@ const makeMockEditor = () => {
     getText: () => h.getText(),
     isActive: () => false,
     commands: makeMockCommands(),
+    chain: () => makeChainable(),
     state: {
       doc: { textBetween: () => h.selectedText, content: { size: 0 }, descendants: () => {} },
       selection: { from: 0, to: 0 },
@@ -131,6 +157,8 @@ beforeEach(async () => {
     'p-ghost',
     'p-type',
     'p-global',
+    'p-origin',
+    'p-rewrite',
     'p-title',
     'p-recovery',
     'p-tree-search',
@@ -176,6 +204,7 @@ beforeEach(async () => {
   h.getHTML = () => '<p>初始内容</p>'
   h.getText = () => '初始内容'
   h.selectedText = ''
+  h.chainCalls.length = 0
 })
 afterEach(() => {
   cleanup()
@@ -558,7 +587,59 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     expect(onRequestGhost).toHaveBeenCalled()
     fireEvent.click(screen.getByText('Tab 采纳续写'))
-    expect(editorInstance.commands.insertContent).toHaveBeenCalledWith('的续写内容')
+    const chained = h.chainCalls.map(([name]) => name)
+    expect(chained).toEqual(expect.arrayContaining(['insertContent', 'setMeta', 'run']))
+    expect(h.chainCalls.find(([name]) => name === 'insertContent')?.[1]).toEqual(['的续写内容'])
+    // 采纳的字数挂在 AI 来源上，不进作者当日手打（§P3.10）
+    expect(h.chainCalls.find(([name]) => name === 'setMeta')?.[1]).toEqual([
+      WRITE_ORIGIN_META,
+      'ai',
+    ])
+  })
+
+  it('counts only keystroke growth in 今日新增, never the adopted AI text', async () => {
+    render(<RichEditor projectId="p-origin" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const counted = () => {
+      const label = screen.getAllByTitle(SESSION_WORDS_RULE)[0]
+      return Number((label.parentElement?.textContent ?? '').replace(/\D/g, ''))
+    }
+
+    const tagged = (origin?: string) => ({
+      transaction: { getMeta: (key: string) => (key === WRITE_ORIGIN_META ? origin : undefined) },
+    })
+
+    h.getText = () => '初始内容'
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '初始内容的续写内容'
+    act(() => h.capturedOnUpdate?.(tagged('ai')))
+    expect(counted()).toBe(0)
+
+    // 同一段文字若来自作者自己的击键，就必须计入：证明排除的是来源而不是增长本身
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '初始内容的续写内容手打两字'
+    act(() => h.capturedOnUpdate?.(tagged()))
+    expect(counted()).toBe(4)
+  })
+
+  it('does not credit an in-place rewrite that never emits an update event', async () => {
+    // 权威写入路径（AI 改写采纳、格式化、敏感词修复）用 setContent(emitUpdate:false)
+    // 灌回正文：没有 onUpdate，只有事务。基线若只在 onUpdate 里维护，
+    // 作者下一次击键会把整段改写一并算成手打（§P3.10）。
+    render(<RichEditor projectId="p-rewrite" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const counted = () => {
+      const label = screen.getAllByTitle(SESSION_WORDS_RULE)[0]
+      return Number((label.parentElement?.textContent ?? '').replace(/\D/g, ''))
+    }
+
+    h.getText = () => '改写前'
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '改写后整段长出来的五百字'
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '改写后整段长出来的五百字再加两字'
+    act(() => h.capturedOnUpdate?.({ transaction: { getMeta: () => undefined } }))
+    expect(counted()).toBe(4)
   })
 
   it('mounts without crashing when typewriter mode is on', async () => {

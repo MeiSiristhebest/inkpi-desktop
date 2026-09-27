@@ -31,6 +31,8 @@ vi.mock('@tiptap/react', async (importOriginal) => {
     getHTML: () => '<p>x</p>',
     getText: () => 'x',
     isActive: () => false,
+    on: vi.fn(),
+    off: vi.fn(),
     commands: makeCommands(),
     state: { doc: { textBetween: () => '', content: { size: 0 } }, selection: { from: 0, to: 0 } },
     view: {

@@ -5,6 +5,7 @@ import { spring, variants, gesture } from '../../../motion'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import { GLOBAL_HIT_LABEL } from '../globalSearch'
+import { WRITE_ORIGIN_META } from '../writeOrigin'
 
 interface FindReplaceBarProps {
   model: EditorModel
@@ -51,8 +52,12 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
     if (!ed || ed.isDestroyed || matchPositions.length === 0) return
     const m = matchPositions[activeMatch]
     if (!m) return
-    ed.commands.setTextSelection({ from: m.from, to: m.to })
-    ed.commands.insertContent(replaceText)
+    // 整段选中替换是批量写入，不是作者逐字敲进来的（§P3.10）；与「全部替换」保持同一口径。
+    ed.chain()
+      .setTextSelection({ from: m.from, to: m.to })
+      .insertContent(replaceText)
+      .setMeta(WRITE_ORIGIN_META, 'bulk-edit')
+      .run()
     actions.handleEditorUpdate()
   }
 
