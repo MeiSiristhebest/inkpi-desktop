@@ -23,10 +23,7 @@ import type { CodexEntity } from '../../../src/plugins/living-codex/types'
 import type { DiffReviewRecord } from '../../../src/ports/diffReviewRepository'
 import type { CombatDuelRecord } from '../../../src/ports/combatSandboxRepository'
 import type { TimelineNode, NarrativeThread } from '../../../src/plugins/timeline-grid/types'
-import type {
-  ChapterChronologyEvent,
-  MultiCalendarProjectRecord,
-} from '../../../src/ports/multiCalendarRepository'
+import type { ChapterChronologyEvent, MultiCalendarProjectRecord } from '../../../src/ports/multiCalendarRepository'
 import type { EmotionAuditRecord } from '../../../src/ports/emotionAuditRepository'
 
 type TestRecord = {

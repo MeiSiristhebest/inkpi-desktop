@@ -70,14 +70,7 @@ describe('Tier 4: Novel writing scenarios', () => {
       `${chapter.content} 林凡终于踏入金丹初期。`,
       chapter.id,
       chapter.revision,
-      [
-        {
-          id: protagonist.id,
-          name: protagonist.name,
-          category: 'character',
-          currentTier: '练气九层',
-        },
-      ],
+      [{ id: protagonist.id, name: protagonist.name, category: 'character', currentTier: '练气九层' }],
     )
     expect(analysis.summary.attributeUpdates).toBe(1)
     const patch = analysis.patches[0]
@@ -158,24 +151,14 @@ describe('Tier 4: Novel writing scenarios', () => {
         chapterId: `${projectId}::chapter-0`,
         chapterOrder: 0,
         chapterTitle: '旧历终结',
-        timePoint: {
-          calendarId: ancient.id,
-          year: 1000,
-          month: 12,
-          day: 30,
-          absoluteDayIndex: conversion.absoluteDayIndex - 1,
-        },
+        timePoint: { calendarId: ancient.id, year: 1000, month: 12, day: 30, absoluteDayIndex: conversion.absoluteDayIndex - 1 },
         eventSummary: '旧历最后一日',
       },
       {
         chapterId: chapter.id,
         chapterOrder: chapter.order,
         chapterTitle: chapter.title,
-        timePoint: {
-          calendarId: dynasty.id,
-          ...conversion.targetDate,
-          absoluteDayIndex: conversion.absoluteDayIndex,
-        },
+        timePoint: { calendarId: dynasty.id, ...conversion.targetDate, absoluteDayIndex: conversion.absoluteDayIndex },
         eventSummary: '新历第一日',
       },
     ])
@@ -213,9 +196,7 @@ describe('Tier 4: Novel writing scenarios', () => {
     expect(chronology.hasParadox).toBe(false)
     expect(causal).toHaveLength(0)
     expect(audited).toEqual([{ projectId, chapterId: chapter.id, wordCount: 2400, waterScore: 18 }])
-    expect(harness.getCodexEntity(protagonist.id)?.attributes.timelineDay).toBe(
-      conversion.absoluteDayIndex,
-    )
+    expect(harness.getCodexEntity(protagonist.id)?.attributes.timelineDay).toBe(conversion.absoluteDayIndex)
     unsubscribe()
   })
 
@@ -229,11 +210,7 @@ describe('Tier 4: Novel writing scenarios', () => {
     expect(diff.hunks.length).toBeGreaterThan(0)
     const merged = DiffReviewerEngine.applyHunks(
       original,
-      diff.hunks.map((hunk) => ({
-        lines: hunk.lines,
-        oldStartLine: hunk.oldStartLine,
-        resolution: 'applied' as const,
-      })),
+      diff.hunks.map((hunk) => ({ lines: hunk.lines, oldStartLine: hunk.oldStartLine, resolution: 'applied' as const })),
     )
     const committed = await harness.mutateActiveChapter({
       chapterId: chapter.id,
