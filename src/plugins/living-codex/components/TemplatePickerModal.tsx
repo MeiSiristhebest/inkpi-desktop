@@ -33,7 +33,8 @@ export const TemplatePickerModal: FC<TemplatePickerModalProps> = ({
   const effectivePreset =
     filteredCharacters.find((p) => p.id === selectedPreset?.id) || filteredCharacters[0] || null
 
-  const handleApplyCharacter = (preset: CharacterPreset) => {
+  // 只把模板灌进新建表单、不写库（§P2.15）：与 consistency-sentinel「套用预置体系」那种直接落库的动词必须分开。
+  const handleFillCharacterForm = (preset: CharacterPreset) => {
     onSelect({
       name: '',
       aliases: [],
@@ -45,7 +46,7 @@ export const TemplatePickerModal: FC<TemplatePickerModalProps> = ({
     onClose()
   }
 
-  const handleApplyGenericTemplate = (
+  const handleFillGenericForm = (
     category: CodexCategory,
     title: string,
     summary: string,
@@ -204,13 +205,16 @@ export const TemplatePickerModal: FC<TemplatePickerModalProps> = ({
                     </p>
                   </div>
                   <button
-                    onClick={() => handleApplyCharacter(effectivePreset)}
+                    onClick={() => handleFillCharacterForm(effectivePreset)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ink-accent)] text-white rounded-lg font-medium text-[12px] shadow-sm hover:opacity-90"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    一键套用此人设
+                    用它填这张新卡
                   </button>
                 </div>
+                <p className="text-[11px] text-[var(--ink-text-faint)]">
+                  只是把模板文字填进右侧待新建的设定卡，设定库不会多任何记录；改名保存后才会落库。
+                </p>
 
                 <div className="p-2.5 rounded-lg bg-[var(--ink-bg-sidebar)] border border-[var(--ink-border)]">
                   <span className="text-[11px] font-medium text-[var(--ink-text-faint)]">
@@ -238,7 +242,7 @@ export const TemplatePickerModal: FC<TemplatePickerModalProps> = ({
           <div className="flex-1 p-4 grid grid-cols-2 gap-3 overflow-y-auto">
             <div
               onClick={() =>
-                handleApplyGenericTemplate(
+                handleFillGenericForm(
                   'faction',
                   '隐世仙门/名门正派',
                   '传承万年的正道巨擘，拥有护宗大阵与太上长老团，门风严谨。',
@@ -254,7 +258,7 @@ export const TemplatePickerModal: FC<TemplatePickerModalProps> = ({
             </div>
             <div
               onClick={() =>
-                handleApplyGenericTemplate(
+                handleFillGenericForm(
                   'faction',
                   '魔门九幽/暗杀公会',
                   '藏于暗处的杀伐势力，实力为尊，内部遵循残酷的丛林法则。',
@@ -273,7 +277,7 @@ export const TemplatePickerModal: FC<TemplatePickerModalProps> = ({
           <div className="flex-1 p-4 grid grid-cols-2 gap-3 overflow-y-auto">
             <div
               onClick={() =>
-                handleApplyGenericTemplate(
+                handleFillGenericForm(
                   'item',
                   '上古神器/本命法宝',
                   '封印中的太古至尊神物，内蕴残破乾坤小世界，可成长进化。',
@@ -292,7 +296,7 @@ export const TemplatePickerModal: FC<TemplatePickerModalProps> = ({
           <div className="flex-1 p-4 grid grid-cols-2 gap-3 overflow-y-auto">
             <div
               onClick={() =>
-                handleApplyGenericTemplate(
+                handleFillGenericForm(
                   'location',
                   '远古秘境/太古神墟',
                   '千年一开的试炼遗迹，机缘与大凶并存，内有太古妖兽盘踞。',

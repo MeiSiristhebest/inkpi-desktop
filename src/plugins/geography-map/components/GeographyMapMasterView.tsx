@@ -229,7 +229,7 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         {/* 左侧 2D 互动网格画板 */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center">
           <div className="mb-3 text-xs text-slate-400 flex items-center gap-3">
-            <span>点击任意单元格应用所选地形笔刷</span>
+            <span>点击任意单元格涂上所选地形（只改画板，保存后才写入）</span>
             <span>
               起点: ({startPos.x},{startPos.y})
             </span>

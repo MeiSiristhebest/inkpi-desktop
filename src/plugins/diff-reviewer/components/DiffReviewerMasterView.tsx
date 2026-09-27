@@ -12,6 +12,7 @@ import {
   ProposalLedger,
   type AiProposal,
 } from '../../../ai/proposals'
+import { previewChoiceLabel, reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 import { semanticTextFromContent } from '../../../domain/content'
 import { formatByPreset } from '../../../domain/text'
 
@@ -205,10 +206,15 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             <span>双栏 Plan/Apply 审校与合并器 (DiffReviewer)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            基于 Myers SES 最短编辑算法与行内字词级对齐，实现多源修订的分块采纳与原子合稿
+            基于 Myers SES 最短编辑算法与行内字词级对齐：逐块取舍只重算合稿预览，正文要等写回才改变
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {writebackProposal && (
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              写回状态：{reviewStatusLabel(writebackProposal.status)}
+            </span>
+          )}
           {host?.activeChapter && (
             <button
               onClick={() => void handleWriteback()}
@@ -234,13 +240,13 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             onClick={applyAll}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition"
           >
-            <Check className="w-3.5 h-3.5" /> 全部采纳
+            <Check className="w-3.5 h-3.5" /> 全部纳入预览
           </button>
           <button
             onClick={rejectAll}
             className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition"
           >
-            <X className="w-3.5 h-3.5" /> 全部拒绝
+            <X className="w-3.5 h-3.5" /> 全部排除
           </button>
         </div>
       </div>
@@ -305,19 +311,19 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
                           : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
                     }`}
                   >
-                    {hunk.resolution.toUpperCase()}
+                    {previewChoiceLabel(hunk.resolution)}
                   </span>
                   <button
                     onClick={() => setHunkResolution(hunk.id, 'applied')}
                     className="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 transition"
                   >
-                    采纳
+                    纳入预览
                   </button>
                   <button
                     onClick={() => setHunkResolution(hunk.id, 'rejected')}
                     className="px-2 py-1 bg-rose-600 text-white rounded text-xs hover:bg-rose-700 transition"
                   >
-                    放弃
+                    排除
                   </button>
                 </div>
               </div>

@@ -28,7 +28,9 @@ describe('TemplatePickerModal Component', () => {
     const onClose = vi.fn()
 
     render(<TemplatePickerModal isOpen={true} onClose={onClose} onSelect={onSelect} />)
-    const applyBtn = screen.getByRole('button', { name: /一键套用此人设/ })
+    // §P2.15：这里只把模板灌进新建表单，动词不能借用「应用/套用」，否则和真正落库的入口就分不开了。
+    expect(screen.getByText(/设定库不会多任何记录/)).toBeInTheDocument()
+    const applyBtn = screen.getByRole('button', { name: /用它填这张新卡/ })
     fireEvent.click(applyBtn)
 
     expect(onSelect).toHaveBeenCalledWith(

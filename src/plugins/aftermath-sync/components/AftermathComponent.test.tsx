@@ -114,7 +114,7 @@ describe('AftermathSync UI Components', () => {
     })
     fireEvent.click(screen.getByText('扫描章节设定变迁'))
 
-    fireEvent.click(await screen.findByLabelText('批准回写'))
+    fireEvent.click(await screen.findByLabelText('采纳回写'))
 
     await waitFor(async () => {
       const entities = await indexedDbCodexEntityRepository.getAll()
@@ -147,7 +147,7 @@ describe('AftermathSync UI Components', () => {
     expect(
       await screen.findByText(/扫描完成：正文里没有命中可对照实体的状态变迁/),
     ).toBeInTheDocument()
-    expect(screen.getByText('暂无待审批的设定回写补丁')).toBeInTheDocument()
+    expect(screen.getByText('暂无待审阅的设定回写补丁')).toBeInTheDocument()
   })
 
   it('AftermathDrawer renders correctly', () => {

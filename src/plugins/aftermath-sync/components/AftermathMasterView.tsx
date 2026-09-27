@@ -3,6 +3,7 @@ import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { codexApplicationService } from '../../../services/domainApplicationServices'
+import { reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 import { AftermathEngine } from '../engine/AftermathEngine'
 import type { AftermathPatchRecord, EntityCandidate } from '../types'
 import type { CodexEntity } from '../../living-codex/types'
@@ -89,7 +90,7 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
     if (res.patches.length === 0) {
       setScanNotice('扫描完成：正文里没有命中可对照实体的状态变迁')
     } else {
-      setScanNotice(`扫描完成：新增 ${res.patches.length} 条待确认补丁`)
+      setScanNotice(`扫描完成：新增 ${res.patches.length} 条待审阅补丁`)
     }
     await loadPatches()
   }
@@ -143,11 +144,11 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
             <span>章后桥段设定回写器 (AftermathSync)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            对照本书设定库里的实体，从你粘贴的正文中捕获角色境界突破、宝物易主与人际羁绊，生成待确认补丁
+            对照本书设定库里的实体，从你粘贴的正文中捕获角色境界突破、宝物易主与人际羁绊，生成待审阅补丁
           </p>
         </div>
         <div className="text-xs text-slate-400">
-          待审批补丁:{' '}
+          待审阅补丁:{' '}
           <span className="font-bold text-amber-500">
             {patches.filter((p) => p.status === 'pending').length}
           </span>{' '}
@@ -191,9 +192,12 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
 
       <div className="space-y-3">
         <h3 className="text-sm font-bold">设定回写提议列表</h3>
+        <p className="text-[11px] text-slate-400">
+          采纳会立即改写设定库里的实体，本面板不提供撤销；不确定的补丁先驳回，改好正文再扫一次。
+        </p>
         {patches.length === 0 ? (
           <div className="p-8 border rounded-xl text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-900">
-            暂无待审批的设定回写补丁
+            暂无待审阅的设定回写补丁
           </div>
         ) : (
           patches.map((patch) => (
@@ -216,19 +220,19 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                           : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
                     }`}
                   >
-                    {patch.status.toUpperCase()}
+                    {reviewStatusLabel(patch.status)}
                   </span>
                   {patch.status === 'pending' && (
                     <>
                       <button
-                        aria-label="批准回写"
+                        aria-label="采纳回写"
                         onClick={() => handleResolve(patch.id, 'applied')}
                         className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        aria-label="驳回回写"
+                        aria-label="忽略回写"
                         onClick={() => handleResolve(patch.id, 'rejected')}
                         className="p-1 rounded bg-rose-600 text-white hover:bg-rose-700"
                       >

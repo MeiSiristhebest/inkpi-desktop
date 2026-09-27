@@ -22,7 +22,7 @@ export const AftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => 
         <span className="font-bold flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
           <GitPullRequest className="w-4 h-4" /> 设定回写提案
         </span>
-        <span className="text-[10px] text-amber-500 font-bold">{pendingPatches.length} 待确认</span>
+        <span className="text-[10px] text-amber-500 font-bold">{pendingPatches.length} 待审阅</span>
       </div>
 
       {pendingPatches.length === 0 ? (

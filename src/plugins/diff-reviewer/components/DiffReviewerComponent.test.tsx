@@ -50,12 +50,15 @@ describe('DiffReviewer UI Components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /计算差异分块/ }))
     await screen.findByText(/差异决策分块/)
-    fireEvent.click(screen.getByRole('button', { name: /全部采纳/ }))
+    fireEvent.click(screen.getByRole('button', { name: /全部纳入预览/ }))
+    expect(screen.queryByText(/写回状态/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /写回正文章节/ }))
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '撤销写回' })).toBeInTheDocument(),
     )
+    // §P2.15：「已落盘」只能由权威写入出现，逐块取舍那一层不许用这个词。
+    expect(screen.getByText('写回状态：已落盘')).toBeInTheDocument()
     expect(saveChapter).toHaveBeenCalledTimes(1)
     expect(saveChapter.mock.calls[0][0]).toMatchObject({
       id: chapter.id,
@@ -115,7 +118,7 @@ describe('DiffReviewer UI Components', () => {
       })
     })
     await screen.findByText(/差异决策分块/)
-    fireEvent.click(screen.getByRole('button', { name: /全部采纳/ }))
+    fireEvent.click(screen.getByRole('button', { name: /全部纳入预览/ }))
     fireEvent.click(screen.getByRole('button', { name: /写回正文章节/ }))
 
     await waitFor(() =>
