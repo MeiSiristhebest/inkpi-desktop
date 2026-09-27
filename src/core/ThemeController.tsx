@@ -2,6 +2,23 @@ import { useEffect, type FC } from 'react'
 import { useSettings } from './settings'
 
 /**
+ * 原生窗口主题同步。
+ *
+ * WebView2 只改客户区的 CSS，标题栏与原生菜单属于 Win32 非客户区，不会因为 data-theme
+ * 变深就变深——深浅皮肤切换后会出现「上面一条白、下面整片黑」。这里把算出来的明暗显式
+ * 告诉窗口；非 Tauri 环境（浏览器与 jsdom）没有这个通道，按仓库既有写法先探测
+ * __TAURI_INTERNALS__，再动态 import，避免测试环境拉进原生桥。
+ */
+function syncNativeWindowTheme(dark: boolean) {
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return
+  void import('@tauri-apps/api/window')
+    .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(dark ? 'dark' : 'light'))
+    .catch(() => {
+      // 主题同步是装饰性的：拿不到窗口或权限时保持原生当前值即可。
+    })
+}
+
+/**
  * 主题副作用边界：把「写 document.documentElement[data-theme/data-skin]」这一唯一 DOM 副作用
  * 从 useSettings 抽到此处，作为全局单一副作用边界。视图层与设置状态本身不再触碰 document。
  */
@@ -9,36 +26,48 @@ export const ThemeController: FC = () => {
   const [settings] = useSettings()
 
   useEffect(() => {
-    const root = document.documentElement
-    if (settings.themeMode === 'system') root.removeAttribute('data-theme')
-    else root.setAttribute('data-theme', settings.themeMode)
+    const apply = () => {
+      const root = document.documentElement
+      if (settings.themeMode === 'system') root.removeAttribute('data-theme')
+      else root.setAttribute('data-theme', settings.themeMode)
 
-    // 自动联动适配：深浅模式与皮肤系统无缝协同
-    let effectiveSkin = settings.themeSkin
-    const isDark =
-      settings.themeMode === 'dark' ||
-      (settings.themeMode === 'system' &&
-        typeof window !== 'undefined' &&
-        window.matchMedia?.('(prefers-color-scheme: dark)').matches)
+      // 自动联动适配：深浅模式与皮肤系统无缝协同
+      let effectiveSkin = settings.themeSkin
+      const isDark =
+        settings.themeMode === 'dark' ||
+        (settings.themeMode === 'system' &&
+          typeof window !== 'undefined' &&
+          window.matchMedia?.('(prefers-color-scheme: dark)').matches)
 
-    // 若系统进入深色模式，浅色皮肤自动平滑升阶为对应的一线深色沉浸皮肤
-    if (isDark) {
-      if (effectiveSkin === 'default') effectiveSkin = 'dark'
-      else if (effectiveSkin === 'sepia' || effectiveSkin === 'ink') effectiveSkin = 'forest'
-      else if (effectiveSkin === 'sage' || effectiveSkin === 'youth') effectiveSkin = 'forest'
-    } else {
-      // 若系统进入浅色模式，深色皮肤自动平滑回退为对应的一线浅色护眼皮肤
-      if (effectiveSkin === 'dark') effectiveSkin = 'default'
-      else if (effectiveSkin === 'midnight') effectiveSkin = 'default'
-      else if (effectiveSkin === 'forest') effectiveSkin = 'sage'
+      syncNativeWindowTheme(isDark)
+
+      // 若系统进入深色模式，浅色皮肤自动平滑升阶为对应的一线深色沉浸皮肤
+      if (isDark) {
+        if (effectiveSkin === 'default') effectiveSkin = 'dark'
+        else if (effectiveSkin === 'sepia' || effectiveSkin === 'ink') effectiveSkin = 'forest'
+        else if (effectiveSkin === 'sage' || effectiveSkin === 'youth') effectiveSkin = 'forest'
+      } else {
+        // 若系统进入浅色模式，深色皮肤自动平滑回退为对应的一线浅色护眼皮肤
+        if (effectiveSkin === 'dark') effectiveSkin = 'default'
+        else if (effectiveSkin === 'midnight') effectiveSkin = 'default'
+        else if (effectiveSkin === 'forest') effectiveSkin = 'sage'
+      }
+
+      root.setAttribute('data-skin', effectiveSkin)
+
+      // 全局界面缩放：设置 root fontSize，使基于 rem 的 UI 元素（侧栏、顶栏、按钮）等比缩放
+      const uiSize = settings.uiFontSize || 13
+      root.style.fontSize = `${uiSize}px`
+      root.style.setProperty('--ink-ui-font-size', `${uiSize}px`)
     }
 
-    root.setAttribute('data-skin', effectiveSkin)
+    apply()
 
-    // 全局界面缩放：设置 root fontSize，使基于 rem 的 UI 元素（侧栏、顶栏、按钮）等比缩放
-    const uiSize = settings.uiFontSize || 13
-    root.style.fontSize = `${uiSize}px`
-    root.style.setProperty('--ink-ui-font-size', `${uiSize}px`)
+    // themeMode 的默认值是 'system'：不订阅系统翻转的话，皮肤与标题栏都只会在改设置时才对。
+    if (settings.themeMode !== 'system') return
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)')
+    query?.addEventListener('change', apply)
+    return () => query?.removeEventListener('change', apply)
   }, [settings.themeMode, settings.themeSkin, settings.uiFontSize])
 
   return null
