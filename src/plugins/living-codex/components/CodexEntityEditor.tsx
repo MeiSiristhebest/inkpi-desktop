@@ -2,6 +2,7 @@ import { useState, useEffect, type FC } from 'react'
 import type { CodexEntity, CodexCategory, EntityRelation } from '../types'
 import { Save, Trash2, X, Plus, Sparkles } from 'lucide-react'
 import { TemplatePickerModal } from './TemplatePickerModal'
+import { countTemplates } from '../content/characterPresets'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clock } from '../../../adapters/clock'
 
@@ -107,7 +108,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
           <button
             onClick={() => setIsTemplateModalOpen(true)}
             className="flex items-center gap-1 px-2 py-1 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-accent)] border border-[var(--ink-accent)]/20 text-[11px] font-medium hover:bg-[var(--ink-accent)]/10"
-            title="从 36+ 种人设与世界观模版库挑选"
+            title={`从 ${countTemplates()} 份人设与世界观模版里挑一份起点`}
           >
             <Sparkles className="w-3 h-3" />
             <span>模版库</span>

@@ -8,6 +8,7 @@ import { clock } from '../../../adapters/clock'
 import { CodexEntityEditor } from './CodexEntityEditor'
 import { TemplatePickerModal } from './TemplatePickerModal'
 import { WORLDVIEW_DEMO_PACKS, type WorldviewDemoPack } from '../content/worldviewDemos'
+import { CHARACTER_PRESET_COUNT, countTemplates } from '../content/characterPresets'
 import {
   Search,
   Plus,
@@ -231,7 +232,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
           <button
             onClick={() => setIsTemplateModalOpen(true)}
             className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-card)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)]"
-            title="浏览 36+ 种男女核心人设与世界观模版"
+            title={`浏览 ${countTemplates()} 份男女核心人设与世界观模版`}
           >
             <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
             <span>模版库</span>
@@ -338,8 +339,8 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
                     开启你的活体世界观图谱
                   </h3>
                   <p className="text-[12px] text-[var(--ink-text-muted)] max-w-lg mx-auto leading-relaxed">
-                    你可以一键预装经典题材世界观 Demo 体验 Aho-Corasick 毫秒级行文感知，也可以从 36+
-                    种核心人设模版自由创造。
+                    你可以一键预装经典题材世界观 Demo 体验 Aho-Corasick 毫秒级行文感知，也可以从{' '}
+                    {countTemplates()} 份预置模版自由创造。
                   </p>
                 </div>
 
@@ -385,7 +386,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--ink-bg-card)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[12px] font-medium transition-all"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                    <span>从 36+ 种男女核心人设模版挑选</span>
+                    <span>从 {CHARACTER_PRESET_COUNT} 份男女核心人设模版挑选</span>
                   </button>
                   <button
                     onClick={() => {
