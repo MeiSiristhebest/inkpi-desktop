@@ -34,10 +34,11 @@ describe('capability coverage', () => {
     for (const definition of ALL_PLUGIN_DEFINITIONS) {
       const capability = capabilityFor(definition.id)
       expect(capability, definition.id).toBeDefined()
+      // 名字和说明以前在注册表里抄了第二份，抄到命令面板和侧栏各说一个名字。现在不许抄。
+      expect(capability?.name, definition.id).toBe(definition.name)
+      expect(capability?.description, definition.id).toBe(definition.description)
       if (curatedIds.has(definition.id)) continue
-      expect(capability?.name).toBe(definition.name)
-      expect(capability?.description).toBe(definition.description)
-      expect(capability?.category).toBe(definition.category)
+      expect(capability?.category, definition.id).toBe(definition.category)
     }
   })
 
