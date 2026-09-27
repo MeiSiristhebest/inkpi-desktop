@@ -22,6 +22,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -235,17 +236,17 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               <label className="block mb-1 font-medium text-slate-700 dark:text-slate-300">
                 伏笔分类：
               </label>
-              <select
+              <Select
                 value={formCategory}
-                onChange={(e) => setFormCategory(e.target.value as ChekhovGunRecord['category'])}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                onValueChange={(v) => setFormCategory(v as ChekhovGunRecord['category'])}
+                className="w-full"
               >
                 <option value="item">道具/神兵/信物</option>
                 <option value="secret">身世/隐秘/真相</option>
                 <option value="promise">誓言/约定/誓死之战</option>
                 <option value="character">隐藏人物/大能化身</option>
                 <option value="technique">未练成底牌/禁术</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block mb-1 font-medium text-slate-700 dark:text-slate-300">

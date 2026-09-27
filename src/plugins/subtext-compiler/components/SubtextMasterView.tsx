@@ -11,6 +11,7 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { semanticTextFromContent } from '../../../domain/content'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -102,10 +103,11 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
               内在隐藏情绪 / 动机:
             </label>
-            <select
-              className="mt-1 w-full border px-3 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
+            <Select
+              className="mt-1 w-full"
+              size="sm"
               value={emotion}
-              onChange={(e) => setEmotion(e.target.value as any)}
+              onValueChange={(v) => setEmotion(v as any)}
             >
               <option value="affection">深情克制 / 默默守护</option>
               <option value="fear">恐惧惊惶 / 故作镇静</option>
@@ -113,7 +115,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
               <option value="guilt">内疚悔恨 / 狼狈回避</option>
               <option value="pride">自尊傲慢 / 居高临下</option>
               <option value="anger">盛怒克制 / 隐忍杀机</option>
-            </select>
+            </Select>
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">

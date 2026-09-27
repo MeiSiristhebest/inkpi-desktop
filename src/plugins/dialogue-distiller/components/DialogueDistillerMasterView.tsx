@@ -21,6 +21,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -196,10 +197,10 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
               <BookOpen className="w-3.5 h-3.5" />
               文本来源:
             </span>
-            <select
+            <Select
               value={selectedChapterId}
-              onChange={(e) => handleSelectChapter(e.target.value)}
-              className="text-xs px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+              onValueChange={(v) => handleSelectChapter(v)}
+              size="sm"
             >
               <option value="all">全书正文聚合采样 (前10000字)</option>
               {chapters.map((c) => (
@@ -207,7 +208,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
                   第 {c.order} 章 · {c.title || '无标题'}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
       </div>
@@ -331,29 +332,21 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
             </span>
 
             <div className="flex items-center gap-2 text-xs">
-              <select
-                value={charA}
-                onChange={(e) => setCharA(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              >
+              <Select value={charA} onValueChange={(v) => setCharA(v)} className="flex-1" size="sm">
                 {characterNames.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
                 ))}
-              </select>
+              </Select>
               <span className="text-[var(--ink-text-muted)]">VS</span>
-              <select
-                value={charB}
-                onChange={(e) => setCharB(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              >
+              <Select value={charB} onValueChange={(v) => setCharB(v)} className="flex-1" size="sm">
                 {characterNames.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
                 ))}
-              </select>
+              </Select>
               <button
                 onClick={handleCompareClick}
                 className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs font-medium hover:border-[var(--ink-accent)]"

@@ -13,6 +13,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Anchor, Copy, Check, Plus, Trash2, Sparkles, Zap, BookOpen, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -168,17 +169,17 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <BookOpen className="w-3.5 h-3.5" />
               当前章节:
             </span>
-            <select
+            <Select
               value={selectedChapterId}
-              onChange={(e) => handleSelectChapter(e.target.value)}
-              className="text-xs px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+              onValueChange={(v) => handleSelectChapter(v)}
+              size="sm"
             >
               {chapters.map((c) => (
                 <option key={c.id} value={c.id}>
                   第 {c.order} 章 · {c.title || '无标题'} ({c.wordCount || 0}字)
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ import type { NarrativeArchetypeRecord, ArchetypeCategory, ChemistryResult } fro
 import { Dna, Shuffle, Users, Swords } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const [engine] = useState(() => new ArchetypeEngine())
@@ -46,14 +47,10 @@ export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => 
           <ScoreProvenanceBadge source="rule" detail="按角色在场景里的出现与对立关系计分" />
         </div>
         <div className="flex items-center gap-2">
-          <select
-            className="border px-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as any)}
-          >
+          <Select size="sm" value={category} onValueChange={(v) => setCategory(v as any)}>
             <option value="character_archetype_36">36 经典戏剧人格原型卡</option>
             <option value="narrative_motif_12">12 大英雄之旅叙事母题卡</option>
-          </select>
+          </Select>
           <button
             onClick={handleDraw}
             className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"

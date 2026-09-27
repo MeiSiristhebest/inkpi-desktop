@@ -47,6 +47,7 @@ import {
 } from '../../../core/capabilityRegistry'
 import type { DesktopPlugin, PluginDrawerCapability } from '../../../types/plugin'
 import { shortcutHint } from '../../../core/editorShortcuts'
+import { Select } from '../../../ui/primitives'
 
 /** 已经声明了能力类别的抽屉插件：分组只需要这一个前提，所以把它写进类型而不是靠断言。 */
 type CategorizedDrawerPlugin = DesktopPlugin & { drawerCapability: PluginDrawerCapability }
@@ -251,17 +252,18 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         {/* 章节状态选择器 */}
         <div className="relative shrink-0">
-          <select
+          <Select
             value={activeChapter?.status || 'draft'}
-            onChange={(e) => actions.setStatus(e.target.value as ChapterStatus)}
-            className="appearance-none pl-2.5 pr-6 py-1 rounded-lg text-[11px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] focus:outline-none focus:border-[var(--ink-accent)] cursor-pointer font-medium"
+            onValueChange={(v) => actions.setStatus(v as ChapterStatus)}
+            aria-label="章节状态"
+            size="sm"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>
             ))}
-          </select>
+          </Select>
           <span
             className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full"
             style={{
@@ -397,7 +399,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <Italic className="w-3.5 h-3.5" />
           </motion.button>
 
-          {/* 隐藏保留用于向后兼容单测的选择器 */}
+          {/* 隐藏保留用于向后兼容单测的选择器：它们是测试钩子而不是 UI，
+              所以继续用原生 <select>（可被 getByTitle 直接命中），不进组件门面。 */}
           <div className="hidden" aria-hidden="true">
             <select
               value={model.fontFamily || 'wenkai'}

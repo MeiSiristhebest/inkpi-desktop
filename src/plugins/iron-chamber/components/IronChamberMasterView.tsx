@@ -7,6 +7,7 @@ import type { IronChamberRecord, ChamberLockMode } from '../types'
 import { Lock, Unlock, ShieldAlert, AlertCircle } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { Select } from '../../../ui/primitives'
 
 export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [activeRecord, setActiveRecord] = useState<IronChamberRecord | null>(null)
@@ -132,15 +133,16 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 锁定模式:
               </label>
-              <select
-                className="mt-1 w-full border px-2 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
+              <Select
+                className="mt-1 w-full"
+                size="sm"
                 value={mode}
-                onChange={(e) => setMode(e.target.value as any)}
+                onValueChange={(v) => setMode(v as any)}
               >
                 <option value="words">字数目标 (不达标不解锁)</option>
                 <option value="minutes">时长倒计时 (专注直到闹钟)</option>
                 <option value="dual">双重极限 (字数与时长必须兼达)</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">

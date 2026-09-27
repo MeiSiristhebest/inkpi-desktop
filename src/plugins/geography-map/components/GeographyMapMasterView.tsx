@@ -17,6 +17,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 const EMPTY_CELLS: GeoMapGridRecord['occupiedCells'] = []
 
@@ -295,16 +296,12 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">移动方式/速度：</span>
-                <select
-                  value={marchSpeed}
-                  onChange={(e) => setMarchSpeed(Number(e.target.value))}
-                  className="p-1 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-                >
+                <Select value={marchSpeed} onValueChange={(v) => setMarchSpeed(Number(v))}>
                   <option value={30}>凡人步卒/辎重 (30 km/天)</option>
                   <option value={70}>精锐轻骑快马 (70 km/天)</option>
                   <option value={300}>筑基修士御剑 (300 km/天)</option>
                   <option value={2000}>元婴挪移遁法 (2000 km/天)</option>
-                </select>
+                </Select>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-1.5">

@@ -20,6 +20,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -167,17 +168,18 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
                 选择待预演章节：
               </label>
-              <select
+              <Select
                 value={selectedChapterId}
-                onChange={(e) => setSelectedChapterId(e.target.value)}
-                className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                onValueChange={(v) => setSelectedChapterId(v)}
+                className="w-full"
+                size="sm"
               >
                 {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
                     第 {c.order} 章：{c.title}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             {simulation && (

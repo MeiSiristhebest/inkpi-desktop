@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Columns2, BookOpen, X } from 'lucide-react'
 import type { ChapterRecord, VolumeRecord } from '../../../types'
 import { htmlToPlain } from '../../../domain/text'
+import { Select } from '../../../ui/primitives'
 
 interface SplitViewDrawerProps {
   currentChapterId: string
@@ -57,10 +58,11 @@ export const SplitViewDrawer: React.FC<SplitViewDrawerProps> = ({
           <span className="font-semibold text-[var(--ink-text)] shrink-0">分屏对照参考台</span>
 
           {/* 章节快速切换下拉 */}
-          <select
+          <Select
             value={selectedChapterId}
-            onChange={(e) => setSelectedChapterId(e.target.value)}
-            className="ml-1.5 max-w-[200px] px-2 py-0.5 text-[11px] rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)] truncate cursor-pointer"
+            onValueChange={(v) => setSelectedChapterId(v)}
+            className="ml-1.5 max-w-[200px] truncate"
+            size="sm"
           >
             {volumes.map((vol) => {
               const volChs = chapters.filter((c) => c.volumeId === vol.id)
@@ -75,7 +77,7 @@ export const SplitViewDrawer: React.FC<SplitViewDrawerProps> = ({
                 </optgroup>
               )
             })}
-          </select>
+          </Select>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

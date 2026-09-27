@@ -10,6 +10,7 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -141,10 +142,10 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 <BookOpen className="w-3.5 h-3.5" />
                 检查章节:
               </span>
-              <select
+              <Select
                 value={selectedChapterId}
-                onChange={(e) => handleSelectChapter(e.target.value)}
-                className="text-xs px-2.5 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                onValueChange={(v) => handleSelectChapter(v)}
+                size="sm"
               >
                 <option value="all">全书章节聚合巡检</option>
                 {chapters.map((c) => (
@@ -152,7 +153,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                     第 {c.order} 章 · {c.title || '无标题'}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 

@@ -5,6 +5,7 @@ import { useTableViewModel } from '../../hooks/useTableViewModel'
 import { Plus, Trash2, Edit2, X, Check } from 'lucide-react'
 import { confirmDialog } from '../../adapters/confirmDialog'
 import { Modal } from '../../ui/molecules/Modal'
+import { Select } from '../../ui/primitives'
 
 export interface TableViewProps {
   projectId: string
@@ -165,23 +166,24 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
                 <div key={idx} className="space-y-1">
                   <label className="text-xs font-semibold text-[var(--ink-text)]">{col.name}</label>
                   {col.options ? (
-                    <select
+                    <Select
                       value={val}
-                      onChange={(e) =>
+                      onValueChange={(v) =>
                         setEditingRow({
                           ...editingRow,
-                          data: { ...editingRow.data, [col.name]: e.target.value },
+                          data: { ...editingRow.data, [col.name]: v },
                         })
                       }
-                      className="w-full p-2 text-xs rounded-lg bg-[var(--ink-bg)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"
+                      className="w-full"
+                      size="sm"
+                      placeholder="-- 请选择 --"
                     >
-                      <option value="">-- 请选择 --</option>
                       {col.options.map((opt: string) => (
                         <option key={opt} value={opt}>
                           {opt}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   ) : (
                     <input
                       type="text"

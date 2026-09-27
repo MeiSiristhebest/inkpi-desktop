@@ -3,6 +3,7 @@ import { Bold, Underline } from 'lucide-react'
 import { Modal } from '../../../ui/molecules/Modal'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 import type { FontKind } from '../../../core/settings'
+import { Select } from '../../../ui/primitives'
 
 interface FontFormatModalProps {
   onClose: () => void
@@ -82,17 +83,18 @@ export const FontFormatModal: React.FC<FontFormatModalProps> = ({ onClose, model
           {/* 1. 字体选择 + 粗体 + 下划线 */}
           <div className="flex items-center gap-2">
             <span className="text-[13px] text-[var(--ink-text-muted)] w-10 shrink-0">字体</span>
-            <select
+            <Select
               value={currentFont}
-              onChange={(e) => model.updateSettings?.({ fontFamily: e.target.value as FontKind })}
-              className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text)] text-xs focus:outline-none focus:border-[var(--ink-accent)] cursor-pointer"
+              onValueChange={(v) => model.updateSettings?.({ fontFamily: v as FontKind })}
+              className="flex-1"
+              size="sm"
             >
               {FONTS.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.label}
                 </option>
               ))}
-            </select>
+            </Select>
 
             {/* 加粗 (Bold) */}
             <button

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord } from '../../types'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
@@ -740,7 +741,10 @@ describe('CreativeWorkflowsPanel 的活动章节指针', () => {
     const audit = makeAudit()
     render(<Harness writingChapter={third} audit={audit} />)
 
-    expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-3')
+    expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+      'data-value',
+      'chapter-3',
+    )
     fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
 
     await waitFor(() => expect(audit).toHaveBeenCalledOnce())
@@ -750,10 +754,18 @@ describe('CreativeWorkflowsPanel 的活动章节指针', () => {
   it('跟随编辑器翻页，直到作者自己改过章节下拉框', async () => {
     const audit = makeAudit()
     const { rerender } = render(<Harness writingChapter={first} audit={audit} />)
-    expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-1')
+    expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+      'data-value',
+      'chapter-1',
+    )
 
     rerender(<Harness writingChapter={second} audit={audit} />)
-    await waitFor(() => expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-2'))
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+        'data-value',
+        'chapter-2',
+      ),
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
     await waitFor(() => expect(audit).toHaveBeenCalledOnce())
@@ -764,10 +776,14 @@ describe('CreativeWorkflowsPanel 的活动章节指针', () => {
     const audit = makeAudit()
     const { rerender } = render(<Harness writingChapter={first} audit={audit} />)
 
-    fireEvent.change(screen.getByLabelText('选择章节'), { target: { value: 'chapter-3' } })
+    await userEvent.click(screen.getByRole('combobox', { name: '选择章节' }))
+    await userEvent.click(await screen.findByRole('option', { name: '第三章' }))
     rerender(<Harness writingChapter={second} audit={audit} />)
 
-    expect(screen.getByLabelText('选择章节')).toHaveValue('chapter-3')
+    expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+      'data-value',
+      'chapter-3',
+    )
     fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
     await waitFor(() => expect(audit).toHaveBeenCalledOnce())
     expect(audit.mock.calls[0][0].document.text).toContain('剑折了')

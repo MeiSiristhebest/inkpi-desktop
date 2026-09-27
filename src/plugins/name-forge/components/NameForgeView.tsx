@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 const CATEGORY_TABS: { id: NameCategory; label: string; icon: typeof User }[] = [
   { id: 'character_cn', label: '修仙东方人名', icon: User },
@@ -238,15 +239,15 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
               <div className="h-4 w-px bg-[var(--ink-border)]" />
               <div className="flex items-center gap-1">
                 <span className="text-[var(--ink-text-muted)] text-[11px]">性别：</span>
-                <select
+                <Select
                   value={gender}
-                  onChange={(e) => setGender(e.target.value as 'male' | 'female' | 'neutral')}
-                  className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
+                  onValueChange={(v) => setGender(v as 'male' | 'female' | 'neutral')}
+                  size="sm"
                 >
                   <option value="neutral">随机混搭</option>
                   <option value="male">男性氏族</option>
                   <option value="female">女性法师/贵族</option>
-                </select>
+                </Select>
               </div>
             </>
           )}
@@ -254,15 +255,11 @@ export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           {/* 数量 */}
           <div className="flex items-center gap-1 ml-auto">
             <span className="text-[var(--ink-text-muted)] text-[11px]">批次：</span>
-            <select
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-              className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-            >
+            <Select value={count} onValueChange={(v) => setCount(Number(v))} size="sm">
               <option value={5}>5 条</option>
               <option value={10}>10 条</option>
               <option value={20}>20 条</option>
-            </select>
+            </Select>
           </div>
         </div>
       </div>

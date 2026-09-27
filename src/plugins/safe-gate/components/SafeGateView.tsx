@@ -24,6 +24,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsRed as SensitiveWord[]),
@@ -208,10 +209,10 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           {chapters.length > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-[var(--ink-text-muted)] mr-2">
               <BookOpen className="w-3.5 h-3.5" />
-              <select
+              <Select
                 value={selectedChapterId}
-                onChange={(e) => handleSelectChapter(e.target.value)}
-                className="px-2 py-1 text-xs rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                onValueChange={(v) => handleSelectChapter(v)}
+                size="sm"
               >
                 <option value="all">全书章节采样</option>
                 {chapters.map((c) => (
@@ -219,22 +220,18 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     第 {c.order} 章 · {c.title || '无题'}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
           <span className="text-[var(--ink-text-muted)]">文风适配：</span>
-          <select
-            value={genre}
-            onChange={(e) => setGenre(e.target.value as GenreStyle)}
-            className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-          >
+          <Select value={genre} onValueChange={(v) => setGenre(v as GenreStyle)} size="sm">
             <option value="xianxia">仙侠修真 (推荐文言古风)</option>
             <option value="historical">古代历史 (推荐典籍成语)</option>
             <option value="urban">都市异能 (推荐现代委婉)</option>
             <option value="sci_fi">科幻赛博 (推荐未来建制)</option>
             <option value="fantasy">西幻魔法 (推荐奇幻术语)</option>
             <option value="neutral">通用中性</option>
-          </select>
+          </Select>
 
           <div className="h-3 w-px bg-[var(--ink-border)] mx-1" />
 

@@ -1,6 +1,6 @@
 import { useId, useState, useMemo, type FC } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Search, RefreshCw, Plus, X, ChevronDown, Check, ArrowLeft } from 'lucide-react'
+import { Search, RefreshCw, Plus, X, Check, ArrowLeft } from 'lucide-react'
 import {
   type ModelConfig,
   type ThinkingLevel,
@@ -15,6 +15,7 @@ import {
 import { fetchModelIds } from '../../adapters/modelProviderProbe'
 import { fieldLabel, inputCls, PrimaryButton, SecondaryButton, Switch } from './SettingsShared'
 import { spring, variants, gesture } from '../../motion'
+import { Select } from '../../ui/primitives'
 
 export interface ProviderDetailViewProps {
   initialConfig?: ModelConfig | null
@@ -343,29 +344,26 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
           <label className={fieldLabel} htmlFor={`${uid}-service`}>
             服务提供商
           </label>
-          <div className="relative">
-            <select
-              id={`${uid}-service`}
-              value={service}
-              onChange={(e) => {
-                const s = e.target.value
-                setService(s)
-                if (s !== 'custom') {
-                  const m = PROVIDER_META[s as ProviderType]
-                  if (m?.defaultBaseUrl) setBaseUrl(m.defaultBaseUrl)
-                  if (!name) setName(m?.label || s)
-                }
-              }}
-              className={`${inputCls} appearance-none cursor-pointer`}
-            >
-              {Object.entries(PROVIDER_META).map(([key, meta]) => (
-                <option key={key} value={key}>
-                  {meta.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-[var(--ink-text-faint)] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+          <Select
+            id={`${uid}-service`}
+            value={service}
+            onValueChange={(v) => {
+              const s = v
+              setService(s)
+              if (s !== 'custom') {
+                const m = PROVIDER_META[s as ProviderType]
+                if (m?.defaultBaseUrl) setBaseUrl(m.defaultBaseUrl)
+                if (!name) setName(m?.label || s)
+              }
+            }}
+            className="w-full"
+          >
+            {Object.entries(PROVIDER_META).map(([key, meta]) => (
+              <option key={key} value={key}>
+                {meta.label}
+              </option>
+            ))}
+          </Select>
         </div>
 
         {/* 名称 与 接口地址 */}

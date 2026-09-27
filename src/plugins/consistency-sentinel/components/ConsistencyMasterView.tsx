@@ -23,6 +23,7 @@ import {
   Bot,
   BookOpen,
 } from 'lucide-react'
+import { Select } from '../../../ui/primitives'
 
 export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -324,10 +325,10 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               {chapters.length > 0 && (
                 <div className="flex items-center gap-1 text-xs text-[var(--ink-text-muted)]">
                   <BookOpen className="w-3.5 h-3.5" />
-                  <select
+                  <Select
                     value={selectedChapterId}
-                    onChange={(e) => handleSelectChapter(e.target.value)}
-                    className="px-2 py-1 text-xs rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                    onValueChange={(v) => handleSelectChapter(v)}
+                    size="sm"
                   >
                     <option value="all">全书章节采样</option>
                     {chapters.map((c) => (
@@ -335,7 +336,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                         第 {c.order} 章 · {c.title || '无题'}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               )}
               <button

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { NarrativeLinterMasterView } from './NarrativeLinterMasterView'
 import { NarrativeLinterDrawer } from './NarrativeLinterDrawer'
 import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
@@ -61,7 +62,8 @@ describe('NarrativeLinter UI Components', () => {
 
     const selector = await screen.findByRole('combobox')
     expect(screen.getByDisplayValue('第一章正文')).toBeInTheDocument()
-    fireEvent.change(selector, { target: { value: 'chapter-2' } })
+    await userEvent.click(selector)
+    await userEvent.click(await screen.findByRole('option', { name: '第 2 章 · 第二章' }))
 
     const textarea = screen.getByRole('textbox')
     await waitFor(() => expect(textarea).toHaveValue('第二章\n第二章正文'))

@@ -8,6 +8,7 @@ import {
   act,
   within,
 } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { RichEditor } from './RichEditor'
 import { db } from '../../db/indexedDB'
 import { SettingsProvider } from '../../core/settings'
@@ -719,8 +720,10 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-status" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
-    const select = screen.getByDisplayValue('草稿')
-    fireEvent.change(select, { target: { value: 'published' } })
+    const select = screen.getByRole('combobox', { name: '章节状态' })
+    expect(select).toHaveAttribute('data-value', 'draft')
+    await userEvent.click(select)
+    await userEvent.click(await screen.findByRole('option', { name: '已发布' }))
 
     await waitFor(async () => {
       const chs = await db.getAll('chapters')

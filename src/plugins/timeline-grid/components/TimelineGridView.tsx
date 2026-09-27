@@ -15,6 +15,7 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Plus, GitBranch, X, Check, Trash2, Bot, Sparkles } from 'lucide-react'
+import { Select } from '../../../ui/primitives'
 
 export const DEFAULT_THREADS: Omit<NarrativeThread, 'projectId'>[] = [
   { id: 'thread-main', name: '主线 / 逆天修仙', color: '#3b82f6', characterIds: [], order: 0 },
@@ -467,17 +468,13 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">所属叙事线</label>
-            <select
-              value={threadId}
-              onChange={(e) => setThreadId(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-            >
+            <Select value={threadId} onValueChange={(v) => setThreadId(v)} className="w-full">
               {threads.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">发生章节 (X轴)</label>

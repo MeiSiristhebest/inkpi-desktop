@@ -12,6 +12,7 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Sparkles, Plus, Trash2, Activity, Flame, ChevronDown, ChevronUp, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -304,17 +305,17 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
         />
         <div className="flex items-center gap-1 text-[var(--ink-text-muted)]">
           <span>爽点烈度:</span>
-          <select
+          <Select
             value={newIntensity}
-            onChange={(e) => setNewIntensity(Number(e.target.value) as 1 | 2 | 3 | 4 | 5)}
-            className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
+            onValueChange={(v) => setNewIntensity(Number(v) as 1 | 2 | 3 | 4 | 5)}
+            size="sm"
           >
             <option value={1}>★☆☆☆☆ 微爽</option>
             <option value={2}>★★☆☆☆ 局部</option>
             <option value={3}>★★★☆☆ 显著</option>
             <option value={4}>★★★★☆ 震撼</option>
             <option value={5}>★★★★★ 极度暴爽</option>
-          </select>
+          </Select>
         </div>
         <div className="flex items-center gap-1 text-[var(--ink-text-muted)]">
           <span>埋设章:</span>

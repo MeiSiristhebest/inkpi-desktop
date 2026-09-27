@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   Bot,
 } from 'lucide-react'
+import { Select } from '../../../ui/primitives'
 
 export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -349,18 +350,14 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs items-end">
           <div>
             <label className="block mb-1 text-slate-500">来源历法系统：</label>
-            <select
-              value={sourceCalId}
-              onChange={(e) => setSourceCalId(e.target.value)}
-              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-            >
+            <Select value={sourceCalId} onValueChange={(v) => setSourceCalId(v)} className="w-full">
               {calendars.length === 0 && <option value="">（尚未定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="md:col-span-2 grid grid-cols-3 gap-1.5">
@@ -399,18 +396,14 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
           <div>
             <label className="block mb-1 text-slate-500">换算目标历法：</label>
-            <select
-              value={targetCalId}
-              onChange={(e) => setTargetCalId(e.target.value)}
-              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-            >
+            <Select value={targetCalId} onValueChange={(v) => setTargetCalId(v)} className="w-full">
               {calendars.length === 0 && <option value="">（尚未定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* 换算结果卡片 */}
@@ -446,33 +439,29 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block mb-1 text-slate-500">关联章节：</label>
-            <select
+            <Select
               value={eventChapterId}
-              onChange={(e) => setEventChapterId(e.target.value)}
-              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+              onValueChange={(v) => setEventChapterId(v)}
+              className="w-full"
             >
               {chapters.map((c) => (
                 <option key={c.id} value={c.id}>
                   第 {c.order} 章：{c.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div>
             <label className="block mb-1 text-slate-500">采用历法：</label>
-            <select
-              value={eventCalId}
-              onChange={(e) => setEventCalId(e.target.value)}
-              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-            >
+            <Select value={eventCalId} onValueChange={(v) => setEventCalId(v)} className="w-full">
               {calendars.length === 0 && <option value="">（先在上方定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="grid grid-cols-3 gap-1.5">

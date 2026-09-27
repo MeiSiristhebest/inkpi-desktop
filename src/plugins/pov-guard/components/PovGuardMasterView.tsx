@@ -5,6 +5,7 @@ import { PovGuardEngine } from '../engine/PovGuardEngine'
 import type { PovViolation } from '../types'
 import { ShieldAlert, AlertTriangle, EyeOff, Play } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
+import { Select } from '../../../ui/primitives'
 
 export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [currentText, setCurrentText] = useState('')
@@ -80,16 +81,12 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
           </div>
           <div className="flex items-center gap-1.5 text-xs">
             <span className="font-semibold text-slate-500">视角模式:</span>
-            <select
-              className="border px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-              value={povMode}
-              onChange={(e) => setPovMode(e.target.value as any)}
-            >
+            <Select size="sm" value={povMode} onValueChange={(v) => setPovMode(v as any)}>
               <option value="third_limited">第三人称受限 (Third Limited)</option>
               <option value="first_person">第一人称 (First Person)</option>
               <option value="third_objective">第三人称客观 (Objective)</option>
               <option value="omniscient">全知视角 (Omniscient)</option>
-            </select>
+            </Select>
           </div>
         </div>
       </div>

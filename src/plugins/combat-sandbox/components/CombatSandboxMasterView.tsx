@@ -13,6 +13,7 @@ import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel
 import { semanticTextFromContent } from '../../../domain/content'
 import { Swords, ShieldAlert, Flame, Zap, BookmarkCheck, Sparkles, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
@@ -272,10 +273,10 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             </div>
             <div>
               <label className="block mb-1 text-slate-500">实力阶梯：</label>
-              <select
+              <Select
                 value={protagonistRank}
-                onChange={(e) => setProtagonistRank(Number(e.target.value))}
-                className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold"
+                onValueChange={(v) => setProtagonistRank(Number(v))}
+                className="w-full"
               >
                 <option value={0}>（选择阶梯位置）</option>
                 {ladder.map((t) => (
@@ -283,7 +284,7 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                     {t.name}（序位 {t.rankValue}）
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -342,10 +343,10 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             </div>
             <div>
               <label className="block mb-1 text-slate-500">实力阶梯：</label>
-              <select
+              <Select
                 value={enemyRank}
-                onChange={(e) => setEnemyRank(Number(e.target.value))}
-                className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold"
+                onValueChange={(v) => setEnemyRank(Number(v))}
+                className="w-full"
               >
                 <option value={0}>（选择阶梯位置）</option>
                 {ladder.map((t) => (
@@ -353,7 +354,7 @@ export const CombatSandboxMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                     {t.name}（序位 {t.rankValue}）
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 

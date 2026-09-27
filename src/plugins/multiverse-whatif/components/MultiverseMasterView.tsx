@@ -10,6 +10,7 @@ import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 type CanonChapter = { index: number; title: string; summary: string; entities: string[] }
 
@@ -194,18 +195,19 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             <label className="text-xs font-bold text-slate-500 block mb-1">
               分歧奇点章节 (Fork Point):
             </label>
-            <select
+            <Select
               aria-label="分歧奇点章节"
               value={forkIndex}
-              onChange={(e) => setForkIndex(Number(e.target.value))}
-              className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"
+              onValueChange={(v) => setForkIndex(Number(v))}
+              className="w-full"
+              size="sm"
             >
               {canonChapters.map((ch) => (
                 <option key={ch.index} value={ch.index}>
                   {ch.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="md:col-span-3">

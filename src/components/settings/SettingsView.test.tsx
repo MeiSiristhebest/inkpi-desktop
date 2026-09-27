@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, renderHook, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { SettingsView } from './SettingsView'
 import { SettingsProvider } from '../../core/settings'
 import { ThemeController } from '../../core/ThemeController'
@@ -90,8 +91,8 @@ describe('SettingsView', () => {
     fireEvent.click(screen.getByText('添加服务'))
 
     // 选择 DeepSeek 厂商并填写模型 ID
-    const selects = screen.getAllByRole('combobox')
-    fireEvent.change(selects[0], { target: { value: 'deepseek' } })
+    await userEvent.click(screen.getByLabelText('服务提供商'))
+    await userEvent.click(await screen.findByRole('option', { name: 'DeepSeek' }))
 
     // 添加模型 ID
     fireEvent.change(screen.getByPlaceholderText('输入模型 ID，如 my-model-v2'), {
@@ -113,8 +114,8 @@ describe('SettingsView', () => {
 
     fireEvent.click(screen.getByText('添加服务'))
 
-    const selects = screen.getAllByRole('combobox')
-    fireEvent.change(selects[0], { target: { value: 'deepseek' } })
+    await userEvent.click(screen.getByLabelText('服务提供商'))
+    await userEvent.click(await screen.findByRole('option', { name: 'DeepSeek' }))
 
     await waitFor(() =>
       expect(screen.getByDisplayValue('https://api.deepseek.com/v1')).toBeInTheDocument(),
@@ -252,8 +253,11 @@ describe('SettingsView', () => {
     for (const tab of ['外观', '编辑器', '写作与习惯', '连接', '高级']) {
       fireEvent.click(screen.getByText(tab))
       for (const el of container.querySelectorAll<HTMLElement>(
-        'input, select, textarea, [role="switch"], [role="radiogroup"]',
+        'input, select, textarea, [role="switch"], [role="radiogroup"], [role="combobox"]',
       )) {
+        // 读屏器看不见的东西不需要名字：aria-hidden 子树（如组件库为表单提交准备的隐藏 input）
+        // 与 getByRole 的默认规则一致，跳过它不是为了放过真控件。
+        if (el.closest('[aria-hidden="true"]')) continue
         visited += 1
         expect(
           accessibleName(el),
@@ -261,7 +265,7 @@ describe('SettingsView', () => {
         ).toBeTruthy()
       }
     }
-    // 实测覆盖 26 个控件；下限只防门控空转（例如标签名写错导致一个控件都没遍历到）
+    // 实测覆盖 25 个控件（含 4 个门面组合框）；下限只防门控空转（例如标签名写错导致一个控件都没遍历到）
     expect(visited).toBeGreaterThanOrEqual(20)
   })
 

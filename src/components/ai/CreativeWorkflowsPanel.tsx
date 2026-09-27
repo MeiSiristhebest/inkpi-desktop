@@ -38,6 +38,7 @@ import {
 import { DistillationInboxModal } from './DistillationInboxModal'
 import { indexedDbCodexEntityRepository } from '../../adapters/indexedDbCodexEntityRepository'
 import type { CodexEntity } from '../../plugins/living-codex/types'
+import { Select } from '../../ui/primitives'
 
 interface CreativeWorkflowsPanelProps {
   projectId: string
@@ -522,21 +523,22 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         </TabButton>
       </div>
       {tab !== 'distill' && (
-        <select
+        <Select
           aria-label="选择章节"
           value={selectedChapterId}
-          onChange={(event) => {
+          onValueChange={(v) => {
             userPickedChapterRef.current = true
-            setSelectedChapterId(event.target.value)
+            setSelectedChapterId(v)
           }}
-          className="mb-2 w-full rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs"
+          className="mb-2 w-full"
+          size="sm"
         >
           {chapters.map((chapter) => (
             <option key={chapter.id} value={chapter.id}>
               {chapter.title}
             </option>
           ))}
-        </select>
+        </Select>
       )}
       <motion.button
         type="button"

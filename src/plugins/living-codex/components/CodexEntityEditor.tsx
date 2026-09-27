@@ -5,6 +5,7 @@ import { TemplatePickerModal } from './TemplatePickerModal'
 import { countTemplates } from '../content/characterPresets'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clock } from '../../../adapters/clock'
+import { Select } from '../../../ui/primitives'
 
 interface CodexEntityEditorProps {
   entity: Partial<CodexEntity> | null
@@ -240,18 +241,14 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
 
           {/* 添加新关系 */}
           <div className="flex gap-1.5 pt-1">
-            <select
-              value={newRelType}
-              onChange={(e) => setNewRelType(e.target.value)}
-              className="px-2 py-1 bg-[var(--ink-bg-sidebar)] border border-[var(--ink-border)] rounded text-[12px]"
-            >
+            <Select value={newRelType} onValueChange={(v) => setNewRelType(v)} size="sm">
               <option value="宿敌">宿敌</option>
               <option value="盟友">盟友</option>
               <option value="师徒">师徒</option>
               <option value="所属势力">所属势力</option>
               <option value="持有者">持有者</option>
               <option value="位于">位于</option>
-            </select>
+            </Select>
             <input
               value={newRelTarget}
               onChange={(e) => setNewRelTarget(e.target.value)}

@@ -4,6 +4,7 @@ import type { PromiseLedgerEntry, PromiseTier, PromiseStatus } from '../types'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { X, Check } from 'lucide-react'
+import { Select } from '../../../ui/primitives'
 
 interface PromiseEntryEditorProps {
   entry: Partial<PromiseLedgerEntry>
@@ -107,30 +108,30 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">伏笔重要度分层</label>
-            <select
+            <Select
               value={tier}
-              onChange={(e) => setTier(e.target.value as PromiseTier)}
-              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+              onValueChange={(v) => setTier(v as PromiseTier)}
+              className="w-full"
             >
               {TIERS.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">生命周期状态</label>
-            <select
+            <Select
               value={status}
-              onChange={(e) => setStatus(e.target.value as PromiseStatus)}
-              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+              onValueChange={(v) => setStatus(v as PromiseStatus)}
+              className="w-full"
             >
               <option value="planted">埋设中 (Planted)</option>
               <option value="progressing">发酵推进中 (Progressing)</option>
               <option value="paid_off">已闭环回收 (Paid-off)</option>
               <option value="abandoned">已弃用 (Abandoned)</option>
-            </select>
+            </Select>
           </div>
         </div>
 
