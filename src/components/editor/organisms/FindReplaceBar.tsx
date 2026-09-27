@@ -4,6 +4,7 @@ import { ArrowUp, ArrowDown, X, BookOpen, Replace, FileText } from 'lucide-react
 import { spring, variants, gesture } from '../../../motion'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
+import { GLOBAL_HIT_LABEL } from '../globalSearch'
 
 interface FindReplaceBarProps {
   model: EditorModel
@@ -233,7 +234,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
             className="max-h-72 overflow-y-auto border-t border-[var(--ink-border)] bg-[var(--ink-bg)] p-2 space-y-1"
           >
             <div className="px-2 py-1 text-[11px] text-[var(--ink-text-faint)] flex items-center justify-between font-medium">
-              <span>检索结果：{globalResults.length} 个章节包含命中项</span>
+              <span>检索结果：{globalResults.length} 条命中（正文 / 标题 / 时间线）</span>
               <span>回车再次刷新</span>
             </div>
 
@@ -244,7 +245,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
             ) : (
               globalResults.map((r) => (
                 <motion.button
-                  key={r.chapterId}
+                  key={`${r.kind}:${r.chapterId}`}
                   type="button"
                   {...gesture.listRow}
                   transition={spring.snappy}
@@ -258,14 +259,14 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="font-semibold text-[var(--ink-text)] group-hover:text-[var(--ink-accent)] flex items-center gap-1.5 truncate">
                       <FileText className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
-                      {r.title}
+                      {GLOBAL_HIT_LABEL[r.kind]} · {r.title}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] font-mono shrink-0">
                       {r.count} 处命中
                     </span>
                   </div>
                   <div className="text-[11.5px] text-[var(--ink-text-muted)] truncate leading-relaxed">
-                    …{r.snippet}…
+                    {r.snippet ? `…${r.snippet}…` : '标题命中，点击进入本章'}
                   </div>
                 </motion.button>
               ))

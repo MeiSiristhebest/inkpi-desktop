@@ -6,6 +6,7 @@ import { clock } from '../../../adapters/clock'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { renderChapterHtmlDocument } from '../../../adapters/htmlChapterRenderer'
 import { blobFileDownloader } from '../../../adapters/blobFileDownloader'
+import { indexedDbTimelineRepository } from '../../../adapters/indexedDbTimelineRepository'
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
 import type { KeyValueStore } from '../../../ports/keyValueStore'
 import { setGhostText as showGhostText } from '../../../extensions/ghost-text'
@@ -35,13 +36,7 @@ import { draftJournal } from '../../../services/draftJournal'
 import { chapterMutationService } from '../../../services/defaultChapterMutationService'
 import type { ChapterMutation } from '../../../services/chapterMutationService'
 import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
-
-export interface GlobalSearchResult {
-  chapterId: string
-  title: string
-  snippet: string
-  count: number
-}
+import { collectGlobalSearchHits, type GlobalSearchHit } from '../globalSearch'
 
 export interface DraftRecoveryState {
   status: 'available' | 'recovered' | 'stale' | 'conflict'
@@ -82,7 +77,7 @@ export interface EditorModelState {
   ghostText: string
   showGlobalSearch: boolean
   globalQuery: string
-  globalResults: GlobalSearchResult[]
+  globalResults: GlobalSearchHit[]
   draftRecovery: DraftRecoveryState | null
   excludedNumberingIds: Set<string>
   findText: string
@@ -211,7 +206,7 @@ export interface ChapterEditorModel {
   ghostText: string
   showGlobalSearch: boolean
   globalQuery: string
-  globalResults: GlobalSearchResult[]
+  globalResults: GlobalSearchHit[]
   draftRecovery: DraftRecoveryState | null
   excludedNumberingIds: Set<string>
   findText: string
@@ -288,7 +283,7 @@ export interface ChapterEditorActions {
   executeReplace: () => void
   acceptGhostText: () => void
   runGlobalSearch: (query: string) => Promise<void>
-  jumpToChapterFromSearch: (r: GlobalSearchResult) => void
+  jumpToChapterFromSearch: (r: GlobalSearchHit) => void
   updateActiveTitle: (title: string) => Promise<void>
   recoverDraft: () => Promise<void>
   discardDraft: () => void
@@ -1208,45 +1203,35 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         patch({ globalResults: [] })
         return
       }
-      const proj = await indexedDbProjectRepository.getChaptersByProject(projectId)
+      const [chapters, nodes] = await Promise.all([
+        indexedDbProjectRepository.getChaptersByProject(projectId),
+        indexedDbTimelineRepository.getAllNodes(),
+      ])
       if (
         requestGeneration !== globalSearchGeneration.current ||
         stateRef.current.globalQuery.trim() !== q
       ) {
         return
       }
-      const res: GlobalSearchResult[] = []
-      for (const ch of proj) {
-        const plain = htmlToPlain(ch.content || '')
-        const idx = plain.indexOf(q)
-        if (idx === -1) continue
-        const count = plain.split(q).length - 1
-        const start = Math.max(0, idx - 24)
-        const snippet = plain
-          .substring(start, start + 64)
-          .replace(/\s+/g, ' ')
-          .trim()
-        res.push({ chapterId: ch.id, title: ch.title, snippet, count })
-      }
-      res.sort((a, b) => b.count - a.count)
+      const res = collectGlobalSearchHits(projectId, chapters, nodes, q)
       if (requestGeneration === globalSearchGeneration.current) patch({ globalResults: res })
     },
     [projectId, patch],
   )
 
   const jumpToChapterFromSearch = useCallback(
-    (r: GlobalSearchResult) => {
+    (r: GlobalSearchHit) => {
       const ch = stateRef.current.chapters.find((c) => c.id === r.chapterId)
-      if (ch) {
-        patch({
-          showGlobalSearch: false,
-          findText: stateRef.current.globalQuery.trim(),
-          showFindReplace: true,
-        })
-        void activateChapter(ch)
-      } else {
+      if (!ch) {
         patch({ showGlobalSearch: false })
+        return
       }
+      // 只有正文命中才值得把词填进本章查找：标题/时间线命中的词不在正文里，填了就是「0 处」。
+      if (r.kind === 'chapter-content') {
+        patch({ findText: stateRef.current.globalQuery.trim(), showFindReplace: true })
+      }
+      patch({ showGlobalSearch: false })
+      void activateChapter(ch)
     },
     [patch, activateChapter],
   )

@@ -1,6 +1,7 @@
 import { BookOpen, X } from 'lucide-react'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
+import { GLOBAL_HIT_LABEL } from '../globalSearch'
 
 interface GlobalSearchPopupProps {
   model: EditorModel
@@ -36,7 +37,7 @@ export const GlobalSearchPopup: React.FC<GlobalSearchPopupProps> = ({ model }) =
           </IconButton>
         </div>
         <div className="flex items-center justify-between px-4 py-1.5 text-[11px] text-[var(--ink-text-faint)] border-b border-[var(--ink-border)]">
-          <span>{globalResults.length} 个章节命中</span>
+          <span>{globalResults.length} 条命中（正文 / 标题 / 时间线）</span>
           <button
             onClick={() => void actions.runGlobalSearch(globalQuery)}
             className="text-[var(--ink-accent)] hover:underline"
@@ -52,18 +53,23 @@ export const GlobalSearchPopup: React.FC<GlobalSearchPopupProps> = ({ model }) =
           )}
           {globalResults.map((r) => (
             <button
-              key={r.chapterId}
+              key={`${r.kind}:${r.chapterId}`}
               onClick={() => actions.jumpToChapterFromSearch(r)}
               className="w-full text-left px-4 py-2.5 border-b border-[var(--ink-border)] hover:bg-[var(--ink-bg-hover)] transition-colors"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[13px] text-[var(--ink-text)] truncate">{r.title}</span>
+                <span className="text-[13px] text-[var(--ink-text)] truncate">
+                  <span className="mr-1.5 px-1.5 py-0.5 rounded border border-[var(--ink-border)] text-[10px] text-[var(--ink-text-faint)]">
+                    {GLOBAL_HIT_LABEL[r.kind]}
+                  </span>
+                  {r.title}
+                </span>
                 <span className="text-[10px] text-[var(--ink-text-faint)] shrink-0 tabular-nums">
                   {r.count} 处
                 </span>
               </div>
               <div className="text-[11px] text-[var(--ink-text-faint)] mt-0.5 truncate">
-                …{r.snippet}…
+                {r.snippet ? `…${r.snippet}…` : '标题命中，点击进入本章'}
               </div>
             </button>
           ))}
