@@ -96,8 +96,8 @@ describe('editor shortcut registry', () => {
 })
 
 describe('rendered shortcut strings stay derived from the registry', () => {
-  it('ships no hand-written mac glyph in any product string', () => {
-    const offenders: string[] = []
+  /** 逐行交给回调，跳过测试文件和注释行：注释里的 `Ctrl+S` 说的是键位，不是界面文案。 */
+  const forEachCodeLine = (visit: (text: string, location: string) => void) => {
     const walk = (dir: string) => {
       for (const name of readdirSync(dir)) {
         const full = join(dir, name)
@@ -106,18 +106,41 @@ describe('rendered shortcut strings stay derived from the registry', () => {
           continue
         }
         if (!/\.(ts|tsx)$/.test(name) || name.includes('.test.')) continue
+        const location = relative(srcRoot, full).replace(/\\/g, '/')
         readFileSync(full, 'utf8')
           .split('\n')
           .forEach((line, index) => {
             const text = line.trim()
             // 注释行不参与朗读，也不算用户可见文案
             if (text.startsWith('//') || text.startsWith('/*') || text.startsWith('*')) return
-            if (!/[⌘⇧⌃⌥]/.test(text)) return
-            offenders.push(`${relative(srcRoot, full)}:${index + 1} ${text.slice(0, 60)}`)
+            visit(text, `${location}:${index + 1}`)
           })
       }
     }
     walk(srcRoot)
+  }
+
+  it('ships no hand-written mac glyph in any product string', () => {
+    const offenders: string[] = []
+    forEachCodeLine((text, location) => {
+      if (/[⌘⇧⌃⌥]/.test(text)) offenders.push(`${location} ${text.slice(0, 60)}`)
+    })
+    expect(offenders).toEqual([])
+  })
+
+  it('ships no hand-written Windows chord either (§P4.6)', () => {
+    const offenders: string[] = []
+    // 展示文案只能由 formatShortcutLabel/shortcutHint 派生：手写的那份会和注册表绑的键位各自漂移，
+    // 而这条门控原先只查 mac 字形，FormView 的「保存修改 (Ctrl+S)」就是从这里的空档走掉的。
+    const literalChord = /(?:Ctrl|Control|Shift|Alt|Win)\s*\+\s*[A-Za-z0-9\\/]/
+    forEachCodeLine((text, location) => {
+      // 注册表自己写的就是键位记法（Alt+ArrowUp），那是唯一的真源，不是界面文案。
+      if (location.startsWith('core/editorShortcuts.ts')) return
+      if (!literalChord.test(text)) return
+      offenders.push(`${location} ${text.slice(0, 70)}`)
+    })
+    // 反证：扫描不能只会放行。FormView 原来那行文案必须被这条正则抓到。
+    expect(literalChord.test("isSaved ? '已保存' : '保存修改 (Ctrl+S)'")).toBe(true)
     expect(offenders).toEqual([])
   })
 })

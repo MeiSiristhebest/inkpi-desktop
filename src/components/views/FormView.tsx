@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import type { FormDataRepository } from '../../ports/formDataRepository'
 import { useFormViewModel } from '../../hooks/useFormViewModel'
+import { matchesEditorShortcut, shortcutHint } from '../../core/editorShortcuts'
 import { Save } from 'lucide-react'
 import { Tooltip } from '../../ui/primitives'
 
@@ -22,7 +23,7 @@ export const FormView: React.FC<FormViewProps> = ({ projectId, tabId, tabMeta, r
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if (matchesEditorShortcut('saveChapter', e)) {
         e.preventDefault()
         save()
       }
@@ -46,7 +47,7 @@ export const FormView: React.FC<FormViewProps> = ({ projectId, tabId, tabMeta, r
             className={`px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow transition-all ${isSaved ? 'bg-[var(--ink-bg-card)] border border-[var(--ink-border)] text-[var(--ink-text-muted)]' : 'bg-[var(--ink-accent)] text-white hover:opacity-90'}`}
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{isSaved ? '已保存' : '保存修改 (Ctrl+S)'}</span>
+            <span>{isSaved ? '已保存' : shortcutHint('保存修改', 'saveChapter')}</span>
           </button>
         </div>
 
