@@ -54,12 +54,14 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
         />
       </Tooltip>
       <div className="h-11 shrink-0 flex items-center justify-between px-3 border-b border-[var(--ink-border)]/50">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-[22px] h-[22px] rounded-md bg-[var(--ink-accent)] text-white flex items-center justify-center text-[11px] shrink-0 font-medium">
-            章
+        <Tooltip content="单击选择，双击重命名，右键更多操作">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-[22px] h-[22px] rounded-md bg-[var(--ink-accent)] text-white flex items-center justify-center text-[11px] shrink-0 font-medium">
+              章
+            </div>
+            <span className="text-[13px] font-medium truncate">章节目录</span>
           </div>
-          <span className="text-[13px] font-medium truncate">章节目录</span>
-        </div>
+        </Tooltip>
         <div className="flex items-center gap-0.5">
           <Tooltip content="新建分卷">
             <motion.button
@@ -174,11 +176,18 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
                       const isSelected = ch.id === activeChapterId
                       const num = chapterNumberMap.get(ch.id)
                       return (
-                        <Tooltip key={ch.id} content="单击选择，双击重命名，右键更多操作">
-                          <motion.div
-                            {...gesture.listRow}
-                            transition={spring.snappy}
-                            className={`group w-full flex items-center justify-between gap-1.5 px-2 py-[5px] rounded-md text-[13px] text-left transition-colors duration-150 cursor-pointer ${
+                        <Tooltip
+                          key={ch.id}
+                          content={`${num ? `正文第 ${num} 章 · ` : ''}状态：${
+                            STATUS_OPTIONS.find((s) => s.value === ch.status)?.label ??
+                            ch.status ??
+                            'draft'
+                          }`}
+                        >
+                          {/* 行不按 motion 实例走：目录是唯一无上限的列表（长篇基线 1000 章），
+                              每章一个 motion.div 实测多花 37% 挂载时间，而 listRow 只有 0.5% 按压缩放。 */}
+                          <div
+                            className={`group w-full flex items-center justify-between gap-1.5 px-2 py-[5px] rounded-md text-[13px] text-left transition-[color,transform] duration-150 active:scale-[0.995] cursor-pointer ${
                               isSelected
                                 ? 'bg-[var(--ink-bg-active)] font-medium text-[var(--ink-text)]'
                                 : 'text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)]'
@@ -198,22 +207,18 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
                               })
                             }}
                           >
-                            <Tooltip content={`章节状态：${ch.status || 'draft'}`}>
-                              <span
-                                className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{
-                                  backgroundColor:
-                                    STATUS_OPTIONS.find((s) => s.value === ch.status)?.color ||
-                                    'var(--ink-text-faint)',
-                                }}
-                              />
-                            </Tooltip>
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{
+                                backgroundColor:
+                                  STATUS_OPTIONS.find((s) => s.value === ch.status)?.color ||
+                                  'var(--ink-text-faint)',
+                              }}
+                            />
                             {num ? (
-                              <Tooltip content="正文序号">
-                                <span className="text-[10px] text-[var(--ink-text-faint)] tabular-nums shrink-0 font-mono w-4 text-right">
-                                  {num}
-                                </span>
-                              </Tooltip>
+                              <span className="text-[10px] text-[var(--ink-text-faint)] tabular-nums shrink-0 font-mono w-4 text-right">
+                                {num}
+                              </span>
                             ) : null}
                             <span className="truncate flex-1">{ch.title}</span>
 
@@ -221,23 +226,22 @@ export const ChapterTree: React.FC<ChapterTreeProps> = ({ model }) => {
                             <span className="text-[10.5px] text-[var(--ink-text-faint)] shrink-0 tabular-nums group-hover:hidden">
                               {ch.wordCount}
                             </span>
-                            <Tooltip content="更多操作（重命名 / 删除 / 复制）">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  actions.setChapterContextMenu({
-                                    x: Math.min(e.clientX, window.innerWidth - 200),
-                                    y: Math.min(e.clientY, window.innerHeight - 280),
-                                    chapter: ch,
-                                  })
-                                }}
-                                className="hidden group-hover:flex items-center justify-center p-0.5 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-                              >
-                                <MoreHorizontal className="w-3.5 h-3.5" />
-                              </button>
-                            </Tooltip>
-                          </motion.div>
+                            <button
+                              type="button"
+                              aria-label="更多操作（重命名 / 删除 / 复制）"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                actions.setChapterContextMenu({
+                                  x: Math.min(e.clientX, window.innerWidth - 200),
+                                  y: Math.min(e.clientY, window.innerHeight - 280),
+                                  chapter: ch,
+                                })
+                              }}
+                              className="hidden group-hover:flex items-center justify-center p-0.5 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                            >
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </Tooltip>
                       )
                     })}
