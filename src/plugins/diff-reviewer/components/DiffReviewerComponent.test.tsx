@@ -3,6 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { DiffReviewerMasterView } from './DiffReviewerMasterView'
 import { DiffReviewerDrawer } from './DiffReviewerDrawer'
 import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
+import {
+  hashText,
+  IndexedDbProposalStore,
+  ProposalLedger,
+  type AiProposal,
+} from '../../../ai/proposals'
 
 const { saveChapter } = vi.hoisted(() => ({
   saveChapter: vi.fn(),
@@ -57,6 +63,55 @@ describe('DiffReviewer UI Components', () => {
     expect(await screen.findByText(/本章还没有审校写回记录/)).toBeInTheDocument()
     expect(screen.queryByText(/处修订分块/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Hunk #1/)).not.toBeInTheDocument()
+  })
+
+  it('DiffReviewerDrawer lists the chapter records that really are in the ledger', async () => {
+    const stored = new ProposalLedger({ store: new IndexedDbProposalStore() })
+    const proposal: AiProposal = {
+      id: 'proposal-diff-reviewer-drawer-seed',
+      taskId: 'diff-reviewer-diff-reviewer-drawer-chapter-seed',
+      documentId: 'diff-reviewer-drawer-chapter',
+      baseRevision: 1,
+      patches: [
+        {
+          documentId: 'diff-reviewer-drawer-chapter',
+          from: 0,
+          to: 9,
+          text: '林凡走在大街上。',
+        },
+      ],
+      status: 'pending',
+      createdAt: 1700000000001,
+      sourceHash: hashText('林凡走在大街上。'),
+    }
+    stored.create(proposal)
+    stored.accept(proposal.id)
+    await stored.flush()
+
+    const chapter = {
+      id: 'diff-reviewer-drawer-chapter',
+      projectId: 'p1',
+      volumeId: 'v1',
+      title: '第一章',
+      content: '林凡走在大街上。',
+      wordCount: 8,
+      order: 1,
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+
+    render(
+      <DesktopPluginHostProvider projectId="p1" activeChapter={chapter}>
+        <DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />
+      </DesktopPluginHostProvider>,
+    )
+
+    expect(await screen.findByText(/写回 #1 · 替换 1 段/)).toBeInTheDocument()
+    expect(screen.getByText('1 条审校写回记录')).toBeInTheDocument()
+    // §P2.15：账本状态只有词表里的那一个说法，而且撤回到哪里做必须说清楚。
+    expect(screen.getByText('已采纳')).toBeInTheDocument()
+    expect(screen.getByText(/撤销/)).toBeInTheDocument()
   })
 
   it('starts blank and refuses to compute from two empty panels', async () => {

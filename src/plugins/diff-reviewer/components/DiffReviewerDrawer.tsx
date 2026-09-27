@@ -60,6 +60,9 @@ export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
         </div>
       ) : (
         <div className="space-y-1.5">
+          <p className="text-[10px] text-slate-400 leading-relaxed">
+            这里只随动展示已经发生过的写回；要撤销，回到双栏审校面板用「撤销写回」，那里撤的是最近一次。
+          </p>
           {proposals.map((proposal, idx) => (
             <div
               key={proposal.id}
