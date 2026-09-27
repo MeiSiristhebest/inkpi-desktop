@@ -40,15 +40,15 @@ describe('PluginEventBus', () => {
     const timeHandler = vi.fn()
     const gunHandler = vi.fn()
 
-    pluginEventBus.on('TIMELINE_EVENT_REGISTERED', timeHandler)
+    pluginEventBus.on('UNIFIED_CHAPTER_EVALUATED', timeHandler)
     pluginEventBus.on('FORESHADOW_PLANTED', gunHandler)
 
-    pluginEventBus.emit('TIMELINE_EVENT_REGISTERED', {
+    pluginEventBus.emit('UNIFIED_CHAPTER_EVALUATED', {
       projectId: 'p2',
       chapterId: 'c1',
-      calendarId: 'cal_ancient',
-      universalAbsoluteDay: 3600,
-      summary: '开宗大典',
+      compositeScore: 82,
+      pacingRating: '偏慢',
+      cliffhangerScore: 61,
     })
 
     expect(timeHandler).toHaveBeenCalledTimes(1)

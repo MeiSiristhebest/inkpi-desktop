@@ -23,7 +23,10 @@ import type { CodexEntity } from '../../../src/plugins/living-codex/types'
 import type { DiffReviewRecord } from '../../../src/ports/diffReviewRepository'
 import type { CombatDuelRecord } from '../../../src/ports/combatSandboxRepository'
 import type { TimelineNode, NarrativeThread } from '../../../src/plugins/timeline-grid/types'
-import type { ChapterChronologyEvent, MultiCalendarProjectRecord } from '../../../src/ports/multiCalendarRepository'
+import type {
+  ChapterChronologyEvent,
+  MultiCalendarProjectRecord,
+} from '../../../src/ports/multiCalendarRepository'
 import type { EmotionAuditRecord } from '../../../src/ports/emotionAuditRepository'
 
 type TestRecord = {
@@ -446,15 +449,15 @@ describe('Tier 3: Cross-Feature Workflows', () => {
 
     const chronologyAudit = MultiCalendarEngine.validateChronology(chronologyEvents)
     const causalAudit = causalEngine.auditAllConflicts(nodes)
-    const timelineEvents: number[] = []
+    const auditedChapters: string[] = []
     const finished = new Promise<void>((resolve, reject) => {
-      harness.scopedBus.on('TIMELINE_EVENT_REGISTERED', (payload) => {
-        timelineEvents.push(payload.universalAbsoluteDay)
+      harness.scopedBus.on('CHAPTER_CONTENT_AUDITED', (payload) => {
+        auditedChapters.push(payload.chapterId)
         void (async () => {
           await harness.mutateCodexEntity(entity.id, (previous) => ({
             attributes: {
               ...previous.attributes,
-              lastTimelineDay: payload.universalAbsoluteDay,
+              lastAuditedChapter: payload.chapterId,
             },
           }))
           const updated = harness.getCodexEntity(entity.id)
@@ -465,12 +468,11 @@ describe('Tier 3: Cross-Feature Workflows', () => {
       })
     })
 
-    harness.scopedBus.emit('TIMELINE_EVENT_REGISTERED', {
+    harness.scopedBus.emit('CHAPTER_CONTENT_AUDITED', {
       projectId,
       chapterId: chapter.id,
-      calendarId: dynasty.id,
-      universalAbsoluteDay: conversion.absoluteDayIndex,
-      summary: '新历第一日已登记',
+      wordCount: 2400,
+      waterScore: 18,
     })
     await finished
     const mutation = await harness.mutateActiveChapter({
@@ -491,14 +493,15 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     expect(conversion.targetDate).toEqual({ year: 1, month: 1, day: 1 })
     expect(chronologyAudit.hasParadox).toBe(false)
     expect(causalAudit).toHaveLength(0)
-    expect(timelineEvents).toEqual([conversion.absoluteDayIndex])
+    // 下面那次真实改稿也会在同一条审计通道上 emit，所以这里断言「送达」而不是「恰好一次」。
+    expect(auditedChapters).toContain(chapter.id)
     expect(storedCalendar?.chronologyEvents[1].timePoint.absoluteDayIndex).toBe(
       conversion.absoluteDayIndex,
     )
     expect(storedNodes.map((node) => node.id)).toEqual(
       expect.arrayContaining(nodes.map((node) => node.id)),
     )
-    expect(storedEntity?.attributes.lastTimelineDay).toBe(conversion.absoluteDayIndex)
+    expect(storedEntity?.attributes.lastAuditedChapter).toBe(chapter.id)
     expect(mutation.success).toBe(true)
     expect(persistedChapter.revision).toBe(2)
   })

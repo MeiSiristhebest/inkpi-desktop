@@ -7,23 +7,13 @@
  */
 
 export type PluginEventType =
-  | 'TIMELINE_EVENT_REGISTERED' // multi-calendar -> timeline-grid
   | 'POWER_BREACH_DETECTED' // combat-sandbox -> consistency-sentinel
   | 'FORESHADOW_PLANTED' // chekhov-radar -> promise-ledger
-  | 'PROMISE_STATUS_CHANGED' // promise-ledger -> chekhov-radar
-  | 'CODEX_ENTITY_TOUCHED' // living-codex -> memory-palace
+  | 'CODEX_ENTITY_TOUCHED' // living-codex -> aftermath-sync
   | 'CHAPTER_CONTENT_AUDITED' // water-meter / reader-hook -> emotion-curve
-  | 'EMOTIONAL_CURVE_UPDATED' // timeline-grid -> emotion-curve
   | 'UNIFIED_CHAPTER_EVALUATED' // 章节质量统一评估流 (rhythm-radar + reader-hook + paywall-sentry)
 
 export interface PluginEventPayloads {
-  TIMELINE_EVENT_REGISTERED: {
-    projectId: string
-    chapterId: string
-    calendarId: string
-    universalAbsoluteDay: number
-    summary: string
-  }
   POWER_BREACH_DETECTED: {
     projectId: string
     protagonistName: string
@@ -38,12 +28,6 @@ export interface PluginEventPayloads {
     plantChapterOrder: number
     category: string
   }
-  PROMISE_STATUS_CHANGED: {
-    projectId: string
-    promiseId: string
-    status: 'planted' | 'progressing' | 'paid_off' | 'abandoned'
-    targetChapter: number
-  }
   CODEX_ENTITY_TOUCHED: {
     projectId: string
     entityId: string
@@ -55,10 +39,6 @@ export interface PluginEventPayloads {
     chapterId: string
     wordCount: number
     waterScore?: number
-  }
-  EMOTIONAL_CURVE_UPDATED: {
-    projectId: string
-    points: Array<{ chapter: number; averagePolarity: number }>
   }
   UNIFIED_CHAPTER_EVALUATED: {
     projectId: string

@@ -70,7 +70,14 @@ describe('Tier 4: Novel writing scenarios', () => {
       `${chapter.content} 林凡终于踏入金丹初期。`,
       chapter.id,
       chapter.revision,
-      [{ id: protagonist.id, name: protagonist.name, category: 'character', currentTier: '练气九层' }],
+      [
+        {
+          id: protagonist.id,
+          name: protagonist.name,
+          category: 'character',
+          currentTier: '练气九层',
+        },
+      ],
     )
     expect(analysis.summary.attributeUpdates).toBe(1)
     const patch = analysis.patches[0]
@@ -151,14 +158,24 @@ describe('Tier 4: Novel writing scenarios', () => {
         chapterId: `${projectId}::chapter-0`,
         chapterOrder: 0,
         chapterTitle: '旧历终结',
-        timePoint: { calendarId: ancient.id, year: 1000, month: 12, day: 30, absoluteDayIndex: conversion.absoluteDayIndex - 1 },
+        timePoint: {
+          calendarId: ancient.id,
+          year: 1000,
+          month: 12,
+          day: 30,
+          absoluteDayIndex: conversion.absoluteDayIndex - 1,
+        },
         eventSummary: '旧历最后一日',
       },
       {
         chapterId: chapter.id,
         chapterOrder: chapter.order,
         chapterTitle: chapter.title,
-        timePoint: { calendarId: dynasty.id, ...conversion.targetDate, absoluteDayIndex: conversion.absoluteDayIndex },
+        timePoint: {
+          calendarId: dynasty.id,
+          ...conversion.targetDate,
+          absoluteDayIndex: conversion.absoluteDayIndex,
+        },
         eventSummary: '新历第一日',
       },
     ])
@@ -179,16 +196,15 @@ describe('Tier 4: Novel writing scenarios', () => {
         updatedAt: Date.now(),
       },
     ])
-    const timelineDays: number[] = []
-    const unsubscribe = harness.scopedBus.on('TIMELINE_EVENT_REGISTERED', (payload) => {
-      timelineDays.push(payload.universalAbsoluteDay)
+    const audited: unknown[] = []
+    const unsubscribe = harness.scopedBus.on('CHAPTER_CONTENT_AUDITED', (payload) => {
+      audited.push(payload)
     })
-    harness.scopedBus.emit('TIMELINE_EVENT_REGISTERED', {
+    harness.scopedBus.emit('CHAPTER_CONTENT_AUDITED', {
       projectId,
       chapterId: chapter.id,
-      calendarId: dynasty.id,
-      universalAbsoluteDay: conversion.absoluteDayIndex,
-      summary: '新历第一日已登记',
+      wordCount: 2400,
+      waterScore: 18,
     })
     await harness.mutateCodexEntity(protagonist.id, (previous) => ({
       attributes: { ...previous.attributes, timelineDay: conversion.absoluteDayIndex },
@@ -196,8 +212,10 @@ describe('Tier 4: Novel writing scenarios', () => {
 
     expect(chronology.hasParadox).toBe(false)
     expect(causal).toHaveLength(0)
-    expect(timelineDays).toEqual([conversion.absoluteDayIndex])
-    expect(harness.getCodexEntity(protagonist.id)?.attributes.timelineDay).toBe(conversion.absoluteDayIndex)
+    expect(audited).toEqual([{ projectId, chapterId: chapter.id, wordCount: 2400, waterScore: 18 }])
+    expect(harness.getCodexEntity(protagonist.id)?.attributes.timelineDay).toBe(
+      conversion.absoluteDayIndex,
+    )
     unsubscribe()
   })
 
@@ -211,7 +229,11 @@ describe('Tier 4: Novel writing scenarios', () => {
     expect(diff.hunks.length).toBeGreaterThan(0)
     const merged = DiffReviewerEngine.applyHunks(
       original,
-      diff.hunks.map((hunk) => ({ lines: hunk.lines, oldStartLine: hunk.oldStartLine, resolution: 'applied' as const })),
+      diff.hunks.map((hunk) => ({
+        lines: hunk.lines,
+        oldStartLine: hunk.oldStartLine,
+        resolution: 'applied' as const,
+      })),
     )
     const committed = await harness.mutateActiveChapter({
       chapterId: chapter.id,

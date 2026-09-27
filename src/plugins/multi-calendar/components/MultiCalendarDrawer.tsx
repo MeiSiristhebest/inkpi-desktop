@@ -3,12 +3,12 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { MultiCalendarEngine } from '../engine/MultiCalendarEngine'
 import type { MultiCalendarProjectRecord } from '../types'
 import { indexedDbMultiCalendarRepository } from '../../../adapters/indexedDbMultiCalendarRepository'
-import { pluginEventBus } from '../../../core/pluginEventBus'
 import { Calendar, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react'
+
+const DATE_TERM = /((?:大炎)?(?:天历|灵历|贞观|元丰|洪武|建安)[^，。\n]{2,15}(?:年|月|日))/
 
 export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [record, setRecord] = useState<MultiCalendarProjectRecord | null>(null)
-  const [detectedDate, setDetectedDate] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -21,34 +21,7 @@ export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
   const calendars = record?.calendars || MultiCalendarEngine.DEFAULT_CALENDARS
   const events = record?.chronologyEvents || []
   const audit = MultiCalendarEngine.validateChronology(events)
-
-  useEffect(() => {
-    if (!currentText) {
-      setDetectedDate(null)
-      return
-    }
-    // 文本时间词特征自动捕获
-    const match = currentText.match(
-      /((?:大炎)?(?:天历|灵历|贞观|元丰|洪武|建安)[^，。\n]{2,15}(?:年|月|日))/,
-    )
-    if (match) {
-      const captured = match[0].trim()
-      setDetectedDate(captured)
-
-      // 自动向全系统广播 TIMELINE_EVENT_REGISTERED
-      try {
-        pluginEventBus.emit('TIMELINE_EVENT_REGISTERED', {
-          projectId,
-          chapterId: 'current',
-          calendarId: calendars[0]?.id || 'cal_ancient',
-          universalAbsoluteDay: 100, // 估算标量日
-          summary: captured,
-        })
-      } catch (err) {
-        console.warn('[MultiCalendarDrawer] Failed to emit TIMELINE_EVENT_REGISTERED:', err)
-      }
-    }
-  }, [currentText, projectId, calendars])
+  const detectedDate = DATE_TERM.exec(currentText ?? '')?.[0]?.trim() ?? null
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
