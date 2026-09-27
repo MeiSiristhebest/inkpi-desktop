@@ -28,6 +28,30 @@ describe('DiffReviewer UI Components', () => {
     expect(screen.getByText(/双栏审校随动/)).toBeDefined()
   })
 
+  it('starts blank and refuses to compute from two empty panels', async () => {
+    const onPluginTool = vi.fn(async () => null)
+    const onStats = vi.fn()
+    render(
+      <DesktopPluginHostProvider projectId="p1" onPluginTool={onPluginTool} isAiConnected>
+        <DiffReviewerMasterView projectId="p1" onStats={onStats} />
+      </DesktopPluginHostProvider>,
+    )
+
+    // §P2.4：没有正文可带的时候必须是空白，不能塞一段仙侠示例稿冒充本书原稿。
+    const [original, proposed] = screen.getAllByRole('textbox')
+    expect(original.value).toBe('')
+    expect(proposed.value).toBe('')
+    // 统计口径也不能替作者把示例稿的字数报上去。
+    expect(onStats).toHaveBeenCalledWith(expect.objectContaining({ wordCount: 0 }))
+
+    fireEvent.click(screen.getByRole('button', { name: /计算差异分块/ }))
+    expect(screen.getByText(/两栏都还是空的/)).toBeInTheDocument()
+    expect(screen.queryByText(/差异决策分块/)).not.toBeInTheDocument()
+    // §P2.7：空白输入不该惊动运行时 AI。
+    expect(onPluginTool).not.toHaveBeenCalled()
+    expect(saveChapter).not.toHaveBeenCalled()
+  })
+
   it('records reviewed writeback as a durable proposal and supports undo', async () => {
     const chapter = {
       id: 'diff-reviewer-chapter',
@@ -48,6 +72,8 @@ describe('DiffReviewer UI Components', () => {
       </DesktopPluginHostProvider>,
     )
 
+    // §P2.4：修订稿不再预置示例文本，作者给什么才算什么。
+    fireEvent.change(screen.getAllByRole('textbox')[1], { target: { value: '原稿修订。' } })
     fireEvent.click(screen.getByRole('button', { name: /计算差异分块/ }))
     await screen.findByText(/差异决策分块/)
     fireEvent.click(screen.getByRole('button', { name: /全部纳入预览/ }))
@@ -62,7 +88,7 @@ describe('DiffReviewer UI Components', () => {
     expect(saveChapter).toHaveBeenCalledTimes(1)
     expect(saveChapter.mock.calls[0][0]).toMatchObject({
       id: chapter.id,
-      content: expect.not.stringMatching(/^原稿。$/),
+      content: '原稿修订。',
       revision: 2,
     })
 

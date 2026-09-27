@@ -19,19 +19,20 @@ import { Tooltip } from '../../../ui/primitives'
 
 export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const host = useOptionalPluginHostContext()
+  // §P2.4：没有正文可带的时候就从空白开始。这里以前塞了一段仙侠示例稿，
+  // 于是没配置过的作品一打开就被告知本书的原稿长这样。
   const initialSource = host?.activeChapter
     ? semanticTextFromContent(
         host.activeChapter.id,
         host.activeChapter.content || '',
         host.activeChapter.revision,
       )
-    : '风雨如晦，夜幕笼罩着古老残破的城池。\n远处传来急促而沉重的脚步声。'
+    : ''
   const [sourceText, setSourceText] = useState(initialSource)
-  const [proposedText, setProposedText] = useState(
-    '骤雨如瀑，阴冷夜幕笼罩着风雨飘摇的废弃古城。\n寂静长街深处传来急促而沉重的破空脚步声。',
-  )
+  const [proposedText, setProposedText] = useState('')
   const [hunks, setHunks] = useState<ReviewHunkView[]>([])
   const [mergedResult, setMergedResult] = useState('')
+  const [computeNotice, setComputeNotice] = useState('')
   const [proposalLedger] = useState(
     () => new ProposalLedger({ store: new IndexedDbProposalStore() }),
   )
@@ -55,6 +56,12 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
   }, [mergedResult, sourceText, onStats])
 
   const handleCompute = async () => {
+    // 两栏都空的时候不要惊动引擎和 AI：那只会烧一次没有人要求的请求（§P2.7）。
+    if (!sourceText.trim() && !proposedText.trim()) {
+      setComputeNotice('两栏都还是空的：先粘贴原稿或修订稿，再计算分块。')
+      return
+    }
+    setComputeNotice('')
     let diff = DiffReviewerEngine.computeDiff(semanticSourceText, semanticProposedText)
     const runtimeAssistant = host?.aiAssistant
     if (runtimeAssistant?.isAvailable && runtimeAssistant.runPluginTool) {
@@ -263,6 +270,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             className="w-full h-40 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 leading-relaxed"
             value={sourceText}
             onChange={(e) => setSourceText(e.target.value)}
+            placeholder="打开正文章节后会自动带入当前稿；也可以直接粘贴一段原稿。"
           />
         </div>
         <div className="space-y-1.5">
@@ -270,6 +278,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             AI / 审校修订提案 (Proposed):
           </label>
           <textarea
+            placeholder="粘贴 AI 或审校给出的修订稿"
             className="w-full h-40 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 leading-relaxed"
             value={proposedText}
             onChange={(e) => setProposedText(e.target.value)}
@@ -284,6 +293,9 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
         >
           <Layers className="w-4 h-4" /> 计算差异分块 (Compute Diff Hunks)
         </button>
+        {computeNotice && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{computeNotice}</p>
+        )}
       </div>
 
       {writebackError && (
