@@ -222,6 +222,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               {searchQuery && (
                 <button
                   type="button"
+                  aria-label="清空插件搜索"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--ink-text-faint)] hover:text-[var(--ink-text)] cursor-pointer"
                 >

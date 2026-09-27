@@ -213,6 +213,7 @@ export const ScrapbookMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                     {copiedId === f.id ? '已准备复制' : '提取片段'}
                   </button>
                   <button
+                    aria-label={`删除《${f.sourceChapterTitle || '未命名章节'}》的废稿片段`}
                     onClick={() => handleDelete(f.id)}
                     className="text-slate-400 hover:text-rose-600"
                   >

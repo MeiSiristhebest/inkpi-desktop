@@ -263,6 +263,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="关闭冲突提示"
                 onClick={() => setShowConflictModal(false)}
                 className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
               >

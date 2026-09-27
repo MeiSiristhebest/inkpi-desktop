@@ -134,6 +134,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
             {isSaving ? '保存中...' : '保存'}
           </button>
           <button
+            aria-label="关闭实体编辑器"
             onClick={onClose}
             className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]"
           >
@@ -232,6 +233,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
                   <span>{rel.targetName}</span>
                 </div>
                 <button
+                  aria-label={`移除与 ${rel.targetName} 的「${rel.relationType}」关系`}
                   onClick={() => handleRemoveRelation(idx)}
                   className="text-[var(--ink-text-faint)] hover:text-red-500"
                 >

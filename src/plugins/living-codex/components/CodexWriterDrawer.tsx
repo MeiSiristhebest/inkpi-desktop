@@ -163,6 +163,7 @@ export const CodexWriterDrawer: FC<CodexWriterDrawerProps> = ({
             <div className="flex items-center justify-between font-semibold">
               <span className="text-[var(--ink-accent)]">{previewEntity.name} 详情</span>
               <button
+                aria-label={`关闭 ${previewEntity.name} 的详情速查`}
                 onClick={() => setPreviewEntity(null)}
                 className="text-[var(--ink-text-faint)] hover:text-[var(--ink-text)]"
               >

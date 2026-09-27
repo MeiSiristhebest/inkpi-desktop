@@ -540,6 +540,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               </div>
 
               <button
+                aria-label={`从年表移除《${ev.chapterTitle}》`}
                 onClick={() => handleRemoveEvent(ev.chapterId)}
                 className="p-1 rounded text-slate-400 hover:text-red-500 transition"
               >
