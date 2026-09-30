@@ -58,5 +58,7 @@ jobs:
 
       - name: Cargo Clippy
         working-directory: src-tauri
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[],"resources":{}}}'
         run: cargo clippy --all-targets
 ...
