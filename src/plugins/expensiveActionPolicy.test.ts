@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { getPluginRuntimeEntry } from '../ai/tasks/pluginRuntimeCatalog'
 
 /**
  * §P2.7 Expensive Action Policy。
@@ -11,7 +12,7 @@ import { describe, expect, it } from 'vitest'
  * 都曾把 runPluginTool 挂在 useEffect 上，于是切换章节和每敲一个字都是一次真实计费。
  * 本地确定性预览才应该实时跑。
  *
- * 这条策略是文件级的，所以用源码扫描来守：任何 React effect 的实参里都不允许出现 AI 边界调用。
+ * 扫描 effect 中的模型调用；Runtime 目录中声明的离线工具不消耗模型 token。
  */
 
 const PLUGIN_ROOT = dirname(fileURLToPath(import.meta.url))
@@ -39,6 +40,10 @@ function effectTriggeredAiCalls(source: string): string[] {
     if (end === null) continue
     const body = source.slice(open, end)
     for (const call of body.matchAll(AI_SEAM)) {
+      const pluginId = call[0].startsWith('runPluginTool')
+        ? /^\s*(['"])([^'"]+)\1/.exec(body.slice((call.index ?? 0) + call[0].length))?.[2]
+        : undefined
+      if (pluginId && getPluginRuntimeEntry(pluginId)?.runtimeClass === 'tool') continue
       const line = source.slice(0, effect.index ?? 0).split('\n').length
       violations.push(`useEffect at line ${line} invokes ${call[0].trim()}(…)`)
     }
@@ -61,6 +66,16 @@ describe('expensive AI action policy (§P2.7)', () => {
     expect(
       effectTriggeredAiCalls(
         `const V = () => { useEffect(() => { void host.runPluginTool('p', { text }) }, [text]); return null }`,
+      ),
+    ).toHaveLength(1)
+    expect(
+      effectTriggeredAiCalls(
+        `useEffect(() => { void host.runPluginTool('memory-palace', { query }) }, [query])`,
+      ),
+    ).toHaveLength(0)
+    expect(
+      effectTriggeredAiCalls(
+        `useEffect(() => { void host.runPluginWorkflow('multiverse-whatif', { text }) }, [text])`,
       ),
     ).toHaveLength(1)
     // 本地引擎放在 effect 里是允许的：贵的只有 AI 边界。
