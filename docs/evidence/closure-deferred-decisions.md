@@ -19,4 +19,4 @@ This record keeps intentionally deferred comparison items explicit. A deferral i
 - Runtime: pinned-dependency check, TypeScript build, 177 files / 827 tests, process restart recovery, cache persistence, route fallback, dual-instance sync, and cross-boundary freeze tests pass.
 - Desktop: typecheck, Oxlint (warnings only), 273 files / 1320 tests (3 skipped), production build, frontend parity, NSIS build, and opt-in packaged sidecar RPC acceptance pass.
 - GUI acceptance and real-provider acceptance remain explicit manual/opt-in gates; they are not represented as completed by this record.
-- The current dirty Runtime contract fingerprint is `28f36aed`; `runtime.lock.json` records that hash while retaining the historical pinned commit. Advance the pinned commit together with the Runtime changes before formal release sign-off.
+- `runtime.lock.json` now pins published Runtime commit `f730b7ee6e2ded771559beba4eb7b6f780d7348f`, contract version `2`, and schema fingerprint `ada927d2`. The fingerprint was read after rebuilding the protocol package from that clean commit; the compatibility gate retains an exact commit assertion.
