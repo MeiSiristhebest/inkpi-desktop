@@ -11,6 +11,8 @@ import {
 import type { ProjectRecord, ChapterRecord, VolumeRecord } from '../types'
 import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
 import { clock } from '../adapters/clock'
+import { chapterSaveEvents } from '../ports/chapterSaveEvents'
+import { domainChangeEvents } from '../ports/domainChangeEvents'
 
 interface ProjectDataContextValue {
   projectId: string
@@ -99,15 +101,15 @@ export const ProjectDataProvider: FC<ProjectDataProviderProps> = ({ projectId, c
     let active = true
     const cached = memoryCache.get(projectId)
 
-    if (cached && clock.now() - cached.timestamp < 10000) {
+    const hasFreshCache = Boolean(cached && clock.now() - cached.timestamp < 10000)
+    if (hasFreshCache && cached) {
       setProject(cached.project)
       setChapters(cached.chapters)
       setVolumes(cached.volumes)
       setIsLoading(false)
-      return
+    } else {
+      setIsLoading(true)
     }
-
-    setIsLoading(true)
     Promise.all([
       indexedDbProjectRepository.getProject(projectId),
       indexedDbProjectRepository.getChaptersByProject(projectId),
@@ -131,6 +133,58 @@ export const ProjectDataProvider: FC<ProjectDataProviderProps> = ({ projectId, c
 
     return () => {
       active = false
+    }
+  }, [projectId])
+
+  // IndexedDB remains authoritative; local save and cross-window domain events
+  // only invalidate this projection and cause a fresh read from IndexedDB.
+  useEffect(() => {
+    let active = true
+    let refreshInFlight = Promise.resolve()
+    const refresh = () => {
+      refreshInFlight = refreshInFlight
+        .then(async () => {
+          const [p, chs, vols] = await Promise.all([
+            indexedDbProjectRepository.getProject(projectId),
+            indexedDbProjectRepository.getChaptersByProject(projectId),
+            indexedDbProjectRepository.getVolumesByProject(projectId),
+          ])
+          if (!active) return
+          setProject(p || null)
+          setChapters(chs || [])
+          setVolumes(vols || [])
+          memoryCache.set(projectId, {
+            project: p || null,
+            chapters: chs || [],
+            volumes: vols || [],
+            timestamp: clock.now(),
+          })
+        })
+        .catch(() => {})
+    }
+
+    const unsubscribeDomain = domainChangeEvents.subscribe(projectId, refresh)
+    const unsubscribeChapter = chapterSaveEvents.subscribe(({ chapter }) => {
+      if (!active || chapter.projectId !== projectId) return
+      setChapters((current) => {
+        const next = current.some((item) => item.id === chapter.id)
+          ? current.map((item) => (item.id === chapter.id ? chapter : item))
+          : [...current, chapter]
+        const cached = memoryCache.get(projectId)
+        memoryCache.set(projectId, {
+          project: cached?.project || null,
+          chapters: next,
+          volumes: cached?.volumes || [],
+          timestamp: clock.now(),
+        })
+        return next
+      })
+    })
+
+    return () => {
+      active = false
+      unsubscribeDomain()
+      unsubscribeChapter()
     }
   }, [projectId])
 

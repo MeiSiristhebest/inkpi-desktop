@@ -277,18 +277,28 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 }
 
+/**
+ * §P1.12: an `ai-task` / `hybrid` plugin names its boundary on the shared task
+ * seam (`usePluginAiTask('<id>')` + `aiTask.run(payload)`) instead of calling
+ * `runPluginTask` from the view, because the seam is what keeps the outcome on
+ * screen. Both spellings are one id-bearing boundary, and a view that used both
+ * would be counted twice on purpose.
+ */
+const RUNTIME_BOUNDARY_ID_PATTERNS: readonly RegExp[] = [
+  /\b(?:runPluginTask|runPluginTool|runPluginWorkflow)\s*\(\s*['"`]([^'"`]+)['"`]/g,
+  /\busePluginAiTask\s*\(\s*['"`]([^'"`]+)['"`]/g,
+]
+const RUNTIME_BOUNDARY_CALL =
+  /\b(?:runPluginTask|runPluginTool|runPluginWorkflow|usePluginAiTask)\s*\(/g
+
 function pluginEvidence(pluginId: FirstPartyPluginId) {
   const directory = join(PLUGIN_ROOT, pluginId)
   const files = existsSync(directory) ? implementationFiles(directory) : []
   const source = stripComments(files.map((file) => readFileSync(file, 'utf8')).join('\n'))
-  const runtimeInvocations = [
-    ...source.matchAll(
-      /\b(?:runPluginTask|runPluginTool|runPluginWorkflow)\s*\(\s*['"`]([^'"`]+)['"`]/g,
-    ),
-  ].map((match) => match[1])
-  const runtimeInvocationCount = [
-    ...source.matchAll(/\b(?:runPluginTask|runPluginTool|runPluginWorkflow)\s*\(/g),
-  ].length
+  const runtimeInvocations = RUNTIME_BOUNDARY_ID_PATTERNS.flatMap((pattern) =>
+    [...source.matchAll(pattern)].map((match) => match[1]),
+  )
+  const runtimeInvocationCount = [...source.matchAll(RUNTIME_BOUNDARY_CALL)].length
 
   return {
     directory,

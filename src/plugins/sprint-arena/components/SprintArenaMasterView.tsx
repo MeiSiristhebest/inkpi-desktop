@@ -3,6 +3,7 @@ import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { SprintRecord } from '../types'
 import { indexedDbSprintRepository } from '../../../adapters/indexedDbSprintRepository'
 import { Flame, Clock, Zap, Trophy, Trash2, CheckCircle2 } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const [records, setRecords] = useState<SprintRecord[]>([])
@@ -138,13 +139,14 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => handleDeleteRecord(r.id)}
-                    className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
-                    title="删除记录"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content="删除记录">
+                    <button
+                      onClick={() => handleDeleteRecord(r.id)}
+                      className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
 
                 <div className="flex items-center justify-between text-xs bg-[var(--ink-bg-canvas)] p-2.5 rounded-lg border border-[var(--ink-border)]/50">

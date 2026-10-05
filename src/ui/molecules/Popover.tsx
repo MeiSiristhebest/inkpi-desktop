@@ -10,6 +10,7 @@ import React, {
 } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { spring, variants, tween } from '../../motion'
+import { useOverlayFocus } from '../useOverlayFocus'
 
 interface PopoverProps {
   trigger: ReactNode
@@ -98,62 +99,9 @@ export const Popover: FC<PopoverProps> = ({
     setOpen(false)
   }, [])
 
-  // Focus management: on open, focus first focusable; on close, restore trigger
-  useEffect(() => {
-    if (!open) return
-
-    const el = panelRef.current
-    if (!el) return
-
-    const focusable = Array.from(
-      el.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    )
-    const first = focusable[0]
-    if (first) {
-      first.focus()
-    } else {
-      el.setAttribute('tabindex', '-1')
-      el.focus()
-    }
-
-    const trapFocus = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      const focusableInside = Array.from(
-        el.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      )
-      if (focusableInside.length === 0) return
-      const currentIndex = focusableInside.indexOf(document.activeElement as HTMLElement)
-      const nextIndex = e.shiftKey
-        ? currentIndex <= 0
-          ? focusableInside.length - 1
-          : currentIndex - 1
-        : currentIndex === focusableInside.length - 1
-          ? 0
-          : currentIndex + 1
-      e.preventDefault()
-      focusableInside[nextIndex]?.focus()
-    }
-
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        handleClose()
-      }
-    }
-
-    window.addEventListener('keydown', trapFocus)
-    window.addEventListener('keydown', handleEsc)
-    const trigger = triggerRef.current
-    return () => {
-      window.removeEventListener('keydown', trapFocus)
-      window.removeEventListener('keydown', handleEsc)
-      trigger?.focus()
-    }
-  }, [open, handleClose])
+  // 焦点契约与 Modal 共用一份实现：打开时交给面板内首个可聚焦控件，Tab 在面板内循环，
+  // Esc 关闭，关闭后把焦点还给触发者。
+  useOverlayFocus({ containerRef: panelRef, active: open, onClose: handleClose })
 
   // Reposition on scroll/resize
   useEffect(() => {

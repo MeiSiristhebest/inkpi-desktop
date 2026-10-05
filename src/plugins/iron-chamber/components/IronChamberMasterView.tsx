@@ -1,4 +1,5 @@
-import { useState, useEffect, type FC } from 'react'
+import { useId, useState, useEffect, type FC } from 'react'
+import { Modal } from '../../../ui/molecules/Modal'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbIronChamberRepository } from '../../../adapters/indexedDbIronChamberRepository'
 import { IronChamberEngine } from '../engine/IronChamberEngine'
@@ -6,6 +7,7 @@ import type { IronChamberRecord, ChamberLockMode } from '../types'
 import { Lock, Unlock, ShieldAlert, AlertCircle } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { Select } from '../../../ui/primitives'
 
 export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [activeRecord, setActiveRecord] = useState<IronChamberRecord | null>(null)
@@ -17,6 +19,8 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
   const [emergencyReason, setEmergencyReason] = useState('')
   const [showPanicModal, setShowPanicModal] = useState(false)
   const [panicError, setPanicError] = useState<string | null>(null)
+  const panicTitleId = useId()
+  const panicReasonId = useId()
 
   const loadData = async () => {
     const all = await indexedDbIronChamberRepository.getAll(projectId)
@@ -129,15 +133,16 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                 锁定模式:
               </label>
-              <select
-                className="mt-1 w-full border px-2 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
+              <Select
+                className="mt-1 w-full"
+                size="sm"
                 value={mode}
-                onChange={(e) => setMode(e.target.value as any)}
+                onValueChange={(v) => setMode(v as any)}
               >
                 <option value="words">字数目标 (不达标不解锁)</option>
                 <option value="minutes">时长倒计时 (专注直到闹钟)</option>
                 <option value="dual">双重极限 (字数与时长必须兼达)</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
@@ -246,39 +251,48 @@ export const IronChamberMasterView: FC<DesktopPluginViewProps> = ({ projectId, o
       )}
 
       {showPanicModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-rose-800 rounded-xl p-6 max-w-md w-full space-y-4 text-slate-100">
-            <div className="flex items-center gap-2 text-rose-500 font-bold">
-              <ShieldAlert className="w-5 h-5" />
-              <span>紧急脱逃反思协议</span>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              不可逆心流契约被设计用于克服拖延。强行退出将把违约记录写入项目历史日志。
-              请如实填写不少于 15 字的放弃反思说明：
-            </p>
-            <textarea
-              className="w-full h-24 p-2 text-xs rounded bg-slate-950 border border-slate-700 text-slate-200 resize-none"
-              placeholder="为什么中途放弃？有何不可抗力或心理阻力？"
-              value={emergencyReason}
-              onChange={(e) => setEmergencyReason(e.target.value)}
-            />
-            {panicError && <div className="text-rose-400 text-xs">{panicError}</div>}
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setShowPanicModal(false)}
-                className="px-3 py-1.5 rounded text-xs bg-slate-800 hover:bg-slate-700 text-slate-300"
-              >
-                继续坚持码字
-              </button>
-              <button
-                onClick={handleEmergencyAbort}
-                className="px-3 py-1.5 rounded text-xs bg-rose-700 hover:bg-rose-800 text-white font-bold"
-              >
-                确认强行违约脱逃
-              </button>
-            </div>
+        <Modal
+          onClose={() => setShowPanicModal(false)}
+          ariaLabelledBy={panicTitleId}
+          overlayClassName="bg-black/80"
+          widthClass="max-w-md"
+          panelClassName="bg-slate-900 border border-rose-800 rounded-xl p-6 text-slate-100 flex flex-col gap-4"
+          closeOnBackdrop={false}
+        >
+          <div id={panicTitleId} className="flex items-center gap-2 text-rose-500 font-bold">
+            <ShieldAlert className="w-5 h-5" />
+            <span>紧急脱逃反思协议</span>
           </div>
-        </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            不可逆心流契约被设计用于克服拖延。强行退出将把违约记录写入项目历史日志。
+            请如实填写不少于 15 字的放弃反思说明：
+          </p>
+          <label htmlFor={panicReasonId} className="sr-only">
+            放弃反思说明
+          </label>
+          <textarea
+            id={panicReasonId}
+            className="w-full h-24 p-2 text-xs rounded bg-slate-950 border border-slate-700 text-slate-200 resize-none"
+            placeholder="为什么中途放弃？有何不可抗力或心理阻力？"
+            value={emergencyReason}
+            onChange={(e) => setEmergencyReason(e.target.value)}
+          />
+          {panicError && <div className="text-rose-400 text-xs">{panicError}</div>}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setShowPanicModal(false)}
+              className="px-3 py-1.5 rounded text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+            >
+              继续坚持码字
+            </button>
+            <button
+              onClick={handleEmergencyAbort}
+              className="px-3 py-1.5 rounded text-xs bg-rose-700 hover:bg-rose-800 text-white font-bold cursor-pointer"
+            >
+              确认强行违约脱逃
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   )

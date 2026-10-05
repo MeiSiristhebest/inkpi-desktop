@@ -17,33 +17,24 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 
-const FALLBACK_CHAPTER_TEXT =
-  '长夜漫漫，寒风掠过废弃的大殿。\n主角按捺住胸中翻腾的杀意，选择暂避锋芒。\n然而黑暗深处的冷笑声骤然撕破死寂，致命的杀招毫无征兆地贴面袭来！'
-
 export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
   const activeChapter = host?.activeChapter
-  const initialText =
-    (activeChapter
-      ? semanticTextFromContent(
-          activeChapter.id,
-          activeChapter.content || '',
-          activeChapter.revision,
-        )
-      : '') || FALLBACK_CHAPTER_TEXT
+  const initialText = activeChapter
+    ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
+    : ''
   const [chapterText, setChapterText] = useState(initialText)
-  const [activeChapterId, setActiveChapterId] = useState(activeChapter?.id || 'ch_01')
   const [historyDanmakus, setHistoryDanmakus] = useState<ShadowDanmakuRecord[]>([])
 
   useEffect(() => {
     if (!activeChapter) return
-    const nextText = semanticTextFromContent(
-      activeChapter.id,
-      activeChapter.content || '',
-      activeChapter.revision,
+    setChapterText(
+      semanticTextFromContent(
+        activeChapter.id,
+        activeChapter.content || '',
+        activeChapter.revision,
+      ),
     )
-    setChapterText(nextText || FALLBACK_CHAPTER_TEXT)
-    setActiveChapterId(activeChapter.id)
   }, [activeChapter?.id, activeChapter?.content, activeChapter?.revision])
 
   const loadHistory = async () => {
@@ -65,10 +56,11 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
   const simulation: ShadowSimulationResult = ShadowReaderEngine.simulate(
     chapterText,
-    activeChapterId,
+    activeChapter?.id ?? '',
   )
 
   const handleSaveDanmakus = async () => {
+    if (!activeChapter) return
     for (const d of simulation.danmakus) {
       const record: ShadowDanmakuRecord = {
         ...d,
@@ -99,17 +91,15 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="text"
-            className="px-3 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-            placeholder="当前章节ID"
-            value={activeChapterId}
-            onChange={(e) => setActiveChapterId(e.target.value)}
-          />
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            当前章节：
+            {activeChapter?.title ?? '未选择章节，弹幕不会归档到任何章节'}
+          </span>
           <button
             type="button"
             onClick={handleSaveDanmakus}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-medium shadow-sm transition"
+            disabled={!activeChapter}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-medium shadow-sm transition disabled:opacity-40 disabled:hover:bg-indigo-600"
           >
             <Send className="w-3.5 h-3.5" />
             <span>存入项目弹幕库 ({simulation.danmakus.length})</span>
@@ -169,10 +159,14 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="border rounded-xl p-5 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-3">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <label
+            htmlFor="shadow-reader-chapter-text"
+            className="text-xs font-bold text-slate-500 uppercase tracking-wider"
+          >
             章节正文推演区:
           </label>
           <textarea
+            id="shadow-reader-chapter-text"
             className="w-full h-80 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 leading-relaxed"
             value={chapterText}
             onChange={(e) => setChapterText(e.target.value)}

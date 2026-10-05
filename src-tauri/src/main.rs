@@ -12,6 +12,7 @@ use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
 mod instance_config;
+mod menu;
 mod secret_store;
 
 use instance_config::InstanceConfig;
@@ -60,6 +61,18 @@ fn resolve_daemon_bin(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     None
 }
 
+/// Both child handles point at the same append-mode file, so the daemon's own
+/// diagnostics survive a startup crash instead of vanishing into `Stdio::null()`.
+fn daemon_log_stdio(path: &std::path::Path) -> Option<(Stdio, Stdio)> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .ok()?;
+    let stderr_file = file.try_clone().ok()?;
+    Some((Stdio::from(file), Stdio::from(stderr_file)))
+}
+
 fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
     let requested_config = InstanceConfig::from_process()?;
     let app_local_data_dir = if requested_config.profile.is_some() {
@@ -94,11 +107,22 @@ fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
         }
     };
 
+    let daemon_log_path = instance_config.daemon_log_path();
     let mut binding = Command::new(&bin);
-    let cmd = binding
-        .args(instance_config.daemon_args())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    let cmd = binding.args(instance_config.daemon_args());
+    match daemon_log_stdio(&daemon_log_path) {
+        Some((stdout, stderr)) => {
+            cmd.stdout(stdout).stderr(stderr);
+        }
+        None => {
+            eprintln!(
+                "[inkpi-desktop] 无法写入 daemon 日志 {}：daemon 输出将被丢弃，\
+                 SPA 连不上时没有任何可查的原因。",
+                daemon_log_path.display()
+            );
+            cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        }
+    }
 
     for (key, value) in instance_config.environment_overrides() {
         cmd.env(key, value);
@@ -124,13 +148,14 @@ fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
         Ok(child) => {
             DAEMON_CHILD.get_or_init(|| Mutex::new(Some(child)));
             println!(
-                "[inkpi-desktop] InkPi daemon spawned ({:?}) (profile={:?}, instance={:?}, http={}, ws={}, state_db={:?})",
+                "[inkpi-desktop] InkPi daemon spawned ({:?}) (profile={:?}, instance={:?}, http={}, ws={}, state_db={:?}, log={:?})",
                 bin,
                 instance_config.profile,
                 instance_config.instance_id,
                 instance_config.http_port,
                 instance_config.ws_port,
                 instance_config.state_db,
+                daemon_log_path,
             );
         }
         Err(e) => {
@@ -156,6 +181,46 @@ fn kill_daemon() {
     }
 }
 
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn daemon_log_stdio_keeps_what_the_child_prints_before_it_dies() {
+        let dir = std::env::temp_dir().join(format!("inkpi-daemon-log-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch directory");
+        let path = dir.join("daemon.log");
+        let (stdout, stderr) = daemon_log_stdio(&path).expect("log handles");
+
+        let status = Command::new("cmd")
+            .args([
+                "/C",
+                "echo daemon-stdout & echo daemon-stderr 1>&2 & exit 1",
+            ])
+            .stdout(stdout)
+            .stderr(stderr)
+            .spawn()
+            .expect("spawn a child that writes both streams")
+            .wait()
+            .expect("wait for the child");
+
+        let captured = std::fs::read_to_string(&path).expect("read the daemon log");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(status.code().is_some_and(|code| code != 0));
+        assert!(
+            captured.contains("daemon-stderr"),
+            "stderr never reached {}: {captured:?}",
+            path.display()
+        );
+        assert!(
+            captured.contains("daemon-stdout"),
+            "stdout never reached {}: {captured:?}",
+            path.display()
+        );
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -163,10 +228,22 @@ fn main() {
             secret_store::secret_store_set,
             secret_store::secret_store_remove,
         ])
+        // 菜单命令一律以 id 转发给前端，由前端翻译回 editorShortcuts 里的那条 chord，
+        // 因此原生侧不复制第二份按键绑定（见 src/menu.rs 顶部注释）。
+        .on_menu_event(|app, event| {
+            use tauri::Emitter;
+            let id = event.id().as_ref().to_string();
+            if menu::is_command_id(&id) {
+                if let Err(error) = app.emit(menu::MENU_EVENT, id) {
+                    eprintln!("[inkpi-desktop] 菜单命令转发失败: {error}");
+                }
+            }
+        })
         .setup(|app| {
             spawn_daemon(app.handle()).map_err(|message| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
             })?;
+            menu::install(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())

@@ -7,9 +7,14 @@ import { CheckCircle2, AlertCircle, Wrench, BookOpen, Bot, Zap } from 'lucide-re
 import { clock } from '../../../adapters/clock'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('narrative-linter')
   const [engine] = useState(() => new NarrativeLinterEngine())
   const [rules, setRules] = useState(() => NarrativeLinterEngine.getDefaultRules())
   const [chapters, setChapters] = useState<any[]>([])
@@ -87,7 +92,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
   }
 
   // 接入 AI 叙事深度体检
-  const handleAiDeepLint = () => {
+  const handleAiDeepLint = async () => {
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -99,9 +104,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
       ).slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('narrative-linter', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const toggleRule = (ruleId: string) => {
@@ -129,6 +132,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
             ESLint
             风格的网文工业级质量管线，直连真实章节，拦截副词堆叠、窒息长句、百科说教与现代热梗
           </p>
+          <ScoreProvenanceBadge source="rule" detail="100 减去规则命中数加权" />
         </div>
 
         <div className="flex items-center gap-4">
@@ -138,10 +142,10 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 <BookOpen className="w-3.5 h-3.5" />
                 检查章节:
               </span>
-              <select
+              <Select
                 value={selectedChapterId}
-                onChange={(e) => handleSelectChapter(e.target.value)}
-                className="text-xs px-2.5 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                onValueChange={(v) => handleSelectChapter(v)}
+                size="sm"
               >
                 <option value="all">全书章节聚合巡检</option>
                 {chapters.map((c) => (
@@ -149,7 +153,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                     第 {c.order} 章 · {c.title || '无标题'}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 
@@ -215,12 +219,13 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 <button
                   className="px-3 py-1 bg-[var(--ink-accent)] text-white rounded text-xs font-semibold hover:opacity-90 transition flex items-center gap-1 cursor-pointer"
                   onClick={handleAiDeepLint}
-                  disabled={!text.trim()}
+                  disabled={!text.trim() || aiTask.isRunning}
                 >
                   <Bot className="w-3 h-3" />
                   AI 叙事深度体检
                 </button>
               )}
+              <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
             </div>
           </div>
 

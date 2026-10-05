@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbMultiverseRepository } from '../../../adapters/indexedDbMultiverseRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
@@ -9,6 +9,8 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 type CanonChapter = { index: number; title: string; summary: string; entities: string[] }
 
@@ -16,11 +18,11 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
   const host = useOptionalPluginHostContext()
   const [canonChapters, setCanonChapters] = useState<CanonChapter[]>([])
   const [forkIndex, setForkIndex] = useState<number>(0)
-  const [premise, setPremise] = useState<string>(
-    '如果主角在该章节没有现身救下女配，选择暗中取宝独善其身',
-  )
+  const [premise, setPremise] = useState<string>('')
   const [branches, setBranches] = useState<MultiverseBranchRecord[]>([])
   const [activeBranch, setActiveBranch] = useState<MultiverseSimulationResult | null>(null)
+  const [isRunning, setIsRunning] = useState(false)
+  const workflowRunRef = useRef(0)
 
   const loadBranches = async () => {
     const list = await indexedDbMultiverseRepository.getAll(projectId)
@@ -58,17 +60,39 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
     })
   }, [branches, onStats])
 
-  // 执行实时分支因果模拟；连接 Daemon 时由 Runtime Workflow 负责，离线时保留本地确定性回退。
+  // 离线本地模拟可以即时预览；联网 Runtime 工作流必须由作者明确运行。
   useEffect(() => {
     if (canonChapters.length < 2) return
-    const localResult = MultiverseEngine.simulateFork(canonChapters, forkIndex, premise)
-    setActiveBranch(localResult)
-    const runtimeAssistant = host?.aiAssistant
-    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginWorkflow) return
+    setActiveBranch(MultiverseEngine.simulateFork(canonChapters, forkIndex, premise))
+  }, [canonChapters, forkIndex, premise])
 
-    let cancelled = false
-    void runtimeAssistant
-      .runPluginWorkflow(
+  useEffect(() => {
+    workflowRunRef.current += 1
+  }, [canonChapters, forkIndex, premise])
+
+  useEffect(() => {
+    return () => {
+      workflowRunRef.current += 1
+    }
+  }, [])
+
+  const handleRunWorkflow = async () => {
+    const runtimeAssistant = host?.aiAssistant
+    if (
+      canonChapters.length < 2 ||
+      !runtimeAssistant?.isAvailable ||
+      !runtimeAssistant.runPluginWorkflow ||
+      isRunning
+    ) {
+      return
+    }
+
+    const runId = workflowRunRef.current + 1
+    workflowRunRef.current = runId
+    setIsRunning(true)
+
+    try {
+      const result = await runtimeAssistant.runPluginWorkflow(
         'multiverse-whatif',
         {
           canonChapters: canonChapters.map((chapter) => ({
@@ -85,16 +109,21 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
           forkChapterIndex: forkIndex,
           divergencePremise: semanticTextFromContent('multiverse-divergence-premise', premise),
         },
-        { projectId },
+        { projectId, executionMode: 'explicit', cancellable: true },
       )
-      .then((result) => {
-        if (!cancelled && isMultiverseSimulationResult(result)) setActiveBranch(result)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
+      if (
+        workflowRunRef.current === runId &&
+        result?.status === 'completed' &&
+        isMultiverseSimulationResult(result.result)
+      ) {
+        setActiveBranch(result.result)
+      }
+    } catch (error) {
+      if (workflowRunRef.current === runId) console.error('Multiverse workflow failed:', error)
+    } finally {
+      if (workflowRunRef.current === runId) setIsRunning(false)
     }
-  }, [canonChapters, forkIndex, host?.aiAssistant, premise, projectId])
+  }
 
   const handleSaveBranch = async () => {
     if (!activeBranch) return
@@ -124,15 +153,31 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             设定剧情分支分歧奇点，推演“如果主角未救女配/错失机缘”的因果涟漪与蝴蝶效应
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按分支正文的词集重合度推算" />
         </div>
-        <button
-          type="button"
-          onClick={handleSaveBranch}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg font-medium shadow-sm transition"
-        >
-          <Send className="w-3.5 h-3.5" />
-          <span>归档当前推演分支</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRunWorkflow}
+            disabled={
+              canonChapters.length < 2 ||
+              !host?.aiAssistant?.isAvailable ||
+              !host?.aiAssistant?.runPluginWorkflow ||
+              isRunning
+            }
+            className="px-3.5 py-1.5 border border-purple-300 text-purple-700 dark:border-purple-800 dark:text-purple-300 text-xs rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRunning ? '运行中…' : '运行 AI 推演'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveBranch}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg font-medium shadow-sm transition"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>归档当前推演分支</span>
+          </button>
+        </div>
       </div>
 
       {/* 空状态提示 */}
@@ -150,17 +195,19 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             <label className="text-xs font-bold text-slate-500 block mb-1">
               分歧奇点章节 (Fork Point):
             </label>
-            <select
+            <Select
+              aria-label="分歧奇点章节"
               value={forkIndex}
-              onChange={(e) => setForkIndex(Number(e.target.value))}
-              className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"
+              onValueChange={(v) => setForkIndex(Number(v))}
+              className="w-full"
+              size="sm"
             >
               {canonChapters.map((ch) => (
                 <option key={ch.index} value={ch.index}>
                   {ch.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="md:col-span-3">
@@ -169,6 +216,7 @@ export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             </label>
             <input
               type="text"
+              aria-label="What-If 假设前提"
               value={premise}
               onChange={(e) => setPremise(e.target.value)}
               className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"

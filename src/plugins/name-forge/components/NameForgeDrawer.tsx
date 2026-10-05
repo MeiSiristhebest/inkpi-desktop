@@ -4,6 +4,7 @@ import type { NameCategory, GeneratedNameItem } from '../types'
 import { nameForgeEngine } from '../engine/NameForgeEngine'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { Sparkles, Dices, Copy, Check } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 const CATEGORY_OPTIONS: { id: NameCategory; label: string }[] = [
   { id: 'character_cn', label: '东方人名' },
@@ -53,14 +54,15 @@ export const NameForgeDrawer: FC<DesktopPluginDrawerProps> = () => {
             <span>奇幻起名摇号</span>
           </div>
 
-          <button
-            onClick={handleReroll}
-            className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)] hover:text-purple-400 flex items-center gap-1 text-[11px]"
-            title="重新生成 5 个名字"
-          >
-            <Dices className="w-3.5 h-3.5" />
-            <span>摇号</span>
-          </button>
+          <Tooltip content="重新生成 5 个名字">
+            <button
+              onClick={handleReroll}
+              className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)] hover:text-purple-400 flex items-center gap-1 text-[11px]"
+            >
+              <Dices className="w-3.5 h-3.5" />
+              <span>摇号</span>
+            </button>
+          </Tooltip>
         </div>
 
         {/* 类别下拉切换 */}
@@ -92,23 +94,24 @@ export const NameForgeDrawer: FC<DesktopPluginDrawerProps> = () => {
             >
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-[var(--ink-text)]">{item.name}</span>
-                <button
-                  onClick={() => handleCopy(item)}
-                  className="hover:text-[var(--ink-accent)] flex items-center gap-1 text-[var(--ink-text-muted)] text-[10px]"
-                  title="复制名称"
-                >
-                  {isCopied ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-500" />
-                      <span className="text-emerald-500">已复制</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>复制</span>
-                    </>
-                  )}
-                </button>
+                <Tooltip content="复制名称">
+                  <button
+                    onClick={() => handleCopy(item)}
+                    className="hover:text-[var(--ink-accent)] flex items-center gap-1 text-[var(--ink-text-muted)] text-[10px]"
+                  >
+                    {isCopied ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-500" />
+                        <span className="text-emerald-500">已复制</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>复制</span>
+                      </>
+                    )}
+                  </button>
+                </Tooltip>
               </div>
 
               <p className="text-[10px] text-[var(--ink-text-muted)] line-clamp-1">

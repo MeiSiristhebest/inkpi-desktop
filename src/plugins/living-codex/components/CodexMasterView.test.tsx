@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { CodexMasterView } from './CodexMasterView'
+import { countTemplates } from '../content/characterPresets'
 import { db } from '../../../db/indexedDB'
 import type { CodexEntity } from '../types'
 
@@ -83,9 +84,13 @@ describe('CodexMasterView Component', () => {
 
     render(<CodexMasterView projectId="p1" />)
 
-    const templateBtn = await screen.findByTitle('浏览 36+ 种男女核心人设与世界观模版')
+    // 提示改由门面承担后触发器上不再有原生 title，按可见名字定位；
+    // 实算份数是否真的到达用户，由下面弹窗里的 `${countTemplates()} 款预置模板` 兜住。
+    const templateBtn = await screen.findByRole('button', { name: '模版库' })
     fireEvent.click(templateBtn)
 
-    expect(await screen.findByText(/36\+ 款预置模板/)).toBeInTheDocument()
+    expect(
+      await screen.findByText(new RegExp(`${countTemplates()} 款预置模板`)),
+    ).toBeInTheDocument()
   })
 })

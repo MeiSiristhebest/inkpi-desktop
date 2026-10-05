@@ -9,9 +9,14 @@ import {
   CloudOff,
 } from 'lucide-react'
 import { AiActivityCenter } from './AiActivityCenter'
+import {
+  formatAssistantRequestScope,
+  type AssistantRequestScope,
+} from '../../ai/context/requestScope'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
-import type { AiArtifact } from '../../ai/artifacts/artifactStore'
+import type { StandardAiResult } from '../../types/aiResultLifecycle'
 import type { DomainSyncConflict } from '../../domain/sync/domainSyncService'
+import { Tooltip } from '../../ui/primitives'
 
 interface AiMessage {
   role: 'user' | 'assistant'
@@ -29,10 +34,13 @@ interface AiAssistantPanelProps {
   onInputChange: (value: string) => void
   onSend: () => void
   onClose: () => void
+  /** 发送前披露：随指令带出的本地内容，由会话状态机投影，面板只负责如实展示（P3.15） */
+  requestScope?: AssistantRequestScope
   initialTab?: 'chat' | 'activity'
   onTabChange?: (tab: 'chat' | 'activity') => void
   taskRecovery?: TaskRecoveryRecord[]
-  artifacts?: AiArtifact[]
+  /** 本工作区的统一 AI 结果，Activity Center 的唯一结果列表来源 */
+  results?: StandardAiResult[]
   taskRecoveryLoading?: boolean
   taskRecoveryError?: string
   onResumeTask?: (taskId: string) => Promise<boolean>
@@ -52,10 +60,11 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   onInputChange,
   onSend,
   onClose,
+  requestScope,
   initialTab = 'chat',
   onTabChange,
   taskRecovery = [],
-  artifacts = [],
+  results = [],
   taskRecoveryLoading = false,
   taskRecoveryError,
   onResumeTask,
@@ -102,9 +111,9 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           >
             <Activity className="w-3.5 h-3.5" />
             活动中心
-            {(taskRecovery.length > 0 || artifacts.length > 0) && (
+            {(taskRecovery.length > 0 || results.length > 0) && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[var(--ink-accent-soft)] text-[var(--ink-accent)]">
-                {taskRecovery.length + artifacts.length}
+                {taskRecovery.length + results.length}
               </span>
             )}
           </button>
@@ -112,59 +121,57 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
         <div className="flex items-center gap-2">
           {/* Domain Sync State Indicator */}
           {domainSyncState === 'synced' && (
-            <span
-              title="领域数据已与 Daemon 保持权威同步"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-            >
-              <CheckCircle2 className="w-2.5 h-2.5" />
-              已同步
-            </span>
+            <Tooltip content="领域数据已与 Daemon 保持权威同步">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                <CheckCircle2 className="w-2.5 h-2.5" />
+                已同步
+              </span>
+            </Tooltip>
           )}
           {domainSyncState === 'syncing' && (
-            <span
-              title="正在与 Daemon 异步投影同步…"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse"
-            >
-              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-              正在同步
-            </span>
+            <Tooltip content="正在与 Daemon 异步投影同步…">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
+                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                正在同步
+              </span>
+            </Tooltip>
           )}
           {domainSyncState === 'pending' && (
-            <span
-              title="存在尚未推送到 Daemon 的本地领域修改"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              待同步
-            </span>
+            <Tooltip content="存在尚未推送到 Daemon 的本地领域修改">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                待同步
+              </span>
+            </Tooltip>
           )}
           {domainSyncState === 'conflict' && (
-            <button
-              type="button"
-              onClick={() => setShowConflictModal(true)}
-              title="存在领域投影版本冲突，点击查看详情"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
-            >
-              <AlertTriangle className="w-2.5 h-2.5" />
-              存在冲突
-            </button>
+            <Tooltip content="存在领域投影版本冲突，点击查看详情">
+              <button
+                type="button"
+                onClick={() => setShowConflictModal(true)}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
+              >
+                <AlertTriangle className="w-2.5 h-2.5" />
+                存在冲突
+              </button>
+            </Tooltip>
           )}
           {domainSyncState === 'offline' && (
-            <span
-              title="Daemon 离线，领域修改暂存于本地 IndexedDB"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]"
-            >
-              <CloudOff className="w-2.5 h-2.5" />
-              离线
-            </span>
+            <Tooltip content="Daemon 离线，领域修改暂存于本地 IndexedDB">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]">
+                <CloudOff className="w-2.5 h-2.5" />
+                离线
+              </span>
+            </Tooltip>
           )}
-          <button
-            onClick={onClose}
-            title="收起"
-            className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
+          <Tooltip content="收起">
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors duration-150"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -172,7 +179,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
         <div className="flex-1 overflow-hidden">
           <AiActivityCenter
             recoveryRecords={taskRecovery}
-            artifacts={artifacts}
+            results={results}
             loading={taskRecoveryLoading}
             error={taskRecoveryError}
             onResume={onResumeTask}
@@ -214,6 +221,11 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           </div>
 
           <div className="shrink-0 p-2.5 border-t border-[var(--ink-border)]">
+            {requestScope && (
+              <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--ink-text-faint)]">
+                {formatAssistantRequestScope(requestScope)}
+              </p>
+            )}
             <div className="flex items-end gap-1.5">
               <input
                 type="text"
@@ -251,6 +263,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="关闭冲突提示"
                 onClick={() => setShowConflictModal(false)}
                 className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
               >

@@ -7,8 +7,8 @@ export const indexedDbPaywallAuditRepository: PaywallAuditRepository = {
   },
 
   async getByChapterId(chapterId: string): Promise<PaywallAuditRecord | undefined> {
-    const all = await db.getAll<PaywallAuditRecord>('paywallAudits')
-    return all.find((r) => r.chapterId === chapterId)
+    const matches = await db.getByIndex<PaywallAuditRecord>('paywallAudits', 'chapterId', chapterId)
+    return matches[0]
   },
 
   async save(record: PaywallAuditRecord): Promise<void> {

@@ -9,10 +9,15 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Anchor, Copy, Check, Plus, Trash2, Sparkles, Zap, BookOpen, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('reader-hook')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [testText, setTestText] = useState(
@@ -91,7 +96,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   // 真实 AI 诊断请求通道
-  const handleAiDeepAudit = () => {
+  const handleAiDeepAudit = async () => {
     if (!testText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -103,9 +108,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       ),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('reader-hook', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSaveHook = async () => {
@@ -156,6 +159,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             诊断章尾 300 字悬念张力，直连真实章节，掌握网文工业级断章追更技术
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按断章关键词与句长特征计分" />
         </div>
 
         {/* 章节快速切换选择器 */}
@@ -165,17 +169,17 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <BookOpen className="w-3.5 h-3.5" />
               当前章节:
             </span>
-            <select
+            <Select
               value={selectedChapterId}
-              onChange={(e) => handleSelectChapter(e.target.value)}
-              className="text-xs px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+              onValueChange={(v) => handleSelectChapter(v)}
+              size="sm"
             >
               {chapters.map((c) => (
                 <option key={c.id} value={c.id}>
                   第 {c.order} 章 · {c.title || '无标题'} ({c.wordCount || 0}字)
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
       </div>
@@ -200,6 +204,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 </button>
                 {hostContext?.aiAssistant?.isAvailable && (
                   <button
+                    disabled={aiTask.isRunning}
                     onClick={handleAiDeepAudit}
                     className="px-2.5 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
                   >
@@ -207,6 +212,7 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     AI 深度审读
                   </button>
                 )}
+                <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
               </div>
             </div>
 
@@ -334,13 +340,14 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                       </div>
                       <p className="text-[11px] text-[var(--ink-text)] truncate">{h.hookText}</p>
                     </div>
-                    <button
-                      onClick={() => handleDeleteHook(h.id)}
-                      className="text-[var(--ink-text-muted)] hover:text-rose-500 p-1"
-                      title="删除"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <Tooltip content="删除">
+                      <button
+                        onClick={() => handleDeleteHook(h.id)}
+                        className="text-[var(--ink-text-muted)] hover:text-rose-500 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </Tooltip>
                   </div>
                 ))}
               </div>
@@ -370,17 +377,18 @@ export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     >
                       载入测算
                     </button>
-                    <button
-                      onClick={() => handleCopy(tpl.id, tpl.example)}
-                      className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
-                      title="复制例句"
-                    >
-                      {copiedId === tpl.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                    <Tooltip content="复制例句">
+                      <button
+                        onClick={() => handleCopy(tpl.id, tpl.example)}
+                        className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+                      >
+                        {copiedId === tpl.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
                 <p className="text-[11px] text-[var(--ink-text-muted)]">{tpl.description}</p>

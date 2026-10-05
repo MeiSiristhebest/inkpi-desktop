@@ -12,24 +12,27 @@ import {
   ProposalLedger,
   type AiProposal,
 } from '../../../ai/proposals'
+import { previewChoiceLabel, reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 import { semanticTextFromContent } from '../../../domain/content'
 import { formatByPreset } from '../../../domain/text'
+import { Tooltip } from '../../../ui/primitives'
 
 export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
   const host = useOptionalPluginHostContext()
+  // §P2.4：没有正文可带的时候就从空白开始。这里以前塞了一段仙侠示例稿，
+  // 于是没配置过的作品一打开就被告知本书的原稿长这样。
   const initialSource = host?.activeChapter
     ? semanticTextFromContent(
         host.activeChapter.id,
         host.activeChapter.content || '',
         host.activeChapter.revision,
       )
-    : '风雨如晦，夜幕笼罩着古老残破的城池。\n远处传来急促而沉重的脚步声。'
+    : ''
   const [sourceText, setSourceText] = useState(initialSource)
-  const [proposedText, setProposedText] = useState(
-    '骤雨如瀑，阴冷夜幕笼罩着风雨飘摇的废弃古城。\n寂静长街深处传来急促而沉重的破空脚步声。',
-  )
+  const [proposedText, setProposedText] = useState('')
   const [hunks, setHunks] = useState<ReviewHunkView[]>([])
   const [mergedResult, setMergedResult] = useState('')
+  const [computeNotice, setComputeNotice] = useState('')
   const [proposalLedger] = useState(
     () => new ProposalLedger({ store: new IndexedDbProposalStore() }),
   )
@@ -53,6 +56,12 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
   }, [mergedResult, sourceText, onStats])
 
   const handleCompute = async () => {
+    // 两栏都空的时候不要惊动引擎和 AI：那只会烧一次没有人要求的请求（§P2.7）。
+    if (!sourceText.trim() && !proposedText.trim()) {
+      setComputeNotice('两栏都还是空的：先粘贴原稿或修订稿，再计算分块。')
+      return
+    }
+    setComputeNotice('')
     let diff = DiffReviewerEngine.computeDiff(semanticSourceText, semanticProposedText)
     const runtimeAssistant = host?.aiAssistant
     if (runtimeAssistant?.isAvailable && runtimeAssistant.runPluginTool) {
@@ -205,42 +214,49 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             <span>双栏 Plan/Apply 审校与合并器 (DiffReviewer)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            基于 Myers SES 最短编辑算法与行内字词级对齐，实现多源修订的分块采纳与原子合稿
+            基于 Myers SES 最短编辑算法与行内字词级对齐：逐块取舍只重算合稿预览，正文要等写回才改变
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {writebackProposal && (
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              写回状态：{reviewStatusLabel(writebackProposal.status)}
+            </span>
+          )}
           {host?.activeChapter && (
-            <button
-              onClick={() => void handleWriteback()}
-              disabled={writebackBusy || writebackProposal?.status === 'committed'}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
-              title="将审阅后的合稿结果记录为 Proposal，并通过 CAS 写回当前正文章节"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {writebackBusy ? '处理中…' : '写回正文章节 (Proposal/CAS)'}
-            </button>
+            <Tooltip content="将审阅后的合稿结果记录为 Proposal，并通过 CAS 写回当前正文章节">
+              <button
+                onClick={() => void handleWriteback()}
+                disabled={writebackBusy || writebackProposal?.status === 'committed'}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {writebackBusy ? '处理中…' : '写回正文章节 (Proposal/CAS)'}
+              </button>
+            </Tooltip>
           )}
           {writebackProposal?.status === 'committed' && (
-            <button
-              onClick={() => void handleUndo()}
-              disabled={writebackBusy}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
-              title="通过 Proposal Ledger 撤销上一次写回"
-            >
-              撤销写回
-            </button>
+            <Tooltip content="通过 Proposal Ledger 撤销上一次写回">
+              <button
+                onClick={() => void handleUndo()}
+                disabled={writebackBusy}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
+              >
+                撤销写回
+              </button>
+            </Tooltip>
           )}
           <button
             onClick={applyAll}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition"
           >
-            <Check className="w-3.5 h-3.5" /> 全部采纳
+            <Check className="w-3.5 h-3.5" /> 全部纳入预览
           </button>
           <button
             onClick={rejectAll}
             className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition"
           >
-            <X className="w-3.5 h-3.5" /> 全部拒绝
+            <X className="w-3.5 h-3.5" /> 全部排除
           </button>
         </div>
       </div>
@@ -254,6 +270,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             className="w-full h-40 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 leading-relaxed"
             value={sourceText}
             onChange={(e) => setSourceText(e.target.value)}
+            placeholder="打开正文章节后会自动带入当前稿；也可以直接粘贴一段原稿。"
           />
         </div>
         <div className="space-y-1.5">
@@ -261,6 +278,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             AI / 审校修订提案 (Proposed):
           </label>
           <textarea
+            placeholder="粘贴 AI 或审校给出的修订稿"
             className="w-full h-40 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 leading-relaxed"
             value={proposedText}
             onChange={(e) => setProposedText(e.target.value)}
@@ -275,6 +293,9 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
         >
           <Layers className="w-4 h-4" /> 计算差异分块 (Compute Diff Hunks)
         </button>
+        {computeNotice && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{computeNotice}</p>
+        )}
       </div>
 
       {writebackError && (
@@ -305,19 +326,19 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
                           : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
                     }`}
                   >
-                    {hunk.resolution.toUpperCase()}
+                    {previewChoiceLabel(hunk.resolution)}
                   </span>
                   <button
                     onClick={() => setHunkResolution(hunk.id, 'applied')}
                     className="px-2 py-1 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 transition"
                   >
-                    采纳
+                    纳入预览
                   </button>
                   <button
                     onClick={() => setHunkResolution(hunk.id, 'rejected')}
                     className="px-2 py-1 bg-rose-600 text-white rounded text-xs hover:bg-rose-700 transition"
                   >
-                    放弃
+                    排除
                   </button>
                 </div>
               </div>

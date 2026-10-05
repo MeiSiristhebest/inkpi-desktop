@@ -30,7 +30,7 @@ function completedResult(input: AiTask): TaskResult {
   }
 }
 
-function makeClient(onRegister?: () => Promise<void>): {
+function makeClient(onRegister?: () => Promise<unknown> | unknown): {
   client: RpcClient
   calls: Array<{ method: string; params: unknown }>
   registerCalls: number
@@ -49,8 +49,7 @@ function makeClient(onRegister?: () => Promise<void>): {
       }
       if (method === 'instruction.register') {
         registerCalls += 1
-        await onRegister?.()
-        return { success: true } as T
+        return ((await onRegister?.()) ?? { success: true }) as T
       }
       if (method === 'task.submit') {
         return { taskId: (params as { task: AiTask }).task.id, status: 'queued' } as T
@@ -206,6 +205,35 @@ describe('createDaemonAiAssistant instruction registration', () => {
     expect(harness.registerCalls).toBe(2)
   })
 
+  it('retries after a validation-only registration receipt failure', async () => {
+    let attempts = 0
+    const harness = makeClient(() => {
+      attempts += 1
+      if (attempts === 1) {
+        return {
+          success: true,
+          registered: true,
+          count: 0,
+          instructionIds: [],
+          version: 'runtime-v1',
+          results: [],
+        }
+      }
+      return { success: true }
+    })
+    const assistant = createDaemonAiAssistant(harness.client)
+
+    await expect(
+      assistant.runTask(task('validation-failure'), { pollIntervalMs: 0 }),
+    ).rejects.toThrow('expected')
+    await expect(
+      assistant.runTask(task('validation-retry'), { pollIntervalMs: 0 }),
+    ).resolves.toMatchObject({
+      output: { text: 'done:validation-retry' },
+    })
+    expect(harness.registerCalls).toBe(2)
+  })
+
   it('cancels an in-flight task when its caller aborts', async () => {
     const calls: Array<{ method: string; params: unknown }> = []
     const client: RpcClient = {
@@ -254,7 +282,7 @@ describe('createDaemonAiAssistant instruction registration', () => {
     ]
     let statusIndex = 0
     const client: RpcClient = {
-      request: async <T>(method: string, params?: unknown): Promise<T> => {
+      request: async <T>(method: string, _params?: unknown): Promise<T> => {
         if (method === 'instruction.register') return { success: true } as T
         if (method === 'task.submit') return { taskId: 'waiting-user', status: 'queued' } as T
         if (method === 'task.status')
@@ -386,7 +414,7 @@ describe('createDaemonAiAssistant instruction registration', () => {
             toolCallId: 'desktop-plugin-tool-diff-reviewer-1',
             toolName: 'plugin.diff-reviewer.compute',
             content: [{ type: 'text', text: '{"stats":{"additions":1}}' }],
-            details: { stats: { additions: 1 } },
+            details: { stats: { additions: 1 }, password: 'do-not-return' },
             isError: false,
           } as T
         }
@@ -396,7 +424,8 @@ describe('createDaemonAiAssistant instruction registration', () => {
         }
         if (method === 'task.status') {
           const submitted = calls.findLast((call) => call.method === 'task.submit')
-          const submittedTask = (submitted?.params as { task: AiTask }).task
+          if (!submitted) throw new Error('Expected plugin workflow task submission')
+          const submittedTask = (submitted.params as { task: AiTask }).task
           return {
             taskId: submittedTask.id,
             kind: submittedTask.kind,
@@ -416,19 +445,37 @@ describe('createDaemonAiAssistant instruction registration', () => {
     const assistant = createDaemonAiAssistant(client)
 
     await expect(
-      assistant.runPluginTool?.('diff-reviewer', { oldText: 'a', newText: 'b' }),
+      assistant.runPluginTool?.('diff-reviewer', {
+        oldText: 'a',
+        newText: 'b',
+        password: 'tool-password',
+      }),
     ).resolves.toEqual({
       stats: { additions: 1 },
+      password: '[redacted]',
     })
     await expect(
-      assistant.runPluginWorkflow?.('multiverse-whatif', { forkChapterIndex: 2 }),
-    ).resolves.toEqual({ nodes: ['runtime'] })
+      assistant.runPluginWorkflow?.(
+        'multiverse-whatif',
+        { forkChapterIndex: 2, note: 'token=workflow-token' },
+        { password: 'metadata-password' },
+      ),
+    ).resolves.toMatchObject({
+      status: 'completed',
+      result: { nodes: ['runtime'] },
+      artifactContent: { nodes: ['runtime'] },
+      pluginId: 'multiverse-whatif',
+    })
 
     expect(calls[0]).toMatchObject({
       method: 'tool.execute',
       params: {
         toolName: 'plugin.diff-reviewer.compute',
-        arguments: { oldText: 'a', newText: 'b' },
+        arguments: {
+          oldText: 'a',
+          newText: 'b',
+          password: '[redacted]',
+        },
       },
     })
     const workflowSubmit = calls.find((call) => call.method === 'task.submit')
@@ -436,9 +483,34 @@ describe('createDaemonAiAssistant instruction registration', () => {
       params: {
         task: {
           kind: 'plugin.multiverse-whatif.workflow',
+          input: {
+            payload: {
+              forkChapterIndex: 2,
+              note: 'token=[redacted]',
+            },
+          },
+          metadata: {
+            password: '[redacted]',
+          },
           outputContract: { format: 'structured' },
         },
       },
     })
+  })
+
+  it('reports unknown plugin capabilities instead of returning a false success', async () => {
+    const request = vi.fn(async () => ({}) as never)
+    const assistant = createDaemonAiAssistant({
+      request,
+      close: vi.fn(async () => undefined),
+    })
+
+    await expect(assistant.runPluginTool?.('pure-local-plugin', {})).rejects.toThrow(
+      'has no declared Runtime tool capability',
+    )
+    await expect(assistant.runPluginWorkflow?.('pure-local-plugin', {})).rejects.toThrow(
+      'has no declared Runtime workflow capability',
+    )
+    expect(request).not.toHaveBeenCalled()
   })
 })

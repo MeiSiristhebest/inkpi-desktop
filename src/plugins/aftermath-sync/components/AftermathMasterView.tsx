@@ -1,29 +1,76 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAftermathRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { codexApplicationService } from '../../../services/domainApplicationServices'
 import { pluginEventBus } from '../../../core/pluginEventBus'
+import { reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 import { AftermathEngine } from '../engine/AftermathEngine'
-import type { AftermathPatchRecord } from '../types'
+import type { AftermathPatchRecord, EntityCandidate } from '../types'
+import type { CodexEntity } from '../../living-codex/types'
 import { GitPullRequest, Check, X, Sparkles } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 
+// 只读设定库里已有的键，口径与 consistency-sentinel / living-codex 的 Adapters 一致。
+const toEntityCandidate = (entity: CodexEntity): EntityCandidate => ({
+  id: entity.id,
+  name: entity.name,
+  category: entity.category as 'character' | 'item',
+  currentTier: (entity.attributes?.realm as string) || (entity.attributes?.境界 as string),
+  currentOwner:
+    (entity.attributes?.['当前持有者'] as string) ||
+    entity.relations?.find((r) => r.relationType === '持有者')?.targetName,
+})
+
+// propertyName 只是给作者看的标签：批准时必须写回 toEntityCandidate 读取的键，否则同一条变更会被反复提案。
+const ATTRIBUTE_WRITE_KEYS: Record<string, string> = {
+  战力境界: 'realm',
+  所有权归属: '当前持有者',
+}
+
+/** 「谁发生了什么变迁」的判定口径：正文反复扫描必须落到同一个键，否则列表会被重复补丁刷满。 */
+const patchIdentity = (p: {
+  entityId: string
+  changeType: string
+  propertyName: string
+  afterValue: string
+}) => `${p.entityId}|${p.changeType}|${p.propertyName}|${p.afterValue}`
+
 export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [patches, setPatches] = useState<AftermathPatchRecord[]>([])
-  const [chapterText, setChapterText] = useState(
-    '【示例文本】输入章节正文，系统将扫描章后设定回写机会并生成补丁记录。',
-  )
+  // 空白起步：示例正文会被当成作者已写的字数上报（INV-09）。
+  const [chapterText, setChapterText] = useState('')
+  const [roster, setRoster] = useState<EntityCandidate[]>([])
+  const [scanNotice, setScanNotice] = useState<string | null>(null)
 
   const loadPatches = async () => {
     const all = await indexedDbAftermathRepository.getAll(projectId)
     setPatches(all)
   }
 
+  const loadRoster = useCallback(async () => {
+    const all = await indexedDbCodexEntityRepository.getAll()
+    // 名单只取本书设定库里真实存在的角色与物品，绝不现场编一个「未指定角色」。
+    setRoster(
+      all
+        .filter((e) => e.projectId === projectId && ['character', 'item'].includes(e.category))
+        .map(toEntityCandidate),
+    )
+  }, [projectId])
+
   useEffect(() => {
     loadPatches().catch(console.error)
+    loadRoster().catch(console.error)
   }, [projectId])
+
+  // §P2.12：总线注释里的 codexApplicationService -> aftermath-sync 必须真的连通。作者可能在设定库
+  // 面板改完实体就切回来扫描，对照名单停在挂载那一刻的快照上就会把已录的实体再提案一遍。
+  useEffect(() => {
+    return pluginEventBus.scopedBus(projectId).on('CODEX_ENTITY_TOUCHED', () => {
+      loadRoster().catch(console.error)
+    })
+  }, [projectId, loadRoster])
 
   useEffect(() => {
     onStats?.({
@@ -34,12 +81,31 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
   }, [chapterText, onStats])
 
   const handleScan = async () => {
-    const res = AftermathEngine.analyzeChapter(chapterText, 'ch-manual', 1, [
-      { id: 'c1', name: '未指定角色', category: 'character', currentTier: '筑基大圆满' },
-      { id: 'i1', name: '未命名物品', category: 'item', currentOwner: '神秘角色' },
-    ])
+    if (!chapterText.trim()) {
+      setScanNotice('未输入正文：粘贴你自己写完的章节正文后再扫描')
+      return
+    }
+    if (roster.length === 0) {
+      setScanNotice('设定库暂无可对照实体：先去设定库录入角色或物品，本面板不替你虚构名单')
+      return
+    }
+    setScanNotice(null)
 
-    for (const p of res.patches) {
+    // 'ch-manual' 表示「从本面板手工扫描」；没有真实章序就不传，补丁记录里该字段本就是可选的。
+    const res = AftermathEngine.analyzeChapter(chapterText, 'ch-manual', undefined, roster)
+
+    // 同一份正文反复扫描得到的是同一批变迁。以前每次都发一个新 id 存进去，于是同一条回写在
+    // 审阅列表里刷出好几份，批准其中一份后其余几份还挂着「待审阅」。
+    const existing = await indexedDbAftermathRepository.getAll(projectId)
+    const seen = new Set(existing.map(patchIdentity))
+    const fresh = res.patches.filter((p) => {
+      const key = patchIdentity(p)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    for (const p of fresh) {
       const record: AftermathPatchRecord = {
         ...p,
         id: idGenerator.generate('patch'),
@@ -48,6 +114,17 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
         createdAt: clock.now(),
       }
       await indexedDbAftermathRepository.save(record)
+    }
+    if (res.patches.length === 0) {
+      setScanNotice('扫描完成：正文里没有命中可对照实体的状态变迁')
+    } else if (fresh.length === 0) {
+      setScanNotice(`扫描完成：${res.patches.length} 条变迁此前已经记录过，列表保持原样`)
+    } else {
+      const skipped = res.patches.length - fresh.length
+      setScanNotice(
+        `扫描完成：新增 ${fresh.length} 条待审阅补丁` +
+          (skipped > 0 ? `（另有 ${skipped} 条已记录过，未重复添加）` : ''),
+      )
     }
     await loadPatches()
   }
@@ -74,7 +151,7 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           ...targetEntity,
           attributes: {
             ...targetEntity.attributes,
-            [patch.propertyName]: patch.afterValue,
+            [ATTRIBUTE_WRITE_KEYS[patch.propertyName] ?? patch.propertyName]: patch.afterValue,
           },
           detailMarkdown: targetEntity.detailMarkdown
             ? `${targetEntity.detailMarkdown}\n${changeNote}`
@@ -85,16 +162,11 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           updatedAt: clock.now(),
         }
         await codexApplicationService.saveEntity(updatedEntity, 'author-confirmed')
-        pluginEventBus.scopedBus(projectId).emit('CODEX_ENTITY_TOUCHED', {
-          projectId,
-          entityId: targetEntity.id,
-          entityName: targetEntity.name,
-          category: targetEntity.category || 'character',
-        })
       }
     }
 
-    await loadPatches()
+    // 对照名单也要重读：留着批准前的旧境界，下一次扫描会把刚批准掉的变更再提案一遍。
+    await Promise.all([loadPatches(), loadRoster()])
   }
 
   return (
@@ -106,11 +178,11 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
             <span>章后桥段设定回写器 (AftermathSync)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            自动捕获章节完稿中的角色境界突破、宝物易主与人际羁绊，生成世界观同步补丁一键确认
+            对照本书设定库里的实体，从你粘贴的正文中捕获角色境界突破、宝物易主与人际羁绊，生成待审阅补丁
           </p>
         </div>
         <div className="text-xs text-slate-400">
-          待审批补丁:{' '}
+          待审阅补丁:{' '}
           <span className="font-bold text-amber-500">
             {patches.filter((p) => p.status === 'pending').length}
           </span>{' '}
@@ -126,20 +198,40 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
           className="w-full h-28 p-3 text-xs border rounded font-serif bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800"
           value={chapterText}
           onChange={(e) => setChapterText(e.target.value)}
+          placeholder="粘贴你写完的章节正文；扫描只对照本书设定库里已有的实体"
         />
-        <button
-          onClick={handleScan}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1.5 transition"
-        >
-          <Sparkles className="w-4 h-4" /> 扫描章节设定变迁
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <span
+            className={`text-[11px] ${
+              roster.length === 0
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-slate-400 dark:text-slate-500'
+            }`}
+          >
+            {roster.length === 0
+              ? '设定库暂无可对照实体'
+              : `对照名单：本书设定库中的 ${roster.length} 个角色/物品`}
+          </span>
+          <button
+            onClick={handleScan}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1.5 transition"
+          >
+            <Sparkles className="w-4 h-4" /> 扫描章节设定变迁
+          </button>
+        </div>
+        {scanNotice && (
+          <p className="text-[11px] text-indigo-600 dark:text-indigo-400">{scanNotice}</p>
+        )}
       </div>
 
       <div className="space-y-3">
         <h3 className="text-sm font-bold">设定回写提议列表</h3>
+        <p className="text-[11px] text-slate-400">
+          采纳会立即改写设定库里的实体，本面板不提供撤销；不确定的补丁先驳回，改好正文再扫一次。
+        </p>
         {patches.length === 0 ? (
           <div className="p-8 border rounded-xl text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-900">
-            暂无待审批的设定回写补丁
+            暂无待审阅的设定回写补丁
           </div>
         ) : (
           patches.map((patch) => (
@@ -162,17 +254,19 @@ export const AftermathMasterView: FC<DesktopPluginViewProps> = ({ projectId, onS
                           : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
                     }`}
                   >
-                    {patch.status.toUpperCase()}
+                    {reviewStatusLabel(patch.status)}
                   </span>
                   {patch.status === 'pending' && (
                     <>
                       <button
+                        aria-label="采纳回写"
                         onClick={() => handleResolve(patch.id, 'applied')}
                         className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        aria-label="忽略回写"
                         onClick={() => handleResolve(patch.id, 'rejected')}
                         className="p-1 rounded bg-rose-600 text-white hover:bg-rose-700"
                       >

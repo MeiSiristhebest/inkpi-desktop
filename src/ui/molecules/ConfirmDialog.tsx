@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { Modal } from './Modal'
 import { AlertTriangle } from 'lucide-react'
 
@@ -30,17 +30,15 @@ export const ConfirmDialog = ({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) => {
+  // 标题 id 必须逐实例唯一：写死的话，同时挂载的两个确认框会撞出重复 id，
+  // aria-labelledby 只会解析到文档里的第一个，第二个弹窗对读屏器就变成无名。
+  const titleId = useId()
   if (!open) return null
   return (
-    <Modal
-      onClose={onCancel}
-      title={title}
-      ariaLabelledBy="confirm-dialog-title"
-      widthClass="max-w-[400px]"
-    >
+    <Modal onClose={onCancel} title={title} ariaLabelledBy={titleId} widthClass="max-w-[400px]">
       <div className="px-5 py-3.5 border-b border-[var(--ink-border)] flex items-center justify-between bg-[var(--ink-bg-panel)]">
         <h2
-          id="confirm-dialog-title"
+          id={titleId}
           className="text-[14px] font-medium text-[var(--ink-text)] flex items-center gap-2"
         >
           {danger && <AlertTriangle className="w-4 h-4 text-[var(--ink-danger)]" />}

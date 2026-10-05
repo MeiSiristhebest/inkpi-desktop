@@ -26,7 +26,8 @@ describe('PaywallSentry Components', () => {
       fakeChapters as any,
     )
     render(<PaywallSentryMasterView projectId="proj-1" />)
-    expect(screen.getByText(/付费卡点与首订转化哨兵/)).toBeInTheDocument()
+    expect(screen.getByText(/付费卡点与断章势能哨兵/)).toBeInTheDocument()
+    expect(screen.getByTestId('score-provenance')).toHaveTextContent('来源：即时规则')
     await waitFor(() => {
       expect(screen.getByText(/踏入仙途/)).toBeInTheDocument()
     })
@@ -35,6 +36,7 @@ describe('PaywallSentry Components', () => {
   it('renders PaywallSentryDrawer for currentText', async () => {
     render(<PaywallSentryDrawer projectId="proj-1" currentText="天劫降临，九霄雷动，那是……" />)
     expect(screen.getByText(/付费卡点哨兵 \(PPI\)/)).toBeInTheDocument()
-    expect(screen.getByText(/PPI 势能评分/)).toBeInTheDocument()
+    expect(screen.getByText(/PPI 规则评分/)).toBeInTheDocument()
+    expect(screen.getByTestId('score-provenance')).toHaveTextContent('来源：即时规则')
   })
 })

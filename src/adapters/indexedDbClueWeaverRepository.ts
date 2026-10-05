@@ -14,10 +14,8 @@ interface StoredRecord {
 
 export const indexedDbClueWeaverRepository: ClueWeaverRepository = {
   async getAllClues(projectId: string): Promise<ClueItem[]> {
-    const all = await db.getAll<StoredRecord>('clueMatrices')
-    return all
-      .filter((r) => r.projectId === projectId && r.recordType === 'clue')
-      .map((r) => r.payload as ClueItem)
+    const records = await db.getByIndex<StoredRecord>('clueMatrices', 'projectId', projectId)
+    return records.filter((r) => r.recordType === 'clue').map((r) => r.payload as ClueItem)
   },
 
   async saveClue(clue: ClueItem): Promise<void> {
@@ -35,9 +33,9 @@ export const indexedDbClueWeaverRepository: ClueWeaverRepository = {
   },
 
   async getAllCognitions(projectId: string): Promise<ClueCognitionRecord[]> {
-    const all = await db.getAll<StoredRecord>('clueMatrices')
-    return all
-      .filter((r) => r.projectId === projectId && r.recordType === 'cognition')
+    const records = await db.getByIndex<StoredRecord>('clueMatrices', 'projectId', projectId)
+    return records
+      .filter((r) => r.recordType === 'cognition')
       .map((r) => r.payload as ClueCognitionRecord)
   },
 

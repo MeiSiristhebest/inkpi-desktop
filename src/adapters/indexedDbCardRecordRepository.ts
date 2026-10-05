@@ -8,8 +8,8 @@ import {
 
 export class IndexedDbCardRecordRepository implements CardRecordRepository {
   async getCards(projectId: string, tabId: string): Promise<CardRecord[]> {
-    const all = await db.getAll<CardRecord>('cardRecords')
-    return all.filter((c) => c.projectId === projectId && c.tabId === tabId)
+    const cards = await db.getByIndex<CardRecord>('cardRecords', 'projectId', projectId)
+    return cards.filter((card) => card.tabId === tabId)
   }
 
   async saveCard(card: CardRecord): Promise<void> {

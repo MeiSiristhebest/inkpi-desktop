@@ -1,9 +1,11 @@
-import React from 'react'
+import React, { useId } from 'react'
 import type { CardRecord } from '../../types'
 import type { CardRecordRepository } from '../../ports/cardRecordRepository'
 import { useCardViewModel } from '../../hooks/useCardViewModel'
 import { Plus, User, Edit2, Trash2, X, Check } from 'lucide-react'
 import { confirmDialog } from '../../adapters/confirmDialog'
+import { Modal } from '../../ui/molecules/Modal'
+import { Tooltip } from '../../ui/primitives'
 
 export interface CardViewProps {
   projectId: string
@@ -29,6 +31,7 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
   })
 
   const modules = tabMeta?.modules || []
+  const drawerTitleId = useId()
 
   const handleDelete = async (id: string) => {
     if (!(await confirmDialog.confirm('确定删除该档案卡片？'))) return
@@ -82,20 +85,22 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
                         className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <button
-                          onClick={() => setEditingCard({ ...card })}
-                          className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
-                          title="编辑卡片"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(card.id)}
-                          className="p-1 rounded hover:bg-red-500/10 text-[var(--ink-text-muted)] hover:text-red-500"
-                          title="删除卡片"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip content="编辑卡片">
+                          <button
+                            onClick={() => setEditingCard({ ...card })}
+                            className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="删除卡片">
+                          <button
+                            onClick={() => handleDelete(card.id)}
+                            className="p-1 rounded hover:bg-red-500/10 text-[var(--ink-text-muted)] hover:text-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
 
@@ -144,85 +149,90 @@ export const CardView: React.FC<CardViewProps> = ({ projectId, tabId, tabMeta, r
 
       {/* 卡片编辑抽屉 */}
       {editingCard && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex justify-end animate-in fade-in duration-150">
-          <div className="w-[500px] bg-[var(--ink-bg-card)] border-l border-[var(--ink-border)] h-full p-6 shadow-2xl flex flex-col justify-between">
-            <div className="flex items-center justify-between pb-3 border-b border-[var(--ink-border)]">
-              <h3 className="text-sm font-bold">{isNewCard ? '新建卡片档案' : '编辑卡片档案'}</h3>
-              <button
-                onClick={cancelEditing}
-                className="p-1 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
-              <div>
-                <label className="text-xs font-semibold text-[var(--ink-text)]">
-                  名称 / 标题 *
-                </label>
-                <input
-                  type="text"
-                  placeholder="如：陈渊、苍岚大陆等"
-                  value={editingCard.name}
-                  onChange={(e) => setEditingCard({ ...editingCard, name: e.target.value })}
-                  className="w-full mt-1 p-2 text-xs rounded-lg bg-[var(--ink-bg)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)] font-bold"
-                />
-              </div>
-
-              {modules.map((mod: any, mIdx: number) => (
-                <div key={mIdx} className="space-y-2 border-t border-[var(--ink-border)]/50 pt-3">
-                  <h4 className="text-xs font-bold text-[var(--ink-accent)]">{mod.name}</h4>
-                  <div className="space-y-2.5 pl-1">
-                    {(mod.fields || []).map((field: any, fIdx: number) => {
-                      const val = editingCard.data?.[field.name] || ''
-                      return (
-                        <div key={fIdx} className="space-y-1">
-                          <label className="text-xs font-medium text-[var(--ink-text)] flex items-center justify-between">
-                            <span>{field.name}</span>
-                            {field.desc && (
-                              <span className="text-[10px] text-[var(--ink-text-faint)]">
-                                {field.desc}
-                              </span>
-                            )}
-                          </label>
-                          <input
-                            type="text"
-                            placeholder={field.example || ''}
-                            value={val}
-                            onChange={(e) =>
-                              setEditingCard({
-                                ...editingCard,
-                                data: { ...editingCard.data, [field.name]: e.target.value },
-                              })
-                            }
-                            className="w-full p-2 text-xs rounded-lg bg-[var(--ink-bg)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"
-                          />
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-3 border-t border-[var(--ink-border)] flex items-center justify-end gap-2">
-              <button
-                onClick={cancelEditing}
-                className="px-3.5 py-1.5 rounded-lg border border-[var(--ink-border)] text-xs text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-              >
-                取消
-              </button>
-              <button
-                onClick={saveEditing}
-                className="px-4 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium flex items-center gap-1 shadow hover:opacity-90"
-              >
-                <Check className="w-3.5 h-3.5" />
-                确定保存
-              </button>
-            </div>
+        <Modal
+          onClose={cancelEditing}
+          ariaLabelledBy={drawerTitleId}
+          placement="right"
+          widthClass="w-[500px]"
+          panelClassName="bg-[var(--ink-bg-card)] border-l border-[var(--ink-border)] h-full p-6 shadow-2xl flex flex-col justify-between text-[var(--ink-text)]"
+        >
+          <div className="flex items-center justify-between pb-3 border-b border-[var(--ink-border)]">
+            <h3 id={drawerTitleId} className="text-sm font-bold">
+              {isNewCard ? '新建卡片档案' : '编辑卡片档案'}
+            </h3>
+            <button
+              onClick={cancelEditing}
+              aria-label="关闭"
+              className="p-1 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-        </div>
+
+          <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+            <div>
+              <label className="text-xs font-semibold text-[var(--ink-text)]">名称 / 标题 *</label>
+              <input
+                type="text"
+                placeholder="如：陈渊、苍岚大陆等"
+                value={editingCard.name}
+                onChange={(e) => setEditingCard({ ...editingCard, name: e.target.value })}
+                className="w-full mt-1 p-2 text-xs rounded-lg bg-[var(--ink-bg)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)] font-bold"
+              />
+            </div>
+
+            {modules.map((mod: any, mIdx: number) => (
+              <div key={mIdx} className="space-y-2 border-t border-[var(--ink-border)]/50 pt-3">
+                <h4 className="text-xs font-bold text-[var(--ink-accent)]">{mod.name}</h4>
+                <div className="space-y-2.5 pl-1">
+                  {(mod.fields || []).map((field: any, fIdx: number) => {
+                    const val = editingCard.data?.[field.name] || ''
+                    return (
+                      <div key={fIdx} className="space-y-1">
+                        <label className="text-xs font-medium text-[var(--ink-text)] flex items-center justify-between">
+                          <span>{field.name}</span>
+                          {field.desc && (
+                            <span className="text-[10px] text-[var(--ink-text-faint)]">
+                              {field.desc}
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={field.example || ''}
+                          value={val}
+                          onChange={(e) =>
+                            setEditingCard({
+                              ...editingCard,
+                              data: { ...editingCard.data, [field.name]: e.target.value },
+                            })
+                          }
+                          className="w-full p-2 text-xs rounded-lg bg-[var(--ink-bg)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-3 border-t border-[var(--ink-border)] flex items-center justify-end gap-2">
+            <button
+              onClick={cancelEditing}
+              className="px-3.5 py-1.5 rounded-lg border border-[var(--ink-border)] text-xs text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
+            >
+              取消
+            </button>
+            <button
+              onClick={saveEditing}
+              className="px-4 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium flex items-center gap-1 shadow hover:opacity-90"
+            >
+              <Check className="w-3.5 h-3.5" />
+              确定保存
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   )

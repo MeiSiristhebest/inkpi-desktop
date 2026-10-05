@@ -47,20 +47,19 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
     const alphaEvents: any[] = []
     const betaEvents: any[] = []
 
-    const unsubAlpha = busAlpha.on('TIMELINE_EVENT_REGISTERED', (p) => alphaEvents.push(p))
-    const unsubBeta = busBeta.on('TIMELINE_EVENT_REGISTERED', (p) => betaEvents.push(p))
+    const unsubAlpha = busAlpha.on('CHAPTER_CONTENT_AUDITED', (p) => alphaEvents.push(p))
+    const unsubBeta = busBeta.on('CHAPTER_CONTENT_AUDITED', (p) => betaEvents.push(p))
 
     // Emit event solely in project Alpha
-    busAlpha.emit('TIMELINE_EVENT_REGISTERED', {
+    busAlpha.emit('CHAPTER_CONTENT_AUDITED', {
       projectId: projectAlpha,
       chapterId: 'chap-101',
-      calendarId: 'celestial-calendar',
-      universalAbsoluteDay: 1542,
-      summary: '仙门大比落幕',
+      wordCount: 3120,
+      waterScore: 18,
     })
 
     expect(alphaEvents.length).toBe(1)
-    expect(alphaEvents[0].summary).toBe('仙门大比落幕')
+    expect(alphaEvents[0].chapterId).toBe('chap-101')
 
     // Beta subscriber must receive ZERO events
     expect(betaEvents.length).toBe(0)
@@ -143,8 +142,8 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
 
     const captured: Record<string, unknown> = {}
 
-    bus.on('TIMELINE_EVENT_REGISTERED', (p) => {
-      captured.timeline = p
+    bus.on('UNIFIED_CHAPTER_EVALUATED', (p) => {
+      captured.evaluation = p
     })
     bus.on('POWER_BREACH_DETECTED', (p) => {
       captured.power = p
@@ -159,12 +158,12 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
       captured.audit = p
     })
 
-    bus.emit('TIMELINE_EVENT_REGISTERED', {
+    bus.emit('UNIFIED_CHAPTER_EVALUATED', {
       projectId,
       chapterId: 'chap-1',
-      calendarId: 'cal-1',
-      universalAbsoluteDay: 100,
-      summary: '事件摘要',
+      compositeScore: 78,
+      pacingRating: '均衡',
+      cliffhangerScore: 64,
     })
     bus.emit('POWER_BREACH_DETECTED', {
       projectId,
@@ -193,7 +192,7 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
       waterScore: 12,
     })
 
-    expect(captured.timeline.summary).toBe('事件摘要')
+    expect(captured.evaluation.cliffhangerScore).toBe(64)
     expect(captured.power.riskLevel).toBe('WARNING')
     expect(captured.foreshadow.gunName).toBe('伏笔道具')
     expect(captured.codex.entityName).toBe('设定实体')

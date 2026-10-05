@@ -1,4 +1,4 @@
-<!-- 
+<!--
   Designed & Built with ❤️ by MeiSiristhebest (https://github.com/MeiSiristhebest)
   If this repository helps your learning or engineering, please consider dropping a ⭐ Star!
 -->
@@ -13,7 +13,11 @@
 > 📚 Explore the technical blueprint: [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 <p align="center">
-  <b>Cross-Platform AI-Powered Creative Writing Workstation built with Tauri 2 and React</b>
+  <b>AI-Powered Creative Writing Workstation built with Tauri 2 and React · Windows</b>
+</p>
+
+<p align="center">
+  <b>Platform status: Windows production (NSIS installer). macOS / Linux planned — neither buildable nor released today.</b>
 </p>
 
 <p align="center">
@@ -115,32 +119,37 @@ instances; see `src-tauri/src/instance_config.rs`.
 ## ✨ Key Capabilities
 
 ### 1. Standalone Sidecar Daemon Isolation
+
 The backend daemon is compiled by [Bun](https://bun.sh) into a single standalone binary (`inkpi.exe`). The end-user desktop runtime **operates without Node.js, pnpm, or external runtime installations**.
 
 ### 2. Intelligent Flow Editor & Ghost Text
+
 Built on Tiptap and Novel, featuring real-time AI ghost text suggestions through the unified Task Runtime, inline polish, word count metrics, and Chinese typography formatting.
 
 ### 3. Living Codex Knowledge Graph & AC Automaton
+
 - $O(N+M)$ Aho-Corasick multi-pattern string matcher scans thousands of entity keywords in milliseconds.
 - Dynamic 1-hop spreading activation topology model with 0-1 knapsack token budget context slicing.
 - Interactive slide-over drawer for entity inspection and instant lore referencing.
 
 ### 4. Local-First Offline Resilience (IndexedDB)
+
 Local state, drafts, and entity relations are transactionally persisted into browser IndexedDB (`inkpi-desktop-db`) with debounced auto-save write-back.
 
 ### 5. Clean Process Lifecycle & Port Release
+
 Rust host orchestrates daemon spawn and guarantees immediate process cleanup upon window close, preventing orphan processes and port leaks.
 
 ---
 
 ## ⚙️ Requirements
 
-| Tool | Purpose | Phase |
-|---|---|---|
-| **Node.js**: $\ge 22.0.0$ | Frontend SPA build & test execution | Dev / CI |
-| **npm** / **pnpm** | Package management | Dev / CI |
-| **Rust (MinGW-w64 GNU / MSVC)** | Tauri 2 native shell compilation | Packaging |
-| **Bun** | Upstream daemon standalone binary build | InkPi Monorepo |
+| Tool                            | Purpose                                 | Phase          |
+| ------------------------------- | --------------------------------------- | -------------- |
+| **Node.js**: $\ge 22.0.0$       | Frontend SPA build & test execution     | Dev / CI       |
+| **npm** / **pnpm**              | Package management                      | Dev / CI       |
+| **Rust (MinGW-w64 GNU / MSVC)** | Tauri 2 native shell compilation        | Packaging      |
+| **Bun**                         | Upstream daemon standalone binary build | InkPi Monorepo |
 
 ---
 
@@ -164,15 +173,15 @@ npm run build
 
 ### 1. Unified Development Commands
 
-| Command | Action | Example |
-| :--- | :--- | :--- |
-| `npm run dev` | Launch Vite React SPA development server | `npm run dev` |
-| `npm run tauri:dev` | Sync daemon sidecar and launch Tauri 2 desktop app | `npm run tauri:dev` |
-| `npm run build` | Typecheck with `tsc -b` and bundle SPA via Vite | `npm run build` |
-| `npm run lint` | Run ultra-fast Oxlint across all source files | `npm run lint` |
-| `npm run test` | Run Vitest unit & integration test suite | `npm run test` |
+| Command                 | Action                                               | Example                 |
+| :---------------------- | :--------------------------------------------------- | :---------------------- |
+| `npm run dev`           | Launch Vite React SPA development server             | `npm run dev`           |
+| `npm run tauri:dev`     | Sync daemon sidecar and launch Tauri 2 desktop app   | `npm run tauri:dev`     |
+| `npm run build`         | Typecheck with `tsc -b` and bundle SPA via Vite      | `npm run build`         |
+| `npm run lint`          | Run ultra-fast Oxlint across all source files        | `npm run lint`          |
+| `npm run test`          | Run Vitest unit & integration test suite             | `npm run test`          |
 | `npm run test:coverage` | Run test suite with V8 coverage & quality thresholds | `npm run test:coverage` |
-| `npm run tauri:build` | Compile and package Windows NSIS release installer | `npm run tauri:build` |
+| `npm run tauri:build`   | Compile and package Windows NSIS release installer   | `npm run tauri:build`   |
 
 ### 2. Run Complete Test Suite & Coverage Gate
 
@@ -185,6 +194,7 @@ npm run test:coverage
 ```bash
 npm run tauri:build
 ```
+
 Installer outputs are generated into `src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/`.
 
 ---
@@ -222,6 +232,7 @@ Distributed under the [MIT License](./LICENSE). Copyright (c) 2026 InkPi Contrib
 </a>
 
 ### 🤝 Contributors
+
 <a href="https://github.com/MeiSiristhebest/inkpi-desktop/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=MeiSiristhebest/inkpi-desktop" alt="Contributors" />
 </a>

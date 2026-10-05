@@ -3,6 +3,7 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { PaywallSentryEngine } from '../engine/PaywallSentryEngine'
 import type { PaywallAuditResult } from '../types'
 import { Flame, ShieldCheck, AlertTriangle, Skull } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const [inputText, setInputText] = useState('')
@@ -29,6 +30,8 @@ export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = ({ currentText 
         </span>
       </div>
 
+      <ScoreProvenanceBadge source="rule" detail="按当前正文的文本特征当场计分" />
+
       <div className="space-y-1.5">
         <label className="text-[11px] text-[var(--ink-text-muted)] block">
           快速诊断正文（留空则联动编辑器正文）：
@@ -37,14 +40,14 @@ export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = ({ currentText 
           rows={3}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="粘贴章尾或整章文本，评估读者付费留存率与断章势能..."
+          placeholder="粘贴章尾或整章文本，扫描断章势能的文本特征..."
           className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
         />
       </div>
 
       <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3 rounded-lg border border-amber-500/30">
         <div className="flex items-baseline justify-between mb-1">
-          <span className="font-medium text-[var(--ink-text)]">PPI 势能评分</span>
+          <span className="font-medium text-[var(--ink-text)]">PPI 规则评分</span>
           <span className="text-xl font-bold text-amber-500">{audit.ppiScore} / 100</span>
         </div>
         <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
@@ -56,12 +59,12 @@ export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = ({ currentText 
         <div className="mt-2 text-[11px] flex items-center gap-1">
           {audit.recommendation === 'prime_paywall' && (
             <span className="text-amber-500 flex items-center gap-1 font-semibold">
-              <Flame className="w-3.5 h-3.5" /> 黄金卡点：极度适合作为收费分界点！
+              <Flame className="w-3.5 h-3.5" /> 黄金卡点信号：章尾悬念与期待特征最强。
             </span>
           )}
           {audit.recommendation === 'acceptable' && (
             <span className="text-emerald-500 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" /> 合格卡点：具备承接付费转化的张力。
+              <ShieldCheck className="w-3.5 h-3.5" /> 合格卡点：末段仍留有待释放的期待。
             </span>
           )}
           {audit.recommendation === 'weak_cut' && (
@@ -71,7 +74,7 @@ export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = ({ currentText 
           )}
           {audit.recommendation === 'toxic_drop' && (
             <span className="text-rose-500 flex items-center gap-1 font-medium">
-              <Skull className="w-3.5 h-3.5" /> 危险断点：说明性文字过多，易引起弃书！
+              <Skull className="w-3.5 h-3.5" /> 风险断点信号：说明性文字占比偏高，建议关注。
             </span>
           )}
         </div>

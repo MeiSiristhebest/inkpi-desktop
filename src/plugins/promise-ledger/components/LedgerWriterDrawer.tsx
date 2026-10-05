@@ -6,6 +6,7 @@ import { indexedDbPromiseLedgerRepository } from '../../../adapters/indexedDbPro
 import { clock } from '../../../adapters/clock'
 import { pluginEventBus } from '../../../core/pluginEventBus'
 import { Sparkles, AlertCircle, CheckCircle, Flame, TrendingUp } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 export const LedgerWriterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [entries, setEntries] = useState<PromiseLedgerEntry[]>([])
@@ -168,13 +169,14 @@ export const LedgerWriterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
                   >
                     <CheckCircle className="w-3 h-3" /> 确认兑现
                   </button>
-                  <button
-                    onClick={() => handleQuickProgress(cand.entryId)}
-                    className="px-2 py-1 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] hover:bg-[var(--ink-bg-hover)] flex items-center gap-1"
-                    title="记录一次推进，提振读者记忆"
-                  >
-                    <TrendingUp className="w-3 h-3" /> 推进
-                  </button>
+                  <Tooltip content="记录一次推进，提振读者记忆">
+                    <button
+                      onClick={() => handleQuickProgress(cand.entryId)}
+                      className="px-2 py-1 rounded border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[11px] hover:bg-[var(--ink-bg-hover)] flex items-center gap-1"
+                    >
+                      <TrendingUp className="w-3 h-3" /> 推进
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             ))

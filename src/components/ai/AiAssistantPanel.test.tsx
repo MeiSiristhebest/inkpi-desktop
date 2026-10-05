@@ -68,7 +68,7 @@ describe('AiAssistantPanel Component', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onSend).toHaveBeenCalled()
 
-    const closeBtn = screen.getByTitle('收起')
+    const closeBtn = screen.getByRole('button', { name: '收起' })
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
   })
@@ -173,7 +173,7 @@ describe('AiAssistantPanel Component', () => {
     expect((screen.getByText('发送') as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('should support initialTab="activity" and show badge for artifacts', () => {
+  it('should support initialTab="activity" and show badge for workspace results', () => {
     const onTabChange = vi.fn()
     render(
       <AiAssistantPanel
@@ -183,15 +183,16 @@ describe('AiAssistantPanel Component', () => {
         connected={true}
         initialTab="activity"
         onTabChange={onTabChange}
-        artifacts={[
+        results={[
           {
-            id: 'art-1',
-            type: 'creative.story-plan',
-            version: 1,
+            id: 'res-1',
             taskId: 't-1',
+            scope: { workspaceId: 'ws-1', workspaceRevision: 1 },
             kind: 'story-plan',
-            content: {},
-            provenance: {},
+            title: '故事线草案',
+            summary: '',
+            status: 'result',
+            provenance: { timestamp: 1000 },
             createdAt: 1000,
             updatedAt: 1000,
           },
@@ -207,5 +208,33 @@ describe('AiAssistantPanel Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '副驾驶' }))
     expect(onTabChange).toHaveBeenCalledWith('chat')
+  })
+
+  it('shows the pre-send request scope above the composer (P3.15)', () => {
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input="继续"
+        busy={false}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+        requestScope={{
+          hasChapter: true,
+          chapterTitle: '断谷之夜',
+          selectionChars: 12,
+          storyFactCount: 5,
+          historyTurns: 3,
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        '本次请求将发送：当前章节《断谷之夜》 · 选中文本 · 设定 5 项 · 上文 3 条对话',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('发送')).toBeInTheDocument()
   })
 })

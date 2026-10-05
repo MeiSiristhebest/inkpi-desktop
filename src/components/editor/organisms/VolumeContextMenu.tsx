@@ -1,91 +1,78 @@
 import React from 'react'
 import { Edit3, Plus, ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
+import { ContextMenu, type ContextMenuItem } from '../../../ui/molecules/ContextMenu'
 
 interface VolumeContextMenuProps {
   model: EditorModel
 }
 
-/** 分卷右键上下文菜单。organisms 层，仅声明式渲染，命令走 model.actions.* */
+/**
+ * 分卷右键上下文菜单。organisms 层，仅声明式渲染，命令走 model.actions.*。
+ * 条目配置驱动，role=menu / 键盘导航复用 ui/molecules/ContextMenu，不再自带一份（P4.3）。
+ */
 export const VolumeContextMenu: React.FC<VolumeContextMenuProps> = ({ model }) => {
   const { volumeContextMenu, expanded, actions } = model
   if (!volumeContextMenu) return null
+
   const vol = volumeContextMenu.volume
   const isOpen = expanded[vol.id] !== false
+  const close = () => actions.setVolumeContextMenu(null)
+  const pick = (run: () => void) => () => {
+    close()
+    run()
+  }
+
+  const items: ContextMenuItem[] = [
+    {
+      key: 'newChapter',
+      label: '新建章节 (插入本卷)',
+      icon: <Plus size={13} />,
+      onClick: pick(() => actions.newChapter(vol.id)),
+    },
+    {
+      key: 'rename',
+      label: '重命名分卷',
+      icon: <Edit3 size={13} />,
+      onClick: pick(() => {
+        actions.setRenamingVolume(vol)
+        actions.setRenamingVolumeTitle(vol.title)
+      }),
+    },
+    {
+      key: 'toggle',
+      label: isOpen ? '收起此分卷' : '展开此分卷',
+      icon: isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />,
+      onClick: pick(() => actions.toggleVolume(vol.id)),
+    },
+    {
+      key: 'delete',
+      label: '删除分卷…',
+      icon: <Trash2 size={13} />,
+      danger: true,
+      dividerBefore: true,
+      onClick: pick(() => actions.setDeletingVolume(vol)),
+    },
+  ]
 
   return (
     <>
       <div
         className="fixed inset-0 z-40"
-        onClick={() => actions.setVolumeContextMenu(null)}
+        onClick={close}
         onContextMenu={(e) => {
           e.preventDefault()
-          actions.setVolumeContextMenu(null)
+          close()
         }}
       />
-      <div
-        className="fixed z-50 min-w-[200px] w-auto max-w-[260px] p-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12.5px] select-none backdrop-blur-md"
-        style={{ left: volumeContextMenu.x, top: volumeContextMenu.y }}
-      >
-        <div className="px-2.5 py-1.5 border-b border-[var(--ink-border)]/60 text-[11px] text-[var(--ink-text-faint)] truncate font-medium">
-          {vol.title}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            actions.setVolumeContextMenu(null)
-            actions.newChapter(vol.id)
-          }}
-          className="w-full px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap"
-        >
-          <Plus size={13} className="text-[var(--ink-accent)] shrink-0" />
-          <span className="whitespace-nowrap">新建章节 (插入本卷)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            actions.setVolumeContextMenu(null)
-            actions.setRenamingVolume(vol)
-            actions.setRenamingVolumeTitle(vol.title)
-          }}
-          className="w-full px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap"
-        >
-          <Edit3 size={13} className="text-[var(--ink-text-muted)] shrink-0" />
-          <span className="whitespace-nowrap">重命名分卷</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            actions.setVolumeContextMenu(null)
-            actions.toggleVolume(vol.id)
-          }}
-          className="w-full px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap"
-        >
-          {isOpen ? (
-            <ChevronDown size={13} className="text-[var(--ink-text-muted)] shrink-0" />
-          ) : (
-            <ChevronRight size={13} className="text-[var(--ink-text-muted)] shrink-0" />
-          )}
-          <span className="whitespace-nowrap">{isOpen ? '收起此分卷' : '展开此分卷'}</span>
-        </button>
-
-        <div className="border-t border-[var(--ink-border)]/60 my-1" />
-
-        <button
-          type="button"
-          onClick={() => {
-            actions.setVolumeContextMenu(null)
-            actions.setDeletingVolume(vol)
-          }}
-          className="w-full px-2.5 py-1.5 rounded-lg text-left text-[var(--ink-danger)] hover:bg-red-500/10 flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap"
-        >
-          <Trash2 size={13} className="text-[var(--ink-danger)] shrink-0" />
-          <span className="whitespace-nowrap">删除分卷…</span>
-        </button>
-      </div>
+      <ContextMenu
+        items={items}
+        header={vol.title}
+        position={{ x: volumeContextMenu.x, y: volumeContextMenu.y }}
+        widthClass="min-w-[200px] max-w-[260px]"
+        ariaLabel={`分卷操作：${vol.title}`}
+        onClose={close}
+      />
     </>
   )
 }

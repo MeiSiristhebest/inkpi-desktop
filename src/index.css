@@ -13,6 +13,62 @@
  * 这样浅/深两套主题只需在此处维护。
  */
 
+/*
+ * 语义色桥接层：把 shadcn/Base UI 体系所要求的语义名指向 --ink-* 令牌。
+ *
+ * 必须用 @theme inline：inline 让工具类直接内联展开成 var(--ink-*)，
+ * 取色发生在元素自身的层叠上下文，因此下面 6 套 data-skin / data-theme
+ * 主题无需任何重复映射就能自动跟随。改成普通 @theme 会把值固化在 :root。
+ *
+ * 这里的语义名是工具类的前缀（bg-background / text-muted-foreground /
+ * border-input / ring-ring …），行为底座组件依赖它们；--ink-* 仍是唯一真源。
+ */
+@theme inline {
+  --color-background: var(--ink-bg);
+  --color-foreground: var(--ink-text);
+
+  --color-card: var(--ink-bg-card);
+  --color-card-foreground: var(--ink-text);
+
+  --color-popover: var(--ink-bg-elevated);
+  --color-popover-foreground: var(--ink-text);
+
+  --color-primary: var(--ink-accent);
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: var(--ink-bg-active);
+  --color-secondary-foreground: var(--ink-text);
+
+  --color-muted: var(--ink-bg-panel);
+  --color-muted-foreground: var(--ink-text-muted);
+
+  --color-accent: var(--ink-bg-hover);
+  --color-accent-foreground: var(--ink-text);
+
+  --color-destructive: var(--ink-danger);
+  --color-destructive-foreground: #ffffff;
+
+  --color-success: var(--ink-success);
+  --color-warning: var(--ink-warning);
+  --color-ghost: var(--ink-ghost);
+
+  --color-border: var(--ink-border);
+  --color-input: var(--ink-border-strong);
+  --color-ring: var(--ink-accent);
+
+  --color-sidebar: var(--ink-bg-sidebar);
+  --color-sidebar-foreground: var(--ink-text);
+  --color-sidebar-primary: var(--ink-accent);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: var(--ink-bg-hover);
+  --color-sidebar-accent-foreground: var(--ink-text);
+  --color-sidebar-border: var(--ink-border);
+  --color-sidebar-ring: var(--ink-accent);
+
+  /* 替代散落的 ease-[var(--ink-ease)] 任意值写法 */
+  --ease-ink: var(--ink-ease);
+}
+
 @layer base {
   :root {
     color-scheme: light;
@@ -896,6 +952,9 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* 只压时长不压循环次数会让 animate-spin / animate-ping 变成高频频闪，
+       对前庭不耐受的用户比原来的 1s 动效更难受，所以循环必须一并封掉。 */
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }

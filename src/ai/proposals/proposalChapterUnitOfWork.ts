@@ -1,4 +1,5 @@
-import { db } from '../../db/indexedDB'
+import { db, readIndexInTransaction } from '../../db/indexedDB'
+import type { DomainChangeSet } from '@inkpi/protocol'
 import type { ChapterRecord } from '../../types'
 import {
   type AiProposal,
@@ -89,7 +90,6 @@ export class ProposalChapterUnitOfWork {
         const chapterReq = chapterStore.get(chapterId)
         const proposalReq = proposalStore.get(proposalId)
         const lockReq = proposalStore.get(OPERATION_LOCK_PREFIX + proposalId)
-        const domainReq = domainStore.getAll()
 
         let chapterLoaded = false
         let proposalLoaded = false
@@ -99,7 +99,7 @@ export class ProposalChapterUnitOfWork {
         let currentChapter: ChapterRecord | undefined
         let currentProposal: AiProposal | undefined
         let currentLock: unknown
-        let allDomainChanges: any[] | undefined
+        let workspaceJournal: DomainChangeSet[] = []
 
         const checkReady = () => {
           if (!chapterLoaded || !proposalLoaded || !lockLoaded || !domainLoaded) return
@@ -173,9 +173,9 @@ export class ProposalChapterUnitOfWork {
             }
 
             // 3. Prepare DomainChangeSet
-            const workspaceChanges = (allDomainChanges || [])
-              .filter((record: any) => record.workspaceId === workspaceId)
-              .sort((a: any, b: any) => a.revision - b.revision)
+            const workspaceChanges = workspaceJournal.sort(
+              (left, right) => left.revision - right.revision,
+            )
             const currentWorkspaceRev = workspaceChanges.at(-1)?.revision ?? 0
             committedWorkspaceRevision = currentWorkspaceRev + 1
 
@@ -233,12 +233,14 @@ export class ProposalChapterUnitOfWork {
         }
         lockReq.onerror = () => fail(lockReq.error)
 
-        domainReq.onsuccess = () => {
-          allDomainChanges = domainReq.result
-          domainLoaded = true
-          checkReady()
-        }
-        domainReq.onerror = () => fail(domainReq.error)
+        readIndexInTransaction<DomainChangeSet>(domainStore, 'workspaceId', workspaceId, {
+          onSuccess: (records) => {
+            workspaceJournal = records
+            domainLoaded = true
+            checkReady()
+          },
+          onError: (error) => fail(error),
+        })
       },
     )
 
@@ -295,7 +297,6 @@ export class ProposalChapterUnitOfWork {
         const chapterReq = chapterStore.get(chapterId)
         const proposalReq = proposalStore.get(proposalId)
         const lockReq = proposalStore.get(OPERATION_LOCK_PREFIX + proposalId)
-        const domainReq = domainStore.getAll()
 
         let chapterLoaded = false
         let proposalLoaded = false
@@ -305,7 +306,7 @@ export class ProposalChapterUnitOfWork {
         let currentChapter: ChapterRecord | undefined
         let currentProposal: AiProposal | undefined
         let currentLock: unknown
-        let allDomainChanges: any[] | undefined
+        let workspaceJournal: DomainChangeSet[] = []
 
         const checkReady = () => {
           if (!chapterLoaded || !proposalLoaded || !lockLoaded || !domainLoaded) return
@@ -361,9 +362,9 @@ export class ProposalChapterUnitOfWork {
             }
 
             // 3. Prepare DomainChangeSet
-            const workspaceChanges = (allDomainChanges || [])
-              .filter((record: any) => record.workspaceId === workspaceId)
-              .sort((a: any, b: any) => a.revision - b.revision)
+            const workspaceChanges = workspaceJournal.sort(
+              (left, right) => left.revision - right.revision,
+            )
             const currentWorkspaceRev = workspaceChanges.at(-1)?.revision ?? 0
             committedWorkspaceRevision = currentWorkspaceRev + 1
 
@@ -421,12 +422,14 @@ export class ProposalChapterUnitOfWork {
         }
         lockReq.onerror = () => fail(lockReq.error)
 
-        domainReq.onsuccess = () => {
-          allDomainChanges = domainReq.result
-          domainLoaded = true
-          checkReady()
-        }
-        domainReq.onerror = () => fail(domainReq.error)
+        readIndexInTransaction<DomainChangeSet>(domainStore, 'workspaceId', workspaceId, {
+          onSuccess: (records) => {
+            workspaceJournal = records
+            domainLoaded = true
+            checkReady()
+          },
+          onError: (error) => fail(error),
+        })
       },
     )
 

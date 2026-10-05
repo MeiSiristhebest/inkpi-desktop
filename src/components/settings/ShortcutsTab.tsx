@@ -1,16 +1,16 @@
 import type { FC } from 'react'
 import { commandRegistry } from '../../core/commandRegistry'
-import { EDITOR_SHORTCUTS } from '../../core/editorShortcuts'
+import { EDITOR_SHORTCUTS, formatShortcutLabel } from '../../core/editorShortcuts'
 import { Section } from './SettingsShared'
 
 export const ShortcutsTab: FC = () => {
   const commandItems = commandRegistry
     .getAll()
     .filter((command) => command.shortcut)
-    .map((command) => ({ action: command.title, key: command.shortcut! }))
-  const editorShortcutItems = EDITOR_SHORTCUTS.map(({ action, display }) => ({
+    .map((command) => ({ action: command.title, key: formatShortcutLabel(command.shortcut!) }))
+  const editorShortcutItems = EDITOR_SHORTCUTS.map(({ action, shortcut }) => ({
     action,
-    key: display,
+    key: formatShortcutLabel(shortcut),
   }))
   const shortcutItems = [...editorShortcutItems, ...commandItems]
 

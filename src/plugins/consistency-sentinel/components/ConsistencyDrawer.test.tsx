@@ -2,17 +2,39 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { ConsistencyDrawer } from './ConsistencyDrawer'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { indexedDbPowerTierRepository } from '../../../adapters/indexedDbPowerTierRepository'
 
 describe('ConsistencyDrawer — 设定自洽写作随动抽屉', () => {
   beforeEach(async () => {
+    await indexedDbPowerTierRepository.delete('p1')
     const all = await indexedDbCodexEntityRepository.getAll()
     await Promise.all(all.map((e) => indexedDbCodexEntityRepository.delete(e.id)))
   })
 
-  it('renders drawer header and displays consistent state when clean', () => {
+  it('admits it cannot judge tier inversions when nothing is configured (§P2.4)', () => {
     render(<ConsistencyDrawer projectId="p1" currentText="楚凌霄在洞府打坐修持。" />)
     expect(screen.getByText('设定自洽哨兵')).toBeInTheDocument()
-    expect(screen.getByText('当前章节战力与设定自洽')).toBeInTheDocument()
+    expect(screen.getByText('未配置阶梯')).toBeInTheDocument()
+    expect(screen.getByText('未套用战力阶梯，越阶倒错无法判定')).toBeInTheDocument()
+    expect(screen.getByText('未套用战力阶梯，这里只巡检已标注为已故的角色。')).toBeInTheDocument()
+    expect(screen.getByTestId('score-provenance')).toHaveTextContent('来源：即时规则')
+  })
+
+  it('claims consistency only after a tier system exists to check against', async () => {
+    await indexedDbPowerTierRepository.save({
+      projectId: 'p1',
+      systemName: '两阶体系',
+      tiers: ['练气', '筑基'],
+      specialModifiers: [],
+      updatedAt: 100,
+    })
+
+    render(<ConsistencyDrawer projectId="p1" currentText="楚凌霄在洞府打坐修持。" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('当前章节战力与设定自洽')).toBeInTheDocument()
+    })
+    expect(screen.getByText('体系: 2 阶')).toBeInTheDocument()
   })
 
   it('displays critical warning when deceased character acts', async () => {

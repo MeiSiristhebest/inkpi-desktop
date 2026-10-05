@@ -1,4 +1,4 @@
-import { FIRST_PARTY_PLUGIN_IDS, type FirstPartyPluginId } from './pluginCatalog'
+import { isFirstPartyPluginId, type FirstPartyPluginId } from './pluginCatalog'
 
 /** Phase 20 runtime boundary classes. */
 export type PluginRuntimeClass =
@@ -172,10 +172,6 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
 
 export function getPluginRuntimeEntry(pluginId: string): PluginRuntimeCatalogEntry | undefined {
   return isFirstPartyPluginId(pluginId) ? PLUGIN_RUNTIME_CATALOG[pluginId] : undefined
-}
-
-export function isFirstPartyPluginId(pluginId: string): pluginId is FirstPartyPluginId {
-  return (FIRST_PARTY_PLUGIN_IDS as readonly string[]).includes(pluginId)
 }
 
 function taskEntry(pluginId: FirstPartyPluginId): PluginRuntimeCatalogEntry {

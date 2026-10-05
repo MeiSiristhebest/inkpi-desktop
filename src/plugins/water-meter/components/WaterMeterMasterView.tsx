@@ -5,10 +5,15 @@ import type { WaterAuditReport } from '../types'
 import { waterMeterEngine } from '../engine/WaterMeterEngine'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Zap, BookOpen, Bot, Scissors, FileText, Sparkles, Droplet } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('water-meter')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
   const [inputText, setInputText] = useState('')
@@ -61,7 +66,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   // AI 深度叙事密度排查
-  const handleAiDeepWaterAudit = () => {
+  const handleAiDeepWaterAudit = async () => {
     if (!inputText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -73,9 +78,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       ).slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('water-meter', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleApplyClean = () => {
@@ -102,16 +105,17 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             直连全书真实章节，扫描无意义震惊复读与套话水文，提升单章信息密度
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按冗余动词与套话占比计分" />
         </div>
 
         <div className="flex items-center gap-2">
           {chapters.length > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-[var(--ink-text-muted)]">
               <BookOpen className="w-3.5 h-3.5" />
-              <select
+              <Select
                 value={selectedChapterId}
-                onChange={(e) => handleSelectChapter(e.target.value)}
-                className="px-2.5 py-1 text-xs rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                onValueChange={(v) => handleSelectChapter(v)}
+                size="sm"
               >
                 <option value="all">全书章节采样</option>
                 {chapters.map((c) => (
@@ -119,7 +123,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     第 {c.order} 章 · {c.title || '无题'}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 
@@ -133,6 +137,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
 
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiDeepWaterAudit}
               className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
             >
@@ -140,6 +145,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <span>AI 剧情动能深度诊断</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
         </div>
       </div>
 
@@ -222,14 +228,15 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 <FileText className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
                 正文待审段落（当前字数：{report.totalWordCount}）
               </span>
-              <button
-                onClick={handleApplyClean}
-                className="px-2.5 py-1 rounded bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-emerald-500 text-emerald-500 text-xs font-medium flex items-center gap-1"
-                title="自动剔除已识别出的所有假动作套话"
-              >
-                <Scissors className="w-3 h-3" />
-                一键剔除水词
-              </button>
+              <Tooltip content="自动剔除已识别出的所有假动作套话">
+                <button
+                  onClick={handleApplyClean}
+                  className="px-2.5 py-1 rounded bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-emerald-500 text-emerald-500 text-xs font-medium flex items-center gap-1"
+                >
+                  <Scissors className="w-3 h-3" />
+                  一键剔除水词
+                </button>
+              </Tooltip>
             </div>
 
             <textarea

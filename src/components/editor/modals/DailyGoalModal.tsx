@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../../../ui/molecules/Modal'
 import { HelpCircle } from 'lucide-react'
+import { Select } from '../../../ui/primitives'
 
 export interface DailyGoalModalProps {
   onClose: () => void
@@ -110,16 +111,12 @@ export const DailyGoalModal: React.FC<DailyGoalModalProps> = ({
           <span>写作提醒</span>
           <HelpCircle className="w-3.5 h-3.5 text-[var(--ink-text-faint)]" />
         </div>
-        <select
-          value={remindOption}
-          onChange={(e) => setRemindOption(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-[var(--ink-text)] text-xs focus:outline-none focus:border-[var(--ink-accent)] cursor-pointer"
-        >
+        <Select value={remindOption} onValueChange={(v) => setRemindOption(v)} size="sm">
           <option value="none">不提醒</option>
           <option value="20:00">每日 20:00</option>
           <option value="21:00">每日 21:00</option>
           <option value="22:00">每日 22:00</option>
-        </select>
+        </Select>
       </div>
 
       {/* 底部按钮栏 */}

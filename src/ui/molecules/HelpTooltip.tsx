@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { HelpCircle } from 'lucide-react'
+import { Tooltip } from '../primitives'
 
 export interface HelpTooltipProps {
   title: string
@@ -127,23 +128,24 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          setOpen((prev) => !prev)
-        }}
-        className={`p-0.5 rounded transition-colors cursor-pointer ${
-          open
-            ? 'text-[var(--ink-accent)]'
-            : 'text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)]'
-        }`}
-        title={`${title}（点击查看说明）`}
-        aria-label={title}
-      >
-        <HelpCircle style={{ width: size, height: size }} />
-      </button>
+      <Tooltip content={`${title}（点击查看说明）`}>
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setOpen((prev) => !prev)
+          }}
+          className={`p-0.5 rounded transition-colors cursor-pointer ${
+            open
+              ? 'text-[var(--ink-accent)]'
+              : 'text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)]'
+          }`}
+          aria-label={title}
+        >
+          <HelpCircle style={{ width: size, height: size }} />
+        </button>
+      </Tooltip>
 
       {open && (
         <div

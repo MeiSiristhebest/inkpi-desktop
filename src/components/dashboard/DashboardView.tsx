@@ -17,6 +17,7 @@ import { clock } from '../../adapters/clock'
 import { DEFAULT_DAILY_GOAL, writingGoalService } from '../../services/writingGoalService'
 import { HelpTooltip } from '../../ui/molecules/HelpTooltip'
 import type { DashboardModel, WritingGoalPlan } from '../../domain/dashboard'
+import { Tooltip } from '../../ui/primitives'
 
 interface DashboardViewProps {
   projectId: string
@@ -296,9 +297,11 @@ export const DashboardView: FC<DashboardViewProps> = ({
           <div className="flex items-center justify-between px-1">
             <div>
               <h3 className="text-[14px] font-semibold text-[var(--ink-text)]">码字活动</h3>
-              <p className="text-[12px] text-[var(--ink-text-faint)] mt-0.5">
-                今日产出 {data.todayWords.toLocaleString()} 字 · 全自动实时统计
-              </p>
+              <Tooltip content="优先取本机每日码字记录；某天没有记录时，按当天更新过的章节字数回填，所以导入或历史项目的数字会偏大。浮窗的「今日新增」另有口径：它记的是编辑器净增字数，粘贴不计。">
+                <p className="text-[12px] text-[var(--ink-text-faint)] mt-0.5">
+                  今日产出 {data.todayWords.toLocaleString()} 字 · 本机统计
+                </p>
+              </Tooltip>
             </div>
             <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)]">
               {(['daily', 'weekly', 'all'] as const).map((mode) => (
@@ -841,14 +844,15 @@ export const DashboardView: FC<DashboardViewProps> = ({
                           className="text-[var(--ink-text-faint)] font-normal px-1 py-1.5 align-bottom"
                           style={{ width: 24 }}
                         >
-                          <div
-                            className="whitespace-nowrap cursor-pointer hover:text-[var(--ink-accent)]"
-                            style={{ writingMode: 'vertical-rl' }}
-                            title={`${ch.title}（点击直达正文）`}
-                            onClick={() => onOpenView('editor')}
-                          >
-                            {ch.title.length > 8 ? ch.title.slice(0, 8) + '…' : ch.title}
-                          </div>
+                          <Tooltip content={`${ch.title}（点击直达正文）`}>
+                            <div
+                              className="whitespace-nowrap cursor-pointer hover:text-[var(--ink-accent)]"
+                              style={{ writingMode: 'vertical-rl' }}
+                              onClick={() => onOpenView('editor')}
+                            >
+                              {ch.title.length > 8 ? ch.title.slice(0, 8) + '…' : ch.title}
+                            </div>
+                          </Tooltip>
                         </th>
                       ))}
                     </tr>
@@ -871,14 +875,17 @@ export const DashboardView: FC<DashboardViewProps> = ({
                                   : 'bg-[var(--ink-accent)] text-white'
                           return (
                             <td key={ch.id} className="p-0.5 text-center">
-                              <button
-                                type="button"
-                                onClick={() => onOpenView('editor')}
-                                title={`${item.name} 在《${ch.title}》中出场 ${count} 次 · 点击直达编辑`}
-                                className={`w-5 h-5 rounded-[3px] flex items-center justify-center text-[9px] ${heatCls} hover:ring-1 hover:ring-[var(--ink-accent)] transition-all cursor-pointer`}
+                              <Tooltip
+                                content={`${item.name} 在《${ch.title}》中出场 ${count} 次 · 点击直达编辑`}
                               >
-                                {count > 0 ? count : ''}
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenView('editor')}
+                                  className={`w-5 h-5 rounded-[3px] flex items-center justify-center text-[9px] ${heatCls} hover:ring-1 hover:ring-[var(--ink-accent)] transition-all cursor-pointer`}
+                                >
+                                  {count > 0 ? count : ''}
+                                </button>
+                              </Tooltip>
                             </td>
                           )
                         })}

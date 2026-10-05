@@ -29,4 +29,28 @@ describe('AftermathEngine (章后桥段设定回写器)', () => {
     expect(result.patches[0].entityName).toBe('九幽冰魄剑')
     expect(result.patches[0].afterValue).toBe('林凡')
   })
+
+  it('把缔结关系的线索原样带进提案，而不是统一报成盟友', () => {
+    const text = `林凡提出让苏雨柔拜其为师，二人自此共修丹道。`
+    const result = AftermathEngine.analyzeChapter(text, 'ch3', 3, mockEntities)
+
+    expect(result.summary.relations).toBe(1)
+    const patch = result.patches.find((p) => p.changeType === 'new_relation')
+    // 「拜其为师」被写成「结为盟友/至交」是替正文编造了一种没写过的关系。
+    expect(patch?.afterValue).toContain('师徒')
+    expect(patch?.afterValue).toContain('拜其为师')
+    expect(patch?.afterValue).not.toContain('盟友')
+    // 两人成对陈述：线索本身判不出谁拜谁为师，设定库的顺序也不是关系方向。
+    expect(patch?.entityName).toBe('林凡')
+    expect(patch?.afterValue).toContain('苏雨柔')
+  })
+
+  it('没有正文依据时不假称两人本来就相识', () => {
+    const text = `林凡与苏雨柔义结金兰，共赴秘境。`
+    const result = AftermathEngine.analyzeChapter(text, 'ch4', 4, mockEntities)
+
+    const patch = result.patches.find((p) => p.changeType === 'new_relation')
+    expect(patch?.beforeValue).toBe('未记录')
+    expect(patch?.afterValue).toContain('结义')
+  })
 })

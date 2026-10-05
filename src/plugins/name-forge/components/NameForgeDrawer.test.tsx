@@ -16,7 +16,8 @@ describe('NameForgeDrawer — 奇幻起名摇号随动抽屉', () => {
     const sectBtn = screen.getByText('宗门势力')
     fireEvent.click(sectBtn)
 
-    const rerollBtn = screen.getByTitle('重新生成 5 个名字')
+    // 按钮上的可见文字是「摇号」「复制」，长句只在提示里，不参与命名
+    const rerollBtn = screen.getByRole('button', { name: '摇号' })
     fireEvent.click(rerollBtn)
   })
 
@@ -24,7 +25,7 @@ describe('NameForgeDrawer — 奇幻起名摇号随动抽屉', () => {
     const copySpy = vi.spyOn(clipboardWriter, 'writeText').mockResolvedValue()
     render(<NameForgeDrawer projectId="p1" currentText="" />)
 
-    const copyButtons = screen.getAllByTitle('复制名称')
+    const copyButtons = screen.getAllByRole('button', { name: '复制' })
     fireEvent.click(copyButtons[0])
 
     expect(copySpy).toHaveBeenCalled()

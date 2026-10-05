@@ -19,9 +19,14 @@ import {
 } from 'lucide-react'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip } from '../../../ui/primitives'
 
 export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('scene-beats')
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
@@ -58,7 +63,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   )
 
   // AI 智能拆解并生成单章 4 幕电影级节拍表
-  const handleAiGenerateBeats = () => {
+  const handleAiGenerateBeats = async () => {
     const curChap = chapters.find((c) => c.id === currentPlan?.chapterId)
     const analysisInput = {
       chapter: curChap ? { id: curChap.id, order: curChap.order, title: curChap.title } : undefined,
@@ -68,9 +73,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         : '',
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('scene-beats', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleCreatePlanFromTemplate = async (
@@ -156,12 +159,14 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             微观单章 3~5 场戏戏剧弧，目标/冲突/高潮四段式与字数预算动态映射
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按对话/叙述占比与句长特征判定" />
         </div>
 
         {/* 预置模板快速新建 */}
         <div className="flex items-center gap-2">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiGenerateBeats}
               className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
@@ -169,6 +174,7 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <span>AI 场景四幕节拍推演</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={() => handleCreatePlanFromTemplate('climax_burst')}
             className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"
@@ -196,13 +202,14 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         <div className="w-64 flex flex-col bg-[var(--ink-bg-panel)] overflow-hidden shrink-0">
           <div className="p-3 border-b border-[var(--ink-border)] text-xs font-semibold flex items-center justify-between text-[var(--ink-text-muted)]">
             <span>章节细纲列表 ({plans.length})</span>
-            <button
-              onClick={() => handleCreatePlanFromTemplate('climax_burst')}
-              className="hover:text-[var(--ink-accent)]"
-              title="新建细纲计划"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            <Tooltip content="新建细纲计划">
+              <button
+                onClick={() => handleCreatePlanFromTemplate('climax_burst')}
+                className="hover:text-[var(--ink-accent)]"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -225,16 +232,17 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                       {p.beats?.length || 0} 个节拍 · 目标 {p.targetWordCount} 字
                     </span>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeletePlan(p.id)
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400"
-                    title="删除"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content="删除">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeletePlan(p.id)
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               )
             })}
@@ -328,13 +336,14 @@ export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                           <span className="text-[11px] text-[var(--ink-text-muted)]">
                             建议字数：~{estWords} 字 ({Math.round(beat.budgetWordRatio * 100)}%)
                           </span>
-                          <button
-                            onClick={() => handleDeleteBeat(beat.id)}
-                            className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
-                            title="删除此节拍"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <Tooltip content="删除此节拍">
+                            <button
+                              onClick={() => handleDeleteBeat(beat.id)}
+                              className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </div>
 

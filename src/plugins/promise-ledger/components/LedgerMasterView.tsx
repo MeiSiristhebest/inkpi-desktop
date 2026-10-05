@@ -9,8 +9,12 @@ import { promiseApplicationService } from '../../../services/domainApplicationSe
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Plus, Search, Sparkles, Edit2, Trash2, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip } from '../../../ui/primitives'
 
 export const DEMO_PROMISES: Omit<
   PromiseLedgerEntry,
@@ -65,6 +69,7 @@ export const DEMO_PROMISES: Omit<
 
 export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('promise-ledger')
   const [entries, setEntries] = useState<PromiseLedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | PromiseStatus | 'overdue'>('all')
@@ -96,7 +101,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }
 
   // 真实 AI 读者遗忘曲线与伏笔死锁审查
-  const handleAiLedgerAudit = () => {
+  const handleAiLedgerAudit = async () => {
     if (entries.length === 0) return
     const entrySummaries = entries
       .map(
@@ -107,9 +112,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
     const analysisInput = { currentChapter, promises: entrySummaries }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('promise-ledger', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -194,6 +197,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             Plant（埋设）→ Progress（发酵）→ Payoff（回收）生命周期管理与超期红线预警
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按台账条目的到期与回收状态计分" />
         </div>
 
         {/* 核心叙事健康度指示盘 */}
@@ -225,6 +229,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiLedgerAudit}
               className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
@@ -232,6 +237,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
               <span>AI 伏笔死锁排查</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
 
           <button
             onClick={() => setEditingEntry({})}
@@ -412,20 +418,22 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     <div className="pt-2 border-t border-[var(--ink-border)]/50 flex items-center justify-between text-[10px] text-[var(--ink-text-faint)]">
                       <span>埋设：第 {entry.plantChapter} 章</span>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setEditingEntry(entry)}
-                          className="hover:text-[var(--ink-text)]"
-                          title="编辑"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteEntry(entry.id)}
-                          className="hover:text-rose-400"
-                          title="删除"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip content="编辑">
+                          <button
+                            onClick={() => setEditingEntry(entry)}
+                            className="hover:text-[var(--ink-text)]"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="删除">
+                          <button
+                            onClick={() => handleDeleteEntry(entry.id)}
+                            className="hover:text-rose-400"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                   </div>

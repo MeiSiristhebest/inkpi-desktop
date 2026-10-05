@@ -8,10 +8,14 @@ import { indexedDbEmotionAuditRepository } from '../../../adapters/indexedDbEmot
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Activity, AlertTriangle, BookmarkCheck, RefreshCw, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('emotion-curve')
   const [chapters, setChapters] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
@@ -47,7 +51,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [evaluations])
 
   // AI 深度长篇情绪心流节奏诊断
-  const handleAiEmotionDeepAudit = () => {
+  const handleAiEmotionDeepAudit = async () => {
     if (chapters.length === 0) return
     const summaries = evaluations
       .slice(0, 20)
@@ -59,9 +63,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
     const analysisInput = { chapterEmotionSummaries: summaries }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('emotion-curve', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSaveSnapshot = async (ev: ChapterEmotionEvaluation) => {
@@ -95,6 +97,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             双极六维情绪心电图分析，量化“打压蓄势 vs 爆发释放”张弛起伏，防止连续致郁或审美疲劳。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按情绪词密度与起伏计分" />
         </div>
         <div className="flex items-center gap-2">
           {savedSuccessMsg && (
@@ -104,6 +107,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiEmotionDeepAudit}
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
@@ -111,6 +115,7 @@ export const EmotionCurveMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               AI 抑扬张弛深度评估
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={loadChapters}
             className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"

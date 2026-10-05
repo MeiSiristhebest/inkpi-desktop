@@ -7,7 +7,15 @@ const isAscii = (value) => [...value].every((character) => character.charCodeAt(
 const projectTarget = path.resolve('src-tauri', 'target');
 const env = { ...process.env };
 
-if (process.platform === 'win32' && !env.CARGO_TARGET_DIR && !isAscii(projectTarget)) {
+// GNU ld opens @response files with the ANSI CRT, so a non-ASCII target directory breaks
+// linking — but only when the active rustc host is windows-gnu. MSVC link.exe is UTF-16.
+const hostIsGnu = (() => {
+  if (process.platform !== 'win32') return false;
+  const probe = spawnSync('rustc', ['-vV'], { encoding: 'utf8' });
+  return probe.status === 0 && /host:\s*x86_64-pc-windows-gnu/.test(probe.stdout);
+})();
+
+if (process.platform === 'win32' && hostIsGnu && !env.CARGO_TARGET_DIR && !isAscii(projectTarget)) {
   const candidates = [
     path.join(os.tmpdir(), 'inkpi-tauri-target'),
     path.win32.join('C:\\Windows\\Temp', 'inkpi-tauri-target'),

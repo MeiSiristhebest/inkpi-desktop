@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { ImageIcon, X, Check } from 'lucide-react'
 import type { ProjectRecord } from '../../../types'
 import { readCoverImage } from '../coverUpload'
+import { Tooltip } from '../../../ui/primitives'
 
 export interface ProjectEditFormValues {
   name: string
@@ -36,32 +37,34 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
   return (
     <div className="bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl p-5 shadow-[var(--ink-shadow)]">
       <div className="flex items-start gap-4">
-        <div
-          onClick={() => coverInputRef.current?.click()}
-          className="group/cover relative w-[100px] h-[140px] rounded-xl border border-dashed border-[var(--ink-border-strong)] hover:border-[var(--ink-accent)] overflow-hidden transition-all flex items-center justify-center shrink-0 cursor-pointer bg-[var(--ink-bg-panel)] shadow-inner"
-          title="上传封面（可选，2MB 以内）"
-        >
-          {form.cover ? (
-            <>
-              <img src={form.cover} alt="封面" className="w-full h-full object-cover" />
-              <span
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setField('cover', '')
-                }}
-                className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white opacity-0 group-hover/cover:opacity-100 transition-opacity cursor-pointer"
-                title="移除封面"
-              >
-                <X size={12} />
-              </span>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-1.5 text-[var(--ink-text-muted)] group-hover/cover:text-[var(--ink-accent)] transition-colors">
-              <ImageIcon size={18} />
-              <span className="text-[11px]">上传封面</span>
-            </div>
-          )}
-        </div>
+        <Tooltip content="上传封面（可选，2MB 以内）">
+          <div
+            onClick={() => coverInputRef.current?.click()}
+            className="group/cover relative w-[100px] h-[140px] rounded-xl border border-dashed border-[var(--ink-border-strong)] hover:border-[var(--ink-accent)] overflow-hidden transition-all flex items-center justify-center shrink-0 cursor-pointer bg-[var(--ink-bg-panel)] shadow-inner"
+          >
+            {form.cover ? (
+              <>
+                <img src={form.cover} alt="封面" className="w-full h-full object-cover" />
+                <Tooltip content="移除封面">
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setField('cover', '')
+                    }}
+                    className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white opacity-0 group-hover/cover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    <X size={12} />
+                  </span>
+                </Tooltip>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-1.5 text-[var(--ink-text-muted)] group-hover/cover:text-[var(--ink-accent)] transition-colors">
+                <ImageIcon size={18} />
+                <span className="text-[11px]">上传封面</span>
+              </div>
+            )}
+          </div>
+        </Tooltip>
         <input
           ref={coverInputRef}
           type="file"

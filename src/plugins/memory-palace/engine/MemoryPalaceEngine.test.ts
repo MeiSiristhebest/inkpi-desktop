@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { MemoryPalaceEngine } from './MemoryPalaceEngine'
+import { MemoryPalaceEngine, MemoryPalaceWorkspaceIndex } from './MemoryPalaceEngine'
 import type { CodexEntity } from '../../living-codex/types'
 import type { ChapterRecord } from '../../../types'
 
@@ -62,6 +62,22 @@ describe('MemoryPalaceEngine', () => {
       updatedAt: 3000,
     },
   ]
+
+  it('keeps incremental chapter indexing isolated to its workspace', () => {
+    const index = new MemoryPalaceWorkspaceIndex('p1')
+    index.updateMany(fakeChapters)
+    index.update({ ...fakeChapters[0], content: '九霄神雷剑再次现身。' })
+    index.update({ ...fakeChapters[0], projectId: 'p2', content: '九霄神雷剑不应进入 p1。' })
+
+    expect(index.size).toBe(3)
+    expect(
+      index.search('神雷剑', fakeEntities).find((result) => result.entityId === 'e1')
+        ?.totalOccurrences,
+    ).toBe(2)
+
+    index.remove('c2')
+    expect(index.size).toBe(2)
+  })
 
   it('searches entity occurrences across chapters accurately', () => {
     const results = MemoryPalaceEngine.searchEntityOccurrences({

@@ -8,6 +8,7 @@ import { clock } from '../../../adapters/clock'
 import { CodexEntityEditor } from './CodexEntityEditor'
 import { TemplatePickerModal } from './TemplatePickerModal'
 import { WORLDVIEW_DEMO_PACKS, type WorldviewDemoPack } from '../content/worldviewDemos'
+import { CHARACTER_PRESET_COUNT, countTemplates } from '../content/characterPresets'
 import {
   Search,
   Plus,
@@ -24,6 +25,7 @@ import {
   Check,
   Flame,
 } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 interface CodexMasterViewProps {
   projectId: string
@@ -228,35 +230,38 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
           </div>
 
           {/* 模版库按钮 */}
-          <button
-            onClick={() => setIsTemplateModalOpen(true)}
-            className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-card)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)]"
-            title="浏览 36+ 种男女核心人设与世界观模版"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-            <span>模版库</span>
-          </button>
+          <Tooltip content={`浏览 ${countTemplates()} 份男女核心人设与世界观模版`}>
+            <button
+              onClick={() => setIsTemplateModalOpen(true)}
+              className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium border border-[var(--ink-border)] bg-[var(--ink-bg-card)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)]"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
+              <span>模版库</span>
+            </button>
+          </Tooltip>
 
           {/* 导出/备份 */}
           {entities.length > 0 && (
-            <button
-              onClick={handleExportJSON}
-              className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-              title="导出图谱 JSON 备份"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip content="导出图谱 JSON 备份">
+              <button
+                onClick={handleExportJSON}
+                className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
           )}
 
           {/* 清空图谱 */}
           {entities.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-red-500 hover:bg-red-500/10"
-              title="清空当前工程的世界观实体"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip content="清空当前工程的世界观实体">
+              <button
+                onClick={handleClearAll}
+                className="p-1.5 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-red-500 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip>
           )}
 
           {/* 新建实体主按钮 */}
@@ -338,8 +343,8 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
                     开启你的活体世界观图谱
                   </h3>
                   <p className="text-[12px] text-[var(--ink-text-muted)] max-w-lg mx-auto leading-relaxed">
-                    你可以一键预装经典题材世界观 Demo 体验 Aho-Corasick 毫秒级行文感知，也可以从 36+
-                    种核心人设模版自由创造。
+                    你可以一键预装经典题材世界观 Demo 体验 Aho-Corasick 毫秒级行文感知，也可以从{' '}
+                    {countTemplates()} 份预置模版自由创造。
                   </p>
                 </div>
 
@@ -385,7 +390,7 @@ export const CodexMasterView: FC<CodexMasterViewProps> = ({ projectId }) => {
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--ink-bg-card)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[12px] font-medium transition-all"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                    <span>从 36+ 种男女核心人设模版挑选</span>
+                    <span>从 {CHARACTER_PRESET_COUNT} 份男女核心人设模版挑选</span>
                   </button>
                   <button
                     onClick={() => {

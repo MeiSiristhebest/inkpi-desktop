@@ -1,6 +1,8 @@
 import { type FC } from 'react'
 import type { PromiseLedgerEntry } from '../types'
 import { ledgerEngine } from '../engine/LedgerEngine'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip } from '../../../ui/primitives'
 
 interface DebtGanttChartProps {
   entries: PromiseLedgerEntry[]
@@ -50,6 +52,8 @@ export const DebtGanttChart: FC<DebtGanttChartProps> = ({
           </span>
         </div>
       </div>
+
+      <ScoreProvenanceBadge source="rule" detail="按登记的兑现期限推算" />
 
       <div className="min-w-[640px] relative pt-6 pb-2">
         {/* 章节刻度标尺 */}
@@ -106,52 +110,56 @@ export const DebtGanttChart: FC<DebtGanttChartProps> = ({
                       isPaid ? 'bg-blue-400' : isOverdue ? 'bg-rose-500' : 'bg-emerald-400'
                     }`}
                   />
-                  <span className="truncate" title={entry.clueName}>
-                    {entry.clueName}
-                  </span>
+                  <Tooltip content={entry.clueName}>
+                    <span className="truncate">{entry.clueName}</span>
+                  </Tooltip>
                 </div>
 
                 {/* 进度条轨道 */}
                 <div className="flex-1 relative h-4 bg-[var(--ink-bg-canvas)] rounded overflow-hidden">
                   {/* 安全区间 */}
-                  <div
-                    style={{
-                      left: `${plantPct}%`,
-                      width: `${Math.max(1, softPct - plantPct)}%`,
-                    }}
-                    className="absolute top-0 bottom-0 bg-emerald-500/30 border-l-2 border-emerald-500"
-                    title={`第${entry.plantChapter}章埋设`}
-                  />
+                  <Tooltip content={`第${entry.plantChapter}章埋设`}>
+                    <div
+                      style={{
+                        left: `${plantPct}%`,
+                        width: `${Math.max(1, softPct - plantPct)}%`,
+                      }}
+                      className="absolute top-0 bottom-0 bg-emerald-500/30 border-l-2 border-emerald-500"
+                    />
+                  </Tooltip>
 
                   {/* 软告警区间 */}
-                  <div
-                    style={{
-                      left: `${softPct}%`,
-                      width: `${Math.max(1, duePct - softPct)}%`,
-                    }}
-                    className="absolute top-0 bottom-0 bg-amber-500/35 border-l-2 border-amber-500"
-                    title={`第${softCh}章进入告警`}
-                  />
+                  <Tooltip content={`第${softCh}章进入告警`}>
+                    <div
+                      style={{
+                        left: `${softPct}%`,
+                        width: `${Math.max(1, duePct - softPct)}%`,
+                      }}
+                      className="absolute top-0 bottom-0 bg-amber-500/35 border-l-2 border-amber-500"
+                    />
+                  </Tooltip>
 
                   {/* 超期溢出区间 */}
                   {currentChapter > dueCh && !isPaid && (
-                    <div
-                      style={{
-                        left: `${duePct}%`,
-                        width: `${Math.max(1, ((currentChapter - dueCh) / maxCh) * 100)}%`,
-                      }}
-                      className="absolute top-0 bottom-0 bg-rose-500/40 border-l-2 border-rose-500 animate-pulse"
-                      title={`已超期 ${currentChapter - dueCh} 章`}
-                    />
+                    <Tooltip content={`已超期 ${currentChapter - dueCh} 章`}>
+                      <div
+                        style={{
+                          left: `${duePct}%`,
+                          width: `${Math.max(1, ((currentChapter - dueCh) / maxCh) * 100)}%`,
+                        }}
+                        className="absolute top-0 bottom-0 bg-rose-500/40 border-l-2 border-rose-500 animate-pulse"
+                      />
+                    </Tooltip>
                   )}
 
                   {/* 兑现点标记 */}
                   {entry.payoffChapter && (
-                    <div
-                      style={{ left: `${(entry.payoffChapter / maxCh) * 100}%` }}
-                      className="absolute top-0 bottom-0 w-1.5 bg-blue-500 -translate-x-1/2 z-10"
-                      title={`第${entry.payoffChapter}章兑现`}
-                    />
+                    <Tooltip content={`第${entry.payoffChapter}章兑现`}>
+                      <div
+                        style={{ left: `${(entry.payoffChapter / maxCh) * 100}%` }}
+                        className="absolute top-0 bottom-0 w-1.5 bg-blue-500 -translate-x-1/2 z-10"
+                      />
+                    </Tooltip>
                   )}
                 </div>
 

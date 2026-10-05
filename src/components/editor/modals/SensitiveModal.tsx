@@ -4,6 +4,7 @@ import { Modal } from '../../../ui/molecules/Modal'
 
 import { DEFAULT_SENSITIVE_WORDS } from '../../../config/sensitiveWords'
 import { GenericAhoCorasick } from '../../../utils/AhoCorasick'
+import { Tooltip } from '../../../ui/primitives'
 
 interface SensitiveModalProps {
   content: string
@@ -74,13 +75,14 @@ export const SensitiveModal: React.FC<SensitiveModalProps> = ({ content, onApply
             本章敏感词即时检测
           </h3>
         </div>
-        <button
-          onClick={onClose}
-          title="关闭"
-          className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <Tooltip content="关闭">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </Tooltip>
       </div>
 
       <div className="p-5 overflow-y-auto space-y-4 flex-1 bg-[var(--ink-bg)]">

@@ -1,51 +1,65 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import { motion } from 'motion/react'
-import { BookPlus, FileDown, Sparkles } from 'lucide-react'
+import { BookPlus, FileDown, Sparkles, ArchiveRestore, Trash2 } from 'lucide-react'
 import type { ProjectRecord } from '../../types'
+import type { NewProjectForm } from '../../domain/project/projectDefaults'
 import { loadStatsForProjects, type ProjectStats } from '../../core/projectService'
 import { spring, gesture } from '../../motion'
 import { CreateProjectPanel } from './organisms/CreateProjectPanel'
 import { ProjectCard } from './organisms/ProjectCard'
 import { ProjectDeleteDialog } from './organisms/ProjectDeleteDialog'
+import { ProjectArchiveDialog } from './organisms/ProjectArchiveDialog'
 import type { ProjectEditFormValues } from './organisms/ProjectEditForm'
+import { Tooltip } from '../../ui/primitives'
 
 interface BookshelfProps {
   projects: ProjectRecord[]
+  /** 已移出作品库的项目：数据仍在本地，可随时放回（P0.8） */
+  archivedProjects?: ProjectRecord[]
   onOpenProject: (id: string) => void
-  onCreateProject: (
-    name: string,
-    genre: string,
-    intro: string,
-    templateType?: 'blank' | 'demo',
-  ) => void
+  onCreateProject: (form: NewProjectForm) => void
   onImportProject?: (file: File) => void
   /** 一键创建自带种子内容的示范项目，便于首次体验 */
   onCreateDemo?: () => void
-  /** 导出项目完整备份 */
+  /** 导出项目完整备份（含设定/时间线/插件/AI 数据） */
   onExportProject?: (id: string) => void
+  /** 导出纯正文，不含任何中间状态 */
+  onExportManuscript?: (id: string) => void
   /** 编辑项目信息（name/genre/intro/cover） */
   onUpdateProject?: (project: ProjectRecord) => void
-  /** 删除项目 */
+  /** 永久删除：级联清除全部工作区数据，不可撤销 */
   onDeleteProject?: (id: string) => void
+  /** 移出作品库：只隐藏条目，数据保留 */
+  onRemoveFromLibrary?: (id: string) => void
+  /** 放回书架 */
+  onRestoreToLibrary?: (id: string) => void
 }
 
 /**
  * 书架主页（被动视图容器）。
- * 自身只持有 UI 编排状态（新建面板 / 编辑中 id / 待删除项 / 菜单开关 / 统计缓存），
- * 具体的卡片、内联编辑表单、新建面板、删除确认均委托给 organisms（原子设计分层，§2.2）。
+ * 自身只持有 UI 编排状态（新建面板 / 编辑中 id / 待删除项 / 待移出项 / 菜单开关 / 统计缓存），
+ * 具体的卡片、内联编辑表单、新建面板、确认弹窗均委托给 organisms（原子设计分层，§2.2）。
+ *
+ * 「移出作品库」与「永久删除」在这里是两条独立入口：前者只隐藏、可恢复，
+ * 后者不可撤销 —— 混用会让用户以为关掉书架条目就等于删除数据（INV-04 / P0.8）。
  */
 export const Bookshelf = ({
   projects,
+  archivedProjects = [],
   onOpenProject,
   onCreateProject,
   onImportProject,
   onExportProject,
+  onExportManuscript,
   onUpdateProject,
   onDeleteProject,
+  onRemoveFromLibrary,
+  onRestoreToLibrary,
 }: BookshelfProps) => {
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingProject, setDeletingProject] = useState<ProjectRecord | null>(null)
+  const [archivingProject, setArchivingProject] = useState<ProjectRecord | null>(null)
   const [stats, setStats] = useState<Record<string, ProjectStats>>({})
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
 
@@ -182,12 +196,62 @@ export const Bookshelf = ({
                 onCloseMenu={() => setActiveMenuId(null)}
                 onStartEdit={() => setEditingId(p.id)}
                 onExport={() => onExportProject?.(p.id)}
+                onExportManuscript={() => onExportManuscript?.(p.id)}
+                onRemoveFromLibrary={() => setArchivingProject(p)}
                 onDelete={() => setDeletingProject(p)}
                 onSaveEdit={handleSaveEdit}
                 onCancelEdit={() => setEditingId(null)}
               />
             ))}
           </motion.div>
+        )}
+
+        {archivedProjects.length > 0 && (
+          <section
+            className="mt-10 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]/40 p-4"
+            aria-label="已移出作品库"
+          >
+            <h3 className="text-[12.5px] font-semibold text-[var(--ink-text-muted)] mb-1">
+              已移出作品库 ({archivedProjects.length})
+            </h3>
+            <p className="text-[11px] text-[var(--ink-text-faint)] mb-3">
+              这些作品的数据仍完整保留在本地，放回即可继续写作。
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {archivedProjects.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]"
+                >
+                  <span className="text-[12.5px] text-[var(--ink-text)] truncate">
+                    {p.name}
+                    {p.genre ? (
+                      <span className="text-[var(--ink-text-faint)]"> · {p.genre}</span>
+                    ) : null}
+                  </span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onRestoreToLibrary?.(p.id)}
+                      className="inline-flex items-center gap-1 px-2 h-6.5 rounded-md text-[11.5px] border border-[var(--ink-border)] text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                    >
+                      <ArchiveRestore size={12} /> 放回书架
+                    </button>
+                    <Tooltip content="永久删除（不可撤销）">
+                      <button
+                        type="button"
+                        onClick={() => setDeletingProject(p)}
+                        aria-label={`永久删除 ${p.name}`}
+                        className="inline-flex items-center justify-center w-6.5 h-6.5 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-danger)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </Tooltip>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
 
@@ -197,6 +261,15 @@ export const Bookshelf = ({
         onConfirm={() => {
           if (deletingProject) onDeleteProject?.(deletingProject.id)
           setDeletingProject(null)
+        }}
+      />
+
+      <ProjectArchiveDialog
+        project={archivingProject}
+        onCancel={() => setArchivingProject(null)}
+        onConfirm={() => {
+          if (archivingProject) onRemoveFromLibrary?.(archivingProject.id)
+          setArchivingProject(null)
         }}
       />
     </div>

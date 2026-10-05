@@ -38,6 +38,7 @@ import { EditorToolbar } from './organisms/EditorToolbar'
 import { FindReplaceBar } from './organisms/FindReplaceBar'
 import { StatusFooter } from './organisms/StatusFooter'
 import { loadContentIntoEditor, applyContentMutation } from './editorContentBridge'
+import { WRITE_ORIGIN_META, countsAsAuthorTyping, plainLength } from './writeOrigin'
 import { EditorCanvas } from './organisms/EditorCanvas'
 import { GlobalSearchPopup } from './organisms/GlobalSearchPopup'
 import { ChapterContextMenu } from './organisms/ChapterContextMenu'
@@ -76,6 +77,11 @@ export interface RichEditorProps {
   taskProgress?: TaskStatusSnapshot | null
   /** 顶栏单层合一注入 */
   onHome?: () => void
+  /** Engine registers this barrier before transitions that unmount the editor. */
+  onRegisterDurabilityBarrier?: (
+    drain: () => Promise<void>,
+    hasPending: () => boolean,
+  ) => void | (() => void)
   onToggleFocus?: () => void
   isFullscreen?: boolean
   onToggleFullscreen?: () => void
@@ -116,6 +122,7 @@ export const RichEditor: FC<RichEditorProps> = ({
   onAiTask,
   taskProgress,
   onHome,
+  onRegisterDurabilityBarrier,
   onToggleFocus,
   isFullscreen = false,
   onToggleFullscreen,
@@ -152,7 +159,21 @@ export const RichEditor: FC<RichEditorProps> = ({
     deletingVolume,
     volumeContextMenu,
     defaultTypewriter,
+    draftRecovery,
   } = model
+
+  const drainRef = useRef(model.actions.drain)
+  const hasPendingRef = useRef(model.actions.hasPending)
+  drainRef.current = model.actions.drain
+  hasPendingRef.current = model.actions.hasPending
+  useEffect(() => {
+    if (!onRegisterDurabilityBarrier) return
+    const unregister = onRegisterDurabilityBarrier(
+      () => drainRef.current(),
+      () => hasPendingRef.current(),
+    )
+    return typeof unregister === 'function' ? unregister : undefined
+  }, [onRegisterDurabilityBarrier])
 
   // 始终同步最新正文状态至外层 ActiveWritingContext (P1.1)
   const activeWritingCtx = useOptionalActiveWritingContext()
@@ -193,8 +214,8 @@ export const RichEditor: FC<RichEditorProps> = ({
     isActive: true,
   })
 
-  // 记录上一次的正文纯文字长度，用于在用户自然打字输入时派发有效打字字数
-  const prevChapterLenRef = useRef<number>(activeChapter?.wordCount || 0)
+  // 记录本次事务应用前的正文纯文字长度，用于把有效打字增量与程序化写入分开（§P3.10）
+  const prevChapterLenRef = useRef<number>(plainLength(activeChapter?.content || ''))
   const isPasteOperationRef = useRef<boolean>(false)
 
   // 写作背景与网格线配置（默认采用用户最适宜的写作底色与网格设定）
@@ -374,19 +395,20 @@ export const RichEditor: FC<RichEditorProps> = ({
           const g = ghostTextRef.current
           ghostTextRef.current = ''
           actions.setGhostText('')
-          ed.commands.insertContent(g)
+          // 采纳的是 AI 的话，字数就该记在 AI 头上（§P3.10）。
+          ed.chain().insertContent(g).setMeta(WRITE_ORIGIN_META, 'ai').run()
           return true
         }
         return false
       },
     },
-    onUpdate: () => {
+    onUpdate: (props?: { transaction?: { getMeta(key: string): unknown } }) => {
       actions.handleEditorUpdate()
       const currentLen = editorRef.current?.getText()?.replace(/\s+/g, '')?.length || 0
       const delta = currentLen - prevChapterLenRef.current
       prevChapterLenRef.current = currentLen
 
-      if (delta > 0 && !isPasteOperationRef.current) {
+      if (delta > 0 && !isPasteOperationRef.current && countsAsAuthorTyping(props?.transaction)) {
         sessionStats.recordTypedWords(delta)
       }
       isPasteOperationRef.current = false
@@ -487,13 +509,27 @@ export const RichEditor: FC<RichEditorProps> = ({
       hideGhostText(ed)
       ghostTextRef.current = ''
       actions.setGhostText('')
-      prevChapterLenRef.current = ch.content ? ch.wordCount : 0
-      isPasteOperationRef.current = true
+      // 这里不再动字数基线：setContent 走 preventUpdate，基线统一由 beforeTransaction 维护。
     } catch {
       /* 编辑器销毁过程中可能短暂不一致，忽略 */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, activeChapterId, chapters])
+
+  /* ── 打字统计基线：在每次事务应用前抓一次正文长度（§P3.10）────
+     beforeTransaction 触发时 view 尚未 updateState，editor.getText() 读到的仍是应用前的
+     正文，于是 onUpdate 的增量恰好等于本次事务真正写进正文的字数。采纳 AI 续写、
+     格式化/敏感词修复这类 preventUpdate 的程序化写入因此不会再被并入作者的手打增量。 */
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    const onBefore = () => {
+      prevChapterLenRef.current = editor.getText()?.replace(/\s+/g, '')?.length || 0
+    }
+    editor.on('beforeTransaction', onBefore)
+    return () => {
+      editor.off('beforeTransaction', onBefore)
+    }
+  }, [editor])
 
   /* ── 全局快捷键：⌘S 保存 / ⌘F 查找 / ⌘\ 折叠目录（⌘B 归还给 Bold）/ ⌘N 新建章节 / ⌘H 时光机 / Alt+↑/↓ 切章 / Esc 关闭 ── */
   const uiRef = useRef({
@@ -579,6 +615,39 @@ export const RichEditor: FC<RichEditorProps> = ({
   /* ── 渲染 ──────────────────────────────────────────────── */
   return (
     <div className="creative-editor-root flex-1 h-full flex min-h-0 relative bg-[var(--ink-bg)] text-[var(--ink-text)] overflow-hidden">
+      {draftRecovery && draftRecovery.status !== 'recovered' && (
+        <div
+          data-testid="draft-recovery-state"
+          role="status"
+          className="absolute left-3 right-3 top-2 z-30 flex items-center justify-between gap-3 rounded border border-amber-500/40 bg-[var(--ink-bg-panel)]/95 px-3 py-2 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
+        >
+          <span>
+            {draftRecovery.status === 'available'
+              ? '检测到上次未落盘的草稿。'
+              : draftRecovery.status === 'stale'
+                ? '检测到已过期草稿，当前正典未被覆盖。'
+                : '检测到与当前版本冲突的草稿，当前正典未被覆盖。'}
+          </span>
+          <span className="flex items-center gap-2 shrink-0">
+            {draftRecovery.status === 'available' && (
+              <button
+                type="button"
+                onClick={() => void actions.recoverDraft()}
+                className="text-[var(--ink-accent)] hover:underline"
+              >
+                恢复草稿
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={actions.discardDraft}
+              className="text-[var(--ink-text-faint)] hover:underline"
+            >
+              丢弃
+            </button>
+          </span>
+        </div>
+      )}
       {visibleTaskProgress && (
         <div
           data-testid="editor-long-task-status"

@@ -4,8 +4,15 @@ import type { AiTask, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { AiAssistant } from '../ports/aiGateway'
 import type { Clock } from '../ports/clock'
 import type { TaskRecoveryRecord, TaskRecoveryStore } from '../db/taskRecoveryStore'
-import { createStoryState } from '../domain/story'
+import {
+  createStoryEntity,
+  createStoryState,
+  countStoryRecords,
+  upsertEntity,
+  type StoryState,
+} from '../domain/story'
 import { semanticDocumentFromText } from '../domain/content'
+import type { ActiveWritingContext } from '../core/activeWritingContext'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { useAiConversation } from './useAiConversation'
 
@@ -421,6 +428,97 @@ describe('useAiConversation task recovery', () => {
 
     await waitFor(() => expect(syncDomain).toHaveBeenCalledOnce(), { timeout: 3000 })
     expect(syncDomain).toHaveBeenCalledWith('project-1')
+    hook.unmount()
+  })
+})
+
+describe('useAiConversation pre-send request scope', () => {
+  it('promises exactly the chapter, selection, story facts and history it puts on the wire', async () => {
+    const chapterText = '雾压着断谷，灯下山门只余一线。'
+    let storyState = createStoryState(9)
+    storyState = upsertEntity(
+      storyState,
+      createStoryEntity({
+        id: 'ent-1',
+        kind: 'character',
+        name: '林寻',
+        provenance: { sourceType: 'author', factLevel: 'canonical-fact', confidence: 1 },
+      }),
+    )
+    storyState = upsertEntity(
+      storyState,
+      createStoryEntity({
+        id: 'ent-2',
+        kind: 'sect',
+        name: '青岭剑宗',
+        provenance: { sourceType: 'author', factLevel: 'canonical-fact', confidence: 1 },
+      }),
+    )
+    const activeWritingContext: ActiveWritingContext = {
+      workspaceId: 'project-1',
+      workspaceRevision: 4,
+      chapter: {
+        id: 'ch-1',
+        revision: 2,
+        title: '断谷之夜',
+        content: chapterText,
+        wordCount: chapterText.length,
+        semanticDocument: semanticDocumentFromText('ch-1', chapterText),
+      },
+      selection: { from: 0, to: 3, text: chapterText.slice(0, 3) },
+      dirty: false,
+    }
+
+    const submitted: AiTask[] = []
+    const runTask = vi.fn(async (task: AiTask) => {
+      submitted.push(task)
+      return {
+        taskId: task.id,
+        kind: task.kind,
+        status: 'completed' as const,
+        output: { format: 'text' as const, text: '回复' },
+      }
+    })
+    connectToDaemon.mockResolvedValue({ client: makeAssistant(runTask), connected: true })
+    const store = makeStore()
+    const hook = renderHook(() =>
+      useAiConversation(
+        'ws://daemon',
+        null,
+        'project-1',
+        { taskRecoveryStore: store, clock: fixedClock, storyState },
+        activeWritingContext,
+      ),
+    )
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+
+    await act(async () => {
+      hook.result.current.sendAiPrompt('先润色这一段')
+    })
+    await waitFor(() => expect(hook.result.current.aiMessages).toHaveLength(2))
+
+    const promised = hook.result.current.requestScope
+    expect(promised.hasChapter).toBe(true)
+    expect(promised.chapterTitle).toBe('断谷之夜')
+    expect(promised.selectionChars).toBe(3)
+    expect(promised.storyFactCount).toBe(2)
+    expect(promised.historyTurns).toBe(2)
+
+    await act(async () => {
+      hook.result.current.sendAiPrompt('继续')
+    })
+    await waitFor(() => expect(submitted).toHaveLength(2))
+
+    const payload = submitted[1].input.payload as Record<string, unknown>
+    const context = payload.context as Record<string, unknown>
+    const history = payload.conversationHistory as Array<{ role: string; text: string }>
+
+    expect(context.text).toBe(chapterText)
+    expect((context.selectionText as string).length).toBe(promised.selectionChars)
+    expect(countStoryRecords(context.storyState as StoryState)).toBe(promised.storyFactCount)
+    // 最后一条历史就是本次指令，其余正是披露里的"上文 N 条"
+    expect(history).toHaveLength(promised.historyTurns + 1)
+    expect(history.at(-1)).toMatchObject({ role: 'user', text: '继续' })
     hook.unmount()
   })
 })

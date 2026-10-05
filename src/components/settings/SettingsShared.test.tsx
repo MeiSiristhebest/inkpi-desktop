@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { Switch, Slider, Segmented } from './SettingsShared'
+import { Row, Switch, Slider, Segmented } from './SettingsShared'
 
 describe('Switch primitive', () => {
   it('has role="switch" and aria-checked reflects state', () => {
@@ -244,5 +244,54 @@ describe('Segmented primitive', () => {
 
     fireEvent.keyDown(group, { key: 'End' })
     expect(onChange).toHaveBeenCalledWith('c')
+  })
+})
+
+// Row 的可见标题是设置页里控件唯一的名称来源。若它只是兄弟节点，读屏器焦点落到
+// 开关/滑块时只会念出「switch」「slider」，这正是收敛计划 P4.4 点名的反例。
+describe('Row wires its visible label to nested controls', () => {
+  it('names a Switch that passes no ariaLabel', () => {
+    render(
+      <Row label="自动保存">
+        <Switch checked={false} onChange={vi.fn()} />
+      </Row>,
+    )
+    expect(screen.getByRole('switch', { name: '自动保存' })).toBeInTheDocument()
+  })
+
+  it('names a Slider and a Segmented the same way', () => {
+    render(
+      <>
+        <Row label="正文字号">
+          <Slider min={11} max={17} value={13} onChange={vi.fn()} />
+        </Row>
+        <Row label="行距">
+          <Segmented
+            value="1.6"
+            options={[
+              { v: '1.6', label: '1.6' },
+              { v: '2.0', label: '2.0' },
+            ]}
+            onChange={vi.fn()}
+          />
+        </Row>
+      </>,
+    )
+    expect(screen.getByRole('slider', { name: '正文字号' })).toBeInTheDocument()
+    expect(screen.getByRole('radiogroup', { name: '行距' })).toBeInTheDocument()
+  })
+
+  it('keeps an explicit ariaLabel authoritative over the Row label', () => {
+    render(
+      <Row label="输入“时自动补齐双引号”">
+        <Switch checked={false} onChange={vi.fn()} ariaLabel="输入引号时自动补齐双引号" />
+      </Row>,
+    )
+    expect(screen.getByRole('switch', { name: '输入引号时自动补齐双引号' })).toBeInTheDocument()
+  })
+
+  it('names a standalone Switch with its own adjacent visible label', () => {
+    render(<Switch checked={false} onChange={vi.fn()} label="跟随光标" />)
+    expect(screen.getByRole('switch', { name: '跟随光标' })).toBeInTheDocument()
   })
 })

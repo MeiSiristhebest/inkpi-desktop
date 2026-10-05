@@ -29,7 +29,8 @@ describe('NameForgeView — 中西奇幻起名姬主视口', () => {
   it('allows saving generated name to Living Codex', async () => {
     render(<NameForgeView projectId="p1" />)
 
-    const saveButtons = screen.getAllByTitle('收录至活体世界观图谱')
+    // 名称取卡片上可见的「收录至图谱」「复制」，长句提示只提供描述
+    const saveButtons = screen.getAllByRole('button', { name: '收录至图谱' })
     fireEvent.click(saveButtons[0])
 
     await waitFor(() => {
@@ -45,7 +46,7 @@ describe('NameForgeView — 中西奇幻起名姬主视口', () => {
     const copySpy = vi.spyOn(clipboardWriter, 'writeText').mockResolvedValue()
     render(<NameForgeView projectId="p1" />)
 
-    const copyButtons = screen.getAllByTitle('复制名称')
+    const copyButtons = screen.getAllByRole('button', { name: '复制' })
     fireEvent.click(copyButtons[0])
 
     expect(copySpy).toHaveBeenCalled()

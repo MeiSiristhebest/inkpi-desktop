@@ -3,7 +3,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { createServer, type Server } from 'node:net'
 import { mkdtemp, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import type {
@@ -64,15 +64,7 @@ const delay = (milliseconds: number) =>
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tauriConfigPath = join(desktopRoot, 'src-tauri', 'tauri.conf.json')
 const mainRustPath = join(desktopRoot, 'src-tauri', 'src', 'main.rs')
-const nsisDirectory = join(
-  desktopRoot,
-  'src-tauri',
-  'target',
-  'x86_64-pc-windows-gnu',
-  'release',
-  'bundle',
-  'nsis',
-)
+const nsisDirectory = join(desktopRoot, 'src-tauri', 'target', 'release', 'bundle', 'nsis')
 const expectedSkillFiles = [
   'character-voice.md',
   'hook.md',
@@ -85,11 +77,8 @@ const expectedSkillManifests = {
   'promise.md': 'promise',
   'timeline-consistency.md': 'timeline-consistency',
 } as const
-const expectedResourceFiles = [
-  'WebView2Loader.dll',
-  'libgcc_s_seh-1.dll',
-  'libwinpthread-1.dll',
-] as const
+// The supported release target is x86_64-pc-windows-msvc; GNU runtime DLLs are not bundled.
+const expectedResourceFiles = ['WebView2Loader.dll'] as const
 
 interface TauriBundleConfig {
   targets?: string[]
@@ -140,6 +129,14 @@ afterEach(async () => {
 })
 
 describe('Final Freeze: packaged Desktop acceptance', () => {
+  it('keeps Tauri resources aligned with the supported Windows release target', async () => {
+    const config = JSON.parse(await readFile(tauriConfigPath, 'utf8')) as TauriConfig
+    expect(config.bundle?.resources).toEqual({
+      'binaries/skills': 'skills',
+      'dlls/WebView2Loader.dll': 'WebView2Loader.dll',
+    })
+  })
+
   it('inspects the current NSIS payload and its startup/resource contract', async ({ skip }) => {
     const installer = await findNsisInstaller()
     if (!installer) {
@@ -167,6 +164,9 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
       expect(entry, `NSIS payload is missing ${expected}`).toBeDefined()
       expect(entry?.size ?? 0, `${expected} must not be empty`).toBeGreaterThan(0)
     }
+    const payloadFileNames = entries.map((entry) => win32.basename(entry.name).toLowerCase())
+    expect(payloadFileNames).not.toContain('libgcc_s_seh-1.dll')
+    expect(payloadFileNames).not.toContain('libwinpthread-1.dll')
 
     const extractedManifestRoot = await ownTempDirectory('inkpi-final-freeze-manifests-')
     const extractedSkillsDirectory = join(extractedManifestRoot, 'skills')
@@ -192,11 +192,9 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
     expect(config.build?.beforeBuildCommand).toBe('npm run build')
     expect(config.bundle?.targets).toContain('nsis')
     expect(config.bundle?.externalBin).toContain('binaries/inkpi')
-    expect(config.bundle?.resources).toMatchObject({
+    expect(config.bundle?.resources).toEqual({
       'binaries/skills': 'skills',
       'dlls/WebView2Loader.dll': 'WebView2Loader.dll',
-      'dlls/libgcc_s_seh-1.dll': 'libgcc_s_seh-1.dll',
-      'dlls/libwinpthread-1.dll': 'libwinpthread-1.dll',
     })
     expect(config.app?.windows?.[0]).toMatchObject({ label: 'main' })
 

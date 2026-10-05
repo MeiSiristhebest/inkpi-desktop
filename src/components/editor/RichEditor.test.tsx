@@ -8,6 +8,7 @@ import {
   act,
   within,
 } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { RichEditor } from './RichEditor'
 import { db } from '../../db/indexedDB'
 import { SettingsProvider } from '../../core/settings'
@@ -15,6 +16,12 @@ import type { TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
 import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
 import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diagnostics'
+import { draftJournal } from '../../services/draftJournal'
+import { shortcutHint } from '../../core/editorShortcuts'
+import { chapterMutationService } from '../../services/defaultChapterMutationService'
+import { SESSION_WORDS_LABEL } from './hooks/useWritingSessionStats'
+import { WRITE_ORIGIN_META } from './writeOrigin'
+import type { ChapterMutationExecutionResult } from '../../services/chapterMutationService'
 
 // RichEditor 依赖 useSettings（§12.3：Provider 内才能使用），统一在此包裹 SettingsProvider。
 // rerender 也会落到 Provider 之外，故对 rerender 一并包裹。
@@ -33,12 +40,40 @@ const render = (
 
 // 共享可变状态：在测试中动态改写 getHTML/getText/selectedText，并捕获 onUpdate 回调。
 const h = vi.hoisted(() => ({
-  capturedOnUpdate: null as null | (() => void),
+  capturedOnUpdate: null as null | ((props?: unknown) => void),
   getHTML: () => '<p>初始内容</p>',
   getText: () => '初始内容',
   selectedText: '',
+  chainCalls: [] as Array<[string, unknown[]]>,
 }))
 let editorInstance: any = null
+
+// TipTap 的 chain 每一步都返回同一条链，测试里按同样形状记录被调用的命令。
+const makeChainable = () => {
+  const chain: any = {}
+  for (const name of [
+    'focus',
+    'insertContent',
+    'insertContentAt',
+    'setContent',
+    'setTextSelection',
+    'scrollIntoView',
+    'setMeta',
+    'toggleBold',
+    'toggleItalic',
+    'command',
+  ]) {
+    chain[name] = (...args: unknown[]) => {
+      h.chainCalls.push([name, args])
+      return chain
+    }
+  }
+  chain.run = () => {
+    h.chainCalls.push(['run', []])
+    return true
+  }
+  return chain
+}
 
 const makeMockCommands = () => ({
   setContent: vi.fn(),
@@ -46,12 +81,7 @@ const makeMockCommands = () => ({
   setTextSelection: vi.fn(),
   scrollIntoView: vi.fn(),
   focus: () => ({ toggleBold: () => ({ run: () => {} }), toggleItalic: () => ({ run: () => {} }) }),
-  chain: () => ({
-    focus: () => ({
-      toggleBold: () => ({ run: () => {} }),
-      toggleItalic: () => ({ run: () => {} }),
-    }),
-  }),
+  chain: () => makeChainable(),
 })
 
 const makeMockEditor = () => {
@@ -61,6 +91,7 @@ const makeMockEditor = () => {
     getText: () => h.getText(),
     isActive: () => false,
     commands: makeMockCommands(),
+    chain: () => makeChainable(),
     state: {
       doc: { textBetween: () => h.selectedText, content: { size: 0 }, descendants: () => {} },
       selection: { from: 0, to: 0 },
@@ -127,6 +158,10 @@ beforeEach(async () => {
     'p-ghost',
     'p-type',
     'p-global',
+    'p-origin',
+    'p-rewrite',
+    'p-title',
+    'p-recovery',
     'p-tree-search',
     'p-status',
     'p-width',
@@ -153,6 +188,7 @@ beforeEach(async () => {
     'p-split',
     'p-stat',
     'p-hist',
+    'p-save-states',
   ]
   for (const pid of testProjectIds) {
     await db.put('projects', {
@@ -169,6 +205,7 @@ beforeEach(async () => {
   h.getHTML = () => '<p>初始内容</p>'
   h.getText = () => '初始内容'
   h.selectedText = ''
+  h.chainCalls.length = 0
 })
 afterEach(() => {
   cleanup()
@@ -208,6 +245,61 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     )
   }, 10000)
 
+  it('surfaces saving, failed and retry save states in the footer with user-facing words', async () => {
+    // 收口计划 P0.2：把「React 脏 / 防抖排队 / 已 durable」三种内部状态翻成用户能读懂的
+    // 「未保存 / 正在保存… / 已保存」，失败必须显式可见并能重试，而不是退回一个永不消退的脏标记。
+    h.getText = () => '重试后的正文'
+    h.getHTML = () => '<p>重试后的正文</p>'
+    const realMutate = chapterMutationService.mutate.bind(chapterMutationService)
+    let releaseSave: ((result: ChapterMutationExecutionResult) => void) | undefined
+    const mutateSpy = vi.spyOn(chapterMutationService, 'mutate').mockImplementation(
+      () =>
+        new Promise<ChapterMutationExecutionResult>((resolve) => {
+          releaseSave = resolve
+        }),
+    )
+
+    try {
+      render(<RichEditor projectId="p-save-states" />)
+      await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+      const saveState = () => screen.getByTestId('editor-status-save-state')
+      expect(saveState()).toHaveAttribute('data-save-state', 'saved')
+
+      act(() => {
+        h.capturedOnUpdate?.()
+      })
+      // 键入本身只是脏：落库还没开始，不能谎报「正在保存」
+      expect(saveState()).toHaveAttribute('data-save-state', 'unsaved')
+
+      await waitFor(() => expect(mutateSpy).toHaveBeenCalled(), { timeout: 8000 })
+      expect(saveState()).toHaveAttribute('data-save-state', 'saving')
+      expect(saveState()).toHaveTextContent('正在保存…')
+
+      releaseSave?.({ success: false, conflict: false, error: '磁盘写入失败' })
+      await waitFor(() => expect(saveState()).toHaveAttribute('data-save-state', 'error'), {
+        timeout: 8000,
+      })
+      expect(saveState()).toHaveTextContent('保存失败 · 重试')
+      // 失败原因此前挂在 title 上；门面迁走后它仍在可访问名称里（调用点自己写了 aria-label）
+      expect(saveState()).toHaveAccessibleName(/磁盘写入失败/)
+      // 失败不落库：权威存储里仍是原始内容，UI 与 durable 事实一致
+      const before = await db.getAll('chapters')
+      expect(before.find((c) => c.title === '第001章 寒潭惊变')?.content).not.toBe(
+        '<p>重试后的正文</p>',
+      )
+
+      mutateSpy.mockImplementation(realMutate)
+      fireEvent.click(within(saveState()).getByRole('button', { name: '保存失败 · 重试' }))
+      await waitFor(() => expect(saveState()).toHaveAttribute('data-save-state', 'saved'), {
+        timeout: 8000,
+      })
+      // 「已保存」必须对应真实 durable 落库，且重试的是最新那份草稿
+      const after = await db.getAll('chapters')
+      expect(after.find((c) => c.title === '第001章 寒潭惊变')?.content).toBe('<p>重试后的正文</p>')
+    } finally {
+      mutateSpy.mockRestore()
+    }
+  }, 30000)
   it('auto-format applies full-width indent via editor.setContent', async () => {
     render(<RichEditor projectId="p-fmt" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
@@ -217,7 +309,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       })
     })
     h.getText = () => '第一行\n第二行'
-    fireEvent.click(screen.getByTitle('一键首行缩进排版'))
+    fireEvent.click(screen.getByRole('button', { name: /经典出版（空两格）/ }))
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith(
         '<p>　　第一行</p><p>　　第二行</p>',
@@ -235,7 +327,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       })
     })
     h.getText = () => 'hi, there?'
-    fireEvent.click(screen.getByTitle('标点规整'))
+    fireEvent.click(screen.getByRole('button', { name: /标点智能规整/ }))
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　hi， there？</p>', {
         emitUpdate: false,
@@ -253,7 +345,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     h.getText = () => 'abc'
     h.getHTML = () => '<p>abc</p>'
-    fireEvent.click(screen.getByTitle('查找替换 / 全文检索 (⌘F)'))
+    fireEvent.click(screen.getByRole('button', { name: '查找' }))
     fireEvent.change(screen.getByPlaceholderText('检索（文档内全文）'), { target: { value: 'a' } })
     fireEvent.change(screen.getByPlaceholderText('替换为（可选）'), { target: { value: 'X' } })
     fireEvent.click(screen.getByText('全部替换'))
@@ -269,7 +361,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<RichEditor projectId="p-exp" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('导出为 TXT'))
+    fireEvent.click(screen.getByRole('button', { name: /导出 TXT 文档/ }))
     expect(createSpy).toHaveBeenCalled()
     expect(clickSpy).toHaveBeenCalled()
     createSpy.mockRestore()
@@ -282,7 +374,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     // 默认展开：不显示面包屑
     expect(screen.queryByText(/第\d+卷 · 第\d+章/)).not.toBeInTheDocument()
     // 折叠目录：树完全隐藏，左上角显示「第X卷 · 第X章」
-    fireEvent.click(screen.getByTitle('折叠目录 (⌘\\)'))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('折叠目录', 'toggleChapterTree') }),
+    )
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     expect(screen.getByText(/第\d+卷 · 第\d+章/)).toBeInTheDocument()
   })
@@ -369,7 +463,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('creates a new chapter via the tree and writes it to IndexedDB', async () => {
     render(<RichEditor projectId="p-new" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('在当前卷新建章节 (⌘N)'))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('在当前卷新建章节', 'newChapter') }),
+    )
     await waitFor(async () => {
       const chs = await db.getAll('chapters')
       expect(chs.some((c) => c.title.startsWith('第') && c.title.includes('未命名'))).toBe(true)
@@ -379,8 +475,8 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('exposes 首行缩进 and 标点规整 as toolbar actions (appearance moved to unified Settings)', async () => {
     render(<RichEditor projectId="p-settings" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    expect(screen.getByTitle('一键首行缩进排版')).toBeInTheDocument()
-    expect(screen.getByTitle('标点规整')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /经典出版（空两格）/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /标点智能规整/ })).toBeInTheDocument()
     // 等待编辑器完成首章灌入，避免慢速 CI 上点击发生在 editorRef 建立之前。
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith(expect.any(String), {
@@ -389,7 +485,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     // 首行缩进走与工具栏相同的格式化逻辑
     h.getText = () => '独行'
-    fireEvent.click(screen.getByTitle('一键首行缩进排版'))
+    fireEvent.click(screen.getByRole('button', { name: /经典出版（空两格）/ }))
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>　　独行</p>', {
         emitUpdate: false,
@@ -404,16 +500,16 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.getAllByText('排版', { exact: true })).toHaveLength(1)
     expect(screen.queryByTestId('editor-font-format-menu-item')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByTitle('排版与标点规范'))
+    fireEvent.click(screen.getByTestId('editor-toolbar-format-trigger'))
     expect(screen.getByTestId('editor-font-format-menu-item')).toBeVisible()
   })
 
   it('toggles the find/replace bar open and closed', async () => {
     render(<RichEditor projectId="p-find2" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('查找替换 / 全文检索 (⌘F)'))
+    fireEvent.click(screen.getByRole('button', { name: '查找' }))
     expect(screen.getByPlaceholderText('检索（文档内全文）')).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('关闭'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
     expect(screen.queryByPlaceholderText('检索（文档内全文）')).not.toBeInTheDocument()
   })
 
@@ -422,7 +518,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<RichEditor projectId="p-exp2" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('导出为 MD'))
+    fireEvent.click(screen.getByRole('button', { name: /导出 Markdown/ }))
     expect(createSpy).toHaveBeenCalled()
     expect(clickSpy).toHaveBeenCalled()
     createSpy.mockRestore()
@@ -434,7 +530,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     render(<RichEditor projectId="p-exp3" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('导出为 HTML'))
+    fireEvent.click(screen.getByRole('button', { name: /导出 HTML 单页/ }))
     expect(createSpy).toHaveBeenCalled()
     expect(clickSpy).toHaveBeenCalled()
     createSpy.mockRestore()
@@ -452,7 +548,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       />,
     )
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('重连 InkPi Daemon'))
+    fireEvent.click(screen.getByRole('button', { name: /点击重连 InkPi Daemon/ }))
     expect(onReconnect).toHaveBeenCalled()
   })
 
@@ -464,13 +560,17 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('collapses and restores the chapter tree via the sidebar toggle', async () => {
     render(<RichEditor projectId="p-side" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('折叠目录 (⌘\\)'))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('折叠目录', 'toggleChapterTree') }),
+    )
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('展开目录 (⌘\\)'))
+    fireEvent.click(
+      screen.getByRole('button', { name: shortcutHint('展开目录', 'toggleChapterTree') }),
+    )
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
-  it('responds to global shortcuts (⌘\ folds tree, ⌘F opens find, Esc closes)', async () => {
+  it('responds to global shortcuts (⌘ folds tree, ⌘F opens find, Esc closes)', async () => {
     render(<RichEditor projectId="p-keys" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     fireEvent.keyDown(window, { key: '\\', ctrlKey: true })
@@ -497,7 +597,61 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     expect(onRequestGhost).toHaveBeenCalled()
     fireEvent.click(screen.getByText('Tab 采纳续写'))
-    expect(editorInstance.commands.insertContent).toHaveBeenCalledWith('的续写内容')
+    const chained = h.chainCalls.map(([name]) => name)
+    expect(chained).toEqual(expect.arrayContaining(['insertContent', 'setMeta', 'run']))
+    expect(h.chainCalls.find(([name]) => name === 'insertContent')?.[1]).toEqual(['的续写内容'])
+    // 采纳的字数挂在 AI 来源上，不进作者当日手打（§P3.10）
+    expect(h.chainCalls.find(([name]) => name === 'setMeta')?.[1]).toEqual([
+      WRITE_ORIGIN_META,
+      'ai',
+    ])
+  })
+
+  it('counts only keystroke growth in 今日新增, never the adopted AI text', async () => {
+    render(<RichEditor projectId="p-origin" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const counted = () => {
+      // 口径说明改由提示门面承担后，触发器上不再有原生 title，改按可见标签定位同一行
+      const label = screen.getAllByText(SESSION_WORDS_LABEL)[0]
+      return Number((label.parentElement?.textContent ?? '').replace(/\D/g, ''))
+    }
+
+    const tagged = (origin?: string) => ({
+      transaction: { getMeta: (key: string) => (key === WRITE_ORIGIN_META ? origin : undefined) },
+    })
+
+    h.getText = () => '初始内容'
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '初始内容的续写内容'
+    act(() => h.capturedOnUpdate?.(tagged('ai')))
+    expect(counted()).toBe(0)
+
+    // 同一段文字若来自作者自己的击键，就必须计入：证明排除的是来源而不是增长本身
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '初始内容的续写内容手打两字'
+    act(() => h.capturedOnUpdate?.(tagged()))
+    expect(counted()).toBe(4)
+  })
+
+  it('does not credit an in-place rewrite that never emits an update event', async () => {
+    // 权威写入路径（AI 改写采纳、格式化、敏感词修复）用 setContent(emitUpdate:false)
+    // 灌回正文：没有 onUpdate，只有事务。基线若只在 onUpdate 里维护，
+    // 作者下一次击键会把整段改写一并算成手打（§P3.10）。
+    render(<RichEditor projectId="p-rewrite" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const counted = () => {
+      // 口径说明改由提示门面承担后，触发器上不再有原生 title，改按可见标签定位同一行
+      const label = screen.getAllByText(SESSION_WORDS_LABEL)[0]
+      return Number((label.parentElement?.textContent ?? '').replace(/\D/g, ''))
+    }
+
+    h.getText = () => '改写前'
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '改写后整段长出来的五百字'
+    editorInstance._fire('beforeTransaction')
+    h.getText = () => '改写后整段长出来的五百字再加两字'
+    act(() => h.capturedOnUpdate?.({ transaction: { getMeta: () => undefined } }))
+    expect(counted()).toBe(4)
   })
 
   it('mounts without crashing when typewriter mode is on', async () => {
@@ -507,10 +661,59 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     ).toBeInTheDocument()
   })
 
+  it('persists inline chapter title edits before updating the visible chapter', async () => {
+    render(<RichEditor projectId="p-title" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    // 工具栏的 titleDraft 是 activeChapter.title 的镜像，比侧栏晚一帧（同步 effect），必须异步查询
+    const titleInput = await screen.findByDisplayValue('第001章 寒潭惊变')
+    const originalChapter = (await db.getAll('chapters')).find(
+      (item) => item.projectId === 'p-title' && item.title === '第001章 寒潭惊变',
+    )
+    if (!originalChapter) throw new Error('title chapter not found')
+    fireEvent.change(titleInput, { target: { value: '第一章 已持久化' } })
+
+    await waitFor(async () => {
+      const chapter = await db.get('chapters', originalChapter.id)
+      expect(chapter?.title).toBe('第一章 已持久化')
+      expect(chapter?.revision).toBe(2)
+    })
+  })
+
+  it('exposes a recoverable draft state without replacing canonical content automatically', async () => {
+    render(<RichEditor projectId="p-recovery" />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chapter = (await db.getAll('chapters')).find(
+      (item) => item.projectId === 'p-recovery' && item.title === '第001章 寒潭惊变',
+    )
+    if (!chapter) throw new Error('recovery chapter not found')
+
+    draftJournal.record({
+      workspaceId: 'p-recovery',
+      chapterId: chapter.id,
+      baseRevision: chapter.revision ?? 1,
+      editorContent: '<p>未落盘草稿</p>',
+      updatedAt: (chapter.updatedAt ?? 0) + 1,
+    })
+    cleanup()
+    editorInstance = makeMockEditor()
+
+    render(<RichEditor projectId="p-recovery" />)
+    expect(await screen.findByTestId('draft-recovery-state')).toHaveTextContent(
+      '检测到上次未落盘的草稿',
+    )
+    expect((await db.get('chapters', chapter.id))?.content).not.toBe('<p>未落盘草稿</p>')
+
+    fireEvent.click(screen.getByText('恢复草稿'))
+    await waitFor(async () => {
+      expect((await db.get('chapters', chapter.id))?.content).toBe('<p>未落盘草稿</p>')
+    })
+  })
+
   it('opens the 全书检索 (cross-chapter) modal from the toolbar', async () => {
     render(<RichEditor projectId="p-global" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByTitle('全书检索（跨所有章节）'))
+    fireEvent.click(screen.getByTestId('editor-global-search-trigger'))
     expect(screen.getByPlaceholderText('检索全书所有章节…')).toBeInTheDocument()
   })
 
@@ -528,8 +731,10 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-status" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
-    const select = screen.getByDisplayValue('草稿')
-    fireEvent.change(select, { target: { value: 'published' } })
+    const select = screen.getByRole('combobox', { name: '章节状态' })
+    expect(select).toHaveAttribute('data-value', 'draft')
+    await userEvent.click(select)
+    await userEvent.click(await screen.findByRole('option', { name: '已发布' }))
 
     await waitFor(async () => {
       const chs = await db.getAll('chapters')
@@ -544,7 +749,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
     const footer = screen.getByTestId('editor-status-footer')
     expect(footer).not.toHaveTextContent(/限宽|较宽|铺满/)
-    expect(footer.querySelector('[title*="限宽"]')).not.toBeInTheDocument()
+    expect(within(footer).queryByRole('button', { name: /限宽/ })).not.toBeInTheDocument()
   })
 
   it('renders a word-target progress bar based on chapter word count', async () => {
@@ -665,7 +870,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
     const footer = screen.getByTestId('editor-status-footer')
     expect(footer).not.toHaveTextContent('打字机')
-    expect(footer.querySelector('[title*="打字机"]')).not.toBeInTheDocument()
+    expect(within(footer).queryByRole('button', { name: /打字机/ })).not.toBeInTheDocument()
     expect(onTypewriterChange).not.toHaveBeenCalled()
   })
 
@@ -673,14 +878,14 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-nav" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
-    const nextBtn = screen.getByTitle('下一章（快速切章）')
+    const nextBtn = screen.getByRole('button', { name: '下一章（快速切章）' })
     expect(nextBtn).toBeEnabled()
     fireEvent.click(nextBtn)
 
     const titleInput = screen.getByDisplayValue('第002章 锈剑之鸣')
     expect(titleInput).toBeInTheDocument()
 
-    const prevBtn = screen.getByTitle('上一章（快速切章）')
+    const prevBtn = screen.getByRole('button', { name: '上一章（快速切章）' })
     expect(prevBtn).toBeEnabled()
     fireEvent.click(prevBtn)
 
@@ -692,21 +897,21 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
     // 敏感词检测弹窗
-    fireEvent.click(screen.getByTitle('敏感词检测（本章）'))
+    fireEvent.click(screen.getByRole('button', { name: /敏感词即时检测/ }))
     expect(screen.getByText('本章敏感词即时检测')).toBeInTheDocument()
     fireEvent.click(
       screen.getByText('本章敏感词即时检测').parentElement!.parentElement!.querySelector('button')!,
     )
 
     // 时光机版本弹窗
-    fireEvent.click(screen.getByTitle('时光机 · 版本历史'))
+    fireEvent.click(screen.getByRole('button', { name: /时光机/ }))
     expect(screen.getByText(/版本时光机/)).toBeInTheDocument()
     fireEvent.click(
       screen.getByText(/版本时光机/).parentElement!.parentElement!.querySelector('button')!,
     )
 
-    // 小黑屋专注码字弹窗
-    fireEvent.click(screen.getByTitle('小黑屋 · 强制专注码字'))
+    // 小黑屋专注码字弹窗（条目名取菜单里可见的「进入小黑屋码字」）
+    fireEvent.click(screen.getByRole('button', { name: '进入小黑屋码字' }))
     expect(screen.getByText('小黑屋 · 强制专注码字')).toBeInTheDocument()
     fireEvent.click(screen.getByText('取消'))
   })
@@ -716,21 +921,21 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
 
     // 1. 打开分屏对照抽屉
-    fireEvent.click(screen.getByTitle('分屏对照阅读历史章节'))
+    fireEvent.click(screen.getByRole('button', { name: /分屏 1:1 对照阅读/ }))
     expect(screen.getByText('分屏对照参考台')).toBeInTheDocument()
     expect(screen.getByText(/对照面板仅供阅读与伏笔核验/)).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('关闭对照分屏'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭对照分屏' }))
     expect(screen.queryByText('分屏对照参考台')).not.toBeInTheDocument()
 
     // 2. 打开高频词口癖点检
-    fireEvent.click(screen.getByTitle('高频词与口癖点检'))
+    fireEvent.click(screen.getByRole('button', { name: /口癖与高频词点检/ }))
     expect(screen.getByText(/高频词与口癖点检/)).toBeInTheDocument()
     expect(screen.getByText(/有效词汇总数/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('完成'))
     expect(screen.queryByText(/有效词汇总数/)).not.toBeInTheDocument()
 
-    // 3. 打开行旁待办备忘便签
-    fireEvent.click(screen.getByTitle('行旁待办与备忘便签（导出自动滤除）'))
+    // 3. 打开行旁待办备忘便签（条目名取菜单里可见的「本章伏笔与备忘便签」）
+    fireEvent.click(screen.getByRole('button', { name: '本章伏笔与备忘便签' }))
     expect(screen.getByText('行旁待办与备忘录')).toBeInTheDocument()
     expect(screen.getByText(/此处备忘待办与正文物理隔离/)).toBeInTheDocument()
   })
@@ -816,10 +1021,10 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
 
     // 敏感词检测弹窗
-    const sensitiveBtn = screen.getByTitle('敏感词检测（本章）')
+    const sensitiveBtn = screen.getByRole('button', { name: /敏感词即时检测/ })
     fireEvent.click(sensitiveBtn)
     expect(screen.getByText(/本章敏感词即时检测/)).toBeInTheDocument()
-    fireEvent.click(screen.getByTitle('关闭'))
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
   })
 
   it('triggers chapter deletion confirmation modal and cancels or deletes', async () => {
@@ -873,7 +1078,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-status-ctx" />)
     const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     fireEvent.contextMenu(chItem)
-    const doneBtn = screen.getByRole('button', { name: '已发布' })
+    const doneBtn = screen.getByRole('menuitemradio', { name: '状态：已发布' })
     await act(async () => {
       fireEvent.click(doneBtn)
     })

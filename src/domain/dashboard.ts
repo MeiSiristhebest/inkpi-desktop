@@ -110,18 +110,29 @@ export function computeDashboardModel(
   const weekChs = pc.filter((c) => (c.updatedAt || 0) >= weekAgo)
   const todayChs = pc.filter((c) => (c.updatedAt || 0) >= dayStart)
 
-  // 1. 每日统计聚合：结合 chapters 自身字数与 dailyStatsRecords
+  // 1. 每日统计聚合：以领域日记录（dailyStats）为唯一权威口径。
+  //    章节字数只在「那天完全没有任何记录」时兜底回填，历史项目与导入项目靠它出连续码字天数。
+  //    回填绝不能与真实记录相加：重新保存一章会把整章字数记到当天，
+  //    于是当天只写了 200 字也会显示「今日产出 3000 字」（P3.9 的同源要求）。
   const dailyWords: Record<string, number> = {}
   dailyStatsRecords.forEach((item) => {
     if (item.date && typeof item.words === 'number') {
       dailyWords[item.date] = Math.max(dailyWords[item.date] || 0, item.words)
     }
   })
+  const touchedWordsByDay: Record<string, number> = {}
   pc.forEach((c) => {
     if (!c.updatedAt) return
     const d = toISODate(c.updatedAt)
-    dailyWords[d] = (dailyWords[d] || 0) + (c.wordCount || 0)
+    touchedWordsByDay[d] = (touchedWordsByDay[d] || 0) + (c.wordCount || 0)
   })
+  for (const [date, words] of Object.entries(touchedWordsByDay)) {
+    if (!(date in dailyWords)) dailyWords[date] = words
+  }
+  const weekWords = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(todayDateObj.getTime() - i * DAY_MS)
+    return dailyWords[toISODate(d.getTime())] || 0
+  }).reduce((sum, words) => sum + words, 0)
 
   // 2. 分卷进度
   const volumeProgress: VolumeProgress[] = pv.map((v) => {
@@ -214,8 +225,8 @@ export function computeDashboardModel(
     .sort((a, b) => b.total - a.total)
 
   const totalWords = pc.reduce((a, c) => a + (c.wordCount || 0), 0)
-  const todayWords =
-    dailyWords[todayDateStr] || todayChs.reduce((a, c) => a + (c.wordCount || 0), 0)
+  // 今日产出只认上面的每日口径，不再另算一份「今天更新过的章节总字数」。
+  const todayWords = dailyWords[todayDateStr] || 0
 
   return {
     project,
@@ -225,7 +236,7 @@ export function computeDashboardModel(
     published,
     drafted,
     reviewed,
-    weekWords: weekChs.reduce((a, c) => a + (c.wordCount || 0), 0),
+    weekWords,
     weekChapters: weekChs.length,
     todayWords,
     todayChapters: todayChs.length,

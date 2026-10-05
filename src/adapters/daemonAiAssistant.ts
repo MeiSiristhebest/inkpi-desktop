@@ -19,6 +19,7 @@ import type {
   RuntimeModelRoutesConfigureResult,
 } from '../ports/runtimeModelRoutes'
 import type { AiAssistant, RpcClient } from '../ports/aiGateway'
+import type { PluginWorkflowOutcome, PluginWorkflowProvenance } from '../types/pluginHost'
 import {
   CreativeIntelligence,
   type CreativeTaskGateway,
@@ -42,6 +43,11 @@ import { IndexedDbDomainChangeStore } from './indexedDbDomainChangeStore'
 import { attachProposalSyncRemote } from '../ai/proposals/remoteProposalStore'
 import { DaemonArtifactStore } from './daemonArtifactStore'
 import { getPluginRuntimeEntry } from '../ai/tasks/pluginRuntimeCatalog'
+import {
+  redactPluginRecord,
+  redactPluginValue,
+  redactSensitiveString,
+} from '../core/pluginDataRedaction'
 
 let runtimePluginTaskSequence = 0
 let runtimePluginToolSequence = 0
@@ -144,31 +150,51 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
       input: Record<string, unknown>,
     ): Promise<unknown | null> => {
       const entry = getPluginRuntimeEntry(pluginId)
-      if (!entry?.toolName) return null
+      if (!entry?.toolName) {
+        throw new Error(`Plugin ${pluginId} has no declared Runtime tool capability`)
+      }
       const result = await client.request<ToolResultMessage>('tool.execute', {
         toolName: entry.toolName,
         toolCallId: `desktop-plugin-tool-${pluginId}-${++runtimePluginToolSequence}`,
-        arguments: input,
+        arguments: redactPluginValue(input) as Record<string, unknown>,
       })
       if (result.isError) {
         throw new Error(result.content.map((item) => ('text' in item ? item.text : '')).join(' '))
       }
-      return result.details === undefined
-        ? parseToolResultContent(result)
-        : normalizePluginToolOutput(result.details)
+      const output =
+        result.details === undefined
+          ? parseToolResultContent(result)
+          : normalizePluginToolOutput(result.details)
+      return redactPluginValue(output)
     },
 
     runPluginWorkflow: async (
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,
-    ): Promise<unknown | null> => {
+    ): Promise<PluginWorkflowOutcome<unknown> | null> => {
       const entry = getPluginRuntimeEntry(pluginId)
-      if (entry?.runtimeClass !== 'workflow' || !entry.taskKind) return null
+      if (entry?.runtimeClass !== 'workflow' || !entry.taskKind) {
+        throw new Error(`Plugin ${pluginId} has no declared Runtime workflow capability`)
+      }
+      const safeInput = redactPluginValue(input)
+      const safeMetadata = redactPluginRecord(metadata)
+      const taskId = `plugin-workflow-${pluginId}-${Date.now()}-${++runtimePluginTaskSequence}`
+      const workspaceId =
+        readMetadataString(safeMetadata, 'workspaceId') ??
+        readMetadataString(safeMetadata, 'projectId') ??
+        'unknown'
+      const baseProvenance: PluginWorkflowProvenance = {
+        pluginId,
+        workspaceId,
+        taskId,
+        timestamp: Date.now(),
+        runtimeTarget: entry.runtimeTarget,
+      }
       const result = await runTask({
-        id: `plugin-workflow-${pluginId}-${Date.now()}-${++runtimePluginTaskSequence}`,
+        id: taskId,
         kind: entry.taskKind,
-        input: { payload: input },
+        input: { payload: safeInput },
         contextPolicy: {
           includeSelection: false,
           includeProjectState: false,
@@ -181,10 +207,55 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
           outputFormats: ['structured'],
           needsStructuredOutput: true,
         },
-        metadata: { pluginId, runtimeTarget: entry.runtimeTarget, ...metadata },
+        metadata: { pluginId, runtimeTarget: entry.runtimeTarget, ...safeMetadata },
       })
-      if (result?.status !== 'completed' || result.output?.format !== 'structured') return null
-      return result.output.data
+      const provenance = publicWorkflowProvenance(result?.provenance, baseProvenance)
+      if (!result) {
+        return {
+          status: 'failed',
+          taskId,
+          pluginId,
+          provenance,
+          error: 'Plugin workflow returned no result',
+        }
+      }
+      if (result.status === 'cancelled') {
+        return {
+          status: 'cancelled',
+          taskId,
+          pluginId,
+          provenance,
+          reason: safeWorkflowError(result.error?.message ?? 'Plugin workflow cancelled'),
+        }
+      }
+      if (result.status === 'failed') {
+        return {
+          status: 'failed',
+          taskId,
+          pluginId,
+          provenance,
+          error: safeWorkflowError(result.error?.message ?? 'Plugin workflow failed'),
+        }
+      }
+      if (result.status !== 'completed' || result.output?.format !== 'structured') {
+        return {
+          status: 'failed',
+          taskId,
+          pluginId,
+          provenance,
+          error: 'Plugin workflow returned an invalid structured result',
+        }
+      }
+      const artifactId = result.artifactIds?.[0]
+      return {
+        status: 'completed',
+        taskId,
+        pluginId,
+        provenance,
+        ...(artifactId ? { artifactId } : {}),
+        artifactContent: redactPluginValue(result.output.data),
+        result: redactPluginValue(result.output.data),
+      }
     },
 
     proposalSyncRemote,
@@ -321,6 +392,33 @@ function assertInstructionRegistration(
       throw new Error('Daemon instruction registration receipt is inconsistent')
     }
   }
+}
+
+function readMetadataString(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  const value = metadata?.[key]
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function publicWorkflowProvenance(
+  value: unknown,
+  base: PluginWorkflowProvenance,
+): PluginWorkflowProvenance {
+  if (!isRecord(value)) return base
+  const next = { ...base }
+  for (const key of ['artifactId', 'routeId', 'runtimeTarget', 'provider', 'model'] as const) {
+    const item = value[key]
+    if (typeof item === 'string' && item.trim()) next[key] = item
+  }
+  return next
+}
+
+function safeWorkflowError(value: unknown): string {
+  const message = value instanceof Error ? value.message : String(value)
+  if (!message.trim()) return 'Plugin workflow failed'
+  return redactSensitiveString(message).slice(0, 500)
 }
 
 function sameStringArray(value: unknown, expected: readonly string[]): boolean {

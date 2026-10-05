@@ -9,9 +9,13 @@ import { Award, Sparkles, Send, Bot, BookOpen } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('gold-chapters-eval')
   const [chaptersText, setChaptersText] = useState('')
   const [evaluations, setEvaluations] = useState<GoldChapterEvalRecord[]>([])
 
@@ -54,7 +58,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
   const currentEval = GoldChaptersEngine.evaluate(chaptersText)
 
   // AI 主编级黄金三章签约评测
-  const handleAiGoldAudit = () => {
+  const handleAiGoldAudit = async () => {
     if (!chaptersText.trim()) return
     const analysisInput = {
       openingText: semanticTextFromContent('gold-chapters-eval-ai-input', chaptersText).slice(
@@ -63,9 +67,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
       ),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('gold-chapters-eval', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSave = async () => {
@@ -98,10 +100,15 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             直连全书前三章正文，量化主角动机、金手指筹码与主要矛盾，输出规则信号参考
           </p>
+          <ScoreProvenanceBadge
+            source="rule"
+            detail="按开篇文本特征正则匹配计分，不含平台真实签约数据"
+          />
         </div>
 
         {hostContext?.aiAssistant?.isAvailable && (
           <button
+            disabled={aiTask.isRunning}
             onClick={handleAiGoldAudit}
             className="px-3.5 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
@@ -109,6 +116,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
             AI 主编级开篇签约初审
           </button>
         )}
+        <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -215,6 +223,7 @@ export const GoldChaptersMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
       {evaluations.length > 0 && (
         <div className="border-t pt-4 border-slate-200 dark:border-slate-800">
+          <ScoreProvenanceBadge source="historical" detail="来自已存盘的历史评估快照" />
           <div className="text-xs font-bold text-slate-400 mb-2">
             历史评测快照 ({evaluations.length})
           </div>

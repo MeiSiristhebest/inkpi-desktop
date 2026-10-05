@@ -1,8 +1,10 @@
-import { useState, type FC } from 'react'
+import { useId, useState, type FC } from 'react'
+import { Modal } from '../../../ui/molecules/Modal'
 import type { PromiseLedgerEntry, PromiseTier, PromiseStatus } from '../types'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { X, Check } from 'lucide-react'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 interface PromiseEntryEditorProps {
   entry: Partial<PromiseLedgerEntry>
@@ -36,6 +38,7 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
   const [status, setStatus] = useState<PromiseStatus>(entry.status || 'planted')
   const [payoffChapter, setPayoffChapter] = useState<number | undefined>(entry.payoffChapter)
   const [payoffNote, setPayoffNote] = useState(entry.payoffNote || '')
+  const titleId = useId()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,164 +69,165 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
-      <div className="w-full max-w-lg bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* 标题 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--ink-border)]">
-          <h3 className="font-medium text-sm text-[var(--ink-text)]">
-            {entry.id ? '编辑伏笔账本条目' : '新建 3P 伏笔（契诃夫之枪）'}
-          </h3>
-          <button
-            onClick={onCancel}
-            className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <Modal
+      onClose={onCancel}
+      ariaLabelledBy={titleId}
+      widthClass="max-w-lg"
+      panelClassName="bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[var(--ink-text)]"
+    >
+      {/* 标题 */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--ink-border)] shrink-0">
+        <h3 id={titleId} className="font-medium text-sm text-[var(--ink-text)]">
+          {entry.id ? '编辑伏笔账本条目' : '新建 3P 伏笔（契诃夫之枪）'}
+        </h3>
+        <button
+          onClick={onCancel}
+          aria-label="关闭"
+          className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* 表单内容 */}
+      <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs">
+        <div>
+          <label className="block text-[var(--ink-text-muted)] mb-1">
+            伏笔代称 / 道具 / 契机 <span className="text-rose-400">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={clueName}
+            onChange={(e) => setClueName(e.target.value)}
+            placeholder="例如：残破青铜鼎的第三道铭文"
+            className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]"
+          />
         </div>
 
-        {/* 表单内容 */}
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">
-              伏笔代称 / 道具 / 契机 <span className="text-rose-400">*</span>
-            </label>
+            <label className="block text-[var(--ink-text-muted)] mb-1">伏笔重要度分层</label>
+            <Select
+              value={tier}
+              onValueChange={(v) => setTier(v as PromiseTier)}
+              className="w-full"
+            >
+              {TIERS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[var(--ink-text-muted)] mb-1">生命周期状态</label>
+            <Select
+              value={status}
+              onValueChange={(v) => setStatus(v as PromiseStatus)}
+              className="w-full"
+            >
+              <option value="planted">埋设中 (Planted)</option>
+              <option value="progressing">发酵推进中 (Progressing)</option>
+              <option value="paid_off">已闭环回收 (Paid-off)</option>
+              <option value="abandoned">已弃用 (Abandoned)</option>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[var(--ink-text-muted)] mb-1">埋设章节</label>
             <input
-              type="text"
-              required
-              value={clueName}
-              onChange={(e) => setClueName(e.target.value)}
-              placeholder="例如：残破青铜鼎的第三道铭文"
-              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]"
+              type="number"
+              min="0"
+              value={plantChapter}
+              onChange={(e) => setPlantChapter(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">伏笔重要度分层</label>
-              <select
-                value={tier}
-                onChange={(e) => setTier(e.target.value as PromiseTier)}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              >
-                {TIERS.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">生命周期状态</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PromiseStatus)}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              >
-                <option value="planted">埋设中 (Planted)</option>
-                <option value="progressing">发酵推进中 (Progressing)</option>
-                <option value="paid_off">已闭环回收 (Paid-off)</option>
-                <option value="abandoned">已弃用 (Abandoned)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1">埋设章节</label>
-              <input
-                type="number"
-                min="0"
-                value={plantChapter}
-                onChange={(e) => setPlantChapter(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[var(--ink-text-muted)] mb-1" title="距埋设多少章后告警">
-                软预警跨度(章)
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={softDeadline}
-                onChange={(e) => setSoftDeadline(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label
-                className="block text-[var(--ink-text-muted)] mb-1"
-                title="距埋设多少章内必须回收"
-              >
-                硬红线跨度(章)
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={dueChapterLimit}
-                onChange={(e) => setDueChapterLimit(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-              />
-            </div>
-          </div>
-
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">
-              埋设场景简述 / 线索上下文
-            </label>
-            <textarea
-              rows={3}
-              value={plantNote}
-              onChange={(e) => setPlantNote(e.target.value)}
-              placeholder="记录伏笔的埋藏细节，如：主角在拍卖会无意竞得，鼎身铭文与母亲遗物一致…"
-              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)] resize-none"
+            <Tooltip content="距埋设多少章后告警">
+              <label className="block text-[var(--ink-text-muted)] mb-1">软预警跨度(章)</label>
+            </Tooltip>
+            <input
+              type="number"
+              min="1"
+              value={softDeadline}
+              onChange={(e) => setSoftDeadline(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
             />
           </div>
+          <div>
+            <Tooltip content="距埋设多少章内必须回收">
+              <label className="block text-[var(--ink-text-muted)] mb-1">硬红线跨度(章)</label>
+            </Tooltip>
+            <input
+              type="number"
+              min="1"
+              value={dueChapterLimit}
+              onChange={(e) => setDueChapterLimit(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+            />
+          </div>
+        </div>
 
-          {status === 'paid_off' && (
-            <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg space-y-2">
-              <div className="font-semibold text-blue-400">回收闭环信息</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[var(--ink-text-muted)] mb-1">兑现章节号</label>
-                  <input
-                    type="number"
-                    value={payoffChapter ?? currentChapter}
-                    onChange={(e) => setPayoffChapter(Number(e.target.value))}
-                    className="w-full px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[var(--ink-text-muted)] mb-1">兑现方式与效果</label>
-                  <input
-                    type="text"
-                    value={payoffNote}
-                    onChange={(e) => setPayoffNote(e.target.value)}
-                    placeholder="如：断界渊破境时鼎魂觉醒"
-                    className="w-full px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-                  />
-                </div>
+        <div>
+          <label className="block text-[var(--ink-text-muted)] mb-1">
+            埋设场景简述 / 线索上下文
+          </label>
+          <textarea
+            rows={3}
+            value={plantNote}
+            onChange={(e) => setPlantNote(e.target.value)}
+            placeholder="记录伏笔的埋藏细节，如：主角在拍卖会无意竞得，鼎身铭文与母亲遗物一致…"
+            className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)] resize-none"
+          />
+        </div>
+
+        {status === 'paid_off' && (
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg space-y-2">
+            <div className="font-semibold text-blue-400">回收闭环信息</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[var(--ink-text-muted)] mb-1">兑现章节号</label>
+                <input
+                  type="number"
+                  value={payoffChapter ?? currentChapter}
+                  onChange={(e) => setPayoffChapter(Number(e.target.value))}
+                  className="w-full px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[var(--ink-text-muted)] mb-1">兑现方式与效果</label>
+                <input
+                  type="text"
+                  value={payoffNote}
+                  onChange={(e) => setPayoffNote(e.target.value)}
+                  placeholder="如：断界渊破境时鼎魂觉醒"
+                  className="w-full px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
+                />
               </div>
             </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-[var(--ink-border)]">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-1.5 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-1.5 rounded bg-[var(--ink-accent)] text-white hover:opacity-90 flex items-center gap-1.5 font-medium"
-            >
-              <Check className="w-3.5 h-3.5" /> 保存伏笔
-            </button>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-3 border-t border-[var(--ink-border)]">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-1.5 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-1.5 rounded bg-[var(--ink-accent)] text-white hover:opacity-90 flex items-center gap-1.5 font-medium cursor-pointer"
+          >
+            <Check className="w-3.5 h-3.5" /> 保存伏笔
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

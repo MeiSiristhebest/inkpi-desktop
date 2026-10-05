@@ -3,6 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { DiffReviewerMasterView } from './DiffReviewerMasterView'
 import { DiffReviewerDrawer } from './DiffReviewerDrawer'
 import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
+import {
+  hashText,
+  IndexedDbProposalStore,
+  ProposalLedger,
+  type AiProposal,
+} from '../../../ai/proposals'
 
 const { saveChapter } = vi.hoisted(() => ({
   saveChapter: vi.fn(),
@@ -23,9 +29,113 @@ describe('DiffReviewer UI Components', () => {
     expect(screen.getByText(/双栏 Plan\/Apply 审校与合并器/)).toBeDefined()
   })
 
-  it('DiffReviewerDrawer renders correctly with stats', () => {
+  it('DiffReviewerDrawer reports real facts and never invents revision hunks', async () => {
     render(<DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />)
     expect(screen.getByText(/双栏审校随动/)).toBeDefined()
+    expect(screen.getByText(/已保存稿 8 字/)).toBeDefined()
+    // §P2.3/INV-05：随动面板以前用正则改写正文造出一份假 diff，再报「N 处修订分块」。
+    expect(screen.queryByText(/处修订分块/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/新增字行/)).not.toBeInTheDocument()
+    expect(screen.getByText(/还没有打开章节/)).toBeInTheDocument()
+  })
+
+  it('DiffReviewerDrawer lists only real proposal-ledger records for the chapter', async () => {
+    const chapter = {
+      id: 'diff-reviewer-drawer-chapter',
+      projectId: 'p1',
+      volumeId: 'v1',
+      title: '第一章',
+      content: '林凡走在大街上。',
+      wordCount: 8,
+      order: 1,
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+
+    render(
+      <DesktopPluginHostProvider projectId="p1" activeChapter={chapter}>
+        <DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />
+      </DesktopPluginHostProvider>,
+    )
+
+    // 账本里确实没有这一章的写回记录，那就直说，而不是造出差异来填。
+    expect(await screen.findByText(/本章还没有审校写回记录/)).toBeInTheDocument()
+    expect(screen.queryByText(/处修订分块/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Hunk #1/)).not.toBeInTheDocument()
+  })
+
+  it('DiffReviewerDrawer lists the chapter records that really are in the ledger', async () => {
+    const stored = new ProposalLedger({ store: new IndexedDbProposalStore() })
+    const proposal: AiProposal = {
+      id: 'proposal-diff-reviewer-drawer-seed',
+      taskId: 'diff-reviewer-diff-reviewer-drawer-chapter-seed',
+      documentId: 'diff-reviewer-drawer-chapter',
+      baseRevision: 1,
+      patches: [
+        {
+          documentId: 'diff-reviewer-drawer-chapter',
+          from: 0,
+          to: 9,
+          text: '林凡走在大街上。',
+        },
+      ],
+      status: 'pending',
+      createdAt: 1700000000001,
+      sourceHash: hashText('林凡走在大街上。'),
+    }
+    stored.create(proposal)
+    stored.accept(proposal.id)
+    await stored.flush()
+
+    const chapter = {
+      id: 'diff-reviewer-drawer-chapter',
+      projectId: 'p1',
+      volumeId: 'v1',
+      title: '第一章',
+      content: '林凡走在大街上。',
+      wordCount: 8,
+      order: 1,
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+
+    render(
+      <DesktopPluginHostProvider projectId="p1" activeChapter={chapter}>
+        <DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />
+      </DesktopPluginHostProvider>,
+    )
+
+    expect(await screen.findByText(/写回 #1 · 替换 1 段/)).toBeInTheDocument()
+    expect(screen.getByText('1 条审校写回记录')).toBeInTheDocument()
+    // §P2.15：账本状态只有词表里的那一个说法，而且撤回到哪里做必须说清楚。
+    expect(screen.getByText('已采纳')).toBeInTheDocument()
+    expect(screen.getByText(/撤销/)).toBeInTheDocument()
+  })
+
+  it('starts blank and refuses to compute from two empty panels', async () => {
+    const onPluginTool = vi.fn(async () => null)
+    const onStats = vi.fn()
+    render(
+      <DesktopPluginHostProvider projectId="p1" onPluginTool={onPluginTool} isAiConnected>
+        <DiffReviewerMasterView projectId="p1" onStats={onStats} />
+      </DesktopPluginHostProvider>,
+    )
+
+    // §P2.4：没有正文可带的时候必须是空白，不能塞一段仙侠示例稿冒充本书原稿。
+    const [original, proposed] = screen.getAllByRole('textbox')
+    expect(original.value).toBe('')
+    expect(proposed.value).toBe('')
+    // 统计口径也不能替作者把示例稿的字数报上去。
+    expect(onStats).toHaveBeenCalledWith(expect.objectContaining({ wordCount: 0 }))
+
+    fireEvent.click(screen.getByRole('button', { name: /计算差异分块/ }))
+    expect(screen.getByText(/两栏都还是空的/)).toBeInTheDocument()
+    expect(screen.queryByText(/差异决策分块/)).not.toBeInTheDocument()
+    // §P2.7：空白输入不该惊动运行时 AI。
+    expect(onPluginTool).not.toHaveBeenCalled()
+    expect(saveChapter).not.toHaveBeenCalled()
   })
 
   it('records reviewed writeback as a durable proposal and supports undo', async () => {
@@ -48,18 +158,23 @@ describe('DiffReviewer UI Components', () => {
       </DesktopPluginHostProvider>,
     )
 
+    // §P2.4：修订稿不再预置示例文本，作者给什么才算什么。
+    fireEvent.change(screen.getAllByRole('textbox')[1], { target: { value: '原稿修订。' } })
     fireEvent.click(screen.getByRole('button', { name: /计算差异分块/ }))
     await screen.findByText(/差异决策分块/)
-    fireEvent.click(screen.getByRole('button', { name: /全部采纳/ }))
+    fireEvent.click(screen.getByRole('button', { name: /全部纳入预览/ }))
+    expect(screen.queryByText(/写回状态/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /写回正文章节/ }))
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '撤销写回' })).toBeInTheDocument(),
     )
+    // §P2.15：「已落盘」只能由权威写入出现，逐块取舍那一层不许用这个词。
+    expect(screen.getByText('写回状态：已落盘')).toBeInTheDocument()
     expect(saveChapter).toHaveBeenCalledTimes(1)
     expect(saveChapter.mock.calls[0][0]).toMatchObject({
       id: chapter.id,
-      content: expect.not.stringMatching(/^原稿。$/),
+      content: '原稿修订。',
       revision: 2,
     })
 
@@ -115,7 +230,7 @@ describe('DiffReviewer UI Components', () => {
       })
     })
     await screen.findByText(/差异决策分块/)
-    fireEvent.click(screen.getByRole('button', { name: /全部采纳/ }))
+    fireEvent.click(screen.getByRole('button', { name: /全部纳入预览/ }))
     fireEvent.click(screen.getByRole('button', { name: /写回正文章节/ }))
 
     await waitFor(() =>

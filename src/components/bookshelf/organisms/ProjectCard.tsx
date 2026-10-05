@@ -2,9 +2,12 @@ import { motion } from 'motion/react'
 import { BookOpen, MoreVertical, Upload, FolderOpen } from 'lucide-react'
 import type { ProjectRecord } from '../../../types'
 import type { ProjectStats } from '../../../core/projectService'
+import { clock } from '../../../adapters/clock'
+import { formatRelativeTime } from '../../../lib/relativeTime'
 import { spring, gesture, variants } from '../../../motion'
 import { ProjectContextMenu } from './ProjectContextMenu'
 import { ProjectEditForm, type ProjectEditFormValues } from './ProjectEditForm'
+import { Tooltip } from '../../../ui/primitives'
 
 interface ProjectCardProps {
   project: ProjectRecord
@@ -17,6 +20,8 @@ interface ProjectCardProps {
   onCloseMenu: () => void
   onStartEdit: () => void
   onExport: () => void
+  onExportManuscript: () => void
+  onRemoveFromLibrary: () => void
   onDelete: () => void
   onSaveEdit: (form: ProjectEditFormValues) => void
   onCancelEdit: () => void
@@ -38,6 +43,8 @@ export const ProjectCard = ({
   onCloseMenu,
   onStartEdit,
   onExport,
+  onExportManuscript,
+  onRemoveFromLibrary,
   onDelete,
   onSaveEdit,
   onCancelEdit,
@@ -49,6 +56,12 @@ export const ProjectCard = ({
   const vols = stats?.volumes ?? 0
   const chs = stats?.chapters ?? 0
   const wordsWan = ((stats?.words ?? 0) / 10000).toFixed(1)
+  // 打开项目时编辑器本来就会回到上次写作的那一章（P1.3），卡片把这件事说出口。
+  const openLabel = stats?.resumeChapterTitle
+    ? `继续《${stats.resumeChapterTitle}》`
+    : chs > 0
+      ? '继续写作'
+      : '打开项目'
 
   return (
     <motion.div
@@ -83,14 +96,15 @@ export const ProjectCard = ({
 
             {/* 右上角操作气泡菜单 */}
             <div className="relative" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={onToggleMenu}
-                title="更多操作"
-                className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <MoreVertical size={15} />
-              </button>
+              <Tooltip content="更多操作">
+                <button
+                  type="button"
+                  onClick={onToggleMenu}
+                  className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <MoreVertical size={15} />
+                </button>
+              </Tooltip>
 
               {isMenuOpen && (
                 <ProjectContextMenu
@@ -99,6 +113,8 @@ export const ProjectCard = ({
                   onClose={onCloseMenu}
                   onEdit={onStartEdit}
                   onExport={onExport}
+                  onExportManuscript={onExportManuscript}
+                  onRemoveFromLibrary={onRemoveFromLibrary}
                   onDelete={onDelete}
                 />
               )}
@@ -135,35 +151,38 @@ export const ProjectCard = ({
         </div>
       </div>
 
-      {/* 卡片底栏：创建时间与直觉的“进入写作”主按钮 */}
+      {/* 卡片底栏：上次编辑的相对时间与主按钮（章数未知时不承诺"继续"） */}
       <div className="mt-4 pt-3 border-t border-[var(--ink-border)] flex items-center justify-between text-[11px] text-[var(--ink-text-faint)]">
         <span>
           {project.updatedAt || project.createdAt
-            ? `更新于 ${new Date(project.updatedAt || project.createdAt!).toLocaleDateString()}`
+            ? `上次编辑 ${formatRelativeTime(project.updatedAt || project.createdAt!, clock.now())}`
             : '暂无更新记录'}
         </span>
 
         <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5">
-          <motion.button
-            type="button"
-            onClick={onExport}
-            title="导出 JSON 备份"
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] border border-transparent hover:border-[var(--ink-border)] flex items-center justify-center transition-colors cursor-pointer"
-          >
-            <Upload size={13} />
-          </motion.button>
-          <motion.button
-            type="button"
-            onClick={onOpen}
-            title="打开项目"
-            {...gesture.button}
-            transition={spring.snappy}
-            className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer"
-          >
-            <FolderOpen size={13} /> 进入写作
-          </motion.button>
+          <Tooltip content="导出完整备份（含设定/时间线/插件/AI 数据）">
+            <motion.button
+              type="button"
+              onClick={onExport}
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] border border-transparent hover:border-[var(--ink-border)] flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <Upload size={13} />
+            </motion.button>
+          </Tooltip>
+          <Tooltip content={openLabel}>
+            <motion.button
+              type="button"
+              onClick={onOpen}
+              {...gesture.button}
+              transition={spring.snappy}
+              className="inline-flex items-center gap-1.5 px-3 h-7.5 rounded-lg bg-[var(--ink-accent)] text-white text-[12px] font-medium hover:bg-[var(--ink-accent-hover)] transition-colors shadow-2xs cursor-pointer max-w-[14rem]"
+            >
+              <FolderOpen size={13} className="shrink-0" />
+              <span className="truncate">{openLabel}</span>
+            </motion.button>
+          </Tooltip>
         </div>
       </div>
     </motion.div>

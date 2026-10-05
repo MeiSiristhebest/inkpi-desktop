@@ -1,9 +1,10 @@
-import { db } from '../db/indexedDB'
+import { db, isAuthoritativeStore, type StoreName } from '../db/indexedDB'
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
 import type { IdGenerator } from '../ports/idGenerator'
 import type { Clock } from '../ports/clock'
 import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
+import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 import { idGenerator } from '../adapters/idGenerator'
 import { clock } from '../adapters/clock'
 import { draftJournal } from './draftJournal'
@@ -15,6 +16,8 @@ import {
   type WorkspaceManifest,
   type WorkspaceLocalStorageEntry,
 } from './workspaceManifest'
+
+const domainChangeStore = new IndexedDbDomainChangeStore()
 
 export interface ImportWorkspaceOptions {
   mode?: 'copy' | 'restore'
@@ -202,7 +205,9 @@ function purgeWorkspaceLocalStorage(workspaceId: string, chapterIds: readonly st
 }
 
 // Stores strictly scoped to a project that must be backed up, remapped upon import, or wiped upon purge.
-export const PROJECT_DOMAIN_STORES: string[] = [
+// 权威事实源不在此列（INV-02）：卷章走 ChapterMutationService/projectRepo，领域日志走
+// IndexedDbDomainChangeStore，由各自的通道负责备份、重建与清除。
+export const PROJECT_DOMAIN_STORES: readonly StoreName[] = [
   'settingsKV',
   'dailyStats',
   'codexEntities',
@@ -250,7 +255,6 @@ export const PROJECT_DOMAIN_STORES: string[] = [
   'multiverseBranches',
   'voiceScriptCasts',
   'storyboardScenes',
-  'domainChangeSets',
   'aiArtifacts',
   'aiProposals',
 ]
@@ -692,10 +696,9 @@ export class WorkspaceLifecycleService {
     if (!project) return null
 
     const allVolumes = await this.projectRepo.getAllVolumes()
-    const allChapters = await this.projectRepo.getAllChapters()
+    const chapters = await this.projectRepo.getChaptersByProject(workspaceId)
 
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
-    const chapters = allChapters.filter((c) => c.projectId === workspaceId)
 
     const manifest: WorkspaceManifest = {
       schemaVersion: WORKSPACE_ARCHIVE_SCHEMA_VERSION,
@@ -730,9 +733,8 @@ export class WorkspaceLifecycleService {
     if (!project) return null
 
     const allVolumes = await this.projectRepo.getAllVolumes()
-    const allChapters = await this.projectRepo.getAllChapters()
+    const chapters = await this.projectRepo.getChaptersByProject(workspaceId)
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
-    const chapters = allChapters.filter((c) => c.projectId === workspaceId)
     const localStorageData = collectWorkspaceLocalStorage(
       workspaceId,
       chapters.map((chapter) => chapter.id),
@@ -745,7 +747,7 @@ export class WorkspaceLifecycleService {
     for (const storeName of PROJECT_DOMAIN_STORES) {
       if (typeof db.getAll === 'function') {
         try {
-          const records = await db.getAll<Record<string, unknown>>(storeName as any)
+          const records = await db.getAll<Record<string, unknown>>(storeName)
           const filtered = records.filter((r) => {
             if (storeName === 'settingsKV') {
               const key = String((r as any).key || '')
@@ -830,7 +832,7 @@ export class WorkspaceLifecycleService {
 
   /**
    * 备份恢复模式导入：
-   * 尽可能忠实还原工作区归档，保留历史变更集；如果目标是全新工作区同样重新命名空间化。
+   * 忠实还原工作区归档，包含活动中的 aiProposals；领域日志一律重建（见 internalImportWorkspace）。
    */
   async restoreWorkspaceBackup(
     archiveRaw: unknown,
@@ -921,13 +923,15 @@ export class WorkspaceLifecycleService {
     }
     const rawDomainData = archive.domainData || {}
 
-    // In 'copy' mode, strip domainChangeSets and aiProposals to avoid sequence/checksum collisions
+    // INV-02：权威事实源不经通用领域表循环导入。领域日志尤其不可迁移 —— change set 的 checksum
+    // 覆盖了 id 与 workspaceId，而每次导入都重新分配两者，盲写进去的记录适配器读不回来，
+    // 会让同一个 try 里的 materialize() 把整次导入回滚掉；新工作区的日志由授权通道重新累积。
+    // 'copy' 模式另外剥离活动中的 aiProposals，避免跨工作区状态/序号冲突。
     const sourceDomainData: Record<string, Record<string, unknown>[]> = {}
     for (const [store, records] of Object.entries(rawDomainData)) {
       if (!Array.isArray(records)) continue
-      if (mode === 'copy' && (store === 'domainChangeSets' || store === 'aiProposals')) {
-        continue
-      }
+      if (isAuthoritativeStore(store)) continue
+      if (mode === 'copy' && store === 'aiProposals') continue
       sourceDomainData[store] = records
     }
 
@@ -1359,6 +1363,8 @@ export class WorkspaceLifecycleService {
       }
 
       for (const [storeName, records] of Object.entries(remappedDomainData)) {
+        // storeName 来自归档键，不受 schema 约束，所以这里仍是动态名；权威事实源已在归档边界
+        // 排除（见 sourceDomainData），清单与权威 store 的不相交由 workspaceLifecycleService.test.ts 守住。
         if (typeof db.put === 'function') {
           for (const item of records) {
             await db.put(storeName as any, item)
@@ -1465,9 +1471,8 @@ export class WorkspaceLifecycleService {
 
     // 2. Delete chapters and volumes
     const allVolumes = await this.projectRepo.getAllVolumes()
-    const allChapters = await this.projectRepo.getAllChapters()
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
-    const chapters = allChapters.filter((c) => c.projectId === workspaceId)
+    const chapters = await this.projectRepo.getChaptersByProject(workspaceId)
 
     for (const ch of chapters) {
       await this.projectRepo.deleteChapter(ch.id)
@@ -1490,7 +1495,7 @@ export class WorkspaceLifecycleService {
     for (const storeName of PROJECT_DOMAIN_STORES) {
       if (typeof db.getAll === 'function' && typeof db.delete === 'function') {
         try {
-          const records = await db.getAll<Record<string, unknown>>(storeName as any)
+          const records = await db.getAll<Record<string, unknown>>(storeName)
           for (const rec of records) {
             let matches =
               rec.projectId === workspaceId ||
@@ -1512,7 +1517,7 @@ export class WorkspaceLifecycleService {
             if (matches) {
               const primaryKey = (rec.id || (rec as any).key || (rec as any).projectId) as string
               if (primaryKey) {
-                await db.delete(storeName as any, primaryKey).catch(() => {})
+                await db.delete(storeName, primaryKey).catch(() => {})
               }
             }
           }
@@ -1520,6 +1525,14 @@ export class WorkspaceLifecycleService {
           // ignore
         }
       }
+    }
+
+    // 4. 权威领域日志由自己的适配器清除：它不在可迁移领域表里（INV-02），
+    // 而且这里必须能删掉签名已失效的历史记录，所以走适配器而不是通用表循环。
+    try {
+      await domainChangeStore.purgeWorkspace(workspaceId)
+    } catch (error) {
+      console.warn(`[WorkspaceLifecycle] Failed to purge domain journal for ${workspaceId}`, error)
     }
   }
 }

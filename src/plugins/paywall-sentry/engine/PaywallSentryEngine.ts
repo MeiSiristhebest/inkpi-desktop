@@ -69,7 +69,7 @@ export class PaywallSentryEngine {
       )
     } else if (ppiScore >= 50) {
       recommendation = 'acceptable'
-      suggestions.push('⚖️ 合格卡点：具备一定的情绪惯性与钩子，规则信号显示可平稳承接付费转化。')
+      suggestions.push('⚖️ 合格卡点：具备一定的情绪惯性与钩子，规则信号显示承接力度尚可。')
     } else if (fatigueRiskScore >= 60) {
       recommendation = 'toxic_drop'
       suggestions.push(

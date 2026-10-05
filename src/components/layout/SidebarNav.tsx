@@ -19,8 +19,9 @@ import {
 import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
-import { CAPABILITY_REGISTRY } from '../../core/capabilityRegistry'
+import { capabilityFor } from '../../core/capabilityIndex'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
+import { Tooltip } from '../../ui/primitives'
 
 interface SidebarNavProps {
   activeTabId: string
@@ -92,7 +93,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const groupedCategories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     const navigationPlugins = activePlugins.filter((p) => {
-      const cap = CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
+      const cap = capabilityFor(p.id)
       return Boolean(
         cap &&
         Array.isArray(cap.surfaces) &&
@@ -137,14 +138,15 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       className="sidebar-nav h-screen border-r border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] flex flex-col justify-between select-none text-[var(--ink-text)] z-20 shrink-0 relative group"
     >
       {/* 拖拽手柄：右侧边线，带悬浮光标与宽度约束 */}
-      <div
-        onMouseDown={onMouseDown}
-        onDoubleClick={resetWidth}
-        title="拖拽调整侧边栏宽度（双击恢复默认）"
-        className={`absolute top-0 right-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
-          isDragging ? 'bg-[var(--ink-accent)] w-[2px]' : 'bg-transparent'
-        }`}
-      />
+      <Tooltip content="拖拽调整侧边栏宽度（双击恢复默认）">
+        <div
+          onMouseDown={onMouseDown}
+          onDoubleClick={resetWidth}
+          className={`absolute top-0 right-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
+            isDragging ? 'bg-[var(--ink-accent)] w-[2px]' : 'bg-transparent'
+          }`}
+        />
+      </Tooltip>
 
       {/* Top Project Badge */}
       <div className="sidebar-nav-body flex-1 flex flex-col min-h-0">
@@ -159,13 +161,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
-            title="收起导航"
-          >
-            <PanelLeftClose className="w-4 h-4" />
-          </button>
+          <Tooltip content="收起导航">
+            <button
+              onClick={onClose}
+              className="p-1 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* Current Project */}
@@ -219,6 +222,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               {searchQuery && (
                 <button
                   type="button"
+                  aria-label="清空插件搜索"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--ink-text-faint)] hover:text-[var(--ink-text)] cursor-pointer"
                 >
@@ -245,6 +249,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                     <button
                       type="button"
                       onClick={() => toggleCategory(category)}
+                      aria-expanded={!isCollapsed}
+                      aria-controls={`sidebar-category-${category}`}
                       className="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] cursor-pointer rounded hover:bg-[var(--ink-bg-hover)]/50 transition-colors"
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
@@ -263,12 +269,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
                     {/* 分类内插件列表 */}
                     {!isCollapsed && (
-                      <div className="pl-2 mt-0.5 ml-2 border-l border-[var(--ink-border)]/40 space-y-px">
+                      <div
+                        id={`sidebar-category-${category}`}
+                        className="pl-2 mt-0.5 ml-2 border-l border-[var(--ink-border)]/40 space-y-px"
+                      >
                         {plugins.map((p) => {
                           const Icon = p.icon || Sparkles
                           const isActive = activeTabId === p.id
-                          const capability =
-                            CAPABILITY_REGISTRY[p.id as keyof typeof CAPABILITY_REGISTRY]
+                          const capability = capabilityFor(p.id)
                           const maturity = capability?.maturity
                           const showBeta = maturity === 'beta'
                           const showExp = maturity === 'experimental' || maturity === 'demo'
@@ -287,28 +295,30 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                                 <span className="sidebar-nav-plugin-label truncate">{p.name}</span>
                               </div>
                               {showBeta && (
-                                <span
-                                  className={`text-[9px] px-1 py-0.2 rounded font-sans tracking-wide shrink-0 ${
-                                    isActive
-                                      ? 'bg-white/20 text-white'
-                                      : 'bg-amber-500/15 text-amber-500'
-                                  }`}
-                                  title="调优测试能力 (Beta)"
-                                >
-                                  Beta
-                                </span>
+                                <Tooltip content="调优测试能力 (Beta)">
+                                  <span
+                                    className={`text-[9px] px-1 py-0.2 rounded font-sans tracking-wide shrink-0 ${
+                                      isActive
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-amber-500/15 text-amber-500'
+                                    }`}
+                                  >
+                                    Beta
+                                  </span>
+                                </Tooltip>
                               )}
                               {showExp && (
-                                <span
-                                  className={`text-[9px] px-1 py-0.2 rounded font-sans tracking-wide shrink-0 ${
-                                    isActive
-                                      ? 'bg-white/20 text-white'
-                                      : 'bg-indigo-500/15 text-indigo-400'
-                                  }`}
-                                  title="启发式 / 实验能力 (Experimental)"
-                                >
-                                  实验
-                                </span>
+                                <Tooltip content="启发式 / 实验能力 (Experimental)">
+                                  <span
+                                    className={`text-[9px] px-1 py-0.2 rounded font-sans tracking-wide shrink-0 ${
+                                      isActive
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-indigo-500/15 text-indigo-400'
+                                    }`}
+                                  >
+                                    实验
+                                  </span>
+                                </Tooltip>
                               )}
                             </button>
                           )

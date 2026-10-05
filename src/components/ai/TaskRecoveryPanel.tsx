@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TaskStatus } from '@inkpi/protocol'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
+import { Tooltip } from '../../ui/primitives'
 
 interface TaskRecoveryPanelProps {
   records: TaskRecoveryRecord[]
@@ -92,12 +93,11 @@ export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
               className="rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <span
-                  className="truncate font-medium text-[var(--ink-text)]"
-                  title={record.task.kind}
-                >
-                  {record.task.kind}
-                </span>
+                <Tooltip content={record.task.kind}>
+                  <span className="truncate font-medium text-[var(--ink-text)]">
+                    {record.task.kind}
+                  </span>
+                </Tooltip>
                 <span
                   data-testid={`task-status-${record.task.id}`}
                   className="shrink-0 text-[var(--ink-text-muted)]"
@@ -122,15 +122,16 @@ export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
 
               <div className="mt-2 flex items-center gap-2">
                 {resumable && (
-                  <button
-                    type="button"
-                    disabled={busy || !connected}
-                    title={!connected ? '请先重连 InkPi Daemon' : undefined}
-                    onClick={() => void runAction(record.task.id, () => onResume(record.task.id))}
-                    className="rounded bg-[var(--ink-accent)] px-2 py-1 text-white disabled:opacity-60"
-                  >
-                    {busy ? '处理中…' : '恢复'}
-                  </button>
+                  <Tooltip content={!connected ? '请先重连 InkPi Daemon' : undefined}>
+                    <button
+                      type="button"
+                      disabled={busy || !connected}
+                      onClick={() => void runAction(record.task.id, () => onResume(record.task.id))}
+                      className="rounded bg-[var(--ink-accent)] px-2 py-1 text-white disabled:opacity-60"
+                    >
+                      {busy ? '处理中…' : '恢复'}
+                    </button>
+                  </Tooltip>
                 )}
                 {canCancel(status) && (
                   <button

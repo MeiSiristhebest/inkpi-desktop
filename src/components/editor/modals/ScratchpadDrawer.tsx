@@ -7,6 +7,7 @@ import type { KeyValueStore } from '../../../ports/keyValueStore'
 import type { IdGenerator } from '../../../ports/idGenerator'
 import type { Clock } from '../../../ports/clock'
 import { Drawer, DrawerHeader } from '../../../ui/molecules/Drawer'
+import { Tooltip } from '../../../ui/primitives'
 
 interface ScratchpadDrawerProps {
   projectId: string
@@ -224,17 +225,18 @@ export const ScratchpadDrawer: React.FC<ScratchpadDrawerProps> = ({
                 )}
 
                 <div className="flex items-start gap-2 mt-1">
-                  <button
-                    onClick={() => toggleDone(item.id)}
-                    className="mt-0.5 shrink-0 text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)] cursor-pointer"
-                    title={item.done ? '标记为未完成' : '标记为已完成'}
-                  >
-                    <CheckCircle2
-                      className={`w-3.5 h-3.5 ${
-                        item.done ? 'text-[var(--ink-success)] fill-[var(--ink-success)]/20' : ''
-                      }`}
-                    />
-                  </button>
+                  <Tooltip content={item.done ? '标记为未完成' : '标记为已完成'}>
+                    <button
+                      onClick={() => toggleDone(item.id)}
+                      className="mt-0.5 shrink-0 text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)] cursor-pointer"
+                    >
+                      <CheckCircle2
+                        className={`w-3.5 h-3.5 ${
+                          item.done ? 'text-[var(--ink-success)] fill-[var(--ink-success)]/20' : ''
+                        }`}
+                      />
+                    </button>
+                  </Tooltip>
                   <span
                     className={`flex-1 break-words leading-relaxed text-[12.5px] ${
                       item.done
@@ -244,13 +246,14 @@ export const ScratchpadDrawer: React.FC<ScratchpadDrawerProps> = ({
                   >
                     {item.text}
                   </span>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="shrink-0 p-1 text-[var(--ink-text-faint)] hover:text-rose-500 rounded hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-                    title="删除批注"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content="删除批注">
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="shrink-0 p-1 text-[var(--ink-text-faint)] hover:text-rose-500 rounded hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             )

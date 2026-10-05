@@ -5,19 +5,24 @@ import { SubtextCompilerEngine } from '../engine/SubtextCompilerEngine'
 import type { SubtextDialogueRecord } from '../types'
 import { MessageSquareQuote, Layers, Send, Bot } from 'lucide-react'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { semanticTextFromContent } from '../../../domain/content'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('subtext-compiler')
   const [spoken, setSpoken] = useState('你走吧，我一个人也可以很好。')
   const [speakerName, setSpeakerName] = useState('苏雨柔')
   const [emotion, setEmotion] = useState<
     'anger' | 'fear' | 'pride' | 'affection' | 'jealousy' | 'guilt'
   >('affection')
 
-  const handleAiSubtextCompile = () => {
+  const handleAiSubtextCompile = async () => {
     if (!spoken.trim()) return
     const analysisInput = {
       speaker: semanticTextFromContent('subtext-compiler-speaker', speakerName),
@@ -25,9 +30,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
       spoken: semanticTextFromContent('subtext-compiler-spoken', spoken),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('subtext-compiler', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const loadList = async () => {
@@ -77,6 +80,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             遵循海明威“冰山理论”，将白开水对白解耦为“表面台词 + 水下潜台词 + 肢体微反应”三轨立体架构
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按固定分级表判定，不是模型推断" />
         </div>
       </div>
 
@@ -99,10 +103,11 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
               内在隐藏情绪 / 动机:
             </label>
-            <select
-              className="mt-1 w-full border px-3 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
+            <Select
+              className="mt-1 w-full"
+              size="sm"
               value={emotion}
-              onChange={(e) => setEmotion(e.target.value as any)}
+              onValueChange={(v) => setEmotion(v as any)}
             >
               <option value="affection">深情克制 / 默默守护</option>
               <option value="fear">恐惧惊惶 / 故作镇静</option>
@@ -110,7 +115,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
               <option value="guilt">内疚悔恨 / 狼狈回避</option>
               <option value="pride">自尊傲慢 / 居高临下</option>
               <option value="anger">盛怒克制 / 隐忍杀机</option>
-            </select>
+            </Select>
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
@@ -125,12 +130,14 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
           {hostContext?.aiAssistant?.isAvailable && (
             <button
               onClick={handleAiSubtextCompile}
-              className="px-3 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs mr-2"
+              disabled={aiTask.isRunning}
+              className="px-3 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs mr-2"
             >
               <Bot className="w-3.5 h-3.5" />
               AI 潜台词与微表情深度编译
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSave}
             className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs flex items-center justify-center gap-1.5 transition"

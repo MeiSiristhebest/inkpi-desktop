@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   registerDefaultCommands,
   setNavigationHandler,
+  projectEnabledPluginIds,
+  isCapabilityOffered,
   type NavigationHandler,
 } from './defaultCommands'
 import { commandRegistry } from './commandRegistry'
@@ -62,5 +64,38 @@ describe('defaultCommands', () => {
     expect(mockHandler.openDrawer).toHaveBeenCalledWith('water-meter')
 
     unregister()
+  })
+
+  it('禁用的插件不出 Command：可用性取决于启用投影，系统级能力不受影响（P2.9）', () => {
+    const unregister = registerDefaultCommands()
+    try {
+      // 没有 workspace 打开时，插件命令无从执行，因此不提供。
+      projectEnabledPluginIds(null)
+      expect(isCapabilityOffered('living-codex')).toBe(false)
+      expect(
+        commandRegistry
+          .getAvailable()
+          .map((command) => command.id)
+          .includes('cmd-capability-living-codex'),
+      ).toBe(false)
+
+      projectEnabledPluginIds(new Set(['living-codex']))
+      expect(isCapabilityOffered('living-codex')).toBe(true)
+      expect(
+        commandRegistry
+          .getAvailable()
+          .map((command) => command.id)
+          .includes('cmd-capability-living-codex'),
+      ).toBe(true)
+
+      // 反例锚点：同一次投影下未启用的另一个插件依然不可见，不是"全部放行"造成的通过。
+      expect(isCapabilityOffered('water-meter')).toBe(false)
+
+      // 系统级能力不隶属任何插件，投影为空时也必须照常提供。
+      expect(isCapabilityOffered('dashboard')).toBe(true)
+    } finally {
+      unregister()
+      projectEnabledPluginIds(null)
+    }
   })
 })

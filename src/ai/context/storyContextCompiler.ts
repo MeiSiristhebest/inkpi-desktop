@@ -5,9 +5,8 @@ export interface StoryContextOptions {
   includeHypotheses?: boolean
   maxItems?: number
   /**
-   * 去重模式（默认开启）：
-   * 当实体或事件已被 canonicalFacts 收录时，避免在 entities/events 中全量重复序列化，
-   * 显著精简 Token 占用，避免注意力稀释。
+   * 去重模式：当某一项已被 canonicalFacts 收录时，不再在它的原集合里重复序列化。
+   * 默认只在 taskKind 存在时开启（调用方明确表达了任务意图，才认为精简是安全的）。
    */
   deduplicate?: boolean
   /**
@@ -27,6 +26,8 @@ export interface StoryContextItem {
   factLevel: string
   confidence: number
   canonical: boolean
+  /** Carried through so task-aware projections can filter on lifecycle state, not on prose. */
+  status?: string
 }
 
 export interface StoryContext {
@@ -79,20 +80,20 @@ export function compileStoryContext(
       ? []
       : filteredItems.filter((item) => !item.canonical).slice(0, maxItems)
 
-  const canonicalIds = new Set(canonicalFacts.map((f) => f.id))
+  // 去重按 collection + id 组合键判定：不同集合可能共用同一个 id。
+  const canonicalKeys = new Set(canonicalFacts.map((item) => `${item.collection}:${item.id}`))
 
-  // 去重逻辑：若某 collection 的项已被 canonicalFacts 收录，且开启了 deduplicate，
-  // 则只保留其轻量引用或未收录的项，避免在最终 JSON 中重复出现
   const grouped = (collection: string) => {
     let list = filteredItems.filter((item) => item.collection === collection)
-    if (deduplicate && (collection === 'entities' || collection === 'events')) {
-      list = list.filter((item) => !canonicalIds.has(item.id))
+    if (deduplicate) {
+      list = list.filter((item) => !canonicalKeys.has(`${collection}:${item.id}`))
     }
-    // Task-aware 排序与过滤
-    if (taskKind === 'creative.continue' || taskKind === 'creative.rewrite') {
-      if (collection === 'promises') {
-        list = list.filter((item) => item.summary && !item.summary.includes('fulfilled'))
-      }
+    if (
+      (taskKind === 'creative.continue' || taskKind === 'creative.rewrite') &&
+      collection === 'promises'
+    ) {
+      // 续写/改写只需要未兑现的伏笔；已兑现与已废弃的属于结局信息，不该再驱动生成。
+      list = list.filter((item) => item.status !== 'fulfilled' && item.status !== 'abandoned')
     }
     return list
   }
@@ -118,9 +119,18 @@ export function createStoryContextProvider(getState: () => StoryState | undefine
     id: 'creative.story',
     supports: ({ task }: { task: { contextPolicy?: { includeProjectState?: boolean } } }) =>
       task.contextPolicy?.includeProjectState === true,
-    provide: ({ task }: { task: { contextPolicy?: { metadata?: Record<string, unknown> } } }) => {
+    provide: ({
+      task,
+    }: {
+      task: {
+        kind?: string
+        contextPolicy?: { metadata?: Record<string, unknown> }
+      }
+    }) => {
       const story = compileStoryContext(getState(), {
         includeHypotheses: task.contextPolicy?.metadata?.includeHypotheses !== false,
+        // 任务身份决定投影方式，必须一路带到编译器；否则 taskKind/deduplicate 永远是死选项。
+        ...(typeof task.kind === 'string' && task.kind ? { taskKind: task.kind } : {}),
       })
       if (!story) return []
       return [
@@ -156,6 +166,7 @@ function toContextItem(collection: string, value: unknown): StoryContextItem {
     factLevel,
     confidence,
     canonical: isCanonicalFact({ ...provenance, factLevel } as never),
+    ...(typeof record.status === 'string' ? { status: record.status } : {}),
   }
 }
 

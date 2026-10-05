@@ -49,6 +49,14 @@ const AI_BOUNDARY_ARGUMENTS = new Map<string, number>([
   ['runTask', 0],
 ])
 
+/**
+ * §P1.12: plugin views now hand their task input to the shared AI task seam as
+ * `aiTask.run(payload)`.  `run` is far too generic a method name to register as
+ * a boundary, so match the whole receiver chain instead of losing those 22
+ * call sites from the taint audit.
+ */
+const AI_BOUNDARY_CHAIN_ARGUMENTS = new Map<string, number>([['aiTask.run', 0]])
+
 const DIRECT_MODEL_METHODS = new Set([
   'complete',
   'createChatCompletion',
@@ -410,6 +418,9 @@ function auditTaintedBoundaries(parsed: ParsedSource): BoundaryAudit {
       const boundary = functionName(node.expression)
       const argumentIndex = boundary ? AI_BOUNDARY_ARGUMENTS.get(boundary) : undefined
       if (argumentIndex !== undefined) report(node, boundary, argumentIndex)
+      const chain = propertyChain(node.expression).join('.')
+      const chainArgumentIndex = AI_BOUNDARY_CHAIN_ARGUMENTS.get(chain)
+      if (chainArgumentIndex !== undefined) report(node, chain, chainArgumentIndex)
     }
 
     ts.forEachChild(node, (child) => visit(child, environment))
@@ -639,17 +650,13 @@ function hasNamedImport(ast: ts.SourceFile, name: string, moduleSuffix: string):
 describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
   const sources = implementationSources()
 
-  it('projects both central editor entry points before dispatching drawer/sidebar text', () => {
-    const writer = sources.find(
-      (source) => source.relativeFile === 'src/components/editor/WriterDesk.tsx',
-    )
+  it('projects the live editor entry point before dispatching drawer/sidebar text', () => {
     const rich = sources.find(
       (source) => source.relativeFile === 'src/components/editor/RichEditor.tsx',
     )
-    expect(writer).toBeDefined()
     expect(rich).toBeDefined()
 
-    for (const source of [writer!, rich!]) {
+    for (const source of [rich!]) {
       expect(hasNamedImport(source.ast, 'semanticTextFromContent', '/domain/content')).toBe(true)
       expect(hasProjectorCall(variableInitializer(source.ast, 'activeChapterText'))).toBe(true)
       expect(jsxPropExpressions(source.ast, 'currentText')).not.toContain('activeChapter?.content')
@@ -671,14 +678,6 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
     ).toBe(true)
     expect(
       hasJsxAttributeOnComponent(rich!.ast, 'DrawerDock', 'currentText', 'activeChapterText'),
-    ).toBe(true)
-    expect(
-      hasJsxAttributeOnComponent(
-        writer!.ast,
-        'DrawerComponent',
-        'currentText',
-        'activeChapterText',
-      ),
     ).toBe(true)
   })
 
@@ -706,7 +705,8 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
         audit.boundaryCalls > 0 && sources[index].relativeFile.startsWith('src/plugins/'),
     )
 
-    expect(pluginBoundaryFiles.length).toBeGreaterThan(0)
+    // 22 plugin views on the §P1.12 task seam + the six Runtime tool/workflow views.
+    expect(pluginBoundaryFiles.length).toBeGreaterThanOrEqual(28)
     expect(violations, `raw representation at AI boundaries:\n${violations.join('\n')}`).toEqual([])
   })
 
@@ -737,6 +737,27 @@ describe('Phase 1/20/21 Desktop AI content-boundary architecture gates', () => {
       }
     `)
     expect(auditTaintedBoundaries(safe).violations).toEqual([])
+
+    const seam = parseFixture(`
+      function dispatch(chapter: { content: string }) {
+        const rawChapter = chapter.content
+        const aiTask = usePluginAiTask('demo')
+        aiTask.run({ text: rawChapter })
+      }
+    `)
+    const seamAudit = auditTaintedBoundaries(seam)
+    expect(seamAudit.boundaryCalls).toBe(1)
+    expect(seamAudit.violations).toHaveLength(1)
+    expect(seamAudit.violations[0]).toContain('aiTask.run')
+
+    const safeSeam = parseFixture(`
+      function dispatch(chapter: { id: string; content: string }) {
+        const text = semanticTextFromContent(chapter.id, chapter.content)
+        const aiTask = usePluginAiTask('demo')
+        aiTask.run({ text })
+      }
+    `)
+    expect(auditTaintedBoundaries(safeSeam).violations).toEqual([])
   })
 
   it('proves the legacy gate catches provider, prompt, old interface, and delayed-call fixtures', () => {

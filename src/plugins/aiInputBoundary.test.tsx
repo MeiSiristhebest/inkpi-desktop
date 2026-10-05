@@ -79,10 +79,11 @@ const readBoundarySource = (relativePath: string) =>
   readFileSync(resolve(pluginRoot, relativePath), 'utf8')
 
 describe('plugin AI input boundaries', () => {
-  it('audits all 22 runPluginTask and six Runtime tool/workflow call sites', () => {
+  it('audits all 22 plugin task-seam and six Runtime tool/workflow call sites', () => {
     for (const [relativePath, projectionPattern] of taskBoundaries) {
       const source = readBoundarySource(relativePath)
-      expect(source).toMatch(/runPluginTask\(/)
+      expect(source).toMatch(/usePluginAiTask\(/)
+      expect(source).toMatch(/aiTask\.run\(/)
       expect(source).toMatch(projectionPattern)
     }
 
@@ -96,7 +97,7 @@ describe('plugin AI input boundaries', () => {
       readBoundarySource(relativePath),
     )
     const taskCallCount = allSources.reduce(
-      (count, source) => count + (source.match(/runPluginTask\(/g)?.length ?? 0),
+      (count, source) => count + (source.match(/aiTask\.run\(/g)?.length ?? 0),
       0,
     )
     const runtimeCallCount = allSources.reduce(

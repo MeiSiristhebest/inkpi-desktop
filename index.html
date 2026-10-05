@@ -5,8 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>inkpi-desktop</title>
-    <!-- 开源中文正文网文字体：霞鹜文楷 (LXGW WenKai) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/style.css" />
+    <!-- 字体不要在这里外链：CSP 只放行 style-src/font-src 'self'，CDN 链接打包后会被静默拦截。本地引入见 src/main.tsx。 -->
   </head>
   <body>
     <div id="root"></div>

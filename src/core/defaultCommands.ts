@@ -1,5 +1,6 @@
 import { commandRegistry, type Command } from './commandRegistry'
-import { CAPABILITY_REGISTRY } from './capabilityRegistry'
+import { ALL_CAPABILITIES } from './capabilityIndex'
+import { ALL_PLUGIN_DEFINITIONS } from './pluginDefinitions'
 import type { InspectorSurface } from '../types/inspectorState'
 
 export interface NavigationHandler {
@@ -16,6 +17,25 @@ let activeNavigationHandler: NavigationHandler | null = null
 
 export function setNavigationHandler(handler: NavigationHandler | null): void {
   activeNavigationHandler = handler
+}
+
+const pluginCapabilityIds = new Set(ALL_PLUGIN_DEFINITIONS.map((definition) => definition.id))
+
+/**
+ * P2.9: 禁用的插件不能只从导航和抽屉里消失，却在命令面板里继续可被呼出。启用集合归 PluginProvider
+ * 所有，这里只是它的一份只读投影 —— 命令在 workspace 打开时一次性注册，而可用性要被注册表的每个
+ * 消费方（面板搜索、快捷键、后续的原生菜单）在同一时刻回答。null 表示当前没有 workspace，因此任何
+ * 插件命令都不提供；非插件 capability（系统级与预设）不受投影影响，始终可用。
+ */
+let enabledPluginIds: ReadonlySet<string> | null = null
+
+export function projectEnabledPluginIds(ids: ReadonlySet<string> | null): void {
+  enabledPluginIds = ids
+}
+
+export function isCapabilityOffered(capabilityId: string): boolean {
+  if (!pluginCapabilityIds.has(capabilityId)) return true
+  return enabledPluginIds?.has(capabilityId) ?? false
 }
 
 export function registerDefaultCommands(): () => void {
@@ -88,8 +108,8 @@ export function registerDefaultCommands(): () => void {
     unregisterCallbacks.push(commandRegistry.register(cmd))
   }
 
-  // 2. 从 CAPABILITY_REGISTRY 动态注册已收敛能力，依据 surface 精准分发
-  for (const cap of Object.values(CAPABILITY_REGISTRY)) {
+  // 2. 从能力注册表（含由插件定义派生的条目）动态注册已收敛能力，依据 surface 精准分发
+  for (const cap of Object.values(ALL_CAPABILITIES)) {
     const surfaces = cap.surfaces as readonly string[]
     const isNavigation = surfaces.includes('navigation') || surfaces.includes('canvas')
     const isInspector = surfaces.includes('inspector')
@@ -107,6 +127,7 @@ export function registerDefaultCommands(): () => void {
 
     const cmd: Command = {
       id: `cmd-capability-${cap.id}`,
+      availability: () => isCapabilityOffered(cap.id),
       title: `${actionLabel} ${cap.name}`,
       keywords: [cap.id, cap.name, cap.category, '插件', '模块'],
       category:

@@ -1,4 +1,5 @@
-import React from 'react'
+import { useId } from 'react'
+import { Modal } from '../../../ui/molecules/Modal'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
 
 interface RenameVolumeDialogProps {
@@ -8,22 +9,34 @@ interface RenameVolumeDialogProps {
 /** 分卷重命名弹窗。organisms 层，仅声明式渲染。 */
 export const RenameVolumeDialog: React.FC<RenameVolumeDialogProps> = ({ model }) => {
   const { renamingVolume, renamingVolumeTitle, actions } = model
+  const titleId = useId()
+  const inputId = useId()
   if (!renamingVolume) return null
+
+  const commit = () => actions.renameVolume(renamingVolume, renamingVolumeTitle)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs">
-      <div className="w-[360px] p-5 rounded-2xl bg-[var(--ink-bg-card)] border border-[var(--ink-border)] shadow-2xl">
-        <h3 className="text-[14px] font-semibold mb-3">重命名分卷</h3>
+    <Modal
+      onClose={() => actions.setRenamingVolume(null)}
+      ariaLabelledBy={titleId}
+      widthClass="max-w-[380px]"
+    >
+      <div className="p-5">
+        <h2 id={titleId} className="text-[14px] font-semibold mb-3">
+          重命名分卷
+        </h2>
+        <label htmlFor={inputId} className="sr-only">
+          分卷新名称
+        </label>
         <input
+          id={inputId}
           type="text"
-          autoFocus
           value={renamingVolumeTitle}
           onChange={(e) => actions.setRenamingVolumeTitle(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              actions.renameVolume(renamingVolume, renamingVolumeTitle)
-            } else if (e.key === 'Escape') {
-              actions.setRenamingVolume(null)
+              commit()
             }
           }}
           placeholder="请输入分卷新名称（如：第二卷 · 潜龙在渊）"
@@ -39,7 +52,7 @@ export const RenameVolumeDialog: React.FC<RenameVolumeDialogProps> = ({ model })
           </button>
           <button
             type="button"
-            onClick={() => actions.renameVolume(renamingVolume, renamingVolumeTitle)}
+            onClick={commit}
             disabled={!renamingVolumeTitle.trim()}
             className="px-4 py-1.5 rounded-lg text-[12px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] disabled:opacity-50 transition-colors cursor-pointer"
           >
@@ -47,6 +60,6 @@ export const RenameVolumeDialog: React.FC<RenameVolumeDialogProps> = ({ model })
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

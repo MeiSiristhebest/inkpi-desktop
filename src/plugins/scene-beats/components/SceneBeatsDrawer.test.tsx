@@ -69,11 +69,11 @@ describe('SceneBeatsDrawer — 细纲节拍写作随动抽屉', () => {
     expect(screen.getByText(/绝地反击/)).toBeInTheDocument()
 
     // 切换完成状态
-    const toggleButtons = screen.getAllByTitle('标记已达成')
+    const toggleButtons = screen.getAllByRole('button', { name: '标记已达成' })
     fireEvent.click(toggleButtons[0])
 
     await waitFor(() => {
-      expect(screen.getByTitle('标记未完成')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '标记未完成' })).toBeInTheDocument()
     })
   })
 })

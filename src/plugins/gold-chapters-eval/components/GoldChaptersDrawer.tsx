@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { GoldChaptersEngine } from '../engine/GoldChaptersEngine'
 import { Award } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const GoldChaptersDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const res = GoldChaptersEngine.evaluate(currentText)
@@ -16,6 +17,8 @@ export const GoldChaptersDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
           {res.score} 分
         </span>
       </div>
+
+      <ScoreProvenanceBadge source="rule" detail="按当前正文的文本特征当场计分" />
 
       <div className="p-2.5 rounded bg-slate-100 dark:bg-slate-800 space-y-1.5">
         <div className="flex justify-between text-[11px]">

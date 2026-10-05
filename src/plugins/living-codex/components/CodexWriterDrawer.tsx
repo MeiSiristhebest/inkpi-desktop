@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, type FC, type ComponentType } from 'react'
 import type { CodexEntity } from '../types'
 import { CodexGraphStore } from '../engine/GraphStore'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
-import { pluginEventBus } from '../../../core/pluginEventBus'
 import { User, Shield, MapPin, Sparkles, BookOpen, Layers, Info, X } from 'lucide-react'
 import { Drawer } from '../../../ui/molecules/Drawer'
 
@@ -55,20 +54,7 @@ export const CodexWriterDrawer: FC<CodexWriterDrawerProps> = ({
     const { matchedEntities, xmlContext } = graphStore.current.resolveContextSlice(text, 800)
     setActiveEntities(matchedEntities)
     setXmlSnippet(xmlContext)
-
-    // 向系统 EventBus 广播被正文触碰到的实体 (CODEX_ENTITY_TOUCHED)
-    matchedEntities.forEach((ent) => {
-      try {
-        pluginEventBus.emit('CODEX_ENTITY_TOUCHED', {
-          projectId,
-          entityId: ent.id,
-          entityName: ent.name,
-          category: ent.category,
-        })
-      } catch (err) {
-        console.warn('[CodexWriterDrawer] Failed to emit CODEX_ENTITY_TOUCHED:', err)
-      }
-    })
+    // 触碰是领域事实：每次按键都 emit 会把 replay 缓冲区里真正的写入事件挤掉（§P2.12）。
   }
 
   // 150ms 输入防抖扫描
@@ -177,6 +163,7 @@ export const CodexWriterDrawer: FC<CodexWriterDrawerProps> = ({
             <div className="flex items-center justify-between font-semibold">
               <span className="text-[var(--ink-accent)]">{previewEntity.name} 详情</span>
               <button
+                aria-label={`关闭 ${previewEntity.name} 的详情速查`}
                 onClick={() => setPreviewEntity(null)}
                 className="text-[var(--ink-text-faint)] hover:text-[var(--ink-text)]"
               >

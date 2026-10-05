@@ -31,6 +31,7 @@ vi.mock('./core/projectService', () => ({
   loadProjects: vi.fn(() =>
     Promise.resolve([{ id: 'test-proj', name: '测试项目', updatedAt: Date.now() }]),
   ),
+  loadArchivedProjects: vi.fn(() => Promise.resolve([])),
   createProject: vi.fn(),
   importProject: vi.fn(() =>
     Promise.resolve({

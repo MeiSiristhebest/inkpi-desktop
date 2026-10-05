@@ -14,11 +14,15 @@ import { codexApplicationService } from '../../../services/domainApplicationServ
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Shield, Zap, CheckCircle2, AlertTriangle, GitBranch, Bot, Plus } from 'lucide-react'
+import { Select } from '../../../ui/primitives'
 
 export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('faction-matrix')
   const [factions, setFactions] = useState<FactionNode[]>([])
   const [diplomacies, setDiplomacies] = useState<FactionDiplomacyRecord[]>([])
   const [newFactionName, setNewFactionName] = useState('')
@@ -90,7 +94,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }
 
   // 触发 AI 分析宗门博弈与剧情暗线
-  const handleAiFactionAnalysis = () => {
+  const handleAiFactionAnalysis = async () => {
     if (factions.length === 0) return
     const analysisInput = {
       factions: factions.map((faction) => ({
@@ -106,9 +110,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       })),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('faction-matrix', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const getStance = (idA: string, idB: string): FactionStance => {
@@ -187,6 +189,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         <div className="flex items-center gap-2">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiFactionAnalysis}
               className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1 cursor-pointer"
             >
@@ -194,6 +197,7 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               AI 地缘博弈推演
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={() => setIsAddingFaction(!isAddingFaction)}
             className="px-3 py-1.5 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
@@ -372,29 +376,25 @@ export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
             <div className="flex items-center gap-2 text-xs">
               <span className="text-[var(--ink-text-muted)]">行动影响目标:</span>
-              <select
-                value={rippleTargetId}
-                onChange={(e) => setRippleTargetId(e.target.value)}
-                className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              >
+              <Select value={rippleTargetId} onValueChange={(v) => setRippleTargetId(v)} size="sm">
                 {factions.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.name}
                   </option>
                 ))}
-              </select>
+              </Select>
 
               <span className="text-[var(--ink-text-muted)]">直接好感增减:</span>
-              <select
+              <Select
                 value={rippleDelta}
-                onChange={(e) => setRippleDelta(Number(e.target.value))}
-                className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
+                onValueChange={(v) => setRippleDelta(Number(v))}
+                size="sm"
               >
                 <option value={-50}>-50 (诛杀真传/覆灭分舵)</option>
                 <option value={-30}>-30 (大比当众击败/结仇)</option>
                 <option value={+30}>+30 (拯救外门/归还秘籍)</option>
                 <option value={+50}>+50 (挽救宗门大阵/生死救命)</option>
-              </select>
+              </Select>
             </div>
 
             {rippleResult && (

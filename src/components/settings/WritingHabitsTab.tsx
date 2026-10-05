@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Section, Row, Switch } from './SettingsShared'
 import type { AppSettings } from '../../core/settings'
 import { localStorageKeyValueStore } from '../../adapters/localStorageKeyValueStore'
+import { Select } from '../../ui/primitives'
 
 export interface WritingHabitsConfig {
   autoScrollMode: 'wrap' | 'enter'
@@ -15,7 +16,6 @@ export interface WritingHabitsConfig {
   autoQuotes: boolean
   showRoyaltyEstimate: boolean
   sedentaryMinutes: string
-  chapterTargetWord: string
 }
 
 export const WRITING_HABITS_STORAGE_KEY = 'inkpi-writing-habits-config'
@@ -39,7 +39,6 @@ export const getWritingHabitsConfig = (): WritingHabitsConfig => {
     autoQuotes: true,
     showRoyaltyEstimate: false,
     sedentaryMinutes: '40',
-    chapterTargetWord: '2000',
   }
 }
 
@@ -78,16 +77,17 @@ export const WritingHabitsTab: React.FC<{
           label={`滚屏触发高度 · ${config.scrollThreshold}`}
           hint="内容达到指定视口高度时开始平滑滚屏"
         >
-          <select
+          <Select
+            aria-label="滚屏触发高度"
             value={config.scrollThreshold}
-            onChange={(e) => updateConfig({ scrollThreshold: e.target.value })}
-            className="px-2.5 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs"
+            onValueChange={(v) => updateConfig({ scrollThreshold: v })}
+            size="sm"
           >
             <option value="50%">50%</option>
             <option value="60%">60%</option>
             <option value="70%">70%</option>
             <option value="80%">80%</option>
-          </select>
+          </Select>
         </Row>
         <Row label="滚动跨章" hint="滚动到底部时可直接翻看下一章">
           <Switch
@@ -123,26 +123,24 @@ export const WritingHabitsTab: React.FC<{
         </Row>
         <Row label="高亮触发范围与呈现样式">
           <div className="flex items-center gap-2 text-xs">
-            <select
+            <Select
+              aria-label="高亮触发范围"
               value={config.highlightOccurrence}
-              onChange={(e) =>
-                updateConfig({ highlightOccurrence: e.target.value as 'first' | 'all' })
-              }
-              className="px-2 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs"
+              onValueChange={(v) => updateConfig({ highlightOccurrence: v as 'first' | 'all' })}
+              size="sm"
             >
               <option value="first">首次出现</option>
               <option value="all">全部出现</option>
-            </select>
-            <select
+            </Select>
+            <Select
+              aria-label="高亮呈现样式"
               value={config.highlightStyle}
-              onChange={(e) =>
-                updateConfig({ highlightStyle: e.target.value as 'underline' | 'badge' })
-              }
-              className="px-2 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs"
+              onValueChange={(v) => updateConfig({ highlightStyle: v as 'underline' | 'badge' })}
+              size="sm"
             >
               <option value="underline">下划线高亮</option>
               <option value="badge">徽章点缀</option>
-            </select>
+            </Select>
           </div>
         </Row>
       </Section>
@@ -173,27 +171,16 @@ export const WritingHabitsTab: React.FC<{
 
       <Section title="健康与节奏提醒">
         <Row label="久坐提醒" hint="连续码字达到设定时长后弹出柔和休息提示">
-          <select
+          <Select
+            aria-label="久坐提醒触发时长"
             value={config.sedentaryMinutes}
-            onChange={(e) => updateConfig({ sedentaryMinutes: e.target.value })}
-            className="px-2.5 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs"
+            onValueChange={(v) => updateConfig({ sedentaryMinutes: v })}
+            size="sm"
           >
             <option value="30">连续 30 分钟</option>
             <option value="40">连续 40 分钟</option>
             <option value="60">连续 60 分钟</option>
-          </select>
-        </Row>
-        <Row label="分章提示" hint="单章字数达到设定目标时提醒收尾剧情钩子">
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-[var(--ink-text-muted)]">每满</span>
-            <input
-              type="number"
-              value={config.chapterTargetWord}
-              onChange={(e) => updateConfig({ chapterTargetWord: e.target.value })}
-              className="w-16 px-2 py-1 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-center text-xs tabular-nums"
-            />
-            <span className="text-[var(--ink-text-muted)]">字提醒</span>
-          </div>
+          </Select>
         </Row>
       </Section>
     </>

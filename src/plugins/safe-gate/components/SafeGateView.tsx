@@ -5,6 +5,8 @@ import type { SensitiveWord, RegexRule, GenreStyle, SafeGateScanResult } from '.
 import { SafeGateEngine } from '../engine/SafeGateEngine'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import seedWordsRed from '../data/seed-words-red.json'
 import seedWordsYellow from '../data/seed-words-yellow.json'
 import seedWordsBlue from '../data/seed-words-blue.json'
@@ -21,6 +23,8 @@ import {
   BookOpen,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsRed as SensitiveWord[]),
@@ -34,6 +38,7 @@ const DEMO_FALLBACK_TEXT = `林枫手持利刃杀入敌阵，刹那间血肉横�
 
 export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('safe-gate')
   const [engine] = useState(() => {
     const eng = new SafeGateEngine()
     eng.build(ALL_WORDS, regexRules as RegexRule[])
@@ -100,7 +105,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }
 
   // AI 全文违规隐晦语境排查
-  const handleAiDeepSafeAudit = () => {
+  const handleAiDeepSafeAudit = async () => {
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
@@ -112,9 +117,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       genre,
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('safe-gate', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -156,8 +159,12 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            红线（涉政/违规）+ 黄线（暴力/擦边）+ 蓝线（平台出戏/粗鄙），智能推荐文风自适应平替
+            红线（涉政/违规）+ 黄线（暴力/擦边）+ 蓝线（平台出戏/粗鄙），按词库命中给出文学平替
           </p>
+          <ScoreProvenanceBadge
+            source="rule"
+            detail="按关键词与正则规则命中判定，未接平台审核接口"
+          />
         </div>
 
         {/* 统计指标卡片 */}
@@ -177,6 +184,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiDeepSafeAudit}
               className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
@@ -184,6 +192,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
               <span>AI 隐晦谐音与风控初审</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleBatchReplace}
             disabled={scanResult.isClean}
@@ -200,10 +209,10 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           {chapters.length > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-[var(--ink-text-muted)] mr-2">
               <BookOpen className="w-3.5 h-3.5" />
-              <select
+              <Select
                 value={selectedChapterId}
-                onChange={(e) => handleSelectChapter(e.target.value)}
-                className="px-2 py-1 text-xs rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                onValueChange={(v) => handleSelectChapter(v)}
+                size="sm"
               >
                 <option value="all">全书章节采样</option>
                 {chapters.map((c) => (
@@ -211,22 +220,18 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     第 {c.order} 章 · {c.title || '无题'}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
           <span className="text-[var(--ink-text-muted)]">文风适配：</span>
-          <select
-            value={genre}
-            onChange={(e) => setGenre(e.target.value as GenreStyle)}
-            className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-          >
+          <Select value={genre} onValueChange={(v) => setGenre(v as GenreStyle)} size="sm">
             <option value="xianxia">仙侠修真 (推荐文言古风)</option>
             <option value="historical">古代历史 (推荐典籍成语)</option>
             <option value="urban">都市异能 (推荐现代委婉)</option>
             <option value="sci_fi">科幻赛博 (推荐未来建制)</option>
             <option value="fantasy">西幻魔法 (推荐奇幻术语)</option>
             <option value="neutral">通用中性</option>
-          </select>
+          </Select>
 
           <div className="h-3 w-px bg-[var(--ink-border)] mx-1" />
 
@@ -315,7 +320,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             <span>审查结果与文学平替方案</span>
             {scanResult.isClean ? (
               <span className="text-emerald-500 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> 审查合规
+                <ShieldCheck className="w-3.5 h-3.5" /> 未命中本地词库
               </span>
             ) : (
               <span className="text-rose-500 flex items-center gap-1">
@@ -330,7 +335,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                 <ShieldCheck className="w-8 h-8 mx-auto text-emerald-500 mb-2 opacity-80" />
                 <p className="font-medium text-emerald-500">此分类下无敏感风险</p>
                 <p className="text-[10px] text-[var(--ink-text-faint)] mt-1">
-                  当前文本已符合文风与平台安全标准
+                  当前文本未命中该分级的本地词库条目
                 </p>
               </div>
             ) : (
@@ -378,15 +383,15 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {v.suggestions.map((sug, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleSingleReplace(v.id, sug.replacement)}
-                          className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] text-[11px] font-medium transition-colors flex items-center gap-1"
-                          title={`置信度 ${Math.round(sug.confidence * 100)}%`}
-                        >
-                          <Sparkles className="w-2.5 h-2.5 text-[var(--ink-accent)]" />
-                          <span>{sug.replacement}</span>
-                        </button>
+                        <Tooltip key={i} content={`规则权重 ${Math.round(sug.confidence * 100)}%`}>
+                          <button
+                            onClick={() => handleSingleReplace(v.id, sug.replacement)}
+                            className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] text-[11px] font-medium transition-colors flex items-center gap-1"
+                          >
+                            <Sparkles className="w-2.5 h-2.5 text-[var(--ink-accent)]" />
+                            <span>{sug.replacement}</span>
+                          </button>
+                        </Tooltip>
                       ))}
                     </div>
                   </div>

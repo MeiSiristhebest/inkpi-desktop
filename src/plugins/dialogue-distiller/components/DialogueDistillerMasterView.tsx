@@ -7,6 +7,8 @@ import { indexedDbDialogueVoiceprintRepository } from '../../../adapters/indexed
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Mic,
   Users,
@@ -18,9 +20,12 @@ import {
   BookOpen,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('dialogue-distiller')
   const [characterNames, setCharacterNames] = useState<string[]>([])
   const [voiceprints, setVoiceprints] = useState<CharacterVoiceprint[]>([])
   const [chapters, setChapters] = useState<any[]>([])
@@ -112,7 +117,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
   }
 
   // 触发 AI 进行台词语气深度排查
-  const handleAiDialogueCheck = () => {
+  const handleAiDialogueCheck = async () => {
     if (!extractText.trim()) return
     const analysisInput = {
       characters: [...characterNames],
@@ -120,9 +125,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
       text: semanticTextFromContent('dialogue-distiller-ai-input', extractText).slice(0, 2000),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('dialogue-distiller', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const triggerCompare = (nameA: string, nameB: string, currentVps = voiceprints) => {
@@ -184,6 +187,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             提取多角色台词指纹，直连全书章节与百科角色，拦截语言同质化硬伤
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按台词文本的字面相似度统计" />
         </div>
 
         {/* 章节来源快速切换 */}
@@ -193,10 +197,10 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
               <BookOpen className="w-3.5 h-3.5" />
               文本来源:
             </span>
-            <select
+            <Select
               value={selectedChapterId}
-              onChange={(e) => handleSelectChapter(e.target.value)}
-              className="text-xs px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+              onValueChange={(v) => handleSelectChapter(v)}
+              size="sm"
             >
               <option value="all">全书正文聚合采样 (前10000字)</option>
               {chapters.map((c) => (
@@ -204,7 +208,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
                   第 {c.order} 章 · {c.title || '无标题'}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
       </div>
@@ -228,6 +232,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
               </button>
               {hostContext?.aiAssistant?.isAvailable && (
                 <button
+                  disabled={aiTask.isRunning}
                   onClick={handleAiDialogueCheck}
                   className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
                 >
@@ -235,6 +240,7 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
                   AI 去千人一面鉴别
                 </button>
               )}
+              <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
             </div>
           </div>
 
@@ -326,29 +332,21 @@ export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projec
             </span>
 
             <div className="flex items-center gap-2 text-xs">
-              <select
-                value={charA}
-                onChange={(e) => setCharA(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              >
+              <Select value={charA} onValueChange={(v) => setCharA(v)} className="flex-1" size="sm">
                 {characterNames.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
                 ))}
-              </select>
+              </Select>
               <span className="text-[var(--ink-text-muted)]">VS</span>
-              <select
-                value={charB}
-                onChange={(e) => setCharB(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              >
+              <Select value={charB} onValueChange={(v) => setCharB(v)} className="flex-1" size="sm">
                 {characterNames.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
                 ))}
-              </select>
+              </Select>
               <button
                 onClick={handleCompareClick}
                 className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs font-medium hover:border-[var(--ink-accent)]"

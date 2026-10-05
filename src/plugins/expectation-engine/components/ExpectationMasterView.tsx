@@ -8,10 +8,15 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Sparkles, Plus, Trash2, Activity, Flame, ChevronDown, ChevronUp, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('expectation-engine')
   const [contracts, setContracts] = useState<ExpectationContract[]>([])
   const [, setChapters] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,7 +77,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   }
 
   // AI 爽点节奏与契约长线排查
-  const handleAiExpectationAudit = () => {
+  const handleAiExpectationAudit = async () => {
     if (contracts.length === 0) return
     const analysisInput = {
       contracts: contracts.map((contract) => ({
@@ -81,9 +86,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       })),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('expectation-engine', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -151,11 +154,13 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
             <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
               监控压抑爆发比（SPR），杜绝虐主弃书与审美疲劳，闭环追踪读者核心爽点契约
             </p>
+            <ScoreProvenanceBadge source="rule" detail="基准 50 分，按契约与cue词命中加减" />
           </div>
 
           <div className="flex items-center gap-2">
             {hostContext?.aiAssistant?.isAvailable && (
               <button
+                disabled={aiTask.isRunning}
                 onClick={handleAiExpectationAudit}
                 className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
               >
@@ -163,6 +168,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                 <span>AI 爽点爆发期深度推演</span>
               </button>
             )}
+            <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
             <button
               onClick={() => setShowGoldenThree(!showGoldenThree)}
               className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -299,17 +305,17 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
         />
         <div className="flex items-center gap-1 text-[var(--ink-text-muted)]">
           <span>爽点烈度:</span>
-          <select
+          <Select
             value={newIntensity}
-            onChange={(e) => setNewIntensity(Number(e.target.value) as 1 | 2 | 3 | 4 | 5)}
-            className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
+            onValueChange={(v) => setNewIntensity(Number(v) as 1 | 2 | 3 | 4 | 5)}
+            size="sm"
           >
             <option value={1}>★☆☆☆☆ 微爽</option>
             <option value={2}>★★☆☆☆ 局部</option>
             <option value={3}>★★★☆☆ 显著</option>
             <option value={4}>★★★★☆ 震撼</option>
             <option value={5}>★★★★★ 极度暴爽</option>
-          </select>
+          </Select>
         </div>
         <div className="flex items-center gap-1 text-[var(--ink-text-muted)]">
           <span>埋设章:</span>
@@ -365,13 +371,14 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                       >
                         {c.title}
                       </h4>
-                      <button
-                        onClick={() => handleDeleteContract(c.id)}
-                        className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
-                        title="删除契约"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip content="删除契约">
+                        <button
+                          onClick={() => handleDeleteContract(c.id)}
+                          className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                     </div>
 
                     <div className="flex items-center gap-1 text-amber-500 text-xs mb-2">

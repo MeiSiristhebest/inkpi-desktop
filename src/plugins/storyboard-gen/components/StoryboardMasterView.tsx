@@ -10,53 +10,103 @@ import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
 
-const DEFAULT_CHAPTER_CLIMAX = `乌云翻滚，整座演武场狂风大作。
-一名修士拔剑出鞘，剑气纵横十里，周遭风云为之变色！
-“今日一战，注定载入史册！”
-惊天动地的声势席卷全场，千丈演武石台在一瞬间被剑气撕裂！全场陷入死一般的寂静！`
-
 export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
-  const [chapterId, setChapterId] = useState('ch_01')
-  const [sceneText, setSceneText] = useState(DEFAULT_CHAPTER_CLIMAX)
+  const activeChapter = host?.activeChapter
+  const activeChapterId = activeChapter?.id
+  const activeChapterContent = activeChapter?.content
+  const [chapterId, setChapterId] = useState(activeChapterId ?? '')
+  const [sceneText, setSceneText] = useState(() =>
+    activeChapter ? semanticTextFromContent(activeChapter.id, activeChapter.content) : '',
+  )
+  const draftChapterIdRef = useRef(activeChapterId ?? '')
+  const chapterIdDirtyRef = useRef(false)
+  const sceneTextDirtyRef = useRef(false)
   const [scenes, setScenes] = useState<StoryboardSceneRecord[]>([])
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
+  useEffect(() => {
+    if (!activeChapterId || activeChapterContent === undefined) return
+    const nextSceneText = semanticTextFromContent(activeChapterId, activeChapterContent)
+    const chapterChanged = draftChapterIdRef.current !== activeChapterId
+    if (chapterChanged) {
+      setChapterId(activeChapterId)
+      setSceneText(nextSceneText)
+      chapterIdDirtyRef.current = false
+      sceneTextDirtyRef.current = false
+    } else {
+      if (!chapterIdDirtyRef.current) setChapterId(activeChapterId)
+      if (!sceneTextDirtyRef.current) setSceneText(nextSceneText)
+    }
+    draftChapterIdRef.current = activeChapterId
+  }, [activeChapterContent, activeChapterId])
+
   const localExtracted: ClimaxStoryboardExtraction = StoryboardEngine.extractStoryboard(
     chapterId,
-    '第一章 演武反杀',
+    activeChapter?.title ?? '当前章节',
     sceneText,
   )
   const [runtimeExtracted, setRuntimeExtracted] = useState<ClimaxStoryboardExtraction | null>(null)
+  const [isRunning, setIsRunning] = useState(false)
+  const workflowRunRef = useRef(0)
 
   useEffect(() => {
-    const runtimeAssistant = host?.aiAssistant
-    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginWorkflow) {
-      setRuntimeExtracted(null)
-      return
-    }
-
-    let cancelled = false
+    // An active chapter switch invalidates any workflow still resolving for the
+    // previous chapter. The Runtime task may finish, but its result is no
+    // longer valid for this view.
+    workflowRunRef.current += 1
     setRuntimeExtracted(null)
-    void runtimeAssistant
-      .runPluginWorkflow(
+  }, [activeChapterContent, activeChapterId])
+
+  useEffect(() => {
+    return () => {
+      workflowRunRef.current += 1
+    }
+  }, [])
+
+  const handleRunWorkflow = async () => {
+    const runtimeAssistant = host?.aiAssistant
+    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginWorkflow || isRunning) return
+
+    const runId = workflowRunRef.current + 1
+    workflowRunRef.current = runId
+    setIsRunning(true)
+    setRuntimeExtracted(null)
+    const currentChapterId = activeChapter?.id ?? ''
+    const chapterChangedSinceDraft = draftChapterIdRef.current !== currentChapterId
+    const workflowChapterId = chapterChangedSinceDraft ? currentChapterId : chapterId.trim()
+    const workflowSceneText = chapterChangedSinceDraft
+      ? semanticTextFromContent(currentChapterId, activeChapter?.content ?? '')
+      : sceneText
+    const chapterTitle = activeChapter?.title?.trim() || '当前章节'
+
+    try {
+      const result = await runtimeAssistant.runPluginWorkflow(
         'storyboard-gen',
         {
-          chapterId,
-          chapterTitle: '第一章 演武反杀',
-          chapterText: semanticTextFromContent(`storyboard-gen-${chapterId}`, sceneText),
+          chapterId: workflowChapterId,
+          chapterTitle,
+          chapterText: semanticTextFromContent(
+            `storyboard-gen-${workflowChapterId}`,
+            workflowSceneText,
+          ),
         },
-        { projectId },
+        { projectId, executionMode: 'explicit', cancellable: true },
       )
-      .then((result) => {
-        if (!cancelled && isClimaxStoryboardExtraction(result)) setRuntimeExtracted(result)
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
+      if (
+        workflowRunRef.current === runId &&
+        result?.status === 'completed' &&
+        isClimaxStoryboardExtraction(result.result)
+      ) {
+        setRuntimeExtracted(result.result)
+      }
+    } catch (error) {
+      if (workflowRunRef.current === runId) console.error('Storyboard workflow failed:', error)
+    } finally {
+      if (workflowRunRef.current === runId) setIsRunning(false)
     }
-  }, [chapterId, host?.aiAssistant, projectId, sceneText])
+  }
 
   const extracted = runtimeExtracted ?? localExtracted
 
@@ -181,9 +231,25 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             type="text"
             className="px-3 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
             placeholder="对应章节ID"
+            aria-label="对应章节ID"
             value={chapterId}
-            onChange={(e) => setChapterId(e.target.value)}
+            onChange={(e) => {
+              workflowRunRef.current += 1
+              chapterIdDirtyRef.current = true
+              setChapterId(e.target.value)
+              setRuntimeExtracted(null)
+            }}
           />
+          <button
+            type="button"
+            onClick={handleRunWorkflow}
+            disabled={
+              !host?.aiAssistant?.isAvailable || !host.aiAssistant.runPluginWorkflow || isRunning
+            }
+            className="px-3.5 py-1.5 border border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300 text-xs rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRunning ? '运行中…' : '运行 AI 分镜'}
+          </button>
           <button
             type="button"
             onClick={handleSaveScene}
@@ -204,8 +270,14 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
             </label>
             <textarea
               className="w-full h-36 p-3 text-xs border rounded font-serif bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-800 leading-relaxed"
+              aria-label="高潮名场面文本描述"
               value={sceneText}
-              onChange={(e) => setSceneText(e.target.value)}
+              onChange={(e) => {
+                workflowRunRef.current += 1
+                sceneTextDirtyRef.current = true
+                setSceneText(e.target.value)
+                setRuntimeExtracted(null)
+              }}
             />
           </div>
 
@@ -267,6 +339,7 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                     <button
                       type="button"
                       onClick={() => handleCopyPrompt(f.visualPrompt, f.id)}
+                      aria-label={`复制${f.shotLabel}提示词`}
                       className="text-slate-400 hover:text-rose-500 transition shrink-0"
                     >
                       {copiedPromptId === f.id ? (
@@ -304,6 +377,7 @@ export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, on
                     <button
                       type="button"
                       onClick={() => handleCopyPrompt(c.stableDiffusionPrompt, c.characterId)}
+                      aria-label={`复制${c.characterName}立绘 Prompt`}
                       className="text-[10px] text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
                     >
                       <Copy className="w-3 h-3" /> 复制立绘 Prompt

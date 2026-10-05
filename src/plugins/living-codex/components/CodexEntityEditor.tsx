@@ -2,8 +2,10 @@ import { useState, useEffect, type FC } from 'react'
 import type { CodexEntity, CodexCategory, EntityRelation } from '../types'
 import { Save, Trash2, X, Plus, Sparkles } from 'lucide-react'
 import { TemplatePickerModal } from './TemplatePickerModal'
+import { countTemplates } from '../content/characterPresets'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clock } from '../../../adapters/clock'
+import { Tooltip, Select } from '../../../ui/primitives'
 
 interface CodexEntityEditorProps {
   entity: Partial<CodexEntity> | null
@@ -104,22 +106,24 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
       <div className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)]">
         <span className="text-[13px] font-medium">{entity?.id ? '编辑实体档案' : '新建实体'}</span>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setIsTemplateModalOpen(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-accent)] border border-[var(--ink-accent)]/20 text-[11px] font-medium hover:bg-[var(--ink-accent)]/10"
-            title="从 36+ 种人设与世界观模版库挑选"
-          >
-            <Sparkles className="w-3 h-3" />
-            <span>模版库</span>
-          </button>
-          {entity?.id && onDelete && (
+          <Tooltip content={`从 ${countTemplates()} 份人设与世界观模版里挑一份起点`}>
             <button
-              onClick={() => onDelete(entity.id!)}
-              className="p-1 rounded text-red-500 hover:bg-red-500/10"
-              title="删除实体"
+              onClick={() => setIsTemplateModalOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-accent)] border border-[var(--ink-accent)]/20 text-[11px] font-medium hover:bg-[var(--ink-accent)]/10"
             >
-              <Trash2 className="w-4 h-4" />
+              <Sparkles className="w-3 h-3" />
+              <span>模版库</span>
             </button>
+          </Tooltip>
+          {entity?.id && onDelete && (
+            <Tooltip content="删除实体">
+              <button
+                onClick={() => onDelete(entity.id!)}
+                className="p-1 rounded text-red-500 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
           )}
           <button
             onClick={handleSubmit}
@@ -130,6 +134,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
             {isSaving ? '保存中...' : '保存'}
           </button>
           <button
+            aria-label="关闭实体编辑器"
             onClick={onClose}
             className="p-1 rounded hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]"
           >
@@ -228,6 +233,7 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
                   <span>{rel.targetName}</span>
                 </div>
                 <button
+                  aria-label={`移除与 ${rel.targetName} 的「${rel.relationType}」关系`}
                   onClick={() => handleRemoveRelation(idx)}
                   className="text-[var(--ink-text-faint)] hover:text-red-500"
                 >
@@ -239,18 +245,14 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
 
           {/* 添加新关系 */}
           <div className="flex gap-1.5 pt-1">
-            <select
-              value={newRelType}
-              onChange={(e) => setNewRelType(e.target.value)}
-              className="px-2 py-1 bg-[var(--ink-bg-sidebar)] border border-[var(--ink-border)] rounded text-[12px]"
-            >
+            <Select value={newRelType} onValueChange={(v) => setNewRelType(v)} size="sm">
               <option value="宿敌">宿敌</option>
               <option value="盟友">盟友</option>
               <option value="师徒">师徒</option>
               <option value="所属势力">所属势力</option>
               <option value="持有者">持有者</option>
               <option value="位于">位于</option>
-            </select>
+            </Select>
             <input
               value={newRelTarget}
               onChange={(e) => setNewRelTarget(e.target.value)}

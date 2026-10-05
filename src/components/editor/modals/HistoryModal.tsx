@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { History, RotateCcw, X, Clock, GitCompare, Bookmark, Plus, Check, Info } from 'lucide-react'
+import {
+  History,
+  RotateCcw,
+  X,
+  Clock,
+  GitCompare,
+  Bookmark,
+  Plus,
+  Check,
+  Info,
+  Trash2,
+} from 'lucide-react'
 import { Modal } from '../../../ui/molecules/Modal'
 import { diffWordsWithSpace } from 'diff'
 import { htmlToPlain } from '../../../domain/text'
@@ -10,6 +21,7 @@ import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValu
 import type { KeyValueStore } from '../../../ports/keyValueStore'
 import type { IdGenerator } from '../../../ports/idGenerator'
 import type { Clock as ClockPort } from '../../../ports/clock'
+import { Tooltip } from '../../../ui/primitives'
 
 interface HistoryModalProps {
   chapter: ChapterRecord
@@ -43,6 +55,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const [newSnapshotName, setNewSnapshotName] = useState('')
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false)
   const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const storageKey = `chapter-history-${chapter.id}`
 
@@ -111,6 +124,32 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     }, 400)
   }
 
+  // P3.12：里程碑与自动检查点分区展示。索引仍指向同一份快照数组，
+  // 分区只是视图分组，避免出现第二个"当前选中版本"的真值来源。
+  const grouped = useMemo(() => {
+    const milestones: Array<{ snap: VersionSnapshot; index: number }> = []
+    const autos: Array<{ snap: VersionSnapshot; index: number }> = []
+    snapshots.forEach((snap, index) => {
+      if (snap.kind === 'milestone') milestones.push({ snap, index })
+      else autos.push({ snap, index })
+    })
+    return { milestones, autos }
+  }, [snapshots])
+
+  const handleDeleteMilestone = (target: VersionSnapshot) => {
+    const removedIndex = snapshots.findIndex((snap) => snap.id === target.id)
+    if (removedIndex === -1) return
+    const next = snapshots.filter((_, index) => index !== removedIndex)
+    saveSnapshots(next)
+    setActiveDiffIndex((current) => {
+      if (current === null) return current
+      if (current === removedIndex)
+        return next.length ? Math.min(removedIndex, next.length - 1) : null
+      return current > removedIndex ? current - 1 : current
+    })
+    setPendingDeleteId((current) => (current === target.id ? null : current))
+  }
+
   // 行业通用真实 Diff 计算：对比选中的历史快照与当前最新正文
   const diffResult = useMemo(() => {
     if (activeDiffIndex === null || !snapshots[activeDiffIndex]) return null
@@ -131,13 +170,14 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
             版本时光机与差异比对 · {chapter.title}
           </h3>
         </div>
-        <button
-          onClick={onClose}
-          title="关闭"
-          className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <Tooltip content="关闭">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* 机制说明与操作条 */}
@@ -145,7 +185,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
         <div className="flex items-center gap-2 text-[var(--ink-text-muted)]">
           <Info className="w-3.5 h-3.5 text-[var(--ink-accent)] shrink-0" />
           <span className="text-[11.5px]">
-            自动检查点在持续写作间隙生成；支持随时封存带备注的「里程碑定稿」，安全可逆。
+            自动检查点在持续写作间隙生成，最多保留 20 条；里程碑定稿永久保留，直到你手动删除。
           </span>
         </div>
 
@@ -188,75 +228,37 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 
       {/* 主体：左侧历史检查点列表，右侧实时 Diff 对比 */}
       <div className="flex-1 flex min-h-0 overflow-hidden h-[540px]">
-        {/* 左侧历史列表 */}
-        <div className="w-80 border-r border-[var(--ink-border)] overflow-y-auto p-3 space-y-2 shrink-0 bg-[var(--ink-bg-sidebar)]/30">
-          <div className="text-[11px] font-medium text-[var(--ink-text-faint)] px-1 py-0.5 flex items-center justify-between">
-            <span>历史版本列表</span>
-            <span>共 {snapshots.length} 个记录</span>
-          </div>
-
-          {snapshots.map((snap, idx) => {
-            const isSelected = activeDiffIndex === idx
-            const isMilestone = snap.kind === 'milestone'
-            const wordDelta = chapter.wordCount - snap.wordCount
-
-            return (
-              <div
-                key={snap.id || idx}
-                onClick={() => setActiveDiffIndex(idx)}
-                className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${
-                  isSelected
-                    ? 'bg-[var(--ink-bg-panel)] border-[var(--ink-accent)] shadow-sm'
-                    : 'bg-[var(--ink-bg)] border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] text-[var(--ink-text-muted)]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5 gap-1">
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 ${
-                      isMilestone
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                        : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
-                    }`}
-                  >
-                    {isMilestone ? (
-                      <Bookmark className="w-2.5 h-2.5" />
-                    ) : (
-                      <Clock className="w-2.5 h-2.5" />
-                    )}
-                    <span>{isMilestone ? '里程碑' : '自动检查点'}</span>
-                  </span>
-
-                  {idx === 0 && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20">
-                      最新快照
-                    </span>
-                  )}
-                </div>
-
-                <div className="font-semibold text-[12.5px] text-[var(--ink-text)] truncate mb-1">
-                  {snap.name || `检查点 #${snapshots.length - idx}`}
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-[var(--ink-text-faint)] pt-1 border-t border-[var(--ink-border)]/50 mt-2">
-                  <span>{new Date(snap.timestamp).toLocaleString('zh-CN')}</span>
-                  <div className="flex items-center gap-1.5 font-mono">
-                    <span>{snap.wordCount} 字</span>
-                    {wordDelta !== 0 && (
-                      <span
-                        className={`text-[10px] font-medium ${
-                          wordDelta > 0
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-rose-600 dark:text-rose-400'
-                        }`}
-                      >
-                        {wordDelta > 0 ? `+${wordDelta}` : wordDelta}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+        {/* 左侧：里程碑与自动检查点分区（P3.12） */}
+        <div className="w-80 border-r border-[var(--ink-border)] overflow-y-auto p-3 space-y-4 shrink-0 bg-[var(--ink-bg-sidebar)]/30">
+          <SnapshotGroup
+            title="里程碑"
+            hint={`${grouped.milestones.length} 条 · 不会自动丢弃`}
+            emptyHint="还没有里程碑。定稿后点上方「保存当前为里程碑版本」，它不会被自动检查点挤出历史。"
+            entries={grouped.milestones}
+            total={snapshots.length}
+            activeIndex={activeDiffIndex}
+            currentWordCount={chapter.wordCount}
+            onSelect={(index) => {
+              setPendingDeleteId(null)
+              setActiveDiffIndex(index)
+            }}
+            pendingDeleteId={pendingDeleteId}
+            onArmDelete={setPendingDeleteId}
+            onDelete={handleDeleteMilestone}
+          />
+          <SnapshotGroup
+            title="自动检查点"
+            hint={`${grouped.autos.length} 条 · 最多保留 20 条`}
+            emptyHint="还没有自动检查点。持续写作时会自动生成，超出 20 条后丢弃最旧的一条。"
+            entries={grouped.autos}
+            total={snapshots.length}
+            activeIndex={activeDiffIndex}
+            currentWordCount={chapter.wordCount}
+            onSelect={(index) => {
+              setPendingDeleteId(null)
+              setActiveDiffIndex(index)
+            }}
+          />
         </div>
 
         {/* 右侧：逐词差异比对区 */}
@@ -330,3 +332,135 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     </Modal>
   )
 }
+
+interface SnapshotGroupProps {
+  title: string
+  hint: string
+  emptyHint: string
+  entries: Array<{ snap: VersionSnapshot; index: number }>
+  /** 快照总数：沿用 #N 倒序编号，分区展示不该让编号重新数一遍 */
+  total: number
+  activeIndex: number | null
+  currentWordCount: number
+  onSelect: (index: number) => void
+  pendingDeleteId?: string | null
+  onArmDelete?: (id: string | null) => void
+  onDelete?: (snap: VersionSnapshot) => void
+}
+
+const SnapshotGroup: React.FC<SnapshotGroupProps> = ({
+  title,
+  hint,
+  emptyHint,
+  entries,
+  total,
+  activeIndex,
+  currentWordCount,
+  onSelect,
+  pendingDeleteId,
+  onArmDelete,
+  onDelete,
+}) => (
+  <section aria-label={title} className="space-y-2">
+    <div className="text-[11px] font-medium text-[var(--ink-text-faint)] px-1 py-0.5 flex items-center justify-between gap-2">
+      <span>{title}</span>
+      <span className="shrink-0">{hint}</span>
+    </div>
+
+    {entries.length === 0 && (
+      <p className="px-1 text-[11px] leading-relaxed text-[var(--ink-text-faint)]">{emptyHint}</p>
+    )}
+
+    {entries.map(({ snap, index }) => {
+      const isSelected = activeIndex === index
+      const isMilestone = snap.kind === 'milestone'
+      const wordDelta = currentWordCount - snap.wordCount
+      const isDeleteArmed = Boolean(onDelete) && pendingDeleteId === snap.id
+
+      return (
+        <div
+          key={snap.id || index}
+          onClick={() => onSelect(index)}
+          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${
+            isSelected
+              ? 'bg-[var(--ink-bg-panel)] border-[var(--ink-accent)] shadow-sm'
+              : 'bg-[var(--ink-bg)] border-[var(--ink-border)] hover:border-[var(--ink-border-strong)] text-[var(--ink-text-muted)]'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5 gap-1">
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 flex items-center gap-1 ${
+                isMilestone
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+              }`}
+            >
+              {isMilestone ? (
+                <Bookmark className="w-2.5 h-2.5" />
+              ) : (
+                <Clock className="w-2.5 h-2.5" />
+              )}
+              <span>{isMilestone ? '里程碑' : '自动检查点'}</span>
+            </span>
+
+            {index === 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/20">
+                最新快照
+              </span>
+            )}
+
+            {onDelete &&
+              (isDeleteArmed ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(snap)
+                  }}
+                  className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 transition-colors cursor-pointer"
+                >
+                  确认删除
+                </button>
+              ) : (
+                <Tooltip content="删除此里程碑">
+                  <button
+                    type="button"
+                    aria-label={`删除里程碑 ${snap.name || ''}`.trim()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onArmDelete?.(snap.id ?? null)
+                    }}
+                    className="shrink-0 p-1 rounded text-[var(--ink-text-faint)] hover:text-rose-500 hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </Tooltip>
+              ))}
+          </div>
+
+          <div className="font-semibold text-[12.5px] text-[var(--ink-text)] truncate mb-1">
+            {snap.name || `检查点 #${total - index}`}
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-[var(--ink-text-faint)] pt-1 border-t border-[var(--ink-border)]/50 mt-2">
+            <span>{new Date(snap.timestamp).toLocaleString('zh-CN')}</span>
+            <div className="flex items-center gap-1.5 font-mono">
+              <span>{snap.wordCount} 字</span>
+              {wordDelta !== 0 && (
+                <span
+                  className={`text-[10px] font-medium ${
+                    wordDelta > 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }`}
+                >
+                  {wordDelta > 0 ? `+${wordDelta}` : wordDelta}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    })}
+  </section>
+)

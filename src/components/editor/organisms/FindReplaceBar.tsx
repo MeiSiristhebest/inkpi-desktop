@@ -4,6 +4,9 @@ import { ArrowUp, ArrowDown, X, BookOpen, Replace, FileText } from 'lucide-react
 import { spring, variants, gesture } from '../../../motion'
 import { IconButton } from '../../../ui/atoms/IconButton'
 import type { EditorModel } from '../hooks/useChapterEditorModel'
+import { GLOBAL_HIT_LABEL } from '../globalSearch'
+import { WRITE_ORIGIN_META } from '../writeOrigin'
+import { Tooltip } from '../../../ui/primitives'
 
 interface FindReplaceBarProps {
   model: EditorModel
@@ -50,8 +53,12 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
     if (!ed || ed.isDestroyed || matchPositions.length === 0) return
     const m = matchPositions[activeMatch]
     if (!m) return
-    ed.commands.setTextSelection({ from: m.from, to: m.to })
-    ed.commands.insertContent(replaceText)
+    // 整段选中替换是批量写入，不是作者逐字敲进来的（§P3.10）；与「全部替换」保持同一口径。
+    ed.chain()
+      .setTextSelection({ from: m.from, to: m.to })
+      .insertContent(replaceText)
+      .setMeta(WRITE_ORIGIN_META, 'bulk-edit')
+      .run()
     actions.handleEditorUpdate()
   }
 
@@ -82,7 +89,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
               setScope('book')
               if (findText && !globalQuery) {
                 actions.setGlobalQuery(findText)
-                actions.runGlobalSearch()
+                void actions.runGlobalSearch(findText)
               }
             }}
             className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
@@ -126,22 +133,24 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
                   : '—'}
               </span>
 
-              <IconButton
-                onClick={handlePrevMatch}
-                disabled={matchPositions.length === 0}
-                title="上一项"
-                className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
-              >
-                <ArrowUp className="w-3.5 h-3.5" />
-              </IconButton>
-              <IconButton
-                onClick={handleNextMatch}
-                disabled={matchPositions.length === 0}
-                title="下一项"
-                className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
-              >
-                <ArrowDown className="w-3.5 h-3.5" />
-              </IconButton>
+              <Tooltip content="上一项">
+                <IconButton
+                  onClick={handlePrevMatch}
+                  disabled={matchPositions.length === 0}
+                  className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
+                >
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip content="下一项">
+                <IconButton
+                  onClick={handleNextMatch}
+                  disabled={matchPositions.length === 0}
+                  className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
+                >
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </IconButton>
+              </Tooltip>
             </div>
 
             {/* 替换按钮 */}
@@ -193,11 +202,11 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
                 onChange={(e) => {
                   actions.setGlobalQuery(e.target.value)
                   if (e.target.value.trim().length >= 2) {
-                    actions.runGlobalSearch()
+                    void actions.runGlobalSearch(e.target.value)
                   }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') actions.runGlobalSearch()
+                  if (e.key === 'Enter') void actions.runGlobalSearch(globalQuery)
                 }}
                 placeholder="跨全书所有分卷与章节全文检索…"
                 className="w-full pl-8 pr-3 py-1 rounded-md text-[12px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]"
@@ -207,7 +216,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
               type="button"
               {...gesture.button}
               transition={spring.snappy}
-              onClick={() => actions.runGlobalSearch()}
+              onClick={() => void actions.runGlobalSearch(globalQuery)}
               className="px-3 py-1 rounded-md text-[12px] bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors cursor-pointer font-medium"
             >
               检索全书
@@ -215,13 +224,14 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
           </div>
         )}
 
-        <IconButton
-          onClick={() => actions.setShowFindReplace(false)}
-          title="关闭"
-          className="cursor-pointer ml-1"
-        >
-          <X className="w-3.5 h-3.5" />
-        </IconButton>
+        <Tooltip content="关闭">
+          <IconButton
+            onClick={() => actions.setShowFindReplace(false)}
+            className="cursor-pointer ml-1"
+          >
+            <X className="w-3.5 h-3.5" />
+          </IconButton>
+        </Tooltip>
       </div>
 
       {/* 全书检索命中结果面板（就地直接呈现，无需弹出孤立 Modal 破坏视线） */}
@@ -233,7 +243,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
             className="max-h-72 overflow-y-auto border-t border-[var(--ink-border)] bg-[var(--ink-bg)] p-2 space-y-1"
           >
             <div className="px-2 py-1 text-[11px] text-[var(--ink-text-faint)] flex items-center justify-between font-medium">
-              <span>检索结果：{globalResults.length} 个章节包含命中项</span>
+              <span>检索结果：{globalResults.length} 条命中（正文 / 标题 / 时间线）</span>
               <span>回车再次刷新</span>
             </div>
 
@@ -244,7 +254,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
             ) : (
               globalResults.map((r) => (
                 <motion.button
-                  key={r.chapterId}
+                  key={`${r.kind}:${r.chapterId}`}
                   type="button"
                   {...gesture.listRow}
                   transition={spring.snappy}
@@ -258,14 +268,14 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="font-semibold text-[var(--ink-text)] group-hover:text-[var(--ink-accent)] flex items-center gap-1.5 truncate">
                       <FileText className="w-3.5 h-3.5 text-[var(--ink-text-muted)]" />
-                      {r.title}
+                      {GLOBAL_HIT_LABEL[r.kind]} · {r.title}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] font-mono shrink-0">
                       {r.count} 处命中
                     </span>
                   </div>
                   <div className="text-[11.5px] text-[var(--ink-text-muted)] truncate leading-relaxed">
-                    …{r.snippet}…
+                    {r.snippet ? `…${r.snippet}…` : '标题命中，点击进入本章'}
                   </div>
                 </motion.button>
               ))

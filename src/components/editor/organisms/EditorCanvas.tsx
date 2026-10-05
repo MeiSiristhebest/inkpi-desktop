@@ -10,6 +10,7 @@ import { PRESET_SKINS } from '../modals/BackgroundModal'
 import { useSettings } from '../../../core/settings'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import type { ProposalSyncRemote } from '../../../adapters/daemonDomainSyncRemote'
+import { Tooltip } from '../../../ui/primitives'
 
 interface EditorCanvasProps {
   model: EditorModel
@@ -143,14 +144,13 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
         >
           {/* 打字机模式下的垂直视觉对齐指示 */}
           {effectiveTypewriter && (
-            <div
-              className="pointer-events-none sticky top-[45%] -translate-y-1/2 border-t border-[var(--ink-accent)]/15 z-10 flex items-center justify-end pr-4"
-              title="打字机光标聚焦参考线"
-            >
-              <span className="text-[10px] font-mono text-[var(--ink-accent)]/40 tracking-wider">
-                TYPEWRITER FOCUS
-              </span>
-            </div>
+            <Tooltip content="打字机光标聚焦参考线">
+              <div className="pointer-events-none sticky top-[45%] -translate-y-1/2 border-t border-[var(--ink-accent)]/15 z-10 flex items-center justify-end pr-4">
+                <span className="text-[10px] font-mono text-[var(--ink-accent)]/40 tracking-wider">
+                  TYPEWRITER FOCUS
+                </span>
+              </div>
+            </Tooltip>
           )}
 
           <div

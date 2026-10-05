@@ -1,4 +1,7 @@
-// 36+ 种男女核心人物人设模版库（提炼自高阶网文创作素材库）
+// 男女核心人物人设模版库（提炼自高阶网文创作素材库）。展示给作者的条数一律由 countTemplates()
+// 算出来，别在文案里手写：这套库此前一直对外宣称「36+」。
+
+import type { CodexCategory } from '../types'
 
 export interface CharacterPreset {
   id: string
@@ -156,3 +159,64 @@ export const CHARACTER_PRESETS: CharacterPreset[] = [
     detailMarkdown: `### 核心气质\n体弱多病，手握羽扇；常年隐于幕后，喜怒不形于色。`,
   },
 ]
+
+export interface WorldTemplatePreset {
+  id: string
+  /** 只填表时写进 attributes.类别 的标签，与卡片标题分开维护。 */
+  title: string
+  category: Extract<CodexCategory, 'faction' | 'item' | 'location'>
+  heading: string
+  blurb: string
+  summary: string
+  detailMarkdown: string
+}
+
+export const WORLD_TEMPLATE_PRESETS: WorldTemplatePreset[] = [
+  {
+    id: 'w-faction-orthodox',
+    category: 'faction',
+    title: '隐世仙门/名门正派',
+    heading: '隐世仙门 / 名门正派',
+    blurb: '传承万载的正道巨擘，以阵法、剑诀与浩然正气著称。',
+    summary: '传承万年的正道巨擘，拥有护宗大阵与太上长老团，门风严谨。',
+    detailMarkdown:
+      '### 宗门构架\n分为内门、外门、执法堂、传功阁。\n\n### 镇派至宝\n护宗天阶大阵、不灭真火。',
+  },
+  {
+    id: 'w-faction-shadow',
+    category: 'faction',
+    title: '魔门九幽/暗杀公会',
+    heading: '魔门九幽 / 暗杀公会',
+    blurb: '行事狠辣不择手段的暗影势力，视规矩为无物。',
+    summary: '藏于暗处的杀伐势力，实力为尊，内部遵循残酷的丛林法则。',
+    detailMarkdown:
+      '### 组织戒律\n完成任务赏千金，泄密者诛灭九族。\n\n### 核心秘法\n九幽匿影身法、煞血噬魂术。',
+  },
+  {
+    id: 'w-item-artifact',
+    category: 'item',
+    title: '上古神器/本命法宝',
+    heading: '上古神器 / 本命至宝',
+    blurb: '主角专属随身金手指法宝，带残魂或独立空间。',
+    summary: '封印中的太古至尊神物，内蕴残破乾坤小世界，可成长进化。',
+    detailMarkdown:
+      '### 法宝特质\n随宿主境界逐步解封九重神禁。\n\n### 附带神通\n时间流速加速、提纯天地灵药。',
+  },
+  {
+    id: 'w-location-realm',
+    category: 'location',
+    title: '远古秘境/太古神墟',
+    heading: '远古秘境 / 太古神墟',
+    blurb: '各大势力抢夺机缘的副本舞台，杀人夺宝高发地。',
+    summary: '千年一开的试炼遗迹，机缘与大凶并存，内有太古妖兽盘踞。',
+    detailMarkdown:
+      '### 入境限制\n仅容许骨龄百岁以下或金丹以下修士进入。\n\n### 核心产出\n筑基灵草、上古功法残卷、天外神石。',
+  },
+]
+
+/** 模版库对作者报出的条数：只能由这两份数据算出来。 */
+export const CHARACTER_PRESET_COUNT = CHARACTER_PRESETS.length
+
+export function countTemplates(): number {
+  return CHARACTER_PRESET_COUNT + WORLD_TEMPLATE_PRESETS.length
+}

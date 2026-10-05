@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { MultiCalendarEngine } from './MultiCalendarEngine'
 
 describe('MultiCalendarEngine', () => {
-  const [calAncient, calDynasty] = MultiCalendarEngine.DEFAULT_CALENDARS
+  const [calAncient, calDynasty] = MultiCalendarEngine.GENRE_PRESET_CALENDARS
 
   it('accurately converts date to absolute day and back', () => {
     // 灵历 10 年 3 月 15 日

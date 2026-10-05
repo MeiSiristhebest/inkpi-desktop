@@ -1,9 +1,18 @@
 /// <reference types="vitest" />
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(rootDir, 'src'),
+    },
+  },
   test: {
     env: {
       NODE_ENV: 'test',
@@ -16,6 +25,9 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/db/**/*.ts',
+        'src/domain/**/*.ts',
+        'src/services/**/*.ts',
+        'src/ai/**/*.ts',
         'src/components/editor/RichEditor.tsx',
         'src/components/editor/richEditorUtils.ts',
         'src/components/ai/**/*.tsx',

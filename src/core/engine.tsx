@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, Suspense, type FC, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense, type FC, type ReactNode } from 'react'
 import { PanelRight, Maximize2, Minimize2, Home, PanelLeftOpen, Sparkles } from 'lucide-react'
 import { RichEditor, type RichEditorProps } from '../components/editor/RichEditor'
 import { SettingsView } from '../components/settings/SettingsView'
+import { deriveRuntimeReadiness } from '../components/settings/connectionReadiness'
 import { DashboardView } from '../components/dashboard/DashboardView'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { PluginSuspenseFallback } from './components/PluginSuspenseFallback'
@@ -22,16 +23,20 @@ import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
 import { commandRegistry } from './commandRegistry'
-import { matchesEditorShortcut } from './editorShortcuts'
+import { matchesEditorShortcut, shortcutLabel } from './editorShortcuts'
+import { createMenuCommandRouter, subscribeDesktopMenu } from './desktopMenu'
 import { CommandPaletteModal } from '../components/CommandPaletteModal'
 import {
   type InspectorState,
   type InspectorSurface,
   initialInspectorState,
+  inspectorPanelFor,
+  resolveInspectorRequest,
   toggleInspectorSurface,
 } from '../types/inspectorState'
 import { useOptionalActiveWritingContext } from './activeWritingContext'
 import { useOptionalPluginHostContext } from './pluginHostContext'
+import { Tooltip } from '../ui/primitives'
 
 interface EngineProps {
   projectId: string
@@ -43,7 +48,7 @@ interface EngineProps {
   renderInspector?: (state: InspectorState, onClose: () => void) => ReactNode
   /** 右侧信息栏默认是否开启（默认关闭，保持正文写作画布宽敞；测试中可显式开启） */
   defaultRightOpen?: boolean
-  /** 写作台工具栏中「打开 AI 副驾驶」的回调 */
+  /** Optional integration hook invoked when the AI assistant is opened. */
   onOpenAssistant?: () => void
   /** Daemon 连接状态与重连（透传给编辑器状态栏） */
   isConnected?: boolean
@@ -53,7 +58,7 @@ interface EngineProps {
   onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 返回书架/工作台入口（提供时顶栏显示返回按钮） */
-  onHome?: () => void
+  onHome?: () => void | Promise<void>
 }
 
 interface Stats {
@@ -127,6 +132,13 @@ export const Engine: FC<EngineProps> = ({
 }) => {
   // 当前激活的页签（默认直达正文写作 editor）
   const [activeTabId, setActiveTabId] = useState<string>('editor')
+  const activeTabRef = useRef(activeTabId)
+  activeTabRef.current = activeTabId
+  const editorDurabilityBarrierRef = useRef<(() => Promise<void>) | null>(null)
+  const editorDurabilityPendingRef = useRef(false)
+  const editorDurabilityHasPendingRef = useRef<(() => boolean) | null>(null)
+  const navigationQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const navigateToViewRef = useRef<(tabId: string) => void>(() => {})
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [leftOpen, setLeftOpen] = useState(() => !isCompactViewport())
@@ -143,25 +155,33 @@ export const Engine: FC<EngineProps> = ({
   const pluginHostCtx = useOptionalPluginHostContext()
 
   // 统一面板开合状态：由 inspectorState 作为单一真理来源
-  const isRightPanelOpen = inspectorState.surface !== 'closed'
+  const isRightPanelOpen = inspectorPanelFor(inspectorState) !== 'none'
+  const hasAssistant = Boolean(renderInspector || onOpenAssistant)
+  const openAssistant = useCallback(() => {
+    onOpenAssistant?.()
+    setInspectorState({ surface: 'assistant' })
+  }, [onOpenAssistant])
 
   useEffect(() => {
     const unreg = registerDefaultCommands()
     setNavigationHandler({
-      openView: (tabId) => setActiveTabId(tabId),
-      openAssistant: () => {
-        onOpenAssistant?.()
-        setInspectorState({ surface: 'assistant' })
-      },
+      openView: (tabId) => navigateToViewRef.current(tabId),
+      openAssistant: openAssistant,
       openActivityCenter: () => {
         onOpenAssistant?.()
         setInspectorState({ surface: 'activity' })
       },
       openInspector: (surface: InspectorSurface, pluginId?: string) => {
-        if (surface === 'assistant' || surface === 'activity') {
+        const request = resolveInspectorRequest(surface, pluginId)
+        if (request.kind === 'drawer') {
+          pluginHostCtx?.openDrawer(request.pluginId)
+          return
+        }
+        if (request.kind === 'ignored') return
+        if (request.state.surface === 'assistant' || request.state.surface === 'activity') {
           onOpenAssistant?.()
         }
-        setInspectorState({ surface, pluginId })
+        setInspectorState(request.state)
       },
       openDrawer: (pluginId: string) => {
         pluginHostCtx?.openDrawer(pluginId)
@@ -172,7 +192,7 @@ export const Engine: FC<EngineProps> = ({
       unreg()
       setNavigationHandler(null)
     }
-  }, [onOpenAssistant, pluginHostCtx])
+  }, [onOpenAssistant, openAssistant, pluginHostCtx])
 
   // 全局快捷键监听：Cmd/Ctrl+K 打开全局指令面板
   useEffect(() => {
@@ -192,6 +212,40 @@ export const Engine: FC<EngineProps> = ({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [activeWritingCtx])
+
+  // 原生菜单命令（§P4.7）：Windows 菜单只发命令 id，前端把它翻译回注册表里的同一条
+  // chord 再派发，因此点击菜单项与按快捷键命中的是上面那些完全相同的 handler。
+  // 路由器负责处理方不在场的页签：先切回正文编辑器，挂载完成后补发。
+  const menuRouterRef = useRef<ReturnType<typeof createMenuCommandRouter> | null>(null)
+  menuRouterRef.current ??= createMenuCommandRouter({
+    isEditorActive: () => activeTabRef.current === 'editor',
+    openEditor: () => navigateToViewRef.current('editor'),
+  })
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    let disposed = false
+    void subscribeDesktopMenu((id) => {
+      menuRouterRef.current?.handle(id)
+    })
+      .then((dispose) => {
+        if (disposed) dispose()
+        else unlisten = dispose
+      })
+      .catch((error: unknown) => {
+        console.error('[InkPi Desktop] 原生菜单订阅失败，菜单项不会有任何反应', error)
+      })
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
+
+  // 页签变化后补发被推迟的菜单命令：父组件的 effect 跑在编辑器子树之后，
+  // 此时 RichEditor 的 window keydown 监听器已经挂上。
+  useEffect(() => {
+    menuRouterRef.current?.flush()
+  }, [activeTabId])
 
   useEffect(() => {
     const handleViewportResize = () => {
@@ -245,28 +299,85 @@ export const Engine: FC<EngineProps> = ({
 
   const isEditor = activeTabId === 'editor'
 
+  const registerEditorDurabilityBarrier = useCallback(
+    (drain: () => Promise<void>, hasPending: () => boolean) => {
+      editorDurabilityBarrierRef.current = drain
+      editorDurabilityHasPendingRef.current = hasPending
+      editorDurabilityPendingRef.current = hasPending()
+      return () => {
+        if (editorDurabilityBarrierRef.current === drain) {
+          editorDurabilityBarrierRef.current = null
+          editorDurabilityHasPendingRef.current = null
+          editorDurabilityPendingRef.current = false
+        }
+      }
+    },
+    [],
+  )
+
+  const queueNavigation = useCallback((operation: () => Promise<void>) => {
+    const next = navigationQueueRef.current.then(operation).catch((error) => {
+      console.warn('[InkPi Desktop] Navigation durability barrier failed:', error)
+    })
+    navigationQueueRef.current = next
+    return next
+  }, [])
+
+  const navigateToView = useCallback(
+    (nextTabId: string) => {
+      const leavesEditor = activeTabRef.current === 'editor' && nextTabId !== 'editor'
+      editorDurabilityPendingRef.current = editorDurabilityHasPendingRef.current?.() ?? false
+      if (!leavesEditor || !editorDurabilityPendingRef.current) {
+        activeTabRef.current = nextTabId
+        setActiveTabId(nextTabId)
+        return
+      }
+      void queueNavigation(async () => {
+        await editorDurabilityBarrierRef.current?.()
+        activeTabRef.current = nextTabId
+        setActiveTabId(nextTabId)
+      })
+    },
+    [queueNavigation],
+  )
+
+  navigateToViewRef.current = navigateToView
+
+  const leaveWorkspace = useCallback(() => {
+    const leavesEditor = activeTabRef.current === 'editor'
+    editorDurabilityPendingRef.current = editorDurabilityHasPendingRef.current?.() ?? false
+    if (!leavesEditor || !editorDurabilityPendingRef.current) {
+      void onHome?.()
+      return
+    }
+    void queueNavigation(async () => {
+      await editorDurabilityBarrierRef.current?.()
+      await onHome?.()
+    })
+  }, [onHome, queueNavigation])
+
   const editorProps: RichEditorProps = {
     projectId,
     isTypewriter,
     onTypewriterChange: setIsTypewriter,
     focusMode,
     onStats: setStats,
-    onOpenAssistant,
+    onOpenAssistant: hasAssistant ? openAssistant : undefined,
     isConnected,
     isReconnecting,
     onReconnect,
     onRequestGhost,
     onAiTask,
-    onHome,
+    onHome: leaveWorkspace,
+    onRegisterDurabilityBarrier: registerEditorDurabilityBarrier,
     onToggleFocus: () => setFocusMode((f) => !f),
     isFullscreen,
     onToggleFullscreen: () => setIsFullscreen((f) => !f),
     onToggleRightPanel: () => {
-      if (onOpenAssistant) onOpenAssistant()
       setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
     },
     isRightOpen: isRightPanelOpen,
-    hasAssistant: Boolean(onOpenAssistant),
+    hasAssistant,
   }
 
   // 视图渲染分发：以注册表替代 if 链（OCP，§3.1）
@@ -275,9 +386,9 @@ export const Engine: FC<EngineProps> = ({
       projectId,
       activeTabId,
       tabMeta: activeTabMeta,
-      onOpenView: (v) => setActiveTabId(v),
+      onOpenView: navigateToView,
       onStats: setStats,
-      onOpenAssistant,
+      onOpenAssistant: hasAssistant ? openAssistant : undefined,
       onAiTask,
       onStartFocus: () => {
         setActiveTabId('editor')
@@ -327,9 +438,9 @@ export const Engine: FC<EngineProps> = ({
       {!isFullscreen && !focusMode && leftOpen && (
         <SidebarNav
           activeTabId={activeTabId}
-          onSelectTab={(tabId) => setActiveTabId(tabId)}
+          onSelectTab={navigateToView}
           projectName={projectName || ''}
-          onBackToHome={onHome}
+          onBackToHome={leaveWorkspace}
           onOpenSettings={() => setSettingsOpen(true)}
           onClose={() => setLeftOpen(false)}
         />
@@ -337,17 +448,18 @@ export const Engine: FC<EngineProps> = ({
 
       {/* 侧栏收起后只保留这一个全局展开按钮，避免与编辑器工具栏重复。 */}
       {!isFullscreen && !focusMode && !leftOpen && (
-        <button
-          type="button"
-          data-testid="sidebar-nav-compact-toggle"
-          aria-label="展开导航"
-          title="展开侧栏"
-          data-layout="compact-nav-toggle"
-          onClick={() => setLeftOpen(true)}
-          className="sidebar-nav-compact-toggle items-center justify-center w-7 h-7 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
-        >
-          <PanelLeftOpen className="w-4 h-4" />
-        </button>
+        <Tooltip content="展开侧栏">
+          <button
+            type="button"
+            data-testid="sidebar-nav-compact-toggle"
+            aria-label="展开导航"
+            data-layout="compact-nav-toggle"
+            onClick={() => setLeftOpen(true)}
+            className="sidebar-nav-compact-toggle items-center justify-center w-7 h-7 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
+          >
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
+        </Tooltip>
       )}
 
       {/* 主区 */}
@@ -357,47 +469,54 @@ export const Engine: FC<EngineProps> = ({
           <header className="h-11 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-[var(--ink-border)]">
             <div className="flex items-center gap-1 min-w-0">
               {onHome && (
-                <IconButton onClick={onHome} title="返回作品库">
-                  <Home className="w-4 h-4" />
-                </IconButton>
+                <Tooltip content="返回作品库">
+                  <IconButton onClick={leaveWorkspace}>
+                    <Home className="w-4 h-4" />
+                  </IconButton>
+                </Tooltip>
               )}
               <span className="text-[13px] font-medium truncate">{viewTitle}</span>
             </div>
             <div className="flex items-center gap-0.5">
-              <IconButton onClick={() => setIsFullscreen((f) => !f)} title="全屏 / 退出全屏">
-                {isFullscreen ? (
-                  <Minimize2 className="w-4 h-4" />
-                ) : (
-                  <Maximize2 className="w-4 h-4" />
-                )}
-              </IconButton>
-              {onOpenAssistant ? (
-                <IconButton
-                  onClick={() => {
-                    onOpenAssistant()
-                    setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
-                  }}
-                  title={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}
-                  className={
-                    isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
-                  }
-                >
-                  <Sparkles className="w-4 h-4" />
+              <Tooltip content="全屏 / 退出全屏">
+                <IconButton onClick={() => setIsFullscreen((f) => !f)}>
+                  {isFullscreen ? (
+                    <Minimize2 className="w-4 h-4" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4" />
+                  )}
                 </IconButton>
+              </Tooltip>
+              {hasAssistant ? (
+                <Tooltip content={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}>
+                  <IconButton
+                    onClick={() =>
+                      setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
+                    }
+                    className={
+                      isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
+                    }
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </IconButton>
+                </Tooltip>
               ) : (
-                <IconButton
-                  onClick={() =>
-                    setInspectorState((curr) =>
-                      curr.surface === 'closed' ? { surface: 'assistant' } : { surface: 'closed' },
-                    )
-                  }
-                  title={isRightPanelOpen ? '收起信息栏' : '展开信息栏'}
-                  className={
-                    isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
-                  }
-                >
-                  <PanelRight className="w-4 h-4" />
-                </IconButton>
+                <Tooltip content={isRightPanelOpen ? '收起信息栏' : '展开信息栏'}>
+                  <IconButton
+                    onClick={() =>
+                      setInspectorState((curr) =>
+                        curr.surface === 'closed'
+                          ? { surface: 'assistant' }
+                          : { surface: 'closed' },
+                      )
+                    }
+                    className={
+                      isRightPanelOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''
+                    }
+                  >
+                    <PanelRight className="w-4 h-4" />
+                  </IconButton>
+                </Tooltip>
               )}
             </div>
           </header>
@@ -420,16 +539,17 @@ export const Engine: FC<EngineProps> = ({
                 className="project-engine-right-panel shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto relative group"
               >
                 {/* 拖拽手柄：左侧边线，向左拉加宽，带悬浮光标与最小宽度保护 */}
-                <div
-                  onMouseDown={onRightMouseDown}
-                  onDoubleClick={resetRightWidth}
-                  title="拖拽调整面板宽度（双击恢复默认）"
-                  className={`absolute top-0 left-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
-                    isRightDragging
-                      ? 'bg-[var(--ink-accent)] w-[3px]'
-                      : 'hover:bg-[var(--ink-accent)]/50'
-                  }`}
-                />
+                <Tooltip content="拖拽调整面板宽度（双击恢复默认）">
+                  <div
+                    onMouseDown={onRightMouseDown}
+                    onDoubleClick={resetRightWidth}
+                    className={`absolute top-0 left-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
+                      isRightDragging
+                        ? 'bg-[var(--ink-accent)] w-[3px]'
+                        : 'hover:bg-[var(--ink-accent)]/50'
+                    }`}
+                  />
+                </Tooltip>
                 <div className="h-full">
                   {renderInspector
                     ? renderInspector(inspectorState, () =>
@@ -438,7 +558,7 @@ export const Engine: FC<EngineProps> = ({
                     : rightPanel}
                 </div>
               </aside>
-            ) : !onOpenAssistant ? (
+            ) : !hasAssistant ? (
               <aside
                 data-testid="project-engine-right-panel"
                 className="project-engine-right-panel shrink-0 border-l border-[var(--ink-border)] bg-[var(--ink-bg-sidebar)] overflow-y-auto w-[220px]"
@@ -462,7 +582,9 @@ export const Engine: FC<EngineProps> = ({
                     }
                   />
                   <div className="pt-2 border-t border-[var(--ink-border)] text-[11px] leading-relaxed text-[var(--ink-text-faint)]">
-                    快捷键：⌘S 保存 · ⌘B 折叠目录 · ⌘\ 全屏
+                    快捷键：{shortcutLabel('saveChapter')} 保存 ·{' '}
+                    {shortcutLabel('toggleChapterTree')} 折叠目录 ·{' '}
+                    {shortcutLabel('commandPalette')} 命令面板
                   </div>
                 </div>
               </aside>
@@ -480,7 +602,12 @@ export const Engine: FC<EngineProps> = ({
         </button>
       )}
 
-      <SettingsView open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsView
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        runtimeState={deriveRuntimeReadiness({ isConnected, isReconnecting })}
+        onReconnect={onReconnect}
+      />
       <CommandPaletteModal
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}

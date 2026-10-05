@@ -16,6 +16,8 @@ import {
   RotateCcw,
   CheckCircle2,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 const EMPTY_CELLS: GeoMapGridRecord['occupiedCells'] = []
 
@@ -130,6 +132,7 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             2D 离散拓扑网格画板、行军阻尼时间测算与无飞地拓扑校验，从物理距离根除时间线 Bug。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="在作者标注的地点与路线上做确定性推导" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -212,13 +215,14 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           >
             10 km / 格 (洲陆宏观)
           </button>
-          <button
-            onClick={handleResetMap}
-            className="p-1.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            title="清空重置画板"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
+          <Tooltip content="清空重置画板">
+            <button
+              onClick={handleResetMap}
+              className="p-1.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -227,7 +231,7 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         {/* 左侧 2D 互动网格画板 */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center">
           <div className="mb-3 text-xs text-slate-400 flex items-center gap-3">
-            <span>点击任意单元格应用所选地形笔刷</span>
+            <span>点击任意单元格涂上所选地形（只改画板，保存后才写入）</span>
             <span>
               起点: ({startPos.x},{startPos.y})
             </span>
@@ -254,28 +258,31 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
               }
 
               return (
-                <button
+                <Tooltip
                   key={`${cell.x}-${cell.y}`}
-                  onClick={(e) => handleCellClick(cell.x, cell.y, e.shiftKey)}
-                  className={`w-12 h-12 md:w-14 md:h-14 rounded-lg border flex flex-col items-center justify-center text-[10px] font-bold transition transform active:scale-95 relative ${bgClass} ${
-                    isStart || isTarget ? 'ring-2 ring-blue-600 ring-offset-1' : ''
-                  }`}
-                  title={`坐标(${cell.x},${cell.y}) - 地形: ${cell.terrainType}`}
+                  content={`坐标(${cell.x},${cell.y}) - 地形: ${cell.terrainType}`}
                 >
-                  {isStart ? (
-                    <span className="text-[10px] bg-blue-600 text-white px-1 rounded">起</span>
-                  ) : isTarget ? (
-                    <span className="text-[10px] bg-rose-600 text-white px-1 rounded">终</span>
-                  ) : cell.terrainType === 'city' ? (
-                    <Flag className="w-3.5 h-3.5" />
-                  ) : cell.terrainType === 'mountain' ? (
-                    <Mountain className="w-3.5 h-3.5" />
-                  ) : (
-                    <span>
-                      {cell.x},{cell.y}
-                    </span>
-                  )}
-                </button>
+                  <button
+                    onClick={(e) => handleCellClick(cell.x, cell.y, e.shiftKey)}
+                    className={`w-12 h-12 md:w-14 md:h-14 rounded-lg border flex flex-col items-center justify-center text-[10px] font-bold transition transform active:scale-95 relative ${bgClass} ${
+                      isStart || isTarget ? 'ring-2 ring-blue-600 ring-offset-1' : ''
+                    }`}
+                  >
+                    {isStart ? (
+                      <span className="text-[10px] bg-blue-600 text-white px-1 rounded">起</span>
+                    ) : isTarget ? (
+                      <span className="text-[10px] bg-rose-600 text-white px-1 rounded">终</span>
+                    ) : cell.terrainType === 'city' ? (
+                      <Flag className="w-3.5 h-3.5" />
+                    ) : cell.terrainType === 'mountain' ? (
+                      <Mountain className="w-3.5 h-3.5" />
+                    ) : (
+                      <span>
+                        {cell.x},{cell.y}
+                      </span>
+                    )}
+                  </button>
+                </Tooltip>
               )
             })}
           </div>
@@ -293,16 +300,12 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">移动方式/速度：</span>
-                <select
-                  value={marchSpeed}
-                  onChange={(e) => setMarchSpeed(Number(e.target.value))}
-                  className="p-1 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-                >
+                <Select value={marchSpeed} onValueChange={(v) => setMarchSpeed(Number(v))}>
                   <option value={30}>凡人步卒/辎重 (30 km/天)</option>
                   <option value={70}>精锐轻骑快马 (70 km/天)</option>
                   <option value={300}>筑基修士御剑 (300 km/天)</option>
                   <option value={2000}>元婴挪移遁法 (2000 km/天)</option>
-                </select>
+                </Select>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-1.5">

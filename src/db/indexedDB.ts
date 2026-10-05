@@ -9,7 +9,7 @@
 // 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 24
+export const DB_VERSION = 28
 
 export const STORES = [
   'projects',
@@ -69,6 +69,24 @@ export const STORES = [
   'aiProposals',
 ] as const
 export type StoreName = (typeof STORES)[number]
+
+/**
+ * INV-02 权威事实源：只能由各自的领域通道（ChapterMutationService、
+ * IndexedDbDomainChangeStore 等）写入。工作区备份/导入/清除的通用领域表循环必须与它
+ * 完全不相交，架构守卫（src/architecture.test.ts）与本文件的清单测试共用这一份定义。
+ */
+export const AUTHORITATIVE_STORES = [
+  'projects',
+  'volumes',
+  'chapters',
+  'domainChangeSets',
+  'domainProjectionCursors',
+] as const
+
+export type AuthoritativeStoreName = (typeof AUTHORITATIVE_STORES)[number]
+
+export const isAuthoritativeStore = (name: string): name is AuthoritativeStoreName =>
+  (AUTHORITATIVE_STORES as readonly string[]).includes(name)
 
 class InkStudioDB {
   private dbPromise: Promise<IDBDatabase> | null = null
@@ -255,6 +273,34 @@ class InkStudioDB {
               store.createIndex('projectId', 'projectId', { unique: false })
               store.createIndex('chapterId', 'chapterId', { unique: false })
             }
+            if (name === 'aiArtifacts' && typeof store.createIndex === 'function') {
+              store.createIndex('taskId', 'taskId', { unique: false })
+              store.createIndex('type', 'type', { unique: false })
+              // Artifact rows carry no top-level workspaceId; ownership is the authority, and the
+              // write path copies a metadata workspace into it before persisting.
+              store.createIndex('workspaceId', 'ownership.workspaceId', { unique: false })
+            }
+          }
+        }
+
+        // 已存在的表在版本升级中补建索引：上面的分支只对新库生效，老库里缺失的索引
+        // 永远不会被创建，getByIndex 会静默退化为全表扫描。
+        const missingIndexes: Array<[StoreName, string, string?]> = [
+          ['chapters', 'projectId'],
+          ['formData', 'projectId'],
+          ['domainChangeSets', 'workspaceId'],
+          ['aiArtifacts', 'taskId'],
+          ['aiArtifacts', 'type'],
+          ['aiArtifacts', 'workspaceId', 'ownership.workspaceId'],
+        ]
+        const upgradeTransaction = request.transaction
+        if (upgradeTransaction) {
+          for (const [storeName, indexName, keyPath] of missingIndexes) {
+            if (!db.objectStoreNames.contains(storeName)) continue
+            const store = upgradeTransaction.objectStore(storeName)
+            if (!store.indexNames.contains(indexName)) {
+              store.createIndex(indexName, keyPath ?? indexName, { unique: false })
+            }
           }
         }
       }
@@ -385,6 +431,33 @@ class InkStudioDB {
 }
 
 export const db = new InkStudioDB()
+
+/**
+ * 在一个已经打开的事务里按索引读取，退化语义与 InkStudioDB.getByIndex 完全一致
+ * （索引不存在时做全表属性过滤）。权威 store 的「校验 + 写入」必须共用一个事务，
+ * 所以调用方拿不到 getByIndex，只能用这个：事务内读自己的那部分，而不是整张表。
+ */
+export function readIndexInTransaction<T>(
+  store: IDBObjectStore,
+  indexName: string,
+  queryValue: IDBValidKey,
+  handlers: { onSuccess: (records: T[]) => void; onError: (error: unknown) => void },
+): void {
+  if (!store.indexNames.contains(indexName)) {
+    const request = store.getAll()
+    request.onerror = () => handlers.onError(request.error)
+    request.onsuccess = () => {
+      const list = (request.result as Array<Record<string, unknown>>) || []
+      handlers.onSuccess(
+        list.filter((item) => item && item[indexName] === queryValue) as unknown as T[],
+      )
+    }
+    return
+  }
+  const request = store.index(indexName).getAll(queryValue)
+  request.onerror = () => handlers.onError(request.error)
+  request.onsuccess = () => handlers.onSuccess((request.result as T[]) || [])
+}
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error ?? 'Unknown IndexedDB error'))

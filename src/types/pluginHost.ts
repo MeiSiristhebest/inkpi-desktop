@@ -21,16 +21,60 @@ export interface ChapterMutationResult {
   error?: string
 }
 
-export interface PluginAnalysisResult {
+export type PluginWorkflowStatus = 'running' | 'completed' | 'failed' | 'cancelled'
+
+/** Public, redacted provenance that may be rendered by plugin UIs. */
+export interface PluginWorkflowProvenance {
+  pluginId: string
+  workspaceId: string
   taskId: string
+  timestamp: number
   artifactId?: string
-  result: string | null
-  provenance: {
-    pluginId: string
-    workspaceId: string
-    timestamp: number
-  }
+  routeId?: string
+  runtimeTarget?: string
+  provider?: string
+  model?: string
 }
+
+/**
+ * A plugin invocation is an observable workflow, not a nullable string.
+ * Error details intentionally contain only a user-safe message; credentials,
+ * private traces, and raw Runtime payloads never cross this boundary.
+ */
+export type PluginWorkflowOutcome<T = string> =
+  | {
+      status: 'running'
+      taskId: string
+      pluginId: string
+      provenance: PluginWorkflowProvenance
+      progress?: number
+    }
+  | {
+      status: 'completed'
+      taskId: string
+      pluginId: string
+      provenance: PluginWorkflowProvenance
+      artifactId?: string
+      artifactContent?: T
+      result: T | null
+    }
+  | {
+      status: 'failed'
+      taskId: string
+      pluginId: string
+      provenance: PluginWorkflowProvenance
+      error: string
+    }
+  | {
+      status: 'cancelled'
+      taskId: string
+      pluginId: string
+      provenance: PluginWorkflowProvenance
+      reason?: string
+    }
+
+/** Backwards-compatible name retained for plugin integrations. */
+export type PluginAnalysisResult = PluginWorkflowOutcome<string>
 
 export interface DesktopPluginHostContextValue {
   projectId: string
@@ -66,12 +110,18 @@ export interface DesktopPluginHostContextValue {
       input: unknown,
       metadata?: Record<string, unknown>,
     ) => Promise<PluginAnalysisResult | null>
+    /** Typed workflow seam for callers that need terminal status and provenance. */
+    runPluginOutcome?: (
+      pluginId: string,
+      input: unknown,
+      metadata?: Record<string, unknown>,
+    ) => Promise<PluginWorkflowOutcome<string> | null>
     runPluginTool?: (pluginId: string, input: Record<string, unknown>) => Promise<unknown | null>
     runPluginWorkflow?: (
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,
-    ) => Promise<unknown | null>
+    ) => Promise<PluginWorkflowOutcome<unknown> | null>
     isAvailable: boolean
   }
 }

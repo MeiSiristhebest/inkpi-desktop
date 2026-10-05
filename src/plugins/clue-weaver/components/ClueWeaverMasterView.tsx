@@ -15,6 +15,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Network,
   Plus,
@@ -25,9 +27,12 @@ import {
   CheckCircle2,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select, Tooltip } from '../../../ui/primitives'
 
 export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('clue-weaver')
   const [clues, setClues] = useState<ClueItem[]>([])
   const [cognitions, setCognitions] = useState<ClueCognitionRecord[]>([])
   const [characters, setCharacters] = useState<Array<{ id: string; name: string }>>([])
@@ -113,7 +118,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   // AI 深度推演：检查全书信息差悬念与视点越权
-  const handleAiDeepLeakAudit = () => {
+  const handleAiDeepLeakAudit = async () => {
     if (!scanText.trim()) return
     const analysisInput = {
       clues: clues.map((clue) => ({ title: clue.title, category: clue.category })),
@@ -121,9 +126,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       text: semanticTextFromContent(`clue-weaver-${selectedChapterId}`, scanText).slice(0, 2500),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('clue-weaver', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   useEffect(() => {
@@ -223,6 +226,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             掌控“谁知道什么”，杜绝全知视角泄露，精准量化多角色情报博弈优势差
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按线索条目的收录与回收计数推算" />
         </div>
       </div>
 
@@ -237,17 +241,13 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             placeholder="登记核心情报/线索（如：太上长老其实死于中毒）..."
             className="flex-1 px-3 py-1.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
           />
-          <select
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value as any)}
-            className="px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-          >
+          <Select value={newCategory} onValueChange={(v) => setNewCategory(v as any)} size="sm">
             <option value="conspiracy">阴谋真相</option>
             <option value="murder">凶案疑云</option>
             <option value="identity">真实身份</option>
             <option value="treasure">至宝密藏</option>
             <option value="secret">宗门秘辛</option>
-          </select>
+          </Select>
           <input
             type="text"
             value={newKeywords}
@@ -304,16 +304,17 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                         className="p-2.5 text-center font-medium text-[var(--ink-text)] min-w-[140px]"
                       >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="truncate" title={c.title}>
-                            {c.title}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteClue(c.id)}
-                            className="text-[var(--ink-text-muted)] hover:text-rose-500 p-0.5"
-                            title="删除线索"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          <Tooltip content={c.title}>
+                            <span className="truncate">{c.title}</span>
+                          </Tooltip>
+                          <Tooltip content="删除线索">
+                            <button
+                              onClick={() => handleDeleteClue(c.id)}
+                              className="text-[var(--ink-text-muted)] hover:text-rose-500 p-0.5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </th>
                     ))}
@@ -373,10 +374,10 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               </span>
               <div className="flex items-center gap-2">
                 {chapters.length > 0 && (
-                  <select
+                  <Select
                     value={selectedChapterId}
-                    onChange={(e) => handleSelectChapter(e.target.value)}
-                    className="text-xs px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
+                    onValueChange={(v) => handleSelectChapter(v)}
+                    size="sm"
                   >
                     <option value="all">全书章节采样</option>
                     {chapters.map((c) => (
@@ -384,7 +385,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                         第 {c.order} 章 · {c.title || '无题'}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 <button
                   onClick={handleScanText}
@@ -394,6 +395,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 </button>
                 {hostContext?.aiAssistant?.isAvailable && (
                   <button
+                    disabled={aiTask.isRunning}
                     onClick={handleAiDeepLeakAudit}
                     className="px-2.5 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
                   >
@@ -401,6 +403,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                     AI 信息差深查
                   </button>
                 )}
+                <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
               </div>
             </div>
 
@@ -446,29 +449,21 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               情报不对称优势量化 (IAI)
             </span>
             <div className="flex items-center gap-2 text-xs">
-              <select
-                value={charA}
-                onChange={(e) => setCharA(e.target.value)}
-                className="flex-1 px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              >
+              <Select value={charA} onValueChange={(v) => setCharA(v)} className="flex-1" size="sm">
                 {characters.map((c) => (
                   <option key={c.id} value={c.name}>
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </Select>
               <span className="text-[var(--ink-text-muted)]">VS</span>
-              <select
-                value={charB}
-                onChange={(e) => setCharB(e.target.value)}
-                className="flex-1 px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              >
+              <Select value={charB} onValueChange={(v) => setCharB(v)} className="flex-1" size="sm">
                 {characters.map((c) => (
                   <option key={c.id} value={c.name}>
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </Select>
               <button
                 onClick={handleCalcAdvantage}
                 className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs font-medium hover:border-[var(--ink-accent)]"

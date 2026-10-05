@@ -1,6 +1,7 @@
-import React, { type ReactNode, useId, useEffect, useRef } from 'react'
+import React, { type ReactNode, useId, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { spring, variants, tween } from '../../motion'
+import { useOverlayFocus } from '../useOverlayFocus'
 
 interface ModalProps {
   onClose: () => void
@@ -17,6 +18,13 @@ interface ModalProps {
   title?: string
   /** Use a visible heading supplied by the child content as the dialog label. */
   ariaLabelledBy?: string
+  /**
+   * 面板停靠方式。center = 居中对话框（默认）；top = 顶部停靠（命令面板这类
+   * 「贴顶 + 居中宽度」的浮层）；right = 右侧全高抽屉（编辑面板等需要大表单的场景）。
+   * 三者只有停靠位置与入场动画不同，ARIA / 焦点契约完全一致，
+   * 避免为任何一种浮层再写一份模态实现。
+   */
+  placement?: 'center' | 'top' | 'right'
 }
 
 /**
@@ -39,88 +47,40 @@ export const Modal: React.FC<ModalProps> = ({
   closeOnBackdrop = true,
   title,
   ariaLabelledBy,
+  placement = 'center',
 }) => {
   const id = useId()
+  const dockedRight = placement === 'right'
   const titleId = title ? `modal-title-${id}` : undefined
   const labelledBy = ariaLabelledBy ?? titleId
   const panelRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLElement | null>(null)
+  useOverlayFocus({ containerRef: panelRef, active: true, onClose })
 
-  // Save trigger focus on open, restore on unmount/close
-  useEffect(() => {
-    triggerRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const el = panelRef.current
-    if (!el) return
-    // Focus first focusable descendant
-    const focusable = Array.from(
-      el.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    )
-    const first = focusable[0]
-    if (first) {
-      first.focus()
-    } else {
-      el.setAttribute('tabindex', '-1')
-      el.focus()
-    }
-
-    const trapFocus = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      const focusableInside = Array.from(
-        el.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      )
-      if (focusableInside.length === 0) return
-      const currentIndex = focusableInside.indexOf(document.activeElement as HTMLElement)
-      const nextIndex = e.shiftKey
-        ? currentIndex <= 0
-          ? focusableInside.length - 1
-          : currentIndex - 1
-        : currentIndex === focusableInside.length - 1
-          ? 0
-          : currentIndex + 1
-      e.preventDefault()
-      focusableInside[nextIndex]?.focus()
-    }
-
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', trapFocus)
-    window.addEventListener('keydown', handleEsc)
-    return () => {
-      window.removeEventListener('keydown', trapFocus)
-      window.removeEventListener('keydown', handleEsc)
-      triggerRef.current?.focus()
-      triggerRef.current = null
-    }
-  }, [onClose])
+  const alignment =
+    placement === 'right'
+      ? 'items-stretch justify-end'
+      : placement === 'top'
+        ? 'items-start justify-center'
+        : 'items-center justify-center'
 
   return (
     <AnimatePresence>
       <motion.div
         {...variants.fade}
         transition={tween.fade}
-        className={`fixed inset-0 z-50 flex items-center justify-center ${overlayClassName} p-4 select-none`}
+        className={`fixed inset-0 z-50 flex ${alignment} ${overlayClassName} p-4 select-none`}
         onClick={(e) => {
           if (closeOnBackdrop && e.target === e.currentTarget) onClose()
         }}
       >
         <motion.div
-          {...variants.scaleIn}
+          {...(dockedRight ? variants.slideInFromRight : variants.scaleIn)}
           transition={spring.gentle}
           ref={panelRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby={labelledBy}
-          className={`w-full ${widthClass} ${panelClassName}`}
+          className={`${dockedRight ? '' : 'w-full'} ${widthClass} ${panelClassName}`}
           onClick={(e) => e.stopPropagation()}
         >
           {title && !ariaLabelledBy && (

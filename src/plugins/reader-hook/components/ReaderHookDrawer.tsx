@@ -3,6 +3,8 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { readerHookEngine } from '../engine/ReaderHookEngine'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { Anchor, Copy, Check, Sparkles } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Tooltip } from '../../../ui/primitives'
 
 export const ReaderHookDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const [inputText, setInputText] = useState('')
@@ -33,6 +35,8 @@ export const ReaderHookDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
           {currentText ? `正文随动感知` : '手动分析模式'}
         </span>
       </div>
+
+      <ScoreProvenanceBadge source="rule" detail="对当前正文的断章特征当场计分" />
 
       <div className="space-y-2">
         <label className="text-[11px] text-[var(--ink-text-muted)] block">
@@ -80,17 +84,18 @@ export const ReaderHookDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
             >
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-[10px] text-[var(--ink-text)]">{tpl.name}</span>
-                <button
-                  onClick={() => handleCopy(tpl.id, tpl.example)}
-                  className="p-0.5 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
-                  title="复制例句"
-                >
-                  {copiedId === tpl.id ? (
-                    <Check className="w-3 h-3 text-emerald-500" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                </button>
+                <Tooltip content="复制例句">
+                  <button
+                    onClick={() => handleCopy(tpl.id, tpl.example)}
+                    className="p-0.5 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
+                  >
+                    {copiedId === tpl.id ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
+                </Tooltip>
               </div>
               <p className="text-[10px] text-[var(--ink-text-muted)] italic leading-tight">
                 {tpl.example}

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import type { CodexEntity } from '../types'
 import { ArrowRight, X, Sparkles, User, Shield } from 'lucide-react'
 import { GenericAhoCorasick } from '../../../utils/AhoCorasick'
+import { Tooltip } from '../../../ui/primitives'
 
 interface ChapterReferencesSidebarProps {
   entities: CodexEntity[]
@@ -98,14 +99,15 @@ export const ChapterReferencesSidebar: React.FC<ChapterReferencesSidebarProps> =
             {totalHits}处
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-          title="收起引用侧栏"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        <Tooltip content="收起引用侧栏">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-md text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* 列表内容区 */}

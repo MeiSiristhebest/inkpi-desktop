@@ -21,6 +21,9 @@ export default defineConfig({
     alias: {
       '@inkpi/client': path.resolve(inkpiRoot, 'packages/client/src/index.ts'),
       '@inkpi/protocol': path.resolve(inkpiRoot, 'packages/protocol/src/index.ts'),
+      // 必须排在 @inkpi/* 之后：Vite 的前缀匹配按声明顺序取首个命中，
+      // 若 '@' 先声明会抢走 '@inkpi/client' 的解析。
+      '@': path.resolve(__dirname, 'src'),
     },
   },
   build: {

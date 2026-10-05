@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react'
 import { motion } from 'motion/react'
-import { Activity, Brain, Database, RefreshCw, Square } from 'lucide-react'
+import { Activity, Brain, Database, RefreshCw, ScrollText, Square } from 'lucide-react'
 import { spring, gesture } from '../../motion'
 import type { TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ChapterRecord } from '../../types'
@@ -8,6 +8,8 @@ import { projectContent } from '../../domain/content'
 import { clock } from '../../adapters/clock'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
+import { generateChapterSynopsis } from '../../ai/orchestrator/chapterSynopsisService'
+import type { ChapterMutationService } from '../../services/chapterMutationService'
 import {
   projectContinuityFindingsToEditor,
   type ContinuityDiagnosticMarker,
@@ -27,6 +29,7 @@ import {
 } from '../../ai/orchestrator/distillationCheckpointStore'
 import { idGenerator } from '../../adapters/idGenerator'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
+import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
 import { buildDurableTaskId } from '../../types/durableTaskId'
 import {
   distillationReviewInbox,
@@ -35,6 +38,7 @@ import {
 import { DistillationInboxModal } from './DistillationInboxModal'
 import { indexedDbCodexEntityRepository } from '../../adapters/indexedDbCodexEntityRepository'
 import type { CodexEntity } from '../../plugins/living-codex/types'
+import { Select } from '../../ui/primitives'
 
 interface CreativeWorkflowsPanelProps {
   projectId: string
@@ -62,6 +66,8 @@ interface CreativeWorkflowsPanelProps {
   ) => Promise<DistillationWorkflowResult | null>
   onSteerTask: (taskId: string, input: unknown) => Promise<boolean>
   distillationCheckpointStore?: DistillationCheckpointStore
+  /** Defaults to the authoritative ChapterMutationService path. */
+  chapterMutation?: ChapterMutationService
 }
 
 type WorkflowTab = 'audit' | 'reason' | 'distill'
@@ -76,12 +82,22 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   onDistillationWorkflow,
   onSteerTask,
   distillationCheckpointStore = indexedDbDistillationCheckpointStore,
+  chapterMutation,
 }) => {
   const [tab, setTab] = useState<WorkflowTab>('audit')
-  const [selectedChapterId, setSelectedChapterId] = useState(chapters[0]?.id ?? '')
+  const activeWritingCtx = useOptionalActiveWritingContext()
+  const editorChapterId = activeWritingCtx?.chapter?.id
+  const userPickedChapterRef = useRef(false)
+  const [selectedChapterId, setSelectedChapterId] = useState(
+    editorChapterId ?? chapters[0]?.id ?? '',
+  )
   const [auditFindings, setAuditFindings] = useState<ContinuityFinding[]>([])
   const [auditDocument, setAuditDocument] = useState<SemanticDocument | null>(null)
   const [deepResult, setDeepResult] = useState<DeepReasoningResult | null>(null)
+  const [generatedSynopsis, setGeneratedSynopsis] = useState<{
+    chapterId: string
+    synopsis: string
+  } | null>(null)
   const [distillation, setDistillation] = useState<DistillationWorkflowResult | null>(null)
   const [isInboxOpen, setIsInboxOpen] = useState(false)
   const [pendingReviewItems, setPendingReviewItems] = useState<DistillationItem[]>([])
@@ -115,17 +131,27 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   }, [projectId])
 
   useEffect(() => {
-    if (!chapters.some((chapter) => chapter.id === selectedChapterId)) {
-      setSelectedChapterId(chapters[0]?.id ?? '')
-    }
-  }, [chapters, selectedChapterId])
+    // P1.1: one chapter pointer — the panel audits what the editor is showing until the author
+    // picks another chapter explicitly.
+    const inList = chapters.some((chapter) => chapter.id === selectedChapterId)
+    if (userPickedChapterRef.current && inList) return
+    const fallback =
+      editorChapterId && chapters.some((chapter) => chapter.id === editorChapterId)
+        ? editorChapterId
+        : (chapters[0]?.id ?? '')
+    if (!inList || selectedChapterId !== fallback) setSelectedChapterId(fallback)
+  }, [chapters, selectedChapterId, editorChapterId])
 
   useEffect(() => () => activeController.current?.abort(), [])
 
   const selectedChapter = useMemo(
-    () => chapters.find((chapter) => chapter.id === selectedChapterId) ?? chapters[0],
+    () => chapters.find((chapter) => chapter.id === selectedChapterId),
     [chapters, selectedChapterId],
   )
+  const synopsisOfSelectedChapter =
+    generatedSynopsis && generatedSynopsis.chapterId === selectedChapter?.id
+      ? generatedSynopsis.synopsis
+      : (selectedChapter?.synopsis ?? '')
   const documents = useMemo(
     () => chapters.map((chapter) => documentForChapter(chapter)),
     [chapters],
@@ -284,6 +310,45 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         { signal: controller.signal, onProgress: setProgress },
       )
       if (token === runToken.current) setDeepResult(result)
+    } catch (cause) {
+      if (!controller.signal.aborted && token === runToken.current) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (token === runToken.current) {
+        busyRef.current = false
+        setBusy(false)
+        if (activeController.current === controller) activeController.current = null
+      }
+    }
+  }
+
+  const runSynopsis = async () => {
+    if (!selectedChapter || !connected || busy) return
+    activeController.current?.abort()
+    const controller = new AbortController()
+    activeController.current = controller
+    const token = ++runToken.current
+    busyRef.current = true
+    setBusy(true)
+    setError(null)
+    setProgress(null)
+    const chapterId = selectedChapter.id
+    try {
+      const result = await generateChapterSynopsis(
+        {
+          workspaceId: projectId,
+          chapter: selectedChapter,
+          signal: controller.signal,
+        },
+        {
+          runDistillation: onDistillationWorkflow,
+          ...(chapterMutation ? { mutationService: chapterMutation } : {}),
+        },
+      )
+      if (token !== runToken.current) return
+      if (result.success) setGeneratedSynopsis({ chapterId, synopsis: result.synopsis })
+      else setError(result.error)
     } catch (cause) {
       if (!controller.signal.aborted && token === runToken.current) {
         setError(cause instanceof Error ? cause.message : String(cause))
@@ -458,18 +523,22 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         </TabButton>
       </div>
       {tab !== 'distill' && (
-        <select
+        <Select
           aria-label="选择章节"
           value={selectedChapterId}
-          onChange={(event) => setSelectedChapterId(event.target.value)}
-          className="mb-2 w-full rounded border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-2 py-1 text-xs"
+          onValueChange={(v) => {
+            userPickedChapterRef.current = true
+            setSelectedChapterId(v)
+          }}
+          className="mb-2 w-full"
+          size="sm"
         >
           {chapters.map((chapter) => (
             <option key={chapter.id} value={chapter.id}>
               {chapter.title}
             </option>
           ))}
-        </select>
+        </Select>
       )}
       <motion.button
         type="button"
@@ -496,6 +565,31 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
                 ? '继续项目提炼'
                 : '开始项目提炼'}
       </motion.button>
+      {tab !== 'distill' && selectedChapter && (
+        <div
+          data-testid="chapter-synopsis-panel"
+          className="mt-2 rounded border border-[var(--ink-border)] p-2"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1 text-[11px] text-[var(--ink-text-muted)]">
+              <ScrollText className="h-3 w-3" />
+              章节梗概（跨章节记忆）
+            </span>
+            <button
+              type="button"
+              data-testid="generate-chapter-synopsis"
+              onClick={() => void runSynopsis()}
+              disabled={!connected || busy}
+              className="rounded border border-[var(--ink-border)] px-2 py-0.5 text-[11px] text-[var(--ink-accent)] disabled:opacity-40"
+            >
+              {synopsisOfSelectedChapter ? '重新生成' : '生成本章梗概'}
+            </button>
+          </div>
+          <p data-testid="chapter-synopsis" className="mt-1 text-xs text-[var(--ink-text-faint)]">
+            {synopsisOfSelectedChapter || '暂无梗概：Runtime 近期摘要层会跳过本章。'}
+          </p>
+        </div>
+      )}
       {tab === 'reason' && progress?.status !== 'completed' && progress?.taskId && (
         <div className="mt-2 flex gap-1">
           <input

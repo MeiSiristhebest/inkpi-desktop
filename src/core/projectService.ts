@@ -14,7 +14,14 @@ import {
   buildBlankChapters,
 } from '../domain/seed'
 import { LEGACY_PROJECT_ID } from '../config'
+import {
+  pluginIdsFor,
+  projectTypeFor,
+  type NewProjectForm,
+} from '../domain/project/projectDefaults'
+import { saveEnabledPluginIds } from './pluginRegistry'
 import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
+import { resolveResumeChapterTitle } from '../lib/resumePointer'
 
 // ─────────────────────────────────────────────────────────────
 // 项目应用服务（原 projectManager）
@@ -35,6 +42,8 @@ export interface ProjectStats {
   chapters: number
   volumes: number
   lastUpdated: number
+  /** 上次在编辑器里打开的章节标题；没有指针或章节已删除时不给。 */
+  resumeChapterTitle?: string
 }
 
 export interface WorkspaceStats {
@@ -45,16 +54,19 @@ export interface WorkspaceStats {
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
-/** 单项目聚合统计：字数 / 章节数 / 卷数 / 最近更新时间（全部取自真实数据） */
+/** 单项目聚合统计：字数 / 章节数 / 卷数 / 最近更新时间 / 续写章节（全部取自真实数据） */
 export async function loadProjectStats(projectId: string): Promise<ProjectStats> {
-  const [vols, chs] = await Promise.all([projectRepo.getAllVolumes(), projectRepo.getAllChapters()])
+  const [vols, pc] = await Promise.all([
+    projectRepo.getAllVolumes(),
+    projectRepo.getChaptersByProject(projectId),
+  ])
   const pv = vols.filter((v) => v.projectId === projectId)
-  const pc = chs.filter((c) => c.projectId === projectId)
   return {
     words: pc.reduce((a, c) => a + (c.wordCount || 0), 0),
     chapters: pc.length,
     volumes: pv.length,
     lastUpdated: pc.reduce((m, c) => Math.max(m, c.updatedAt || 0), 0),
+    resumeChapterTitle: await resolveResumeChapterTitle(projectId, pc),
   }
 }
 
@@ -72,6 +84,7 @@ export async function loadStatsForProjects(
       chapters: pc.length,
       volumes: pv.length,
       lastUpdated: pc.reduce((m, c) => Math.max(m, c.updatedAt || 0), 0),
+      resumeChapterTitle: await resolveResumeChapterTitle(p.id, pc),
     }
   }
   return map
@@ -112,36 +125,81 @@ async function migrateLegacyIfNeeded(): Promise<void> {
   await projectRepo.saveProject(migrated)
 }
 
+/**
+ * 同一毫秒内的连续两次写会让领域日志的 change-set id（`project-<id>-<rev>-<occurredAt>`）
+ * 撞上同一个键却带着不同 checksum，被仓储层判为 id collision 而拒绝写入。
+ * updatedAt 就是那个 occurredAt，所以必须在旧值之上严格递增。
+ */
+function nextUpdatedAt(previous: number): number {
+  return Math.max(clock.now(), previous + 1)
+}
+
 export async function loadProjects(): Promise<ProjectRecord[]> {
   await migrateLegacyIfNeeded()
-  return projectRepo.getAllProjects()
+  const all = await projectRepo.getAllProjects()
+  // 「移出作品库」只隐藏，不删除：archivedAt 有值的作品由 loadArchivedProjects 呈现。
+  return all.filter((project) => !project.archivedAt)
+}
+
+/** 已移出作品库、但数据仍完整保留的作品（可恢复）。 */
+export async function loadArchivedProjects(): Promise<ProjectRecord[]> {
+  await migrateLegacyIfNeeded()
+  const all = await projectRepo.getAllProjects()
+  return all
+    .filter((project) => !!project.archivedAt)
+    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0))
+}
+
+/**
+ * 移出作品库（P0.8）：非破坏操作，只隐藏书架条目。
+ * 正文、设定、时间线、插件数据与 AI 产物一律不动，可随时恢复。
+ */
+export async function removeProjectFromLibrary(projectId: string): Promise<void> {
+  const project = await projectRepo.getProject(projectId)
+  if (!project) return
+  const now = nextUpdatedAt(project.updatedAt)
+  await projectRepo.saveProject({ ...project, updatedAt: now, archivedAt: now })
+}
+
+/** 把作品放回书架。 */
+export async function restoreProjectToLibrary(projectId: string): Promise<void> {
+  const project = await projectRepo.getProject(projectId)
+  if (!project) return
+  await projectRepo.saveProject({
+    ...project,
+    updatedAt: nextUpdatedAt(project.updatedAt),
+    archivedAt: null,
+  })
 }
 
 export async function getProject(id: string): Promise<ProjectRecord | undefined> {
   return projectRepo.getProject(id)
 }
 
-export async function createProject(
-  name: string,
-  genre = '未分类',
-  intro = '',
-  templateType: 'blank' | 'demo' = 'blank',
-): Promise<ProjectRecord> {
+/**
+ * 新建一本作品（§P3.6）。表单上的每个选择都在这里落地：
+ * 封面进记录、工具组合进这本书自己的插件开关、从哪里开始决定种子路径。
+ */
+export async function createProject(form: NewProjectForm): Promise<ProjectRecord> {
   const now = clock.now()
   const project: ProjectRecord = {
     id: idGen.generate('proj'),
-    name,
-    genre,
-    intro,
-    templateType,
+    name: form.name,
+    genre: form.genre.trim() || '未分类',
+    intro: form.intro ?? '',
+    projectType: projectTypeFor(form.tooling),
+    templateType: form.starter,
     createdAt: now,
     updatedAt: now,
+    // 没有封面时整个键省略：saveProject 会把记录当领域变更集外发，
+    // 而那条路径拒绝任何显式 undefined 字段。
+    ...(form.cover ? { cover: form.cover } : {}),
   }
 
   await projectRepo.saveProject(project)
 
   // INV-05: 严格分离 Blank 与 Demo。普通新项目默认生成单卷单空章，不得静默注入“林凡/玄剑宗”示范事实
-  const isDemo = templateType === 'demo'
+  const isDemo = form.starter === 'demo'
   const volumes = isDemo
     ? buildSeedVolumes(project.id, idGen, clock)
     : buildBlankVolumes(project.id, idGen, clock)
@@ -151,6 +209,10 @@ export async function createProject(
 
   await Promise.all(volumes.map((v) => projectRepo.saveVolume(v)))
   await Promise.all(chapters.map((c) => projectRepo.saveChapter(c)))
+
+  // 每个项目的工具集合本来就是按 projectId 分域存的，所以「这本书用哪些工具」是项目数据，
+  // 不是全局偏好 —— 写在全局会让下一本书继承上一本的选择。
+  await saveEnabledPluginIds(new Set(pluginIdsFor(form.tooling, form.customPluginIds)), project.id)
 
   return project
 }
@@ -190,17 +252,38 @@ export async function exportProject(projectId: string): Promise<void> {
   )
 }
 
-/** 删除/永久清除工作区数据（级联清除卷章与领域插件数据） */
+/**
+ * 导出纯正文（Manuscript Export，P0.6）：只有分卷与章节文本，
+ * 不含设定/时间线/插件/AI 状态 —— 与「完整备份」是两种产物，不可互换命名。
+ */
+export async function exportManuscript(projectId: string): Promise<void> {
+  const archive = await workspaceLifecycleService.exportManuscript(projectId)
+  if (!archive) return
+
+  const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' })
+  fileDownloader.downloadBlob(
+    `${archive.project.name || 'inkpi-project'}-manuscript-${new Date(clock.now()).toISOString().slice(0, 10)}.json`,
+    blob,
+  )
+}
+
+/**
+ * 永久删除工作区（P0.8）：级联清除卷章、设定、时间线、插件与 AI 数据，不可撤销。
+ * 「移出作品库」请走 removeProjectFromLibrary，它不碰数据。
+ */
 export async function deleteProject(projectId: string): Promise<void> {
   await workspaceLifecycleService.purgeWorkspace(projectId)
 }
 
-/** 一键创建示范项目：自带种子卷章，便于第一次使用即体验完整功能 */
+/** 一键创建示范项目：自带种子卷章，并给足看得懂这些卷章要用哪些工具 */
 export async function createDemoProject(): Promise<ProjectRecord> {
-  return createProject(
-    '示范 · 苍澜纪元',
-    '仙侠修真',
-    '废脉少年于测灵大典觉醒，吞噬进化，从杂役一路镇压神族。',
-    'demo',
-  )
+  return createProject({
+    name: '示范 · 苍澜纪元',
+    genre: '仙侠修真',
+    intro: '废脉少年于测灵大典觉醒，吞噬进化，从杂役一路镇压神族。',
+    cover: '',
+    starter: 'demo',
+    tooling: 'recommended',
+    customPluginIds: [],
+  })
 }

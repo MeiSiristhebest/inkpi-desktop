@@ -23,6 +23,7 @@ import { idGenerator } from '../../adapters/idGenerator'
 import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
 import { getProposalSyncRemote, isProposalSyncError, RemoteProposalStore } from '../../ai/proposals'
 import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
+import { Tooltip } from '../../ui/primitives'
 
 interface SelectionToolbarProps {
   /** TipTap 编辑器实例（任意结构，仅在具备 on/off/view 时生效） */
@@ -445,88 +446,94 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     >
       {state.show && (
         <>
-          <motion.button
-            type="button"
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('bold') ? 'text-[var(--ink-accent)]' : ''}`}
-            title="加粗"
-          >
-            <Bold className="w-3.5 h-3.5" />
-          </motion.button>
-          <motion.button
-            type="button"
-            {...gesture.iconButton}
-            transition={spring.snappy}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('italic') ? 'text-[var(--ink-accent)]' : ''}`}
-            title="斜体"
-          >
-            <Italic className="w-3.5 h-3.5" />
-          </motion.button>
+          <Tooltip content="加粗">
+            <motion.button
+              type="button"
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('bold') ? 'text-[var(--ink-accent)]' : ''}`}
+            >
+              <Bold className="w-3.5 h-3.5" />
+            </motion.button>
+          </Tooltip>
+          <Tooltip content="斜体">
+            <motion.button
+              type="button"
+              {...gesture.iconButton}
+              transition={spring.snappy}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('italic') ? 'text-[var(--ink-accent)]' : ''}`}
+            >
+              <Italic className="w-3.5 h-3.5" />
+            </motion.button>
+          </Tooltip>
           <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
-          <motion.button
-            type="button"
-            {...gesture.button}
-            transition={spring.snappy}
-            onClick={() => void aiPolish()}
-            className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors duration-150 cursor-pointer"
-            title="调用 InkPi AI 划词润色"
-          >
-            <Wand2 className="w-3 h-3" />
-            <span>{rewriteBusy ? '处理中…' : 'AI 润色'}</span>
-          </motion.button>
+          <Tooltip content="调用 InkPi AI 划词润色">
+            <motion.button
+              type="button"
+              {...gesture.button}
+              transition={spring.snappy}
+              onClick={() => void aiPolish()}
+              className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors duration-150 cursor-pointer"
+            >
+              <Wand2 className="w-3 h-3" />
+              <span>{rewriteBusy ? '处理中…' : 'AI 润色'}</span>
+            </motion.button>
+          </Tooltip>
 
           {/* 划词直接触发断章张力分析抽屉 */}
           {host && state.show && (
             <>
               <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
-              <motion.button
-                type="button"
-                {...gesture.button}
-                transition={spring.snappy}
-                onClick={() => {
-                  host.openDrawer('reader-hook')
-                }}
-                className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-amber-500 hover:bg-amber-500/10 transition-colors duration-150 cursor-pointer"
-                title="查看所选文本追读与断章张力"
-              >
-                <Anchor className="w-3 h-3" />
-                <span>断章感知</span>
-              </motion.button>
+              <Tooltip content="查看所选文本追读与断章张力">
+                <motion.button
+                  type="button"
+                  {...gesture.button}
+                  transition={spring.snappy}
+                  onClick={() => {
+                    host.openDrawer('reader-hook')
+                  }}
+                  className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-amber-500 hover:bg-amber-500/10 transition-colors duration-150 cursor-pointer"
+                >
+                  <Anchor className="w-3 h-3" />
+                  <span>断章感知</span>
+                </motion.button>
+              </Tooltip>
             </>
           )}
 
           {/* 划词直接触发文学质量门禁体检 */}
           {host && state.show && (
-            <motion.button
-              type="button"
-              {...gesture.button}
-              transition={spring.snappy}
-              onClick={() => {
-                host.openDrawer('narrative-linter')
-              }}
-              className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-emerald-500 hover:bg-emerald-500/10 transition-colors duration-150 cursor-pointer"
-              title="排查所选文字是否存在副词堆叠、长句或热梗"
-            >
-              <CheckCircle2 className="w-3 h-3" />
-              <span>文字体检</span>
-            </motion.button>
+            <Tooltip content="排查所选文字是否存在副词堆叠、长句或热梗">
+              <motion.button
+                type="button"
+                {...gesture.button}
+                transition={spring.snappy}
+                onClick={() => {
+                  host.openDrawer('narrative-linter')
+                }}
+                className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-emerald-500 hover:bg-emerald-500/10 transition-colors duration-150 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                <span>文字体检</span>
+              </motion.button>
+            </Tooltip>
           )}
 
           {onOpenAssistant && state.show && (
-            <motion.button
-              type="button"
-              {...gesture.button}
-              transition={spring.snappy}
-              onClick={onOpenAssistant}
-              className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors duration-150 cursor-pointer"
-              title="在右侧助手面板中讨论或深度扩写"
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>AI 对话</span>
-            </motion.button>
+            <Tooltip content="在右侧助手面板中讨论或深度扩写">
+              <motion.button
+                type="button"
+                {...gesture.button}
+                transition={spring.snappy}
+                onClick={onOpenAssistant}
+                className="px-2 py-1 rounded-md text-[12px] flex items-center gap-1 text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors duration-150 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>AI 对话</span>
+              </motion.button>
+            </Tooltip>
           )}
         </>
       )}

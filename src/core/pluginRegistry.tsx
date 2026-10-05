@@ -11,6 +11,7 @@ import type { DesktopPlugin, DesktopPluginCategory } from '../types/plugin'
 import { ALL_LAZY_PLUGINS } from './pluginDefinitions'
 import { indexedDbSettingsKVRepository } from '../adapters/indexedDbSettingsKVRepository'
 import { localStorageKeyValueStore } from '../adapters/localStorageKeyValueStore'
+import { projectEnabledPluginIds } from './defaultCommands'
 
 export const STORAGE_KEY_ENABLED_PLUGINS = 'inkpi_enabled_plugins_v2'
 
@@ -74,9 +75,10 @@ export function loadEnabledPluginIds(workspaceId?: string): Set<string> {
   return legacyPluginIds(workspaceId) ?? defaultPluginIds()
 }
 
-export function saveEnabledPluginIds(ids: Set<string>, workspaceId?: string): void {
+export function saveEnabledPluginIds(ids: Set<string>, workspaceId?: string): Promise<void> {
   const next = Array.from(ids)
-  void indexedDbSettingsKVRepository
+  // 返回给调用方等待：新建项目要把工具组合写进这个项目自己的域，写没落地不能说「已创建」。
+  return indexedDbSettingsKVRepository
     .set(canonicalScope(workspaceId), CANONICAL_PLUGIN_KEY, next)
     .then(async () => {
       const legacyKey = getPluginStorageKey(workspaceId)
@@ -148,6 +150,12 @@ export const PluginProvider: FC<{ workspaceId?: string; children: ReactNode }> =
       cancelled = true
     }
   }, [workspaceId])
+
+  // P2.9: 把启用集合投影给命令层，使禁用的插件既不在导航/抽屉里，也不再从命令面板可被呼出。
+  useEffect(() => {
+    projectEnabledPluginIds(enabledIds)
+    return () => projectEnabledPluginIds(null)
+  }, [enabledIds])
 
   const enablePlugin = useCallback(
     (id: string) => {

@@ -19,11 +19,19 @@ import type {
   ChapterMutationPatch,
   ChapterMutationResult,
   DesktopPluginHostContextValue,
+  PluginAnalysisResult,
+  PluginWorkflowOutcome,
+  PluginWorkflowProvenance,
 } from '../types/pluginHost'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createPluginAnalysisTask, taskResultText } from '../ai'
 import { resolvePluginContextProvider } from './pluginDefinitions'
-import type { PluginAnalysisResult } from '../types/pluginHost'
+import {
+  isSensitiveKey,
+  redactPluginRecord,
+  redactPluginValue,
+  redactSensitiveString,
+} from './pluginDataRedaction'
 
 export const DesktopPluginHostContext = createContext<DesktopPluginHostContextValue | null>(null)
 
@@ -41,7 +49,7 @@ export interface DesktopPluginHostProviderProps {
     pluginId: string,
     input: unknown,
     metadata?: Record<string, unknown>,
-  ) => Promise<unknown | null>
+  ) => Promise<PluginWorkflowOutcome<unknown> | null>
   isAiConnected?: boolean
   children: ReactNode
 }
@@ -62,6 +70,14 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
 }) => {
   const [activeDrawerPluginId, setActiveDrawerPluginId] = useState<string | null>(null)
   const [internalRevision, setInternalRevision] = useState<number>(activeChapter?.revision || 1)
+  const [localMutationChapter, setLocalMutationChapter] = useState<ChapterRecord | null>(null)
+  const resolvedActiveChapter =
+    !onChapterUpdate &&
+    activeChapter?.id === localMutationChapter?.id &&
+    (localMutationChapter?.revision ?? 1) > (activeChapter?.revision ?? 1)
+      ? localMutationChapter
+      : activeChapter
+  const resolvedActiveChapterId = resolvedActiveChapter?.id
 
   useEffect(() => {
     if (activeChapter) {
@@ -95,92 +111,161 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
     if (!onAiTask && !onPluginTool && !onPluginWorkflow) return undefined
     const runTask = async (task: AiTask): Promise<TaskResult | null> => {
       if (!onAiTask) return null
-      return onAiTask(task)
+      try {
+        // SAFETY: Redaction preserves the JSON-shaped AiTask fields while replacing sensitive values.
+        const safeTask = redactPluginValue(task) as unknown as AiTask
+        const result = await onAiTask(safeTask)
+        // SAFETY: TaskResult is JSON-shaped; redaction preserves its status and field structure.
+        return result ? (redactPluginValue(result) as unknown as TaskResult) : null
+      } catch (cause) {
+        throw new Error(safePluginError(cause))
+      }
+    }
+    const runPluginAnalysis = async (
+      pluginId: string,
+      input: unknown,
+      metadata?: Record<string, unknown>,
+    ): Promise<PluginAnalysisResult | null> => {
+      let taskId = `plugin-analysis-${pluginId}`
+      const baseProvenance = (): PluginWorkflowProvenance => ({
+        pluginId,
+        workspaceId: projectId,
+        taskId,
+        timestamp: clock.now(),
+      })
+      try {
+        const safeInput = redactPluginValue(input)
+        const safeMetadata = redactPluginRecord(metadata)
+        const contextProvider = resolvePluginContextProvider(pluginId)
+        const context = contextProvider
+          ? await contextProvider({
+              projectId,
+              currentText:
+                typeof safeInput === 'string' ? safeInput : (JSON.stringify(safeInput) ?? ''),
+              activeChapterId: resolvedActiveChapterId,
+            })
+          : undefined
+
+        const task = createPluginAnalysisTask({
+          pluginId,
+          input: safeInput,
+          workspaceId: projectId,
+          documentId: resolvedActiveChapterId,
+          context,
+          metadata: safeMetadata,
+        })
+        taskId = task.id
+
+        const taskResult = await runTask(task)
+        const provenance = publicPluginProvenance(taskResult?.provenance, {
+          ...baseProvenance(),
+          taskId,
+        })
+        const artifactId = taskResult?.artifactIds?.[0] ?? provenance.artifactId
+        const output = taskResultText(taskResult)
+        const safeOutput = output === null ? null : redactSensitiveString(output)
+        if (taskResult?.status === 'cancelled') {
+          return {
+            status: 'cancelled',
+            taskId,
+            pluginId,
+            provenance,
+            reason: safePluginError(taskResult.error?.message ?? 'Plugin task cancelled'),
+          }
+        }
+        if (taskResult?.status === 'failed' || !taskResult || safeOutput === null) {
+          return {
+            status: 'failed',
+            taskId,
+            pluginId,
+            provenance,
+            error: safePluginError(
+              taskResult?.error?.message ?? 'Plugin task returned no text output',
+            ),
+          }
+        }
+        return {
+          status: 'completed',
+          taskId,
+          pluginId,
+          artifactId,
+          artifactContent: safeOutput,
+          result: safeOutput,
+          provenance,
+        }
+      } catch (cause) {
+        return {
+          status: 'failed',
+          taskId,
+          pluginId,
+          provenance: baseProvenance(),
+          error: safePluginError(cause),
+        }
+      }
+    }
+    const runPluginTask = async (
+      pluginId: string,
+      input: unknown,
+      metadata?: Record<string, unknown>,
+    ): Promise<string | null> => {
+      try {
+        const safeInput = redactPluginValue(input)
+        const safeMetadata = redactPluginRecord(metadata)
+        const contextProvider = resolvePluginContextProvider(pluginId)
+        const context = contextProvider
+          ? await contextProvider({
+              projectId,
+              currentText:
+                typeof safeInput === 'string' ? safeInput : (JSON.stringify(safeInput) ?? ''),
+              activeChapterId: resolvedActiveChapterId,
+            })
+          : undefined
+
+        const task = createPluginAnalysisTask({
+          pluginId,
+          input: safeInput,
+          workspaceId: projectId,
+          documentId: resolvedActiveChapterId,
+          context,
+          metadata: safeMetadata,
+        })
+
+        const taskResult = await runTask(task)
+
+        if (taskResult?.status === 'cancelled') {
+          throw new Error(`Plugin task cancelled: ${pluginId}`)
+        }
+        if (taskResult?.status === 'failed') {
+          throw new Error(
+            safePluginError(taskResult.error?.message ?? `Plugin task failed: ${pluginId}`),
+          )
+        }
+        const output = taskResultText(taskResult)
+        if (output === null) {
+          throw new Error(`Plugin task completed without text output: ${pluginId}`)
+        }
+        return redactSensitiveString(output)
+      } catch (cause) {
+        throw new Error(safePluginError(cause))
+      }
     }
     return {
       isAvailable: !!isAiConnected,
       runTask,
-      runPluginAnalysis: async (
-        pluginId: string,
-        input: unknown,
-        metadata?: Record<string, unknown>,
-      ): Promise<PluginAnalysisResult | null> => {
-        try {
-          const contextProvider = resolvePluginContextProvider(pluginId)
-          const context = contextProvider
-            ? await contextProvider({
-                projectId,
-                currentText: typeof input === 'string' ? input : (JSON.stringify(input) ?? ''),
-                activeChapterId: activeChapter?.id,
-              })
-            : undefined
-
-          const task = createPluginAnalysisTask({
-            pluginId,
-            input,
-            workspaceId: projectId,
-            documentId: activeChapter?.id,
-            context,
-            metadata,
-          })
-
-          const taskResult = await runTask(task)
-          const textOutput = taskResultText(taskResult)
-          // Canonical artifactId persisted by CreativeIntelligence / ArtifactRuntime
-          const artifactId =
-            taskResult?.artifactIds?.[0] ?? (taskResult?.provenance as any)?.artifactId
-
-          return {
-            taskId: task.id,
-            artifactId,
-            result: textOutput,
-            provenance: {
-              pluginId,
-              workspaceId: projectId,
-              timestamp: clock.now(),
-            },
-          }
-        } catch {
-          return null
-        }
-      },
-      runPluginTask: async (
-        pluginId: string,
-        input: unknown,
-        metadata?: Record<string, unknown>,
-      ): Promise<string | null> => {
-        try {
-          const contextProvider = resolvePluginContextProvider(pluginId)
-          const context = contextProvider
-            ? await contextProvider({
-                projectId,
-                currentText: typeof input === 'string' ? input : (JSON.stringify(input) ?? ''),
-                activeChapterId: activeChapter?.id,
-              })
-            : undefined
-
-          const task = createPluginAnalysisTask({
-            pluginId,
-            input,
-            workspaceId: projectId,
-            documentId: activeChapter?.id,
-            context,
-            metadata,
-          })
-
-          const taskResult = await runTask(task)
-          return taskResultText(taskResult)
-        } catch {
-          return null
-        }
-      },
+      runPluginAnalysis,
+      runPluginOutcome: runPluginAnalysis,
+      runPluginTask,
       ...(onPluginTool
         ? {
             runPluginTool: async (pluginId: string, input: Record<string, unknown>) => {
               try {
-                return await onPluginTool(pluginId, input)
-              } catch {
-                return null
+                const result = await onPluginTool(
+                  pluginId,
+                  redactPluginValue(input) as Record<string, unknown>,
+                )
+                return redactPluginValue(result)
+              } catch (cause) {
+                throw new Error(safePluginError(cause))
               }
             },
           }
@@ -193,28 +278,50 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
               metadata?: Record<string, unknown>,
             ) => {
               try {
-                return await onPluginWorkflow(pluginId, input, metadata)
-              } catch {
-                return null
+                const result = await onPluginWorkflow(
+                  pluginId,
+                  redactPluginValue(input),
+                  redactPluginRecord(metadata),
+                )
+                if (!result) return result
+                return {
+                  ...result,
+                  ...(result.status === 'completed'
+                    ? {
+                        result: redactPluginValue(result.result),
+                        ...(result.artifactContent !== undefined
+                          ? { artifactContent: redactPluginValue(result.artifactContent) }
+                          : {}),
+                      }
+                    : {}),
+                  ...(result.status === 'failed'
+                    ? { error: redactSensitiveString(result.error) }
+                    : {}),
+                  ...(result.status === 'cancelled' && result.reason
+                    ? { reason: redactSensitiveString(result.reason) }
+                    : {}),
+                }
+              } catch (cause) {
+                throw new Error(safePluginError(cause))
               }
             },
           }
         : {}),
     }
-  }, [onAiTask, onPluginTool, onPluginWorkflow, isAiConnected, projectId, activeChapter?.id])
+  }, [onAiTask, onPluginTool, onPluginWorkflow, isAiConnected, projectId, resolvedActiveChapterId])
 
   const mutateActiveChapter = useCallback(
     async (patch: ChapterMutationPatch): Promise<ChapterMutationResult> => {
-      if (!activeChapter || patch.chapterId !== activeChapter.id) {
+      if (!resolvedActiveChapter || patch.chapterId !== resolvedActiveChapter.id) {
         return {
           success: false,
           conflict: false,
           currentRevision: internalRevision,
-          error: `Active chapter mismatch: expected active chapter id '${activeChapter?.id || 'none'}', got '${patch.chapterId}'`,
+          error: `Active chapter mismatch: expected active chapter id '${resolvedActiveChapter?.id || 'none'}', got '${patch.chapterId}'`,
         }
       }
 
-      let updatedContent = activeChapter.content || ''
+      let updatedContent = resolvedActiveChapter.content || ''
 
       if (patch.type === 'full_replace') {
         updatedContent = patch.content ?? ''
@@ -233,8 +340,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       // Delegate authoritative mutation to ChapterMutationService
       const mutationResult = await chapterMutationService.mutate({
         workspaceId: projectId,
-        chapterId: activeChapter.id,
-        activeChapterFallback: activeChapter,
+        chapterId: resolvedActiveChapter.id,
+        activeChapterFallback: resolvedActiveChapter,
         expectedRevision: patch.expectedRevision ?? internalRevision,
         mutation: { type: 'replace-content', content: updatedContent },
         origin: 'plugin',
@@ -254,11 +361,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       const resultingChapter = mutationResult.chapter
       if (onChapterUpdate) {
         onChapterUpdate(resultingChapter)
-      } else if (activeChapter) {
-        activeChapter.content = resultingChapter.content
-        activeChapter.revision = resultingChapter.revision
-        activeChapter.wordCount = resultingChapter.wordCount
-        activeChapter.updatedAt = resultingChapter.updatedAt
+      } else {
+        setLocalMutationChapter(resultingChapter)
       }
 
       return {
@@ -268,7 +372,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         updatedContent: mutationResult.chapter.content,
       }
     },
-    [activeChapter, internalRevision, onChapterUpdate, projectId],
+    [resolvedActiveChapter, internalRevision, onChapterUpdate, projectId],
   )
 
   const mutateCodexEntity = useCallback(
@@ -288,23 +392,16 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         updatedAt: clock.now(),
       }
       await codexApplicationService.saveEntity(merged, 'author-confirmed')
-
-      scopedBus.emit('CODEX_ENTITY_TOUCHED', {
-        projectId,
-        entityId: merged.id,
-        entityName: merged.name,
-        category: merged.category || 'entity',
-      })
     },
-    [projectId, scopedBus],
+    [],
   )
 
   const contextValue: DesktopPluginHostContextValue = useMemo(
     () => ({
       projectId,
       projectName,
-      activeChapter,
-      activeChapterId: activeChapter?.id || null,
+      activeChapter: resolvedActiveChapter,
+      activeChapterId: resolvedActiveChapter?.id || null,
       revision: internalRevision,
       bookHierarchy: {
         volumes,
@@ -323,7 +420,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
     [
       projectId,
       projectName,
-      activeChapter,
+      resolvedActiveChapter,
       internalRevision,
       volumes,
       chapters,
@@ -344,6 +441,29 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       {children}
     </DesktopPluginHostContext.Provider>
   )
+}
+
+function publicPluginProvenance(
+  value: unknown,
+  base: PluginWorkflowProvenance,
+): PluginWorkflowProvenance {
+  if (!isRecord(value)) return base
+  const next = { ...base }
+  for (const key of ['artifactId', 'routeId', 'runtimeTarget', 'provider', 'model'] as const) {
+    const item = value[key]
+    if (typeof item === 'string' && item.trim() && !isSensitiveKey(key)) next[key] = item
+  }
+  return next
+}
+
+function safePluginError(value: unknown): string {
+  const message = value instanceof Error ? value.message : String(value)
+  if (!message.trim()) return 'Plugin task failed'
+  return redactSensitiveString(message).slice(0, 500)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 export function usePluginHostContext(): DesktopPluginHostContextValue {

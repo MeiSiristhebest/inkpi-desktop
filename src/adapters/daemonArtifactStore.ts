@@ -1,6 +1,7 @@
 import type { Artifact as RuntimeArtifact } from '@inkpi/protocol'
 import type { RpcClient } from '../ports/aiGateway'
 import {
+  artifactWorkspaceId,
   assertAiArtifact,
   assertArtifactOwnership,
   normalizeArtifactForPersistence,
@@ -29,9 +30,7 @@ export class DaemonArtifactStore implements ArtifactStore {
     }
     artifactEvents.publish({
       artifactId: normalized.id,
-      workspaceId:
-        normalized.ownership?.workspaceId ??
-        (normalized.metadata?.workspaceId as string | undefined),
+      workspaceId: artifactWorkspaceId(normalized),
       action: 'updated',
     })
   }
@@ -61,8 +60,7 @@ export class DaemonArtifactStore implements ArtifactStore {
 }
 
 function toRuntimeArtifact(artifact: AiArtifact): RuntimeArtifact {
-  const workspaceId =
-    artifact.ownership?.workspaceId ?? (artifact.metadata?.workspaceId as string | undefined)
+  const workspaceId = artifactWorkspaceId(artifact)
   return {
     id: artifact.id,
     type: artifact.type,

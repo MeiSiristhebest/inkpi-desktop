@@ -1,7 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord } from '../../types'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
+import { ActiveWritingContextProvider } from '../../core/activeWritingContext'
+import type { ContinuityAuditTaskInput } from '../../ai/tasks/taskFactories'
+import type { ContinuityFinding } from '../../ai/results/taskResults'
+import type {
+  DistillationWorkflowOptions,
+  DistillationWorkflowResult,
+  ProjectDistillationInput,
+} from '../../ai/orchestrator/verticalSlices'
 import { CreativeWorkflowsPanel } from './CreativeWorkflowsPanel'
 
 const chapter: ChapterRecord = {
@@ -516,7 +525,7 @@ describe('CreativeWorkflowsPanel', () => {
       id: 'existing-entity-1',
       projectId: 'project-1',
       name: '既有掌门',
-      type: 'character',
+      category: 'character',
       summary: '宗门掌门人',
       tags: [],
       customFields: {},
@@ -568,5 +577,215 @@ describe('CreativeWorkflowsPanel', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('distillation-merge-picker')).not.toBeInTheDocument()
     })
+  })
+
+  it('generates a chapter synopsis and writes it through the authoritative mutation path', async () => {
+    const synopsis = '雨停后她离城，剑匣留在原地。'
+    const distill = vi.fn(
+      async (
+        _input: ProjectDistillationInput,
+        _options?: DistillationWorkflowOptions,
+      ): Promise<DistillationWorkflowResult> => ({
+        facts: { summary: synopsis, entities: [], events: [], promises: [] },
+        complete: true,
+        failedChunks: [],
+        completedChunks: 1,
+        totalChunks: 1,
+        checkpoint: {
+          nextChunk: 1,
+          completedChunkIndexes: [0],
+          failedChunkIndexes: [],
+          failedChunks: [],
+          facts: { summary: synopsis, entities: [], events: [], promises: [] },
+        },
+        chunkTaskIds: ['chapter-1:chunk:0'],
+      }),
+    )
+    const mutate = vi.fn(async () => ({
+      success: true as const,
+      conflict: false as const,
+      previousRevision: 3,
+      newRevision: 4,
+      chapter: { ...chapter, synopsis, revision: 4 },
+      wordCountDelta: 0,
+    }))
+
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={distill}
+        onSteerTask={vi.fn()}
+        chapterMutation={{ mutate }}
+      />,
+    )
+
+    expect(screen.getByTestId('chapter-synopsis')).toHaveTextContent('暂无梗概')
+
+    fireEvent.click(screen.getByRole('button', { name: '生成本章梗概' }))
+
+    await waitFor(() => expect(screen.getByTestId('chapter-synopsis')).toHaveTextContent(synopsis))
+    expect(screen.getByRole('button', { name: '重新生成' })).toBeInTheDocument()
+    expect(distill).toHaveBeenCalledOnce()
+    const [input, options] = distill.mock.calls[0]
+    expect(input.target).toBe('document')
+    expect(input.fields).toEqual(['summary'])
+    expect(input.documents[0].text).toBe('雨停后，她没有回头。')
+    expect(options.chunkSize).toBe(1)
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'project-1',
+        chapterId: 'chapter-1',
+        expectedRevision: 3,
+        origin: 'ai-rewrite',
+        mutation: { type: 'update-synopsis', synopsis },
+      }),
+    )
+  })
+
+  it('reports a synopsis failure instead of showing a stale summary', async () => {
+    const mutate = vi.fn(async () => ({
+      success: false as const,
+      conflict: true as const,
+      currentRevision: 5,
+      error: 'CAS Conflict: expected revision 3, but current revision is 5',
+    }))
+
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[{ ...chapter, synopsis: '旧梗概' }]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn(async () => ({
+          facts: { summary: '新梗概', entities: [], events: [], promises: [] },
+          complete: true,
+          failedChunks: [],
+          completedChunks: 1,
+          totalChunks: 1,
+          checkpoint: {
+            nextChunk: 1,
+            completedChunkIndexes: [0],
+            failedChunkIndexes: [],
+            failedChunks: [],
+            facts: { summary: '新梗概', entities: [], events: [], promises: [] },
+          },
+          chunkTaskIds: [],
+        }))}
+        onSteerTask={vi.fn()}
+        chapterMutation={{ mutate }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '重新生成' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('CAS Conflict'))
+    expect(screen.getByTestId('chapter-synopsis')).toHaveTextContent('旧梗概')
+  })
+})
+
+describe('CreativeWorkflowsPanel 的活动章节指针', () => {
+  const first: ChapterRecord = {
+    id: 'chapter-1',
+    projectId: 'project-1',
+    volumeId: 'volume-1',
+    title: '第一章',
+    order: 1,
+    content: '<p>雨停后，她没有回头。</p>',
+    wordCount: 10,
+    revision: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  }
+  const second: ChapterRecord = { ...first, id: 'chapter-2', title: '第二章', order: 2 }
+  const third: ChapterRecord = {
+    ...first,
+    id: 'chapter-3',
+    title: '第三章',
+    order: 3,
+    content: '<p>剑折了，她依然没有回头。</p>',
+  }
+  const hierarchy = [first, second, third]
+
+  function makeAudit() {
+    return vi.fn(async (_input: ContinuityAuditTaskInput): Promise<ContinuityFinding[]> => [])
+  }
+
+  function Harness({
+    writingChapter,
+    audit,
+  }: {
+    writingChapter: ChapterRecord
+    audit: (input: ContinuityAuditTaskInput) => Promise<ContinuityFinding[] | null>
+  }) {
+    return (
+      <ActiveWritingContextProvider workspaceId="project-1" initialChapter={writingChapter}>
+        <CreativeWorkflowsPanel
+          projectId="project-1"
+          chapters={hierarchy}
+          connected
+          onContinuityAudit={audit}
+          onDeepReasoning={vi.fn()}
+          onDistillationWorkflow={vi.fn()}
+          onSteerTask={vi.fn()}
+        />
+      </ActiveWritingContextProvider>
+    )
+  }
+
+  it('把「审计当前章节」指向编辑器里正在写的章节，而不是层级里的第一章', async () => {
+    const audit = makeAudit()
+    render(<Harness writingChapter={third} audit={audit} />)
+
+    expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+      'data-value',
+      'chapter-3',
+    )
+    fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
+
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    expect(audit.mock.calls[0][0].document.text).toContain('剑折了')
+  })
+
+  it('跟随编辑器翻页，直到作者自己改过章节下拉框', async () => {
+    const audit = makeAudit()
+    const { rerender } = render(<Harness writingChapter={first} audit={audit} />)
+    expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+      'data-value',
+      'chapter-1',
+    )
+
+    rerender(<Harness writingChapter={second} audit={audit} />)
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+        'data-value',
+        'chapter-2',
+      ),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    expect(audit.mock.calls[0][0].document.text).toContain('她没有回头')
+  })
+
+  it('作者手动选定的章节不会被编辑器的翻页抢回去', async () => {
+    const audit = makeAudit()
+    const { rerender } = render(<Harness writingChapter={first} audit={audit} />)
+
+    await userEvent.click(screen.getByRole('combobox', { name: '选择章节' }))
+    await userEvent.click(await screen.findByRole('option', { name: '第三章' }))
+    rerender(<Harness writingChapter={second} audit={audit} />)
+
+    expect(screen.getByRole('combobox', { name: '选择章节' })).toHaveAttribute(
+      'data-value',
+      'chapter-3',
+    )
+    fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    expect(audit.mock.calls[0][0].document.text).toContain('剑折了')
   })
 })

@@ -7,11 +7,15 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Save, CheckCircle2, Layers, BookOpen, Target, Bot } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('volume-master')
   const [volumes, setVolumes] = useState<Array<{ id: string; title: string; order: number }>>([])
   const [chapters, setChapters] = useState<Array<{ volumeId?: string; wordCount?: number }>>([])
   const [arcs, setArcs] = useState<VolumeArcRecord[]>([])
@@ -90,7 +94,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [projectId, reloadVersion, syncFormWithArc])
 
   // 真实 AI 辅助分卷弧线与卷末大悬念推演
-  const handleAiVolumeArcRecommend = () => {
+  const handleAiVolumeArcRecommend = async () => {
     const curVol = volumes.find((v) => v.id === selectedVolId)
     const volChapters = chapters.filter((c) => c.volumeId === selectedVolId)
     const analysisInput = {
@@ -107,9 +111,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       climax: semanticTextFromContent('volume-master-climax', editClimax),
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('volume-master', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSelectVolume = (volId: string) => {
@@ -169,19 +171,21 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             掌控长篇分卷宏观戏剧弧，分配大高潮爆发点，杜绝中后期战力通胀与水文崩盘
           </p>
+          <ScoreProvenanceBadge source="rule" detail="对各章字数做线性拟合后打分" />
         </div>
 
         <div className="flex items-center gap-2">
           {hostContext?.aiAssistant?.isAvailable && (
             <button
               onClick={handleAiVolumeArcRecommend}
-              disabled={!selectedVolId}
+              disabled={!selectedVolId || aiTask.isRunning}
               className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
             >
               <Bot className="w-3.5 h-3.5 text-purple-400" />
               <span>AI 分卷弧线与跨卷悬念推演</span>
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSaveArc}
             disabled={!selectedVolId}

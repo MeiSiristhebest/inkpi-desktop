@@ -17,6 +17,7 @@ import {
   Hand,
   Sparkles,
 } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 const SENSE_ICONS: Record<SenseType, typeof Eye> = {
   sight: Eye,
@@ -95,13 +96,14 @@ export const DescribePaletteDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
             <Palette className="w-3.5 h-3.5 text-rose-500" />
             <span>修辞微观调色盘</span>
           </div>
-          <button
-            onClick={handleRandomDice}
-            className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)] hover:text-amber-500"
-            title="灵感摇号"
-          >
-            <Dices className="w-3.5 h-3.5" />
-          </button>
+          <Tooltip content="灵感摇号">
+            <button
+              onClick={handleRandomDice}
+              className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)] hover:text-amber-500"
+            >
+              <Dices className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* 随动感官缺失透视 */}
@@ -157,23 +159,24 @@ export const DescribePaletteDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
                   <span>·</span>
                   <span>{snip.category}</span>
                 </span>
-                <button
-                  onClick={() => handleCopy(snip)}
-                  className="hover:text-[var(--ink-accent)] flex items-center gap-1 text-[var(--ink-text-muted)]"
-                  title="复制此句"
-                >
-                  {isCopied ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-500" />
-                      <span className="text-emerald-500">已复制</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>复制</span>
-                    </>
-                  )}
-                </button>
+                <Tooltip content="复制此句">
+                  <button
+                    onClick={() => handleCopy(snip)}
+                    className="hover:text-[var(--ink-accent)] flex items-center gap-1 text-[var(--ink-text-muted)]"
+                  >
+                    {isCopied ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-500" />
+                        <span className="text-emerald-500">已复制</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>复制</span>
+                      </>
+                    )}
+                  </button>
+                </Tooltip>
               </div>
 
               <p className="text-[11px] text-[var(--ink-text)] leading-relaxed font-normal">

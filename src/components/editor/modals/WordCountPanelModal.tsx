@@ -3,11 +3,16 @@ import { motion } from 'motion/react'
 import { X, Feather, SlidersHorizontal } from 'lucide-react'
 import { spring, gesture } from '../../../motion'
 import { Modal } from '../../../ui/molecules/Modal'
-import type { WritingSessionStats } from '../hooks/useWritingSessionStats'
+import {
+  SESSION_WORDS_LABEL,
+  SESSION_WORDS_RULE,
+  type WritingSessionStats,
+} from '../hooks/useWritingSessionStats'
 import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource } from '../../../adapters/randomSource'
 import { MascotFigure } from '../organisms/MascotFigure'
 import { BookCover } from '../../../ui/atoms/BookCover'
+import { Tooltip } from '../../../ui/primitives'
 
 export type HeaderType = 'mascot' | 'cover' | 'plan' | 'none'
 export type LayoutType = 'layout1' | 'layout2' | 'layout3'
@@ -131,14 +136,15 @@ export const WordCountPanelModal: React.FC<
           >
             字数面板
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
-            title="关闭"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <Tooltip content="关闭">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* 左右分栏内容区 */}
@@ -228,7 +234,9 @@ export const WordCountPanelModal: React.FC<
                     onChange={(e) => updateConfig({ showSessionWords: e.target.checked })}
                     className="w-4 h-4 rounded text-[var(--ink-accent)] border-[var(--ink-border)] accent-[var(--ink-accent)] cursor-pointer"
                   />
-                  <span>本次码字</span>
+                  <Tooltip content={SESSION_WORDS_RULE}>
+                    <span>{SESSION_WORDS_LABEL}</span>
+                  </Tooltip>
                 </label>
 
                 <label className="flex items-center gap-2 text-[13px] text-[var(--ink-text)] cursor-pointer select-none">
@@ -338,12 +346,14 @@ export const WordCountPanelModal: React.FC<
                     <div className="flex-1 flex flex-col gap-2.5 text-[12px]">
                       {showSessionWords && (
                         <div className="flex items-center justify-between">
-                          <span className="text-[var(--ink-text-muted)] flex items-center gap-1">
-                            本次码字
-                            <span className="inline-flex items-center justify-center w-3 h-3 text-[8.5px] rounded-full border border-[var(--ink-border-strong)] text-[var(--ink-text-faint)]">
-                              i
+                          <Tooltip content={SESSION_WORDS_RULE}>
+                            <span className="text-[var(--ink-text-muted)] flex items-center gap-1">
+                              {SESSION_WORDS_LABEL}
+                              <span className="inline-flex items-center justify-center w-3 h-3 text-[8.5px] rounded-full border border-[var(--ink-border-strong)] text-[var(--ink-text-faint)]">
+                                i
+                              </span>
                             </span>
-                          </span>
+                          </Tooltip>
                           <span className="font-semibold text-[var(--ink-text)] tabular-nums text-[13px]">
                             {stats.sessionWords.toLocaleString()}
                           </span>
@@ -413,7 +423,11 @@ export const WordCountPanelModal: React.FC<
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                          <span className="text-[9px] text-[var(--ink-text-faint)]">今日计划</span>
+                          <Tooltip content={SESSION_WORDS_RULE}>
+                            <span className="text-[9px] text-[var(--ink-text-faint)]">
+                              今日计划
+                            </span>
+                          </Tooltip>
                           <span className="text-[11px] font-bold text-[var(--ink-accent)] tabular-nums">
                             {stats.sessionWords}/{todayTarget}
                           </span>
@@ -459,9 +473,11 @@ export const WordCountPanelModal: React.FC<
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                        <span className="text-[10px] text-[var(--ink-text-faint)] font-medium">
-                          今日计划
-                        </span>
+                        <Tooltip content={SESSION_WORDS_RULE}>
+                          <span className="text-[10px] text-[var(--ink-text-faint)] font-medium">
+                            今日计划
+                          </span>
+                        </Tooltip>
                         <span className="text-xs font-bold text-[var(--ink-accent)] tabular-nums">
                           {stats.sessionWords}
                           <span className="text-[var(--ink-text-muted)] text-[10px] font-normal">
@@ -487,12 +503,14 @@ export const WordCountPanelModal: React.FC<
                     <div className="w-full grid grid-cols-2 gap-y-3 gap-x-2 py-2.5 border-t border-[var(--ink-border)]">
                       {showSessionWords && (
                         <div className="flex flex-col items-center">
-                          <span className="text-[10.5px] text-[var(--ink-text-muted)] flex items-center gap-1 mb-0.5">
-                            本次码字
-                            <span className="inline-flex items-center justify-center w-2.5 h-2.5 text-[8px] rounded-full border border-[var(--ink-border-strong)] text-[var(--ink-text-faint)]">
-                              i
+                          <Tooltip content={SESSION_WORDS_RULE}>
+                            <span className="text-[10.5px] text-[var(--ink-text-muted)] flex items-center gap-1 mb-0.5">
+                              {SESSION_WORDS_LABEL}
+                              <span className="inline-flex items-center justify-center w-2.5 h-2.5 text-[8px] rounded-full border border-[var(--ink-border-strong)] text-[var(--ink-text-faint)]">
+                                i
+                              </span>
                             </span>
-                          </span>
+                          </Tooltip>
                           <span className="text-lg font-bold text-[var(--ink-text)] tabular-nums tracking-tight">
                             {stats.sessionWords.toLocaleString()}
                           </span>
@@ -536,7 +554,11 @@ export const WordCountPanelModal: React.FC<
                     <div className="w-full flex flex-col gap-1.5 py-2 border-t border-[var(--ink-border)] text-[12px]">
                       {showSessionWords && (
                         <div className="flex items-center justify-between px-2">
-                          <span className="text-[var(--ink-text-muted)]">本次码字</span>
+                          <Tooltip content={SESSION_WORDS_RULE}>
+                            <span className="text-[var(--ink-text-muted)]">
+                              {SESSION_WORDS_LABEL}
+                            </span>
+                          </Tooltip>
                           <span className="font-semibold tabular-nums text-[var(--ink-text)]">
                             {stats.sessionWords}
                           </span>

@@ -6,6 +6,7 @@ import { indexedDbSceneBeatRepository } from '../../../adapters/indexedDbSceneBe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { ListChecks, CheckCircle2, Circle } from 'lucide-react'
+import { Tooltip } from '../../../ui/primitives'
 
 export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
@@ -136,17 +137,18 @@ export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curr
               >
                 <div className="flex items-center justify-between gap-1 mb-1">
                   <div className="flex items-center gap-1.5 truncate">
-                    <button
-                      onClick={() => handleToggleComplete(beat.id)}
-                      className="text-[var(--ink-text-muted)] hover:text-emerald-500"
-                      title={beat.isCompleted ? '标记未完成' : '标记已达成'}
-                    >
-                      {beat.isCompleted ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Circle className="w-4 h-4 shrink-0" />
-                      )}
-                    </button>
+                    <Tooltip content={beat.isCompleted ? '标记未完成' : '标记已达成'}>
+                      <button
+                        onClick={() => handleToggleComplete(beat.id)}
+                        className="text-[var(--ink-text-muted)] hover:text-emerald-500"
+                      >
+                        {beat.isCompleted ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        ) : (
+                          <Circle className="w-4 h-4 shrink-0" />
+                        )}
+                      </button>
+                    </Tooltip>
                     <span
                       className={`font-semibold truncate text-xs ${
                         beat.isCompleted

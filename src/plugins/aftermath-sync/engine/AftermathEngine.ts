@@ -1,6 +1,16 @@
 import type { EntityCandidate, AftermathAnalysisResult } from '../types'
 
 /**
+ * 缔结关系的线索，以及每条线索自己说出的那种关系。
+ * 线索必须带上关系类型：把「拜其为师」统一报成「盟友/至交」是替原文编造羁绊。
+ */
+const BOND_CUES = [
+  { cue: '结为异姓兄弟', relation: '结义兄弟' },
+  { cue: '拜其为师', relation: '师徒' },
+  { cue: '义结金兰', relation: '结义' },
+] as const
+
+/**
  * AftermathEngine (章后桥段设定回写器引擎)
  *
  * 理论基础：实体状态转移与所有权有向图 (Ownership Directed Graph)
@@ -15,7 +25,8 @@ export class AftermathEngine {
   public static analyzeChapter(
     chapterText: string,
     chapterId: string,
-    chapterOrder: number,
+    // 允许 undefined：从面板手工扫描时并没有真实的章序，写死一个数字就是在伪造归属。
+    chapterOrder: number | undefined,
     knownEntities: EntityCandidate[],
   ): AftermathAnalysisResult {
     const lines = chapterText
@@ -97,11 +108,10 @@ export class AftermathEngine {
             const c1 = characters[i]
             const c2 = characters[j]
             if (line.includes(c1.name) && line.includes(c2.name)) {
-              if (
-                line.includes('结为异姓兄弟') ||
-                line.includes('拜其为师') ||
-                line.includes('义结金兰')
-              ) {
+              // 只报原文里出现的那条线索所缔结的关系。「拜其为师」被统一写成
+              // 「盟友/至交」是给正文编造羁绊；谁拜谁为师这里也判不出来，所以成对陈述。
+              const bond = BOND_CUES.find((entry) => line.includes(entry.cue))
+              if (bond) {
                 relations++
                 patches.push({
                   chapterId,
@@ -110,8 +120,8 @@ export class AftermathEngine {
                   entityName: c1.name,
                   changeType: 'new_relation',
                   propertyName: '人际羁绊',
-                  beforeValue: '相识',
-                  afterValue: `与 ${c2.name} 结为盟友/至交`,
+                  beforeValue: '未记录',
+                  afterValue: `与 ${c2.name}：原文出现「${bond.cue}」，据此记为${bond.relation}`,
                   evidenceSnippet: line.slice(0, 45),
                 })
               }

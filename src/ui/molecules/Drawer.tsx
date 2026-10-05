@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { X } from 'lucide-react'
 import { spring, variants, gesture } from '../../motion'
+import { Tooltip } from '../primitives'
 
 interface DrawerProps {
   /** 锚定宽度类，默认 w-[380px] */
@@ -38,14 +39,15 @@ export const DrawerHeader = ({ icon, title, onClose, closeTitle }: DrawerHeaderP
       {icon}
       <span>{title}</span>
     </div>
-    <motion.button
-      onClick={onClose}
-      title={closeTitle}
-      {...gesture.iconButton}
-      transition={spring.snappy}
-      className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
-    >
-      <X className="w-4 h-4" />
-    </motion.button>
+    <Tooltip content={closeTitle}>
+      <motion.button
+        onClick={onClose}
+        {...gesture.iconButton}
+        transition={spring.snappy}
+        className="p-1.5 rounded-md text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors cursor-pointer"
+      >
+        <X className="w-4 h-4" />
+      </motion.button>
+    </Tooltip>
   </div>
 )

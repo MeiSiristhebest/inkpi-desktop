@@ -8,6 +8,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
   Users,
   AlertTriangle,
@@ -17,9 +19,12 @@ import {
   RefreshCw,
   Bot,
 } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { Select } from '../../../ui/primitives'
 
 export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
+  const aiTask = usePluginAiTask('reader-simulator')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -61,7 +66,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
   }, [currentChapter])
 
   // 真实 AI 读者多视点本章追读段评推演
-  const handleAiReaderSimulate = () => {
+  const handleAiReaderSimulate = async () => {
     if (!currentChapter) return
     const chapterText = semanticTextFromContent(
       currentChapter.id,
@@ -80,9 +85,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       ],
     }
 
-    if (hostContext?.aiAssistant?.runPluginTask) {
-      void hostContext.aiAssistant.runPluginTask('reader-simulator', analysisInput)
-    }
+    await aiTask.run(analysisInput)
   }
 
   const handleSaveSimulation = async () => {
@@ -117,6 +120,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             四大心智原形预演本章发布后的真实段评、防踩毒防暴毙、逻辑抓虫与防杠审查。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按读者弃书词表匹配，不含真实读者行为数据" />
         </div>
         <div className="flex items-center gap-2">
           {savedSuccessMsg && (
@@ -126,6 +130,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
+              disabled={aiTask.isRunning}
               onClick={handleAiReaderSimulate}
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
@@ -133,6 +138,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
               AI 读者多视点段评模拟
             </button>
           )}
+          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSaveSimulation}
             className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"
@@ -162,17 +168,18 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
                 选择待预演章节：
               </label>
-              <select
+              <Select
                 value={selectedChapterId}
-                onChange={(e) => setSelectedChapterId(e.target.value)}
-                className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                onValueChange={(v) => setSelectedChapterId(v)}
+                className="w-full"
+                size="sm"
               >
                 {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
                     第 {c.order} 章：{c.title}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             {simulation && (

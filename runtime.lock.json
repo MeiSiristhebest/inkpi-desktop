@@ -1,7 +1,7 @@
 {
   "runtimeRepository": "MeiSiristhebest/inkpi",
-  "pinnedCommit": "6a28619eb21a585b7b37459149dd387065f0670e",
+  "pinnedCommit": "f730b7ee6e2ded771559beba4eb7b6f780d7348f",
   "protocolVersion": "inkpi.runtime.v1",
-  "contractVersion": 1,
-  "schemaHash": "407ceb54"
+  "contractVersion": 2,
+  "schemaHash": "ada927d2"
 }

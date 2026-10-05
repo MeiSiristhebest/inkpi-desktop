@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/react'
 import type { ChapterRecord } from '../../types'
 import { chapterMutationService } from '../../services/defaultChapterMutationService'
 import type { ChapterMutationOrigin } from '../../services/chapterMutationService'
+import { draftJournal } from '../../services/draftJournal'
 
 export interface ApplyMutationOptions {
   workspaceId: string
@@ -31,10 +32,31 @@ export async function applyContentMutation(
   newContent: string,
   options: ApplyMutationOptions,
 ): Promise<ChapterRecord | null> {
+  // The journal is cleared after every durable save, so anything still recorded
+  // here is typing that never reached the database. Replacing content without
+  // draining it first would discard that manuscript text (INV-01), and skipping
+  // the drain when it conflicts would overwrite it with the new content.
+  const pending = draftJournal.get(options.workspaceId, options.chapterId)
+  let expectedRevision = options.expectedRevision
+  if (pending && pending.editorContent !== newContent) {
+    const drained = await chapterMutationService.mutate({
+      workspaceId: options.workspaceId,
+      chapterId: options.chapterId,
+      expectedRevision: pending.baseRevision,
+      mutation: { type: 'replace-content', content: pending.editorContent },
+      origin: 'user-typing',
+    })
+    if (!drained.success) {
+      console.warn('[applyContentMutation] Pending draft recovery rejected:', drained.error)
+      return null
+    }
+    expectedRevision = drained.newRevision
+  }
+
   const result = await chapterMutationService.mutate({
     workspaceId: options.workspaceId,
     chapterId: options.chapterId,
-    expectedRevision: options.expectedRevision,
+    expectedRevision,
     mutation: { type: 'replace-content', content: newContent },
     origin: options.origin,
     countAsAuthorWriting: options.countAsAuthorWriting,

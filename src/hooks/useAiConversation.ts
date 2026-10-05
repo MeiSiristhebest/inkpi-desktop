@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { connectToDaemon } from '../core/daemonConnection'
 import { inkpiDaemonGateway } from '../adapters/inkpiDaemonGateway'
 import type { AiAssistant } from '../ports/aiGateway'
@@ -18,6 +18,11 @@ import {
   createDistillationTask,
 } from '../ai/tasks/taskFactories'
 import { taskResultText } from '../ai/tasks/pluginTasks'
+import {
+  ASSISTANT_HISTORY_TURN_LIMIT,
+  projectAssistantRequestScope,
+  type AssistantRequestScope,
+} from '../ai/context/requestScope'
 import { idGenerator } from '../adapters/idGenerator'
 import type { DomainSyncConflict, DomainSyncResult } from '../domain/sync/domainSyncService'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../ai/tasks/taskFactories'
@@ -38,6 +43,7 @@ import { indexedDbProjectRepository } from '../adapters/indexedDbProjectReposito
 import { projectContent } from '../domain/content'
 import type { ChapterRecord } from '../types'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
+import type { PluginWorkflowOutcome } from '../types/pluginHost'
 import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
 
 /**
@@ -123,8 +129,6 @@ export type DomainSyncState = 'synced' | 'syncing' | 'offline' | 'pending' | 'co
 export interface AiConversation {
   isConnected: boolean
   isReconnecting: boolean
-  aiPanelOpen: boolean
-  setAiPanelOpen: (open: boolean) => void
   aiMessages: AiMessage[]
   aiInput: string
   setAiInput: (value: string) => void
@@ -157,16 +161,16 @@ export interface AiConversation {
     pluginId: string,
     input: unknown,
     metadata?: Record<string, unknown>,
-  ) => Promise<unknown | null>
+  ) => Promise<PluginWorkflowOutcome<unknown> | null>
   syncDomain: (workspaceId: string) => Promise<DomainSyncResult | null>
   listArtifacts: (workspaceId: string) => Promise<AiArtifact[]>
   domainSyncState: DomainSyncState
   syncConflict?: DomainSyncConflict
+  /** 发送前披露：本次请求会随指令带出的本地内容（P3.15） */
+  requestScope: AssistantRequestScope
 }
 
 export interface UseAiConversationOptions {
-  /** 初始右侧 AI 面板是否开启（默认关闭，保持专注写作） */
-  initialPanelOpen?: boolean
   /** 任务恢复存储可注入，便于验证重启/失败/取消路径。 */
   taskRecoveryStore?: TaskRecoveryStore
   /** 时间源可注入，避免恢复快照测试依赖系统时钟。 */
@@ -182,7 +186,7 @@ export function useAiConversation(
   options: UseAiConversationOptions = {},
   activeWritingContext?: ActiveWritingContext | null,
 ): AiConversation {
-  const { initialPanelOpen = false, storyState } = options
+  const { storyState } = options
   const taskStore = options.taskRecoveryStore ?? indexedDbTaskRecoveryStore
   const clockPort = options.clock ?? clock
   const [isConnected, setIsConnected] = useState(false)
@@ -203,7 +207,6 @@ export function useAiConversation(
   const aiBusyRef = useRef(false)
   const promptRequestRef = useRef(0)
 
-  const [aiPanelOpen, setAiPanelOpen] = useState(initialPanelOpen)
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
   const [aiInput, setAiInput] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -639,12 +642,23 @@ export function useAiConversation(
     [activeWritingContext?.workspaceRevision, aiModel?.id, isConnected, runTrackedTask, storyState],
   )
 
+  // 发送前的请求范围披露：与 sendAiPrompt 读取同一份章节、选区、StoryState 与消息列表
+  const requestScope = useMemo(
+    () =>
+      projectAssistantRequestScope({
+        chapter: activeWritingContext?.chapter,
+        selection: activeWritingContext?.selection,
+        storyState,
+        historyMessages: aiMessages,
+      }),
+    [activeWritingContext?.chapter, activeWritingContext?.selection, storyState, aiMessages],
+  )
+
   const sendAiPrompt = useCallback(
     async (prompt: string, chapterId?: string) => {
       const trimmed = prompt.trim()
       if (!trimmed || aiBusyRef.current) return
 
-      setAiPanelOpen(true)
       const newMessages = [...aiMessages, { role: 'user' as const, text: trimmed }]
       setAiMessages(newMessages)
       setAiInput('')
@@ -693,8 +707,8 @@ export function useAiConversation(
             ? activeWritingContext.chapter.semanticDocument
             : projectContent(targetChapterId, activeDocText, activeDocRevision)
 
-        // P1-5: 构造滚动多轮历史 turns (提取最近 6 轮历史)
-        const rollingHistory = newMessages.slice(-6)
+        // P1-5: 构造滚动多轮历史 turns，轮数上限与面板的发送前披露共用同一个常量
+        const rollingHistory = newMessages.slice(-ASSISTANT_HISTORY_TURN_LIMIT)
 
         const task = createAssistantTask({
           taskId: idGenerator.generate('assistant'),
@@ -1141,8 +1155,6 @@ export function useAiConversation(
   return {
     isConnected,
     isReconnecting,
-    aiPanelOpen,
-    setAiPanelOpen,
     aiMessages,
     aiInput,
     setAiInput,
@@ -1167,6 +1179,7 @@ export function useAiConversation(
     listArtifacts,
     domainSyncState,
     syncConflict,
+    requestScope,
   }
 }
 

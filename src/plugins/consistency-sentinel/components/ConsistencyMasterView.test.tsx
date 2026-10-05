@@ -11,11 +11,15 @@ describe('ConsistencyMasterView — 战力阶梯与设定巡检哨兵主视口',
     await Promise.all(all.map((e) => indexedDbCodexEntityRepository.delete(e.id)))
   })
 
-  it('renders heading and default tier system', async () => {
+  it('starts with no power system instead of picking a genre for the author (§P2.4)', async () => {
     render(<ConsistencyMasterView projectId="p1" />)
     expect(await screen.findByText('战力阶梯与设定巡检哨兵')).toBeInTheDocument()
     expect(screen.getByText('战力阶梯偏序体系')).toBeInTheDocument()
-    expect(screen.getByText(/1\. 练气/)).toBeInTheDocument()
+    // 过去这里会直接渲染 presetTiersData[0]，等于替一本西幻书默认了修真阶梯（INV-05/§P2.4）。
+    expect(screen.getByText('未配置：不替本书选流派')).toBeInTheDocument()
+    expect(screen.queryByText(/1\. 练气/)).not.toBeInTheDocument()
+    // 还没点巡检时，界面不得预先给出「自洽」的结论（INV-09）。
+    expect(screen.queryByText(/未发现越阶或吃书矛盾/)).not.toBeInTheDocument()
   })
 
   it('allows applying preset and saving tier system', async () => {
@@ -61,6 +65,9 @@ describe('ConsistencyMasterView — 战力阶梯与设定巡检哨兵主视口',
     })
 
     render(<ConsistencyMasterView projectId="p1" />)
+    // 阶梯必须由作者点选（§P2.4）：越阶判定依赖它，不再由界面默认套用。
+    fireEvent.click(await screen.findByText(/经典修真九阶/))
+
     const textarea = await screen.findByPlaceholderText(/练气期的楚凌霄走上前/)
     fireEvent.change(textarea, { target: { value: '楚凌霄一掌秒杀了赵长老！' } })
 

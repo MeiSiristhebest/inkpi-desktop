@@ -17,12 +17,17 @@ import {
   ActiveWritingContextProvider,
   useOptionalActiveWritingContext,
 } from './core/activeWritingContext'
+import { resolveActiveChapter } from './core/activeChapterResolution'
 import type { ReactNode } from 'react'
-import type { ChapterRecord } from './types'
 import { CreativeWorkflowsPanel } from './components/ai/CreativeWorkflowsPanel'
+import { inspectorPanelFor } from './types/inspectorState'
 import { TaskRecoveryPanel } from './components/ai/TaskRecoveryPanel'
-import type { AiArtifact } from './ai/artifacts'
+import { loadWorkspaceResults } from './ai/results/resultCenter'
+import type { StandardAiResult } from './types/aiResultLifecycle'
+import type { PluginWorkflowOutcome } from './types/pluginHost'
 import { artifactEvents } from './ports/artifactEvents'
+import { proposalStateEvents } from './ports/proposalStateEvents'
+import { TooltipProvider } from './ui/primitives'
 import { useState, useEffect } from 'react'
 
 const ProjectWorkspace: FC<{
@@ -37,7 +42,7 @@ const ProjectWorkspace: FC<{
     pluginId: string,
     input: unknown,
     metadata?: Record<string, unknown>,
-  ) => Promise<unknown | null>
+  ) => Promise<PluginWorkflowOutcome<unknown> | null>
   children: ReactNode
 }> = ({
   projectId,
@@ -50,18 +55,7 @@ const ProjectWorkspace: FC<{
 }) => {
   const { chapters, volumes, reloadChapters } = useProjectData()
   const activeWritingCtx = useOptionalActiveWritingContext()
-  const matchingChapter =
-    activeWritingCtx?.chapter && chapters.find((c) => c.id === activeWritingCtx.chapter?.id)
-
-  // P0-4: 将 ActiveWritingContext 中最新的 content/revision 注入，确保 PluginHost 拿到最新权威正文
-  const authoritativeActiveChapter: ChapterRecord | null = matchingChapter
-    ? {
-        ...matchingChapter,
-        content: activeWritingCtx.chapter?.content ?? matchingChapter.content,
-        wordCount: activeWritingCtx.chapter?.wordCount ?? matchingChapter.wordCount,
-        revision: activeWritingCtx.chapter?.revision ?? matchingChapter.revision,
-      }
-    : chapters[0] || null
+  const authoritativeActiveChapter = resolveActiveChapter(chapters, activeWritingCtx?.chapter)
 
   return (
     <DesktopPluginHostProvider
@@ -91,20 +85,18 @@ const ProjectEngine: FC<{
   onAiTask: (
     task: import('@inkpi/protocol').AiTask,
   ) => Promise<import('@inkpi/protocol').TaskResult | null>
-  onOpenAssistant: () => void
-  aiPanelOpen: boolean
-  setAiPanelOpen: (open: boolean) => void
   aiMessages: Array<{ role: 'user' | 'assistant'; text: string }>
   aiInput: string
   setAiInput: (value: string) => void
   aiBusy: boolean
   sendAiPrompt: (prompt: string) => void
+  requestScope: import('./ai/context/requestScope').AssistantRequestScope
   runContinuityAudit: import('./hooks/useAiConversation').AiConversation['runContinuityAudit']
   runDeepReasoning: import('./hooks/useAiConversation').AiConversation['runDeepReasoning']
   runDistillationWorkflow: import('./hooks/useAiConversation').AiConversation['runDistillationWorkflow']
   steerTask: import('./hooks/useAiConversation').AiConversation['steerTask']
   taskRecovery?: import('./db/taskRecoveryStore').TaskRecoveryRecord[]
-  artifacts?: AiArtifact[]
+  results?: StandardAiResult[]
   taskRecoveryLoading?: boolean
   taskRecoveryError?: string
   resumeTask?: (taskId: string) => Promise<boolean>
@@ -125,56 +117,56 @@ const ProjectEngine: FC<{
       onReconnect={props.onReconnect}
       onRequestGhost={props.onRequestGhost}
       onAiTask={props.onAiTask}
-      onOpenAssistant={props.onOpenAssistant}
       onHome={props.onHome}
-      renderInspector={(state, onClose) => (
-        <>
-          <CreativeWorkflowsPanel
-            projectId={props.projectId}
-            chapters={chapters}
-            connected={props.isConnected}
-            onContinuityAudit={props.runContinuityAudit}
-            onDeepReasoning={props.runDeepReasoning}
-            onDistillationWorkflow={props.runDistillationWorkflow}
-            onSteerTask={props.steerTask}
-          />
-          <AnimatePresence>
-            {state.surface !== 'closed' && (
-              <motion.div
-                key="ai-assistant-drawer"
-                {...variants.slideInFromRight}
-                transition={spring.gentle}
-                className="h-full flex"
-              >
-                <AiAssistantPanel
-                  messages={props.aiMessages}
-                  input={props.aiInput}
-                  busy={props.aiBusy}
-                  connected={props.isConnected}
-                  domainSyncState={props.domainSyncState}
-                  syncConflict={props.syncConflict}
-                  onRetrySync={props.onRetrySync}
-                  initialTab={state.surface === 'activity' ? 'activity' : 'chat'}
-                  onInputChange={props.setAiInput}
-                  onSend={() => props.sendAiPrompt(props.aiInput)}
-                  onClose={() => {
-                    props.setAiPanelOpen(false)
-                    onClose()
-                  }}
-                  taskRecovery={props.taskRecovery}
-                  artifacts={props.artifacts}
-                  taskRecoveryLoading={props.taskRecoveryLoading}
-                  taskRecoveryError={props.taskRecoveryError}
-                  onResumeTask={props.resumeTask}
-                  onCancelTask={props.cancelTask}
-                  onDismissTask={props.dismissTask}
-                  onSteerTask={props.steerTask}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
-      )}
+      renderInspector={(state, onClose) => {
+        const panel = inspectorPanelFor(state)
+        return (
+          <>
+            <CreativeWorkflowsPanel
+              projectId={props.projectId}
+              chapters={chapters}
+              connected={props.isConnected}
+              onContinuityAudit={props.runContinuityAudit}
+              onDeepReasoning={props.runDeepReasoning}
+              onDistillationWorkflow={props.runDistillationWorkflow}
+              onSteerTask={props.steerTask}
+            />
+            <AnimatePresence>
+              {panel !== 'none' && (
+                <motion.div
+                  key="ai-assistant-drawer"
+                  {...variants.slideInFromRight}
+                  transition={spring.gentle}
+                  className="h-full flex"
+                >
+                  <AiAssistantPanel
+                    messages={props.aiMessages}
+                    input={props.aiInput}
+                    busy={props.aiBusy}
+                    connected={props.isConnected}
+                    domainSyncState={props.domainSyncState}
+                    syncConflict={props.syncConflict}
+                    onRetrySync={props.onRetrySync}
+                    initialTab={panel}
+                    onInputChange={props.setAiInput}
+                    onSend={() => props.sendAiPrompt(props.aiInput)}
+                    onClose={onClose}
+                    requestScope={props.requestScope}
+                    taskRecovery={props.taskRecovery}
+                    results={props.results}
+                    taskRecoveryLoading={props.taskRecoveryLoading}
+                    taskRecoveryError={props.taskRecoveryError}
+                    onResumeTask={props.resumeTask}
+                    onCancelTask={props.cancelTask}
+                    onDismissTask={props.dismissTask}
+                    onSteerTask={props.steerTask}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )
+      }}
     />
   )
 }
@@ -222,14 +214,18 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
 
   const {
     projects,
+    archivedProjects,
     activeProjectId,
     setActiveProjectId,
     createProject,
     importProject,
     createDemo,
     exportProject,
+    exportManuscript,
     updateProject,
     deleteProject,
+    removeFromLibrary,
+    restoreToLibrary,
   } = library
 
   const ai = useAiConversation(
@@ -243,8 +239,6 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
   const {
     isConnected,
     isReconnecting,
-    aiPanelOpen,
-    setAiPanelOpen,
     aiMessages,
     aiInput,
     setAiInput,
@@ -269,18 +263,20 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     syncConflict,
     syncDomain,
     listArtifacts,
+    requestScope,
   } = ai
 
-  const [artifacts, setArtifacts] = useState<AiArtifact[]>([])
+  const [results, setResults] = useState<StandardAiResult[]>([])
 
   useEffect(() => {
     let alive = true
     const load = async (projectId: string) => {
       try {
         const items = await listArtifacts(projectId)
-        if (alive) setArtifacts(items)
+        const projected = await loadWorkspaceResults(projectId, items)
+        if (alive) setResults(projected)
       } catch (error) {
-        if (alive) console.error('Failed to load workspace artifacts:', error)
+        if (alive) console.error('Failed to load workspace AI results:', error)
       }
     }
 
@@ -289,13 +285,22 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
       const unsubscribe = artifactEvents.subscribe(activeProjectId, () => {
         void load(activeProjectId)
       })
+      // Author decisions live on proposals, not artifacts, so the lifecycle
+      // status of a result only converges once the proposal change is re-read.
+      const unsubscribeProposals = proposalStateEvents.subscribe(
+        { workspaceId: activeProjectId },
+        () => {
+          void load(activeProjectId)
+        },
+      )
       return () => {
         alive = false
         unsubscribe()
+        unsubscribeProposals()
       }
     }
 
-    setArtifacts([])
+    setResults([])
     return () => {
       alive = false
     }
@@ -313,13 +318,17 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
           <ErrorBoundary label="书架">
             <Bookshelf
               projects={projects}
+              archivedProjects={archivedProjects}
               onOpenProject={setActiveProjectId}
               onCreateProject={createProject}
               onImportProject={importProject}
               onCreateDemo={createDemo}
               onExportProject={exportProject}
+              onExportManuscript={exportManuscript}
               onUpdateProject={updateProject}
               onDeleteProject={deleteProject}
+              onRemoveFromLibrary={removeFromLibrary}
+              onRestoreToLibrary={restoreToLibrary}
             />
           </ErrorBoundary>
         </motion.div>
@@ -348,21 +357,19 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   onReconnect={reconnect}
                   onRequestGhost={requestGhost}
                   onAiTask={runAiTask}
-                  onOpenAssistant={() => setAiPanelOpen(!aiPanelOpen)}
                   onHome={() => setActiveProjectId(null)}
-                  aiPanelOpen={aiPanelOpen}
-                  setAiPanelOpen={setAiPanelOpen}
                   aiMessages={aiMessages}
                   aiInput={aiInput}
                   setAiInput={setAiInput}
                   aiBusy={aiBusy}
                   sendAiPrompt={sendAiPrompt}
+                  requestScope={requestScope}
                   runContinuityAudit={runContinuityAudit}
                   runDeepReasoning={runDeepReasoning}
                   runDistillationWorkflow={runDistillationWorkflow}
                   steerTask={steerTask}
                   taskRecovery={taskRecovery}
-                  artifacts={artifacts}
+                  results={results}
                   taskRecoveryLoading={taskRecoveryLoading}
                   taskRecoveryError={taskRecoveryError}
                   resumeTask={resumeTask}
@@ -383,7 +390,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
   )
 
   return (
-    <>
+    <TooltipProvider>
       {content}
       {activeProjectId && (
         <TaskRecoveryPanel
@@ -396,7 +403,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
           onDismiss={dismissTask}
         />
       )}
-    </>
+    </TooltipProvider>
   )
 }
 
