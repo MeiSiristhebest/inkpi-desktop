@@ -185,6 +185,7 @@ function Select({
       <SelectPrimitive.Portal>
         <SelectPrimitive.Positioner
           align="start"
+          alignItemWithTrigger={false}
           sideOffset={4}
           className="isolate z-50 outline-none"
         >
