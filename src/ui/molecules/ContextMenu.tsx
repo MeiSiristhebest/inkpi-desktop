@@ -14,11 +14,12 @@ export interface ContextMenuItem {
   groupLabel?: string
   /** 次级说明文字：说明选中后会发生什么，让「明确选择」真的建立在选择者能读懂的信息上。 */
   description?: string
-  /**
-   * 互斥选择项：渲染成 role="menuitemradio" + aria-checked（P4.3）。
+  /** 互斥选择项：渲染成 role="menuitemradio" + aria-checked（P4.3）。
    * 用于「状态标记」这类当前值有意义的条目。
    */
   checked?: boolean
+  /** 禁用态：呈现弱化视觉与 cursor-not-allowed，点击/回车不触发动作，无障碍透传 aria-disabled="true" */
+  disabled?: boolean
   onClick: () => void
 }
 
@@ -141,12 +142,16 @@ export const ContextMenu = ({
       case 'Enter':
       case ' ':
         e.preventDefault()
+        if (visibleButtons[current]?.getAttribute('aria-disabled') === 'true') {
+          return
+        }
         visibleButtons[current]?.click()
         break
     }
   }
 
   const handleItemClick = (_index: number, item: ContextMenuItem) => {
+    if (item.disabled) return
     item.onClick()
     onClose?.()
   }
@@ -187,16 +192,20 @@ export const ContextMenu = ({
             type="button"
             role={it.checked === undefined ? 'menuitem' : 'menuitemradio'}
             aria-checked={it.checked}
-            aria-disabled={false}
+            aria-disabled={Boolean(it.disabled)}
             onClick={() => handleItemClick(idx, it)}
-            className={`w-full px-3 py-1.5 text-left flex gap-2 cursor-pointer ${
-              it.description ? 'items-start' : 'items-center'
-            } ${
-              it.danger
-                ? 'text-[var(--ink-danger)] hover:bg-[var(--ink-danger)]/10'
-                : it.checked
-                  ? 'text-[var(--ink-accent)] bg-[var(--ink-accent)]/10 hover:bg-[var(--ink-accent)]/15'
-                  : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+            className={`w-full px-3 py-1.5 text-left flex gap-2 ${
+              it.disabled
+                ? 'opacity-40 cursor-not-allowed text-[var(--ink-text-muted)]'
+                : 'cursor-pointer'
+            } ${it.description ? 'items-start' : 'items-center'} ${
+              it.disabled
+                ? ''
+                : it.danger
+                  ? 'text-[var(--ink-danger)] hover:bg-[var(--ink-danger)]/10'
+                  : it.checked
+                    ? 'text-[var(--ink-accent)] bg-[var(--ink-accent)]/10 hover:bg-[var(--ink-accent)]/15'
+                    : 'text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
             }`}
           >
             {it.icon && (

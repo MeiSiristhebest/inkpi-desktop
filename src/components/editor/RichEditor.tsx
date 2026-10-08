@@ -618,8 +618,9 @@ export const RichEditor: FC<RichEditorProps> = ({
       {draftRecovery && draftRecovery.status !== 'recovered' && (
         <div
           data-testid="draft-recovery-state"
-          role="status"
-          className="absolute left-3 right-3 top-2 z-30 flex items-center justify-between gap-3 rounded border border-amber-500/40 bg-[var(--ink-bg-panel)]/95 px-3 py-2 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
+          role="alert"
+          aria-live="assertive"
+          className="absolute left-3 right-3 top-2 z-30 flex items-center justify-between gap-3 rounded border border-amber-500/70 bg-[var(--ink-bg-panel)]/95 bg-amber-500/10 px-3 py-2 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
         >
           <span>
             {draftRecovery.status === 'available'

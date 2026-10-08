@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { HelpCircle } from 'lucide-react'
 import { Tooltip } from '../primitives'
+import { useOverlayFocus } from '../useOverlayFocus'
 
 export interface HelpTooltipProps {
   title: string
@@ -41,7 +42,14 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
   const popoverRef = useRef<HTMLDivElement>(null)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const popoverId = `help-popover-${id}`
+  const titleId = `help-title-${id}`
   const describedById = `help-description-${id}`
+
+  const handleClose = useCallback(() => {
+    setOpen(false)
+  }, [])
+
+  useOverlayFocus({ containerRef: popoverRef, active: open, onClose: handleClose })
 
   const handleMouseEnter = () => {
     clearTimeout(leaveTimerRef.current)
@@ -99,9 +107,6 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
   useEffect(() => {
     if (!open) return
     const handleScrollOrResize = () => updatePosition()
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as Node
       if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) {
@@ -112,12 +117,10 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
 
     window.addEventListener('scroll', handleScrollOrResize, true)
     window.addEventListener('resize', handleScrollOrResize)
-    window.addEventListener('keydown', handleKeyDown)
     document.addEventListener('mousedown', handleMouseDown)
     return () => {
       window.removeEventListener('scroll', handleScrollOrResize, true)
       window.removeEventListener('resize', handleScrollOrResize)
-      window.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('mousedown', handleMouseDown)
     }
   }, [open, updatePosition])
@@ -142,6 +145,8 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
               : 'text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)]'
           }`}
           aria-label={title}
+          aria-expanded={open}
+          aria-haspopup="dialog"
         >
           <HelpCircle style={{ width: size, height: size }} />
         </button>
@@ -152,7 +157,8 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
           ref={popoverRef}
           id={popoverId}
           role="dialog"
-          aria-labelledby={popoverId}
+          aria-modal="true"
+          aria-labelledby={titleId}
           aria-describedby={describedById}
           style={{
             position: 'fixed',
@@ -165,9 +171,12 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({
         >
           <div className="flex items-center gap-1.5 font-bold text-[12.5px] text-[var(--ink-text)] border-b border-[var(--ink-border)] pb-2 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--ink-accent)] shrink-0" />
-            <span id={describedById}>{title}</span>
+            <span id={titleId}>{title}</span>
           </div>
-          <div className="text-[11.5px] text-[var(--ink-text-muted)] whitespace-pre-line leading-relaxed">
+          <div
+            id={describedById}
+            className="text-[11.5px] text-[var(--ink-text-muted)] whitespace-pre-line leading-relaxed"
+          >
             {children}
           </div>
         </div>

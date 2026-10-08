@@ -172,4 +172,36 @@ describe('ContextMenu primitive', () => {
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
     expect(document.activeElement).toBe(menuitems[1])
   })
+
+  it('disabled 条目具备 aria-disabled="true"，点击或回车均不触发动作且不关闭菜单', () => {
+    const disabledOnClick = vi.fn()
+    const normalOnClick = vi.fn()
+    const onClose = vi.fn()
+    const items: ContextMenuItem[] = [
+      { key: 'dis', label: '不可用操作', disabled: true, onClick: disabledOnClick },
+      { key: 'ok', label: '可用操作', onClick: normalOnClick },
+    ]
+    render(<ContextMenu items={items} onClose={onClose} />)
+
+    const menuitems = screen.getAllByRole('menuitem')
+    expect(menuitems[0]).toHaveAttribute('aria-disabled', 'true')
+    expect(menuitems[1]).toHaveAttribute('aria-disabled', 'false')
+
+    // 点击禁用项
+    fireEvent.click(menuitems[0])
+    expect(disabledOnClick).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+
+    // 回车激活禁用项
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Enter' })
+    expect(disabledOnClick).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+
+    // 导航到可用项并回车
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(menuitems[1])
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Enter' })
+    expect(normalOnClick).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })
