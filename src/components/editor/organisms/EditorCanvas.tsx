@@ -165,7 +165,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
             }`}
             style={{
               paddingTop: effectiveTypewriter ? '35vh' : showSplitView ? '2rem' : '3rem',
-              paddingBottom: effectiveTypewriter ? '55vh' : showSplitView ? '2rem' : '3rem',
+              paddingBottom: effectiveTypewriter ? '55vh' : '45vh',
             }}
           >
             {!effectiveZen && (

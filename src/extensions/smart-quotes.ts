@@ -1,14 +1,36 @@
-import { Extension } from '@tiptap/react'
+import { Extension, textInputRule } from '@tiptap/react'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 
 /**
- * 中文智能引号配对扩展：
- * 1. 当选中有文本时，按下 “ 或 「 自动包裹选中文本成对；
+ * 中文智能标点与排版扩展：
+ * 1. 当选中有文本时，按下 “ 或 「 或 《 自动包裹选中文本成对；
  * 2. 空白处键入中文前引号 “ 时，自动补齐闭合后引号 ” 并将光标定位到引号中间；
- * 3. 光标处于双引号中间直接按 Backspace 时，成对清除前后引号。
+ * 3. 光标处于双引号中间直接按 Backspace 时，成对清除前后引号；
+ * 4. 键入 -- 自动转换为标准中文破折号 ——；
+ * 5. 键入 ... 或 。。。 自动转换为标准中文省略号 ……。
  */
 export const SmartQuotes = Extension.create({
   name: 'smartQuotes',
+
+  addInputRules() {
+    return [
+      // 连续破折号转标准中文双字线破折号：-- -> ——
+      textInputRule({
+        find: /--$/,
+        replace: '——',
+      }),
+      // 连续三个半角句点转标准中文省略号：... -> ……
+      textInputRule({
+        find: /\.{3}$/,
+        replace: '……',
+      }),
+      // 连续三个全角句号转标准中文省略号：。。。 -> ……
+      textInputRule({
+        find: /。。。$/,
+        replace: '……',
+      }),
+    ]
+  },
 
   addProseMirrorPlugins() {
     return [

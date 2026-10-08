@@ -282,14 +282,17 @@ export const Engine: FC<EngineProps> = ({
     direction: 'right',
   })
 
-  // 聚焦模式：Esc 退出
+  // 聚焦模式：Esc 退出（使用 capture: true 捕获阶段，防止被富文本编辑器快捷键吞掉）
   useEffect(() => {
     if (!focusMode) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFocusMode(false)
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setFocusMode(false)
+      }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [focusMode])
 
   const pluginCtx = useOptionalPluginRegistry()
@@ -479,7 +482,7 @@ export const Engine: FC<EngineProps> = ({
             <div className="flex items-center gap-1 min-w-0">
               {onHome && (
                 <Tooltip content="返回作品库">
-                  <IconButton onClick={leaveWorkspace}>
+                  <IconButton label="返回作品库" onClick={leaveWorkspace}>
                     <Home className="w-4 h-4" />
                   </IconButton>
                 </Tooltip>
@@ -488,7 +491,10 @@ export const Engine: FC<EngineProps> = ({
             </div>
             <div className="flex items-center gap-0.5">
               <Tooltip content="全屏 / 退出全屏">
-                <IconButton onClick={() => setIsFullscreen((f) => !f)}>
+                <IconButton
+                  label={isFullscreen ? '退出全屏' : '进入全屏'}
+                  onClick={() => setIsFullscreen((f) => !f)}
+                >
                   {isFullscreen ? (
                     <Minimize2 className="w-4 h-4" />
                   ) : (
@@ -499,6 +505,7 @@ export const Engine: FC<EngineProps> = ({
               {hasAssistant ? (
                 <Tooltip content={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}>
                   <IconButton
+                    label={isRightPanelOpen ? '收起 AI 助手' : '打开 AI 助手'}
                     onClick={() =>
                       setInspectorState((curr) => toggleInspectorSurface(curr, 'assistant'))
                     }
@@ -512,6 +519,7 @@ export const Engine: FC<EngineProps> = ({
               ) : (
                 <Tooltip content={isRightPanelOpen ? '收起信息栏' : '展开信息栏'}>
                   <IconButton
+                    label={isRightPanelOpen ? '收起信息栏' : '展开信息栏'}
                     onClick={() =>
                       setInspectorState((curr) =>
                         curr.surface === 'closed'
@@ -552,12 +560,16 @@ export const Engine: FC<EngineProps> = ({
                   <div
                     onMouseDown={onRightMouseDown}
                     onDoubleClick={resetRightWidth}
-                    className={`absolute top-0 left-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
-                      isRightDragging
-                        ? 'bg-[var(--ink-accent)] w-[3px]'
-                        : 'hover:bg-[var(--ink-accent)]/50'
-                    }`}
-                  />
+                    className="absolute top-0 left-[-6px] w-3 h-full cursor-col-resize z-30 transition-colors flex justify-center group/resizer"
+                  >
+                    <div
+                      className={`w-[2px] h-full transition-colors ${
+                        isRightDragging
+                          ? 'bg-[var(--ink-accent)]'
+                          : 'bg-transparent group-hover/resizer:bg-[var(--ink-accent)]/50'
+                      }`}
+                    />
+                  </div>
                 </Tooltip>
                 <div className="h-full">
                   {renderInspector

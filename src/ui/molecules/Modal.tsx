@@ -68,7 +68,7 @@ export const Modal: React.FC<ModalProps> = ({
       <motion.div
         {...variants.fade}
         transition={tween.fade}
-        className={`fixed inset-0 z-50 flex ${alignment} ${overlayClassName} p-4 select-none`}
+        className={`fixed inset-0 z-[60] flex ${alignment} ${overlayClassName} p-4 select-none`}
         onClick={(e) => {
           if (closeOnBackdrop && e.target === e.currentTarget) onClose()
         }}

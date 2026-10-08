@@ -322,11 +322,11 @@ export const DashboardView: FC<DashboardViewProps> = ({
           </div>
 
           <div className="rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-5 shadow-2xs space-y-3.5 overflow-hidden">
-            {/* 真正自适应充满容器的 SVG 热力点阵：通过 viewBox 矢量坐标缩放，从根本上彻底杜绝右侧被截断或文字折行问题 */}
-            <div className="w-full">
+            {/* 自适应充满容器的 SVG 热力点阵：宽屏自适应充满，极窄视口支持水平滑动以保证字号可读性 */}
+            <div className="w-full overflow-x-auto">
               <svg
                 viewBox="0 0 780 102"
-                className="w-full h-auto block select-none"
+                className="w-full h-auto block select-none min-w-[680px]"
                 preserveAspectRatio="xMidYMid meet"
               >
                 {/* 52 周点阵矩阵 */}

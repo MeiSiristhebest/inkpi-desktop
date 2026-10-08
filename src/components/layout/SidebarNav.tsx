@@ -147,10 +147,16 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         <div
           onMouseDown={onMouseDown}
           onDoubleClick={resetWidth}
-          className={`absolute top-0 right-[-3px] w-[6px] h-full cursor-col-resize z-30 transition-colors ${
-            isDragging ? 'bg-[var(--ink-accent)] w-[2px]' : 'bg-transparent'
-          }`}
-        />
+          className="absolute top-0 right-[-6px] w-3 h-full cursor-col-resize z-30 transition-colors flex justify-center group"
+        >
+          <div
+            className={`w-[2px] h-full transition-colors ${
+              isDragging
+                ? 'bg-[var(--ink-accent)]'
+                : 'bg-transparent group-hover:bg-[var(--ink-accent)]/50'
+            }`}
+          />
+        </div>
       </Tooltip>
 
       {/* Top Project Badge */}

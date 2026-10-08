@@ -254,7 +254,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
 
       {/* Domain Sync Conflict Inspection Modal */}
       {showConflictModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="w-full max-w-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ink-border)]">
               <div className="flex items-center gap-2 text-rose-500 font-medium text-[13px]">
