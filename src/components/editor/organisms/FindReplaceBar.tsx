@@ -135,6 +135,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
 
               <Tooltip content="上一项">
                 <IconButton
+                  label="上一项"
                   onClick={handlePrevMatch}
                   disabled={matchPositions.length === 0}
                   className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
@@ -144,6 +145,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
               </Tooltip>
               <Tooltip content="下一项">
                 <IconButton
+                  label="下一项"
                   onClick={handleNextMatch}
                   disabled={matchPositions.length === 0}
                   className="p-1 rounded-md hover:bg-[var(--ink-bg-hover)] disabled:opacity-30 cursor-pointer"
@@ -226,6 +228,7 @@ export const FindReplaceBar: React.FC<FindReplaceBarProps> = ({ model, editorRef
 
         <Tooltip content="关闭">
           <IconButton
+            label="关闭查找替换"
             onClick={() => actions.setShowFindReplace(false)}
             className="cursor-pointer ml-1"
           >

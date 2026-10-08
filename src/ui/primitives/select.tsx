@@ -26,6 +26,8 @@ export type SelectProps = {
   options?: readonly SelectOption[]
   children?: ReactNode
   'aria-label'?: string
+  /** 语义化标签名，未传 aria-label 时自动作为无障碍名称透传 */
+  label?: string
   placeholder?: ReactNode
   disabled?: boolean
   /** 密度：`sm` 给工具栏/插件筛选条，`default` 给表单。 */
@@ -148,6 +150,7 @@ function Select({
   options,
   children,
   'aria-label': ariaLabel,
+  label,
   placeholder,
   disabled,
   size = 'default',
@@ -159,6 +162,7 @@ function Select({
   const labels: Record<string, ReactNode> = {}
   for (const item of items) labels[item.value] = item.label
   const selected = String(value)
+  const effectiveAriaLabel = ariaLabel ?? label
 
   return (
     <SelectPrimitive.Root
@@ -172,7 +176,7 @@ function Select({
       <SelectPrimitive.Trigger
         data-slot="select-trigger"
         data-value={selected}
-        aria-label={ariaLabel}
+        aria-label={effectiveAriaLabel}
         className={cn(TRIGGER, SIZE[size], className)}
       >
         <SelectPrimitive.Value

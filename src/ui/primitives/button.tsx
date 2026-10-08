@@ -46,18 +46,42 @@ const buttonVariants = cva(
   },
 )
 
+import { Spinner } from '../atoms'
+
+export interface ButtonProps extends ButtonPrimitive.Props, VariantProps<typeof buttonVariants> {
+  /** 是否处于加载/生成等待状态 */
+  isLoading?: boolean
+  /** 加载时的自定义替代文本 */
+  loadingText?: string
+}
+
 function Button({
   className,
   variant = 'default',
   size = 'default',
+  isLoading = false,
+  loadingText,
+  children,
+  disabled,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonProps) {
   return (
     <ButtonPrimitive
       data-slot="button"
+      disabled={disabled || isLoading}
+      aria-busy={isLoading ? true : undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {isLoading ? (
+        <>
+          <Spinner className="mr-1.5 size-3.5 shrink-0" />
+          {loadingText ?? children}
+        </>
+      ) : (
+        children
+      )}
+    </ButtonPrimitive>
   )
 }
 

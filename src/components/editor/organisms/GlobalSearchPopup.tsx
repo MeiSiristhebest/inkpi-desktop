@@ -32,7 +32,11 @@ export const GlobalSearchPopup: React.FC<GlobalSearchPopupProps> = ({ model }) =
             placeholder="检索全书所有章节…"
             className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--ink-text-faint)]"
           />
-          <IconButton onClick={() => actions.setShowGlobalSearch(false)}>
+          <IconButton
+            label="关闭全书检索"
+            tooltip="关闭"
+            onClick={() => actions.setShowGlobalSearch(false)}
+          >
             <X className="w-4 h-4" />
           </IconButton>
         </div>

@@ -56,6 +56,7 @@ export const DrawerDock: FC<DrawerDockProps> = ({ projectId, currentText }) => {
           </div>
           <Tooltip content="关闭插件抽屉">
             <IconButton
+              label="关闭插件抽屉"
               onClick={() => host.closeDrawer()}
               className="hover:bg-[var(--ink-bg-hover)]"
             >

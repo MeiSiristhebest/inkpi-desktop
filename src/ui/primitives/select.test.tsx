@@ -100,4 +100,9 @@ describe('Select 门面', () => {
     await userEvent.click(screen.getByRole('option', { name: '第二章' }))
     expect(onValueChange).toHaveBeenCalledWith('c2')
   })
+
+  it('提供了 label 且未传 aria-label 时，无障碍名称自动使用 label', () => {
+    render(<Select value="draft" onValueChange={vi.fn()} options={OPTS} label="状态筛选" />)
+    expect(screen.getByRole('combobox', { name: '状态筛选' })).toBeInTheDocument()
+  })
 })

@@ -199,7 +199,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       <div className="editor-toolbar-left flex items-center gap-1.5 min-w-0 flex-1">
         {onHome && (
           <Tooltip content="返回作品库">
-            <IconButton onClick={onHome}>
+            <IconButton label="返回作品库" onClick={onHome}>
               <Home className="w-4 h-4" />
             </IconButton>
           </Tooltip>
@@ -207,6 +207,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         <Tooltip content="上一章（快速切章）">
           <IconButton
+            label="上一章"
             onClick={() => actions.prevChapter()}
             disabled={currentChapterIndex <= 0}
             className="disabled:opacity-30 disabled:cursor-not-allowed"
@@ -216,6 +217,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         </Tooltip>
         <Tooltip content="下一章（快速切章）">
           <IconButton
+            label="下一章"
             onClick={() => actions.nextChapter()}
             disabled={currentChapterIndex < 0 || currentChapterIndex >= linearChapters.length - 1}
             className="disabled:opacity-30 disabled:cursor-not-allowed"
@@ -227,6 +229,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         {!isSidebarOpen && (
           <Tooltip content={shortcutHint('展开目录', 'toggleChapterTree')}>
             <IconButton
+              label="展开目录"
               onClick={() => actions.setSidebar(true)}
               className="text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]"
             >
@@ -874,6 +877,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             {onToggleFocus && (
               <Tooltip content={focusMode ? '退出聚焦模式 (Esc)' : '聚焦模式（仅留写作画布）'}>
                 <IconButton
+                  label={focusMode ? '退出聚焦模式' : '聚焦模式'}
                   onClick={onToggleFocus}
                   className={focusMode ? 'text-[var(--ink-accent)]' : ''}
                 >
@@ -884,7 +888,10 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
             {onToggleFullscreen && (
               <Tooltip content="全屏 / 退出全屏">
-                <IconButton onClick={onToggleFullscreen}>
+                <IconButton
+                  label={isFullscreen ? '退出全屏' : '进入全屏'}
+                  onClick={onToggleFullscreen}
+                >
                   {isFullscreen ? (
                     <Minimize2 className="w-3.5 h-3.5" />
                   ) : (
@@ -906,6 +913,15 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 }
               >
                 <IconButton
+                  label={
+                    hasAssistant
+                      ? isRightOpen
+                        ? '收起 AI 助手'
+                        : '打开 AI 助手'
+                      : isRightOpen
+                        ? '收起信息栏'
+                        : '展开信息栏'
+                  }
                   onClick={onToggleRightPanel}
                   className={isRightOpen ? 'text-[var(--ink-accent)] bg-[var(--ink-bg-hover)]' : ''}
                 >
@@ -931,7 +947,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                     data-testid="editor-toolbar-drawer-trigger"
                     aria-haspopup="menu"
                     aria-expanded={activeMenu === 'drawers'}
-                    aria-label="插件随动抽屉"
+                    label="插件随动抽屉"
                     onClick={() => toggleMenu('drawers')}
                     className={
                       host.activeDrawerPluginId
