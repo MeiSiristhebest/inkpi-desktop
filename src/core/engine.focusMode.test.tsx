@@ -126,7 +126,7 @@ describe('Engine — 聚焦模式只收起界面外壳（P3.11）', () => {
     render(<Engine projectId="p1" />)
     expect(kernel).toEqual({ mounts: 1, unmounts: 0 })
 
-    fireEvent.click(screen.getByText('写作面板'))
+    fireEvent.click(screen.getByRole('button', { name: '打开写作面板' }))
 
     await waitFor(() => expect(kernel).toEqual({ mounts: 1, unmounts: 1 }))
     fireEvent.click(screen.getAllByText('正文写作')[0])

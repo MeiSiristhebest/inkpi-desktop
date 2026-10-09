@@ -80,7 +80,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
     // 新版侧栏：分类折叠面板展示插件
     expect(screen.getByPlaceholderText('搜索插件…')).toBeInTheDocument()
     // 点击「写作面板」切回工作台视图
-    fireEvent.click(screen.getByText('写作面板'))
+    fireEvent.click(screen.getByRole('button', { name: '打开写作面板' }))
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     // 点击「正文写作」回到编辑器
     fireEvent.click(screen.getAllByText('正文写作')[0])
@@ -158,7 +158,7 @@ describe('Engine — 主视口路由与多栏布局', () => {
     fireEvent.click(btn)
 
     // 切换至非编辑器视图（如写作面板）后隐藏
-    fireEvent.click(screen.getByText('写作面板'))
+    fireEvent.click(screen.getByRole('button', { name: '打开写作面板' }))
     expect(
       screen.queryByRole('button', { name: '聚焦模式（仅留写作画布）' }),
     ).not.toBeInTheDocument()

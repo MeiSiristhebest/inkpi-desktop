@@ -3,7 +3,6 @@ import { motion } from 'motion/react'
 import {
   ChevronDown,
   ChevronRight,
-  LayoutDashboard,
   BookOpen,
   Sparkles,
   ShieldAlert,
@@ -19,7 +18,6 @@ import {
 import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
-import { isPrimaryNavigationPlugin } from '../../core/capabilityRegistry'
 import { capabilityFor } from '../../core/capabilityIndex'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
 import { Tooltip } from '../../ui/primitives'
@@ -56,6 +54,24 @@ const CATEGORY_ORDER: DesktopPluginCategory[] = [
   'tools',
 ]
 
+const WORKSPACE_SHORTCUTS: Array<{
+  id: string
+  label: string
+  icon: React.FC<{ className?: string }>
+  pluginId?: string
+}> = [
+  { id: 'editor', label: '正文写作', icon: BookOpen },
+  { id: 'volume-master', label: '大纲', icon: Compass, pluginId: 'volume-master' },
+  { id: 'living-codex', label: '故事', icon: Sparkles, pluginId: 'living-codex' },
+  { id: 'gold-chapters-eval', label: '审校', icon: ShieldAlert, pluginId: 'gold-chapters-eval' },
+  {
+    id: 'scrapbook-recycler',
+    label: '素材库',
+    icon: FileSpreadsheet,
+    pluginId: 'scrapbook-recycler',
+  },
+]
+
 export const SidebarNav: React.FC<SidebarNavProps> = ({
   activeTabId,
   onSelectTab,
@@ -76,6 +92,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
   const pluginCtx = useOptionalPluginRegistry()
   const activePlugins = pluginCtx?.activePlugins ?? ALL_AVAILABLE_PLUGINS
+  const availableWorkspaces = useMemo(
+    () =>
+      WORKSPACE_SHORTCUTS.filter(
+        (workspace) =>
+          !workspace.pluginId || activePlugins.some((plugin) => plugin.id === workspace.pluginId),
+      ),
+    [activePlugins],
+  )
 
   // 侧边栏宽度可调：默认 240px，最小 180px，最大 360px，记忆持久化
   const { width, isDragging, onMouseDown, resetWidth } = useResizableWidth({
@@ -94,6 +118,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   // every enabled plugin that declares a navigation surface.
   const groupedCategories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
+    if (!q) return []
+
     const navigationPlugins = activePlugins.filter((p) => {
       const cap = capabilityFor(p.id)
       return Boolean(
@@ -103,17 +129,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       )
     })
 
-    const candidates = q
-      ? navigationPlugins
-      : navigationPlugins.filter((plugin) => isPrimaryNavigationPlugin(plugin.id))
-    const filtered = q
-      ? candidates.filter(
-          (p) =>
-            p.name.toLowerCase().includes(q) ||
-            p.description?.toLowerCase().includes(q) ||
-            p.id.toLowerCase().includes(q),
-        )
-      : candidates
+    const filtered = navigationPlugins.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q),
+    )
 
     const map = new Map<DesktopPluginCategory, DesktopPlugin[]>()
     for (const cat of CATEGORY_ORDER) {
@@ -162,7 +183,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       {/* Top Project Badge */}
       <div className="sidebar-nav-body flex-1 flex flex-col min-h-0">
         <div className="sidebar-nav-brand h-11 flex items-center justify-between px-3 border-b border-[var(--ink-border)]">
-          <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            aria-label="打开写作面板"
+            title="打开写作面板"
+            onClick={() => onSelectTab('dashboard')}
+            className="flex items-center gap-2 min-w-0 text-left rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ink-accent)]"
+          >
             <span className="w-6 h-6 rounded-md bg-[var(--ink-accent)] text-white flex items-center justify-center text-xs shrink-0 font-serif">
               墨
             </span>
@@ -170,7 +197,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               <span className="text-xs font-bold truncate">InkPi</span>
               <span className="text-xs text-[var(--ink-text-muted)] truncate">创作工作台</span>
             </div>
-          </div>
+          </button>
 
           <Tooltip content="收起导航">
             <button
@@ -190,33 +217,28 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           </span>
         </div>
 
-        {/* Quick Nav: Dashboard & Editor */}
-        <div className="sidebar-nav-quick p-2 border-b border-[var(--ink-border)]/50 space-y-1">
-          <button
-            type="button"
-            onClick={() => onSelectTab('dashboard')}
-            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer ${
-              activeTabId === 'dashboard'
-                ? 'bg-[var(--ink-accent)] text-white shadow-2xs font-semibold'
-                : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-            }`}
-          >
-            <LayoutDashboard className="w-3.5 h-3.5" />
-            <span className="sidebar-nav-button-label">写作面板</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectTab('editor')}
-            className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer ${
-              activeTabId === 'editor'
-                ? 'bg-[var(--ink-accent)] text-white shadow-2xs font-semibold'
-                : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span className="sidebar-nav-button-label">正文写作</span>
-          </button>
-        </div>
+        <nav
+          aria-label="创作工作区"
+          className="sidebar-nav-quick p-2 border-b border-[var(--ink-border)]/50 space-y-1"
+        >
+          <span className="px-2.5 text-[10px] text-[var(--ink-text-faint)]">工作区</span>
+          {availableWorkspaces.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={activeTabId === id ? 'page' : undefined}
+              onClick={() => onSelectTab(id)}
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer ${
+                activeTabId === id
+                  ? 'bg-[var(--ink-accent)] text-white shadow-2xs font-semibold'
+                  : 'text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)]'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span className="sidebar-nav-button-label">{label}</span>
+            </button>
+          ))}
+        </nav>
 
         {/* 插件搜索栏 */}
         {activePlugins.length > 0 && (
@@ -228,6 +250,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="搜索插件…"
+                aria-label="搜索插件"
                 className="w-full pl-6 pr-6 py-1 text-xs rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] focus:outline-none focus:border-[var(--ink-accent)]"
               />
               {searchQuery && (
@@ -246,14 +269,20 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
         {/* 插件分类折叠列表 */}
         <div className="sidebar-nav-categories flex-1 overflow-y-auto">
-          {activePlugins.length === 0 ? null : groupedCategories.length === 0 ? (
+          {activePlugins.length === 0 ? null : !searchQuery.trim() ? (
+            <div className="px-4 py-5 text-center text-xs text-[var(--ink-text-faint)]">
+              输入名称搜索其他插件
+            </div>
+          ) : groupedCategories.length === 0 ? (
             <div className="px-4 py-6 text-center text-xs text-[var(--ink-text-faint)]">
               未找到匹配「{searchQuery}」的插件
             </div>
           ) : (
             <div className="p-2 space-y-0.5">
               {groupedCategories.map(({ category, label, icon: CatIcon, plugins }) => {
-                const isCollapsed = collapsedCategories[category] ?? false
+                const isCollapsed = searchQuery.trim()
+                  ? false
+                  : (collapsedCategories[category] ?? false)
                 return (
                   <div key={category} className="mb-0.5">
                     {/* 分类头部 */}
