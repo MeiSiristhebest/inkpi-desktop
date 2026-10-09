@@ -59,4 +59,18 @@ describe('ClueWeaverMasterView', () => {
       expect(indexedDbClueWeaverRepository.saveClue).toHaveBeenCalled()
     })
   })
+
+  it('does not invent characters or scan sample text when the project has no characters', async () => {
+    vi.mocked(indexedDbCodexEntityRepository.getAll).mockResolvedValueOnce([])
+    render(<ClueWeaverMasterView projectId="p1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/请先在活体世界观中添加角色/)).toBeInTheDocument()
+    })
+    expect(screen.queryByText('陆沉')).not.toBeInTheDocument()
+    expect(screen.queryByText('林夕')).not.toBeInTheDocument()
+    expect(screen.getByText('输入正文或选择章节后开始扫描。')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/自动从所选章节同步/)).toHaveValue('')
+    expect(screen.queryByText(/【全知泄露】/)).not.toBeInTheDocument()
+  })
 })

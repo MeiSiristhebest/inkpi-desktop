@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   projectLegacyRecordsToStoryEntities,
+  projectLegacyRecordsToStoryState,
   projectPluginRecordsToStoryState,
   STORY_PLUGIN_COLLECTION_MAP,
   type StoryPluginCollectionInput,
@@ -344,6 +345,95 @@ describe('canonical StoryState plugin projection', () => {
       projectId: 'project-1',
       data: { name: '阿青' },
     })
+  })
+
+  it('projects legacy characters, world rules, timeline events, and foreshadow into typed collections', () => {
+    const projection = projectLegacyRecordsToStoryState([
+      {
+        sourceId: 'formData',
+        records: [
+          {
+            id: 'project-1::worldbase',
+            projectId: 'project-1',
+            tabId: 'worldbase',
+            data: { 世界名称: '云州', 世界核心规则: '灵脉决定修行者可吸纳的灵气' },
+          },
+        ],
+      },
+      {
+        sourceId: 'tableRows',
+        records: [
+          {
+            id: 'timeline-row-1',
+            projectId: 'project-1',
+            tabId: 'timeline',
+            data: { 章节标题: '入门', 本章关键事件: '拜入青云宗', 故事内时间: '灵历三年春' },
+          },
+          {
+            id: 'foreshadow-row-1',
+            projectId: 'project-1',
+            tabId: 'foreshadow',
+            data: { 伏笔内容: '旧剑出现裂纹', 埋设位置: '第2章', 状态: '未回收' },
+          },
+        ],
+      },
+      {
+        sourceId: 'cardRecords',
+        records: [
+          {
+            id: 'character-1',
+            projectId: 'project-1',
+            tabId: 'char-main',
+            name: '阿青',
+            data: { 别称: '青衣、阿青', 身份定位: '流亡剑修' },
+          },
+        ],
+      },
+    ])
+
+    expect(projection.entities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'legacy:cardRecords:character-1',
+          kind: 'character',
+          name: '阿青',
+          aliases: ['青衣', '阿青'],
+        }),
+        expect.objectContaining({
+          id: 'legacy:formData:project-1::worldbase',
+          kind: 'world-setting',
+          name: '云州',
+        }),
+      ]),
+    )
+    expect(projection.constraints).toEqual([
+      expect.objectContaining({
+        id: 'legacy:constraint:formData:project-1::worldbase:世界核心规则',
+        type: 'worldbase-rule',
+        description: '世界核心规则: 灵脉决定修行者可吸纳的灵气',
+        subjectIds: ['legacy:formData:project-1::worldbase'],
+        severity: 'info',
+      }),
+    ])
+    expect(projection.events).toEqual([
+      expect.objectContaining({
+        id: 'legacy:event:tableRows:timeline-row-1',
+        type: 'legacy-timeline-event',
+        title: '拜入青云宗',
+        occurredAt: '灵历三年春',
+      }),
+    ])
+    expect(projection.promises).toEqual([
+      expect.objectContaining({
+        id: 'legacy:promise:tableRows:foreshadow-row-1',
+        statement: '旧剑出现裂纹',
+        status: 'open',
+        introducedAt: '第2章',
+      }),
+    ])
+    expect(
+      projection.entities.every((entity) => entity.provenance.factLevel === 'hypothesis'),
+    ).toBe(true)
   })
 
   it('exposes only explicit plugin/source collection routes', () => {

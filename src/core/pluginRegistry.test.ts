@@ -18,6 +18,12 @@ describe('pluginRegistry state persistence & defaults', () => {
     expect(ids.size).toBe(0)
   })
 
+  it('does not use stale localStorage as the first-paint authority', () => {
+    localStorage.setItem(STORAGE_KEY_ENABLED_PLUGINS, JSON.stringify(['legacy-plugin']))
+
+    expect(loadEnabledPluginIds().has('legacy-plugin')).toBe(false)
+  })
+
   it('persists and restores enabled plugin set accurately', async () => {
     const custom = new Set(['living-codex', 'custom-plugin'])
     saveEnabledPluginIds(custom)
@@ -51,6 +57,18 @@ describe('pluginRegistry state persistence & defaults', () => {
     const fromIDB = await loadEnabledPluginIdsFromIDB()
     expect(fromIDB).not.toBeNull()
     expect(fromIDB!.has('living-codex')).toBe(true)
+  })
+
+  it('prefers canonical IndexedDB state and removes stale migration keys', async () => {
+    const projectId = 'plugin-authority-project'
+    const canonicalIds = new Set(['living-codex'])
+    await saveEnabledPluginIds(canonicalIds, projectId)
+    localStorage.setItem(`inkpi_enabled_plugins_${projectId}`, JSON.stringify(['timeline-grid']))
+    localStorage.setItem(STORAGE_KEY_ENABLED_PLUGINS, JSON.stringify(['timeline-grid']))
+
+    await expect(loadEnabledPluginIdsFromIDB(projectId)).resolves.toEqual(canonicalIds)
+    expect(localStorage.getItem(`inkpi_enabled_plugins_${projectId}`)).toBeNull()
+    expect(localStorage.getItem(STORAGE_KEY_ENABLED_PLUGINS)).toBeNull()
   })
 })
 

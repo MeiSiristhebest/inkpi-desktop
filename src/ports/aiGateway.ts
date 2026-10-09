@@ -3,6 +3,8 @@ import type {
   CacheInvalidateParams,
   CacheInvalidateResult,
   CacheStatus,
+  RuntimeModelProviderProbeParams,
+  RuntimeModelProviderProbeResult,
   TaskExecutionSnapshot,
   TaskResult,
   TaskStatusSnapshot,
@@ -70,6 +72,10 @@ export interface AiAssistant {
     routeId: string,
     state?: RuntimeModelRouteHealthState,
   ): Promise<RuntimeModelRouteHealthResult>
+  /** Probe provider reachability and model ids from the Runtime process. */
+  probeModelProvider?(
+    params: RuntimeModelProviderProbeParams,
+  ): Promise<RuntimeModelProviderProbeResult>
   /** Optional daemon projection capability for proposal review state. */
   proposalSyncRemote?: ProposalSyncRemote
   runContinuityAudit?(

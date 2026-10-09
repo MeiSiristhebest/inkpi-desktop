@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { HistoryModal, type VersionSnapshot } from './HistoryModal'
 import type { ChapterRecord } from '../../../types'
 import type { KeyValueStore } from '../../../ports/keyValueStore'
+import { chapterHistoryStorageKey } from '../../../adapters/indexedDbChapterHistoryStore'
 
 const chapter: ChapterRecord = {
   id: 'ch-1',
@@ -54,7 +55,9 @@ function memoryStore(
 
 /** saveSnapshot 的落盘顺序：[最新自动, ...其余自动, ...里程碑] */
 function historyKv(snapshots: VersionSnapshot[]) {
-  return memoryStore({ 'chapter-history-ch-1': JSON.stringify(snapshots) })
+  return memoryStore({
+    [chapterHistoryStorageKey(chapter.projectId, chapter.id)]: JSON.stringify(snapshots),
+  })
 }
 
 describe('HistoryModal 里程碑与自动检查点分区', () => {
@@ -106,7 +109,7 @@ describe('HistoryModal 里程碑与自动检查点分区', () => {
     ).toHaveLength(2)
 
     const persisted: Array<{ id?: string }> = JSON.parse(
-      kvStore.data.get('chapter-history-ch-1') || '[]',
+      kvStore.data.get(chapterHistoryStorageKey(chapter.projectId, chapter.id)) || '[]',
     )
     expect(persisted.map((item) => item.id)).toEqual(['a-1', 'a-0'])
   })

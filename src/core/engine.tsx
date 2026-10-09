@@ -7,7 +7,12 @@ import { DashboardView } from '../components/dashboard/DashboardView'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { PluginSuspenseFallback } from './components/PluginSuspenseFallback'
 import { IconButton, Row } from '../ui/atoms'
-import type { AiTask, TaskResult } from '@inkpi/protocol'
+import type {
+  AiTask,
+  RuntimeModelProviderProbeParams,
+  RuntimeModelProviderProbeResult,
+  TaskResult,
+} from '@inkpi/protocol'
 
 // 42 模块组件引入
 import { TAB_DEFINITIONS as tabDefinitions, type TabDefinition } from '../config/tabDefinitions'
@@ -56,6 +61,9 @@ interface EngineProps {
   onReconnect?: () => void
   /** 行内 Ghost Text 续写请求 */
   onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
+  onProbeModelProvider?: (
+    params: RuntimeModelProviderProbeParams,
+  ) => Promise<RuntimeModelProviderProbeResult>
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 返回书架/工作台入口（提供时顶栏显示返回按钮） */
   onHome?: () => void | Promise<void>
@@ -127,6 +135,7 @@ export const Engine: FC<EngineProps> = ({
   isReconnecting,
   onReconnect,
   onRequestGhost,
+  onProbeModelProvider,
   onAiTask,
   onHome,
 }) => {
@@ -605,6 +614,7 @@ export const Engine: FC<EngineProps> = ({
       <SettingsView
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        probeModelProvider={onProbeModelProvider}
         runtimeState={deriveRuntimeReadiness({ isConnected, isReconnecting })}
         onReconnect={onReconnect}
       />

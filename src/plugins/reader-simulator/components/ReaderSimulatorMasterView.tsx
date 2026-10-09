@@ -118,7 +118,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
             读者认知镜像与段评预演沙盒 (Reader Simulator)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            四大心智原形预演本章发布后的真实段评、防踩毒防暴毙、逻辑抓虫与防杠审查。
+            根据弃书词表和文本特征列出可能的关注点。结果是规则提示，不代表真实评论或发布表现。
           </p>
           <ScoreProvenanceBadge source="rule" detail="按读者弃书词表匹配，不含真实读者行为数据" />
         </div>
@@ -270,7 +270,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 <MessageSquare className="w-4 h-4 text-emerald-500" />
                 虚拟段评弹幕流预演 ({simulation?.comments.length || 0} 条)
               </span>
-              <span className="text-xs text-slate-400">基于语义特征触发的真实读者拟真反应</span>
+              <span className="text-xs text-slate-400">由词表和文本特征生成的模拟读者反应</span>
             </div>
 
             <div className="space-y-2.5 overflow-y-auto flex-1 max-h-[560px]">

@@ -7,7 +7,14 @@ import type { Clock } from '../ports/clock'
 import { clock } from '../adapters/clock'
 import type { ModelConfig } from '../core/settings'
 import { DEFAULT_DAEMON_URL } from '../config'
-import type { AiTask, TaskResult, TaskStatus, TaskStatusSnapshot } from '@inkpi/protocol'
+import type {
+  AiTask,
+  RuntimeModelProviderProbeParams,
+  RuntimeModelProviderProbeResult,
+  TaskResult,
+  TaskStatus,
+  TaskStatusSnapshot,
+} from '@inkpi/protocol'
 import { semanticDocumentFromText } from '../domain/content'
 import type { StoryState } from '../domain/story'
 import {
@@ -164,6 +171,9 @@ export interface AiConversation {
   ) => Promise<PluginWorkflowOutcome<unknown> | null>
   syncDomain: (workspaceId: string) => Promise<DomainSyncResult | null>
   listArtifacts: (workspaceId: string) => Promise<AiArtifact[]>
+  probeModelProvider: (
+    params: RuntimeModelProviderProbeParams,
+  ) => Promise<RuntimeModelProviderProbeResult>
   domainSyncState: DomainSyncState
   syncConflict?: DomainSyncConflict
   /** 发送前披露：本次请求会随指令带出的本地内容（P3.15） */
@@ -1152,6 +1162,16 @@ export function useAiConversation(
     [isConnected],
   )
 
+  const probeModelProvider = useCallback(
+    async (params: RuntimeModelProviderProbeParams): Promise<RuntimeModelProviderProbeResult> => {
+      if (!isConnected || !clientRef.current?.probeModelProvider) {
+        throw new Error('Runtime provider probe is unavailable while disconnected')
+      }
+      return clientRef.current.probeModelProvider(params)
+    },
+    [isConnected],
+  )
+
   return {
     isConnected,
     isReconnecting,
@@ -1177,6 +1197,7 @@ export function useAiConversation(
     runPluginWorkflow,
     syncDomain,
     listArtifacts,
+    probeModelProvider,
     domainSyncState,
     syncConflict,
     requestScope,

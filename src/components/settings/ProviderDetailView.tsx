@@ -12,7 +12,6 @@ import {
   formatTokenCount,
   type ModelCatalogSnapshot,
 } from '../../core/modelCatalog'
-import { fetchModelIds } from '../../adapters/modelProviderProbe'
 import { fieldLabel, inputCls, PrimaryButton, SecondaryButton, Switch } from './SettingsShared'
 import { spring, variants, gesture } from '../../motion'
 import { Tooltip, Select } from '../../ui/primitives'
@@ -21,7 +20,12 @@ export interface ProviderDetailViewProps {
   initialConfig?: ModelConfig | null
   onBack: () => void
   onSave: (config: ModelConfig) => void
-  onTest?: (baseUrl: string, apiKey: string) => Promise<{ ok: boolean; msg: string }>
+  onTest?: (
+    baseUrl: string,
+    apiKey: string,
+    provider: string,
+  ) => Promise<{ ok: boolean; msg: string }>
+  onFetchModels?: (baseUrl: string, apiKey: string, provider: string) => Promise<string[]>
 }
 
 const THINKING_CHOICES: { level: ThinkingLevel; label: string }[] = [
@@ -38,6 +42,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
   onBack,
   onSave,
   onTest,
+  onFetchModels,
 }) => {
   const isEditing = Boolean(initialConfig?.id)
   // 字段 id 前缀：视觉 label 必须真正关联到控件，否则读屏器只报出「combo box」而无名称
@@ -200,7 +205,8 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
     }
     setFetching(true)
     try {
-      const ids = await fetchModelIds(targetUrl, apiKey)
+      if (!onFetchModels) throw new Error('Runtime 未连接，无法从运行时查询模型列表')
+      const ids = await onFetchModels(targetUrl, apiKey, service)
       setFetchedIds((prev) => Array.from(new Set([...prev, ...ids])))
       setTestResult({ ok: true, msg: `成功拉取到 ${ids.length} 个模型` })
       if (selectedIds.length === 0 && ids.length > 0) {
@@ -222,7 +228,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
     if (onTest) {
       setTesting(true)
       try {
-        const res = await onTest(baseUrl, apiKey)
+        const res = await onTest(baseUrl, apiKey, service)
         setTestResult(res)
       } catch (e: any) {
         setTestResult({ ok: false, msg: e?.message || '连接超时' })

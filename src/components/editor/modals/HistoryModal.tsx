@@ -17,7 +17,10 @@ import { htmlToPlain } from '../../../domain/text'
 import type { ChapterRecord } from '../../../types'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clock } from '../../../adapters/clock'
-import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
+import {
+  chapterHistoryStorageKey,
+  indexedDbChapterHistoryStore,
+} from '../../../adapters/indexedDbChapterHistoryStore'
 import type { KeyValueStore } from '../../../ports/keyValueStore'
 import type { IdGenerator } from '../../../ports/idGenerator'
 import type { Clock as ClockPort } from '../../../ports/clock'
@@ -27,7 +30,7 @@ interface HistoryModalProps {
   chapter: ChapterRecord
   onRestore: (content: string) => void
   onClose: () => void
-  /** KV 层注入（测试时传内存实现，生产默认 localStorageKeyValueStore） */
+  /** History store injection for tests; production uses workspace-scoped IndexedDB. */
   kvStore?: KeyValueStore
   idGen?: IdGenerator
   clockPort?: ClockPort
@@ -46,7 +49,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   chapter,
   onRestore,
   onClose,
-  kvStore = localStorageKeyValueStore,
+  kvStore = indexedDbChapterHistoryStore,
   idGen = idGenerator,
   clockPort = clock,
 }) => {
@@ -57,7 +60,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
-  const storageKey = `chapter-history-${chapter.id}`
+  const storageKey = chapterHistoryStorageKey(chapter.projectId, chapter.id)
 
   useEffect(() => {
     kvStore.get(storageKey).then((saved) => {

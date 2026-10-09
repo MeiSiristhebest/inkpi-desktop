@@ -1,6 +1,6 @@
 import { db } from '../db/indexedDB'
 import {
-  projectLegacyRecordsToStoryEntities,
+  projectLegacyRecordsToStoryState,
   projectPluginRecordsToStoryState,
   type StoryPluginCollectionInput,
 } from '../domain/story/pluginProjection'
@@ -330,12 +330,14 @@ export class StoryStateMaterializer {
 
     // 5. 投影生成新的 plugin 分区数据
     const projectedState = projectPluginRecordsToStoryState(sources, { revision: nextRevision })
-    const legacyEntities = projectLegacyRecordsToStoryEntities([
+    const legacyProjection = projectLegacyRecordsToStoryState([
       { sourceId: 'formData', records: formData },
       { sourceId: 'tableRows', records: tableRows },
       { sourceId: 'cardRecords', records: cardRecords },
     ])
-    const legacyEntityMap = Object.fromEntries(legacyEntities.map((entity) => [entity.id, entity]))
+    const legacyEntityMap = Object.fromEntries(
+      legacyProjection.entities.map((entity) => [entity.id, entity]),
+    )
 
     // 6. 分区物化保护（Partition Merging）：
     // 更新所有 canonical plugin 分区；scenes/constraints 仅替换本物化器拥有的命名空间，
@@ -353,19 +355,28 @@ export class StoryStateMaterializer {
     )
     const preservedConstraints = Object.fromEntries(
       Object.entries(existingState?.constraints ?? {}).filter(
-        ([id]) => !id.startsWith('constraint:expectation:'),
+        ([id]) => !id.startsWith('constraint:expectation:') && !id.startsWith('legacy:constraint:'),
       ),
+    )
+    const legacyEvents = Object.fromEntries(
+      legacyProjection.events.map((event) => [event.id, event]),
+    )
+    const legacyPromises = Object.fromEntries(
+      legacyProjection.promises.map((promise) => [promise.id, promise]),
+    )
+    const legacyConstraints = Object.fromEntries(
+      legacyProjection.constraints.map((constraint) => [constraint.id, constraint]),
     )
 
     const newState: StoryState = {
       revision: nextRevision,
       entities: { ...projectedState.entities, ...legacyEntityMap },
       relations: mergedRelations,
-      events: projectedState.events,
+      events: { ...projectedState.events, ...legacyEvents },
       scenes: { ...preservedScenes, ...projectedState.scenes },
       timelines: projectedState.timelines,
-      promises: projectedState.promises,
-      constraints: { ...preservedConstraints, ...projectedState.constraints },
+      promises: { ...projectedState.promises, ...legacyPromises },
+      constraints: { ...preservedConstraints, ...projectedState.constraints, ...legacyConstraints },
     }
 
     // 比较内容是否产生实质变化（忽略 revision 本身）

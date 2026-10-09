@@ -4,18 +4,22 @@ import { SettingsView } from './SettingsView'
 import { SettingsProvider } from '../../core/settings'
 import { ThemeController } from '../../core/ThemeController'
 import { db } from '../../db/indexedDB'
-import { fetchModelIds } from '../../adapters/modelProviderProbe'
 
-vi.mock('../../adapters/modelProviderProbe', () => ({
-  probeModelEndpoint: vi.fn(async () => ({ status: 200, latency: 42 })),
-  fetchModelIds: vi.fn(async () => ['m-1', 'm-2']),
-}))
+const defaultProbe = vi.fn(async () => ({ status: 200, latency: 42, modelIds: ['m-1', 'm-2'] }))
 
-const renderSettings = (props: { open: boolean; onClose: () => void }) =>
+const renderSettings = (props: {
+  open: boolean
+  onClose: () => void
+  probeModelProvider?: typeof defaultProbe
+}) =>
   render(
     <SettingsProvider>
       <ThemeController />
-      <SettingsView open={props.open} onClose={props.onClose} />
+      <SettingsView
+        open={props.open}
+        onClose={props.onClose}
+        probeModelProvider={props.probeModelProvider ?? defaultProbe}
+      />
     </SettingsProvider>,
   )
 
@@ -107,7 +111,7 @@ describe('AiTab 添加面板（真实拉取/手动添加 + 目录预填 + 思考
     })
     fireEvent.click(screen.getByText('获取列表'))
 
-    // 验证 mock 的真实端点拉取结果 m-1, m-2 出现
+    // 验证 Runtime 返回的模型列表出现在界面中。
     await waitFor(() => {
       expect(screen.getAllByText('m-1').length).toBeGreaterThan(0)
       expect(screen.getAllByText('m-2').length).toBeGreaterThan(0)
@@ -168,8 +172,7 @@ describe('AiTab 模型目录', () => {
   })
 
   it('端点没返回模型列表时不算成功，也不覆盖上一次的列表（P5.2 的探测边界）', async () => {
-    // 打包版 CSP 的 connect-src 只放行本机地址，渲染进程直连端点会一个 id 都拿不到。
-    vi.mocked(fetchModelIds).mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    const noModelsProbe = vi.fn(async () => ({ status: 200, latency: 10, modelIds: [] }))
     localStorage.setItem(
       'inkpi-settings',
       JSON.stringify({
@@ -198,7 +201,7 @@ describe('AiTab 模型目录', () => {
         ],
       }),
     )
-    renderSettings({ open: true, onClose: vi.fn() })
+    renderSettings({ open: true, onClose: vi.fn(), probeModelProvider: noModelsProbe })
     fireEvent.click(screen.getByText('自定义 AI 模型'))
 
     fireEvent.click(screen.getByText('更新模型目录'))

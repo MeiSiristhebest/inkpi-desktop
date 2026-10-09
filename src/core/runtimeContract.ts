@@ -1,4 +1,5 @@
 import * as InkPiProtocol from '@inkpi/protocol'
+import runtimeLock from '../../runtime.lock.json'
 
 export interface RuntimeHandshakeRequest {
   protocolVersion: string
@@ -7,6 +8,13 @@ export interface RuntimeHandshakeRequest {
   clientName: string
   clientVersion?: string
   requiredCapabilities: readonly string[]
+  expectedRuntime?: RuntimeIdentityExpectation
+}
+
+export interface RuntimeIdentityExpectation {
+  runtimeCommit: string
+  skillManifestHash: string
+  storageSchemaVersion: number
 }
 
 export interface RuntimeHandshakeResponse {
@@ -15,8 +23,13 @@ export interface RuntimeHandshakeResponse {
   contractVersion: number
   schemaHash: string
   runtimeVersion: string
+  runtimeCommit: string
+  rpcMethods: string[]
   capabilities: string[]
+  skillManifestHash: string
+  storageSchemaVersion: number
   missingCapabilities: string[]
+  missingRpcMethods: string[]
   reason?: string
 }
 
@@ -29,6 +42,7 @@ type RuntimeContractApi = {
     clientName: string
     clientVersion?: string
     requiredCapabilities?: readonly string[]
+    expectedRuntime?: RuntimeIdentityExpectation
   }) => RuntimeHandshakeRequest
   DESKTOP_REQUIRED_RUNTIME_CAPABILITIES: readonly string[]
   DEFAULT_RPC_HOST: string
@@ -63,6 +77,7 @@ export function createRuntimeHandshakeRequest(options: {
   return getRuntimeContract().createRuntimeHandshakeRequest({
     ...options,
     requiredCapabilities: getDesktopRequiredRuntimeCapabilities(),
+    expectedRuntime: getExpectedRuntimeIdentity(),
   })
 }
 
@@ -72,6 +87,36 @@ export function assertRuntimeHandshakeResponse(
   const assertResponse: RuntimeContractApi['assertRuntimeHandshakeResponse'] =
     getRuntimeContract().assertRuntimeHandshakeResponse
   assertResponse(value, getDesktopRequiredRuntimeCapabilities())
+
+  const expected = getExpectedRuntimeIdentity()
+  const response = value as RuntimeHandshakeResponse
+  if (response.runtimeCommit !== expected.runtimeCommit) {
+    throw new Error('Runtime commit does not match runtime.lock.json')
+  }
+  if (response.skillManifestHash !== expected.skillManifestHash) {
+    throw new Error('Runtime skill manifest does not match runtime.lock.json')
+  }
+  if (response.storageSchemaVersion !== expected.storageSchemaVersion) {
+    throw new Error('Runtime storage schema does not match runtime.lock.json')
+  }
+}
+
+function getExpectedRuntimeIdentity(): RuntimeIdentityExpectation {
+  const expected = {
+    runtimeCommit: runtimeLock.pinnedCommit,
+    skillManifestHash: runtimeLock.skillManifestHash,
+    storageSchemaVersion: runtimeLock.storageSchemaVersion,
+  }
+  if (!/^[0-9a-f]{40}$/.test(expected.runtimeCommit)) {
+    throw new Error('runtime.lock.json must contain an exact Runtime commit')
+  }
+  if (!/^[0-9a-f]{64}$/.test(expected.skillManifestHash)) {
+    throw new Error('runtime.lock.json must contain a SHA-256 Skill manifest hash')
+  }
+  if (!Number.isSafeInteger(expected.storageSchemaVersion) || expected.storageSchemaVersion < 1) {
+    throw new Error('runtime.lock.json must contain a valid Runtime storage schema version')
+  }
+  return expected
 }
 
 export function getDesktopRequiredRuntimeCapabilities(): readonly string[] {

@@ -3,8 +3,8 @@ import type { KeyValueStore } from '../ports/keyValueStore'
 /**
  * localStorage 同步适配器（KeyValueStore 端口的轻量实现）。
  *
- * 用于 editor canvas-width、excluded-numbering-ids、chapter-history、
- * scratchpad 等轻量 UI 偏好，读写均同步完成。
+ * 用于 editor canvas-width、excluded-numbering-ids、scratchpad 等轻量 UI 偏好，
+ * 读写均同步完成。章节历史由 workspace-scoped IndexedDB 适配器持久化。
  * 业务层依赖 KeyValueStore 端口，不感知底层是 localStorage 还是其他存储。
  */
 export const localStorageKeyValueStore: KeyValueStore & {

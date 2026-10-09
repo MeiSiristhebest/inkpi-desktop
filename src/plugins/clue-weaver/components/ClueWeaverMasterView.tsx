@@ -45,9 +45,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   const [newKeywords, setNewKeywords] = useState('')
 
   // 视角泄露扫描
-  const [scanText, setScanText] = useState(
-    '陆沉冷笑道：“师兄，你当真以为太上长老是走火入魔？那分明是中了九幽冥毒！”',
-  )
+  const [scanText, setScanText] = useState('')
   const [violations, setViolations] = useState<GodViewViolation[]>([])
 
   // 信息优势比对
@@ -73,10 +71,6 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         .filter((e) => e.projectId === projectId && e.category === 'character')
         .map((e) => ({ id: e.id, name: e.name }))
 
-      // 若世界观无角色，补充默认两位演示
-      if (chars.length === 0) {
-        chars.push({ id: 'c-demo-1', name: '陆沉' }, { id: 'c-demo-2', name: '林夕' })
-      }
       setCharacters(chars)
       if (!charA && chars.length > 0) setCharA(chars[0].name)
       if (!charB && chars.length > 1) setCharB(chars[1].name)
@@ -196,7 +190,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   const handleCalcAdvantage = () => {
-    if (!charA || !charB) return
+    if (!charA || !charB || charA === charB) return
     const aObj = characters.find((c) => c.name === charA)
     const bObj = characters.find((c) => c.name === charB)
     const res = clueWeaverEngine.computeAdvantage(
@@ -286,7 +280,11 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             </div>
           </div>
 
-          {clues.length === 0 ? (
+          {characters.length === 0 ? (
+            <div className="p-8 text-center text-xs text-[var(--ink-text-muted)]">
+              请先在活体世界观中添加角色，再记录每个角色掌握的线索。
+            </div>
+          ) : clues.length === 0 ? (
             <div className="p-8 text-center text-xs text-[var(--ink-text-muted)]">
               暂无已录入线索。在上方登记线索后，将在此生成多视角认知矩阵。
             </div>
@@ -415,7 +413,11 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               className="w-full p-2.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
             />
 
-            {violations.length === 0 ? (
+            {!scanText.trim() ? (
+              <div className="p-3 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-[var(--ink-text-muted)] text-xs">
+                输入正文或选择章节后开始扫描。
+              </div>
+            ) : violations.length === 0 ? (
               <div className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 text-xs flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>无视角泄露。角色所言皆在认知档案授权范围内。</span>
@@ -450,6 +452,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             </span>
             <div className="flex items-center gap-2 text-xs">
               <Select value={charA} onValueChange={(v) => setCharA(v)} className="flex-1" size="sm">
+                <option value="" disabled>
+                  选择角色
+                </option>
                 {characters.map((c) => (
                   <option key={c.id} value={c.name}>
                     {c.name}
@@ -458,6 +463,9 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               </Select>
               <span className="text-[var(--ink-text-muted)]">VS</span>
               <Select value={charB} onValueChange={(v) => setCharB(v)} className="flex-1" size="sm">
+                <option value="" disabled>
+                  选择角色
+                </option>
                 {characters.map((c) => (
                   <option key={c.id} value={c.name}>
                     {c.name}
@@ -466,6 +474,7 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               </Select>
               <button
                 onClick={handleCalcAdvantage}
+                disabled={!charA || !charB || charA === charB}
                 className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs font-medium hover:border-[var(--ink-accent)]"
               >
                 对决比对

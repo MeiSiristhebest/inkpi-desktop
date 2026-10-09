@@ -19,6 +19,7 @@ import {
 import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
+import { isPrimaryNavigationPlugin } from '../../core/capabilityRegistry'
 import { capabilityFor } from '../../core/capabilityIndex'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
 import { Tooltip } from '../../ui/primitives'
@@ -89,7 +90,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     setCollapsedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }))
   }
 
-  // 过滤并归类插件：仅展示在 CapabilityRegistry 中声明支持 navigation surface 的能力
+  // Permanent navigation stays limited to core workflows. Search still exposes
+  // every enabled plugin that declares a navigation surface.
   const groupedCategories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     const navigationPlugins = activePlugins.filter((p) => {
@@ -101,14 +103,17 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       )
     })
 
+    const candidates = q
+      ? navigationPlugins
+      : navigationPlugins.filter((plugin) => isPrimaryNavigationPlugin(plugin.id))
     const filtered = q
-      ? navigationPlugins.filter(
+      ? candidates.filter(
           (p) =>
             p.name.toLowerCase().includes(q) ||
             p.description?.toLowerCase().includes(q) ||
             p.id.toLowerCase().includes(q),
         )
-      : navigationPlugins
+      : candidates
 
     const map = new Map<DesktopPluginCategory, DesktopPlugin[]>()
     for (const cat of CATEGORY_ORDER) {

@@ -129,6 +129,9 @@ describe('WorkspaceLifecycleService', () => {
 
   it('backs up and remaps workspace-scoped localStorage without exporting credentials', async () => {
     localStorage.clear()
+    const chapterHistory = JSON.stringify([{ id: 'snapshot-1', content: '<p>历史版本</p>' }])
+    const originalHistoryKey = 'orig-proj::chapter-history::orig-ch-1'
+    await db.put('settingsKV', { key: originalHistoryKey, value: chapterHistory })
     localStorage.setItem(
       'inkpi_draft_journal:orig-proj:orig-ch-1',
       JSON.stringify({
@@ -154,15 +157,25 @@ describe('WorkspaceLifecycleService', () => {
     expect(backup?.localStorageData?.some(({ value }) => value.includes('do-not-export'))).toBe(
       false,
     )
+    expect(backup?.domainData.settingsKV).toContainEqual({
+      key: originalHistoryKey,
+      value: chapterHistory,
+    })
 
     const result = await service.importWorkspace(backup)
     expect(result.ok).toBe(true)
+    const importedHistoryKey = `${result.workspaceId}::chapter-history::ch_generated_3`
+    await expect(db.get('settingsKV', importedHistoryKey)).resolves.toEqual({
+      key: importedHistoryKey,
+      value: chapterHistory,
+    })
     expect(
       localStorage.getItem(`inkpi_draft_journal:${result.workspaceId}:ch_generated_3`),
     ).toContain('未落盘草稿')
     expect(localStorage.getItem('inkpi_draft_journal:orig-proj:orig-ch-1')).toContain('未落盘草稿')
 
     await service.purgeWorkspace(result.workspaceId!)
+    await db.delete('settingsKV', originalHistoryKey)
     expect(
       localStorage.getItem(`inkpi_draft_journal:${result.workspaceId}:ch_generated_3`),
     ).toBeNull()

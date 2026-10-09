@@ -106,6 +106,13 @@ export interface LegacyStoryProjectionOptions {
   provenance?: Provenance
 }
 
+export interface LegacyStoryProjection {
+  entities: StoryEntity[]
+  events: StoryEvent[]
+  promises: NarrativePromise[]
+  constraints: StoryConstraint[]
+}
+
 /**
  * Projects the pre-StoryState Form/Table/Card stores into derived StoryState
  * entities. This keeps legacy UI data visible to canonical consumers without
@@ -165,6 +172,179 @@ export function projectLegacyRecordsToStoryEntities(
   }
 
   return entities.sort((left, right) => compareStrings(left.id, right.id))
+}
+
+/** Projects high-value legacy modules into typed StoryState collections. */
+export function projectLegacyRecordsToStoryState(
+  sources: readonly LegacyStoryProjectionSource[],
+  options: LegacyStoryProjectionOptions = {},
+): LegacyStoryProjection {
+  const fallbackProvenance = options.provenance ?? {
+    sourceType: 'derived' as const,
+    factLevel: 'hypothesis' as const,
+  }
+  assertProvenance(fallbackProvenance, 'Legacy projection provenance')
+  const projection: LegacyStoryProjection = {
+    entities: [],
+    events: [],
+    promises: [],
+    constraints: [],
+  }
+
+  for (const source of sources) {
+    for (const [index, rawRecord] of source.records.entries()) {
+      const context = `${source.sourceId}[${index}]`
+      const record = requireRecord(rawRecord, context)
+      const sourceRecordId = requiredStringValue(record.id ?? record.tabId, 'id or tabId', context)
+      const tabId = typeof record.tabId === 'string' ? record.tabId : ''
+      const data = isRecord(record.data) ? cloneObject(record.data) : {}
+      const id = `legacy:${source.sourceId}:${sourceRecordId}`
+      const provenanceValue = record.provenance ?? fallbackProvenance
+      assertProvenance(provenanceValue, `Legacy projection ${id} provenance`)
+      const name = firstLegacyText(
+        record.name,
+        record.title,
+        legacyField(data, ['姓名', '世界名称', '名称', '章节标题', '标题', '内容', '伏笔内容']),
+        record.tabId,
+        sourceRecordId,
+      )
+      const attributes = {
+        legacySource: source.sourceId,
+        sourceRecordId,
+        ...(tabId ? { tabId } : {}),
+        ...(typeof record.projectId === 'string' ? { projectId: record.projectId } : {}),
+        data,
+      }
+      const kind = legacyEntityKind(tabId)
+      const aliases = legacyAliases(data)
+      const entity: StoryEntity = {
+        id,
+        kind,
+        name,
+        aliases,
+        attributes,
+        ...(typeof record.status === 'string' ? { status: record.status } : {}),
+        provenance: clone(provenanceValue),
+      }
+      projection.entities.push(entity)
+
+      if (tabId === 'timeline' && source.sourceId === 'tableRows') {
+        const title = firstLegacyText(
+          legacyField(data, ['本章关键事件', '章节标题', '事件标题']),
+          record.name,
+          name,
+        )
+        projection.events.push({
+          id: `legacy:event:${source.sourceId}:${sourceRecordId}`,
+          type: 'legacy-timeline-event',
+          title,
+          ...(legacyField(data, ['故事内时间'])
+            ? { occurredAt: legacyField(data, ['故事内时间']) }
+            : {}),
+          entityIds: [],
+          attributes,
+          provenance: clone(provenanceValue),
+        })
+      }
+
+      if (tabId === 'foreshadow' && source.sourceId === 'tableRows') {
+        const statement = firstLegacyText(
+          legacyField(data, ['伏笔内容', '内容']),
+          record.name,
+          name,
+        )
+        const rawStatus = legacyField(data, ['状态'])
+        const status: NarrativePromiseStatus =
+          rawStatus === '已回收' ? 'fulfilled' : rawStatus === '已作废' ? 'abandoned' : 'open'
+        const introducedAt = legacyField(data, ['埋设位置'])
+        projection.promises.push({
+          id: `legacy:promise:${source.sourceId}:${sourceRecordId}`,
+          statement,
+          status,
+          ...(introducedAt ? { introducedAt } : {}),
+          evidence: [],
+          provenance: clone(provenanceValue),
+        })
+      }
+
+      if (tabId === 'worldbase' || tabId === 'power') {
+        for (const [field, rawValue] of Object.entries(data)) {
+          if (!/(规则|法则|禁忌|限制|代价)/.test(field)) continue
+          const description = legacyText(rawValue)
+          if (!description) continue
+          projection.constraints.push({
+            id: `legacy:constraint:${source.sourceId}:${sourceRecordId}:${field}`,
+            type: `${tabId}-rule`,
+            description: `${field}: ${description}`,
+            subjectIds: [id],
+            severity: 'info',
+            provenance: clone(provenanceValue),
+          })
+        }
+      }
+    }
+  }
+
+  projection.entities.sort((left, right) => compareStrings(left.id, right.id))
+  projection.events.sort((left, right) => compareStrings(left.id, right.id))
+  projection.promises.sort((left, right) => compareStrings(left.id, right.id))
+  projection.constraints.sort((left, right) => compareStrings(left.id, right.id))
+  return projection
+}
+
+function legacyEntityKind(tabId: string): string {
+  if (tabId === 'char-main' || tabId === 'char-secondary' || tabId === 'char-npc') {
+    return 'character'
+  }
+  const kinds: Readonly<Record<string, string>> = {
+    positioning: 'story-positioning',
+    worldbase: 'world-setting',
+    power: 'power-system',
+    master: 'story-outline',
+    'volume-outline': 'volume-outline',
+    'chapter-outline': 'chapter-outline',
+    geography: 'location',
+    nations: 'nation',
+    races: 'species',
+    items: 'story-item',
+    history: 'world-history',
+    terms: 'story-term',
+  }
+  return kinds[tabId] ?? 'legacy-record'
+}
+
+function legacyAliases(data: Record<string, unknown>): string[] {
+  const value = legacyField(data, ['别称', '别名', '曾用名'])
+  if (Array.isArray(value))
+    return value.flatMap((item) => (legacyText(item) ? [legacyText(item)!] : []))
+  return typeof value === 'string'
+    ? value
+        .split(/[、，,;；\s]+/)
+        .map((alias) => alias.trim())
+        .filter(Boolean)
+    : []
+}
+
+function legacyField(data: Record<string, unknown>, names: readonly string[]): string | undefined {
+  for (const name of names) {
+    const text = legacyText(data[name])
+    if (text) return text
+  }
+  return undefined
+}
+
+function legacyText(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return undefined
+}
+
+function firstLegacyText(...values: unknown[]): string {
+  for (const value of values) {
+    const text = legacyText(value)
+    if (text) return text
+  }
+  return '未命名设定'
 }
 
 export interface StoryPluginProjectionOptions {

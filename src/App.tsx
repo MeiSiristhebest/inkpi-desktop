@@ -82,6 +82,7 @@ const ProjectEngine: FC<{
   isReconnecting: boolean
   onReconnect: () => void
   onRequestGhost: (chapterId: string, text: string) => Promise<string | null>
+  probeModelProvider: import('./hooks/useAiConversation').AiConversation['probeModelProvider']
   onAiTask: (
     task: import('@inkpi/protocol').AiTask,
   ) => Promise<import('@inkpi/protocol').TaskResult | null>
@@ -116,6 +117,7 @@ const ProjectEngine: FC<{
       isReconnecting={props.isReconnecting}
       onReconnect={props.onReconnect}
       onRequestGhost={props.onRequestGhost}
+      onProbeModelProvider={props.probeModelProvider}
       onAiTask={props.onAiTask}
       onHome={props.onHome}
       renderInspector={(state, onClose) => {
@@ -263,6 +265,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     syncConflict,
     syncDomain,
     listArtifacts,
+    probeModelProvider,
     requestScope,
   } = ai
 
@@ -356,6 +359,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   isReconnecting={isReconnecting}
                   onReconnect={reconnect}
                   onRequestGhost={requestGhost}
+                  probeModelProvider={probeModelProvider}
                   onAiTask={runAiTask}
                   onHome={() => setActiveProjectId(null)}
                   aiMessages={aiMessages}

@@ -58,6 +58,7 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   RUNTIME_SCHEMA_HASH,
 } from '@inkpi/protocol'
+import runtimeLock from '../runtime.lock.json'
 
 describe('App daemon connection', () => {
   beforeEach(() => {
@@ -100,8 +101,13 @@ describe('App daemon connection', () => {
               contractVersion: RUNTIME_CONTRACT_VERSION,
               schemaHash: RUNTIME_SCHEMA_HASH,
               runtimeVersion: '1.0.0',
+              runtimeCommit: runtimeLock.pinnedCommit,
+              rpcMethods: [...DESKTOP_REQUIRED_RUNTIME_CAPABILITIES],
               capabilities: [...DESKTOP_REQUIRED_RUNTIME_CAPABILITIES],
+              skillManifestHash: runtimeLock.skillManifestHash,
+              storageSchemaVersion: runtimeLock.storageSchemaVersion,
               missingCapabilities: [],
+              missingRpcMethods: [],
             }
           }
           if (method === 'artifact.list') return []

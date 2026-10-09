@@ -11,6 +11,7 @@ import type { FactionDiplomacyRecord } from '../ports/factionDiplomacyRepository
 import type { PowerTierSystem } from '../ports/powerTierRepository'
 import type { ChapterBeatPlan } from '../plugins/scene-beats/types'
 import type { ExpectationContract } from '../ports/expectationRepository'
+import type { CardRecord, FormDataRecord, TableRowRecord } from '../types'
 
 describe('StoryStateMaterializer — 生产级领域物化流水线', () => {
   const workspaceId = 'proj-materializer-test'
@@ -269,6 +270,79 @@ describe('StoryStateMaterializer — 生产级领域物化流水线', () => {
       severity: 'error',
       subjectIds: ['chapter-1'],
     })
+  })
+
+  it('materializes legacy Form/Table/Card records into typed StoryState facts', async () => {
+    const legacyWorkspaceId = 'proj-materializer-legacy-test'
+    const cleanup = async () => {
+      for (const store of ['formData', 'tableRows', 'cardRecords'] as const) {
+        const records = await db.getByIndex<Record<string, unknown>>(
+          store,
+          'projectId',
+          legacyWorkspaceId,
+        )
+        for (const record of records) {
+          const id = record.id
+          if (typeof id === 'string') await db.delete(store, id)
+        }
+      }
+      await db.delete('settingsKV', `storyState::${legacyWorkspaceId}`)
+    }
+    await cleanup()
+
+    await db.put<FormDataRecord>('formData', {
+      id: `${legacyWorkspaceId}::worldbase`,
+      projectId: legacyWorkspaceId,
+      tabId: 'worldbase',
+      data: { 世界名称: '云州', 世界核心规则: '灵脉决定修行者可吸纳的灵气' },
+    })
+    await db.put<CardRecord>('cardRecords', {
+      id: 'legacy-character-1',
+      projectId: legacyWorkspaceId,
+      tabId: 'char-main',
+      name: '阿青',
+      data: { 别称: '青衣、阿青', 身份定位: '流亡剑修' },
+    })
+    await db.put<TableRowRecord>('tableRows', {
+      id: 'legacy-timeline-1',
+      projectId: legacyWorkspaceId,
+      tabId: 'timeline',
+      data: { 章节标题: '入门', 本章关键事件: '拜入青云宗', 故事内时间: '灵历三年春' },
+    })
+    await db.put<TableRowRecord>('tableRows', {
+      id: 'legacy-foreshadow-1',
+      projectId: legacyWorkspaceId,
+      tabId: 'foreshadow',
+      data: { 伏笔内容: '旧剑出现裂纹', 埋设位置: '第2章', 状态: '未回收' },
+    })
+
+    try {
+      const state = await storyStateMaterializer.materialize(legacyWorkspaceId)
+
+      expect(state?.entities['legacy:cardRecords:legacy-character-1']).toMatchObject({
+        kind: 'character',
+        name: '阿青',
+        aliases: ['青衣', '阿青'],
+      })
+      expect(Object.values(state?.constraints ?? {})).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'worldbase-rule',
+            description: '世界核心规则: 灵脉决定修行者可吸纳的灵气',
+          }),
+        ]),
+      )
+      expect(state?.events['legacy:event:tableRows:legacy-timeline-1']).toMatchObject({
+        type: 'legacy-timeline-event',
+        title: '拜入青云宗',
+      })
+      expect(state?.promises['legacy:promise:tableRows:legacy-foreshadow-1']).toMatchObject({
+        statement: '旧剑出现裂纹',
+        status: 'open',
+      })
+    } finally {
+      await cleanup()
+    }
   })
 
   it('idempotent when no domain changes occur', async () => {

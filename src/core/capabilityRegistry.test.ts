@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { CAPABILITY_REGISTRY, getCapabilityOverlay } from './capabilityRegistry'
+import {
+  CAPABILITY_REGISTRY,
+  getCapabilityOverlay,
+  isPrimaryNavigationPlugin,
+  PRIMARY_NAVIGATION_PLUGIN_IDS,
+} from './capabilityRegistry'
 import { capabilityFor } from './capabilityIndex'
 import { ALL_PLUGIN_DEFINITIONS } from './pluginDefinitions'
 import { TAB_DEFINITIONS } from '../config/tabDefinitions'
@@ -68,6 +73,14 @@ describe('CAPABILITY_REGISTRY (P2.1, P2.2, INV-10)', () => {
     const pluginIds = new Set(ALL_PLUGIN_DEFINITIONS.map((definition) => definition.id))
     const shared = TAB_DEFINITIONS.map((tab) => tab.id).filter((id) => pluginIds.has(id))
     expect(shared).toEqual(['geography-map'])
+  })
+
+  it('limits permanent navigation to the primary writing workflows', () => {
+    const primary = new Set<string>(PRIMARY_NAVIGATION_PLUGIN_IDS)
+    expect(PRIMARY_NAVIGATION_PLUGIN_IDS).toHaveLength(4)
+    for (const plugin of ALL_PLUGIN_DEFINITIONS) {
+      expect(isPrimaryNavigationPlugin(plugin.id), plugin.id).toBe(primary.has(plugin.id))
+    }
   })
 
   it('registers no capability that a catalog cannot evidence', () => {

@@ -7,6 +7,10 @@ import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { renderChapterHtmlDocument } from '../../../adapters/htmlChapterRenderer'
 import { blobFileDownloader } from '../../../adapters/blobFileDownloader'
 import { indexedDbTimelineRepository } from '../../../adapters/indexedDbTimelineRepository'
+import {
+  chapterHistoryStorageKey,
+  indexedDbChapterHistoryStore,
+} from '../../../adapters/indexedDbChapterHistoryStore'
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
 import type { KeyValueStore } from '../../../ports/keyValueStore'
 import { setGhostText as showGhostText } from '../../../extensions/ghost-text'
@@ -186,10 +190,12 @@ export interface UseChapterEditorModelArgs {
   editorRef: MutableRefObject<any>
   onStats?: (stats: { title?: string; wordCount: number; updatedAt?: number }) => void
   onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
-  /** 轻量 KV 持久化端口（canvas-width / excluded-numbering-ids / chapter-history / scratchpad）。
+  /** Lightweight KV port for editor preferences and workspace pointers.
    *  测试时注入内存实现；生产默认使用 localStorageKeyValueStore。
    */
   kvStore?: KeyValueStore
+  /** Durable workspace-scoped snapshot history. */
+  historyStore?: KeyValueStore
 }
 
 export interface ChapterEditorModel {
@@ -337,6 +343,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     onStats,
     onRequestGhost,
     kvStore = localStorageKeyValueStore,
+    historyStore = indexedDbChapterHistoryStore,
   } = args
 
   const [settings, updateSettings] = useSettings()
@@ -378,10 +385,12 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const kvStoreRef = useRef(kvStore)
   kvStoreRef.current = kvStore
+  const historyStoreRef = useRef(historyStore)
+  historyStoreRef.current = historyStore
 
   const saveSnapshot = (ch: ChapterRecord) => {
-    const key = `chapter-history-${ch.id}`
-    void kvStoreRef.current.get(key).then((raw) => {
+    const key = chapterHistoryStorageKey(projectId, ch.id)
+    void historyStoreRef.current.get(key).then((raw) => {
       try {
         const existing: Array<{
           kind?: 'auto' | 'milestone'
@@ -400,7 +409,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         const autos = existing.filter((s) => s.kind !== 'milestone')
         const trimmedAutos = autos.slice(0, 19) // keep at most 19 prior autos + 1 new = 20
         const updated = [snapshot, ...trimmedAutos, ...milestones]
-        void kvStoreRef.current.set(key, JSON.stringify(updated))
+        void historyStoreRef.current.set(key, JSON.stringify(updated))
       } catch {
         /* ignore */
       }

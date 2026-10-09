@@ -32,10 +32,6 @@ const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsBlue as SensitiveWord[]),
 ]
 
-const DEMO_FALLBACK_TEXT = `林枫手持利刃杀入敌阵，刹那间血肉横飞，场面开膛破肚惨不忍睹。
-后方政府与公安局的飞舟正在赶来，消息传出后立刻被河  蟹了。
-一旁的魔修狂妄叫嚣：“你这屌丝也敢来送死？老子的战力当真牛逼！”`
-
 export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
   const aiTask = usePluginAiTask('safe-gate')
@@ -47,12 +43,10 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
-  const [text, setText] = useState(DEMO_FALLBACK_TEXT)
+  const [text, setText] = useState('')
   const [genre, setGenre] = useState<GenreStyle>('xianxia')
   const [filterLevel, setFilterLevel] = useState<'all' | 'red' | 'yellow' | 'blue'>('all')
-  const [scanResult, setScanResult] = useState<SafeGateScanResult>(() =>
-    engine.scan(DEMO_FALLBACK_TEXT, 'xianxia'),
-  )
+  const [scanResult, setScanResult] = useState<SafeGateScanResult>(() => engine.scan('', 'xianxia'))
 
   useEffect(() => {
     const load = async () => {
@@ -318,7 +312,9 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
         <div className="w-96 flex flex-col min-w-0 bg-[var(--ink-bg-panel)] overflow-hidden">
           <div className="p-3 border-b border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/40 shrink-0 text-xs font-semibold flex items-center justify-between">
             <span>审查结果与文学平替方案</span>
-            {scanResult.isClean ? (
+            {!text.trim() ? (
+              <span className="text-[var(--ink-text-muted)]">等待正文</span>
+            ) : scanResult.isClean ? (
               <span className="text-emerald-500 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> 未命中本地词库
               </span>
@@ -330,7 +326,14 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {filteredViolations.length === 0 ? (
+            {!text.trim() ? (
+              <div className="text-center py-16 text-[var(--ink-text-muted)] text-xs">
+                <p className="font-medium">输入或选择章节正文后开始检测</p>
+                <p className="text-[10px] text-[var(--ink-text-faint)] mt-1">
+                  空白内容不会显示为通过审查
+                </p>
+              </div>
+            ) : filteredViolations.length === 0 ? (
               <div className="text-center py-16 text-[var(--ink-text-muted)] text-xs">
                 <ShieldCheck className="w-8 h-8 mx-auto text-emerald-500 mb-2 opacity-80" />
                 <p className="font-medium text-emerald-500">此分类下无敏感风险</p>

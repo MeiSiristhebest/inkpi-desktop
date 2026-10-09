@@ -275,6 +275,7 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
         routeId,
         ...(state ? { state } : {}),
       }),
+    probeModelProvider: (params) => client.request('model.provider.probe', params),
 
     runContinuityAudit: async (input, options = {}) => {
       await ensurePluginInstructionsRegistered()

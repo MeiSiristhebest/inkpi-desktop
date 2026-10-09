@@ -38,8 +38,10 @@ import {
 import { PluginSettingsView } from '../plugins/PluginSettingsView'
 import { WritingHabitsTab } from './WritingHabitsTab'
 import { ShortcutsTab } from './ShortcutsTab'
-import { clock } from '../../adapters/clock'
-import { fetchModelIds, probeModelEndpoint } from '../../adapters/modelProviderProbe'
+import type {
+  RuntimeModelProviderProbeParams,
+  RuntimeModelProviderProbeResult,
+} from '@inkpi/protocol'
 import {
   useSettings,
   PROVIDER_META,
@@ -367,11 +369,15 @@ interface SettingsViewProps {
   runtimeState?: RuntimeReadiness
   /** 手动重连 Daemon，缺省时连接页只读展示状态 */
   onReconnect?: () => void
+  probeModelProvider?: (
+    params: RuntimeModelProviderProbeParams,
+  ) => Promise<RuntimeModelProviderProbeResult>
 }
 
 export const SettingsView: FC<SettingsViewProps> = ({
   open,
   onClose,
+  probeModelProvider,
   runtimeState = 'unknown',
   onReconnect,
 }) => {
@@ -562,11 +568,14 @@ export const SettingsView: FC<SettingsViewProps> = ({
             {tab === 'writing' && <WritingHabitsTab settings={settings} update={update} />}
             {tab === 'shortcuts' && <ShortcutsTab />}
             {tab === 'plugins' && <PluginSettingsView />}
-            {tab === 'ai' && <AiTab settings={settings} update={update} />}
+            {tab === 'ai' && (
+              <AiTab settings={settings} update={update} probeModelProvider={probeModelProvider} />
+            )}
             {tab === 'connection' && (
               <ConnectionTab
                 settings={settings}
                 runtimeState={runtimeState}
+                probeModelProvider={probeModelProvider}
                 onReconnect={onReconnect}
               />
             )}
@@ -1094,7 +1103,8 @@ const EditorTab: FC<{
 const AiTab: FC<{
   settings: AppSettings
   update: (p: Partial<AppSettings>) => void
-}> = ({ settings, update }) => {
+  probeModelProvider?: SettingsViewProps['probeModelProvider']
+}> = ({ settings, update, probeModelProvider }) => {
   // 当前已保存的所有供应商列表
   const savedList = useMemo<ModelConfig[]>(() => {
     if (settings.savedAiModels && settings.savedAiModels.length > 0) {
@@ -1120,10 +1130,23 @@ const AiTab: FC<{
     Record<string, { latency?: number; status: 'ok' | 'err'; msg: string }>
   >({})
 
-  // 测试连接处理
-  const handleTestConnection = async (targetUrl: string, targetKey?: string) => {
+  const runProviderProbe = async (
+    provider: string,
+    baseUrl: string,
+    apiKey?: string,
+  ): Promise<RuntimeModelProviderProbeResult> => {
+    if (!probeModelProvider) throw new Error('Runtime 未连接，无法从运行时探测供应商端点')
+    return probeModelProvider({ provider, baseUrl, apiKey })
+  }
+
+  // Provider network requests stay in Runtime; the WebView only renders the result.
+  const handleTestConnection = async (
+    targetUrl: string,
+    targetKey?: string,
+    provider = 'custom',
+  ) => {
     try {
-      const probe = await probeModelEndpoint(targetUrl, targetKey, { now: () => clock.now() })
+      const probe = await runProviderProbe(provider, targetUrl, targetKey)
       if (probe.status >= 200 && probe.status < 300) {
         return { ok: true, msg: `${probe.latency}ms 连接正常 (HTTP ${probe.status})` }
       }
@@ -1137,9 +1160,14 @@ const AiTab: FC<{
   }
 
   // 快速测速按钮
-  const handleQuickSpeedTest = async (url?: string, key?: string, targetId?: string) => {
+  const handleQuickSpeedTest = async (
+    url?: string,
+    key?: string,
+    targetId?: string,
+    provider = 'custom',
+  ) => {
     if (!url) return
-    const res = await handleTestConnection(url, key)
+    const res = await handleTestConnection(url, key, provider)
     if (targetId) {
       setCardSpeedResults((prev) => ({
         ...prev,
@@ -1203,11 +1231,9 @@ const AiTab: FC<{
       const url = m.baseUrl || PROVIDER_META[m.provider]?.defaultBaseUrl
       if (m.enabled === false || !url) continue
       try {
-        const ids = await fetchModelIds(url, m.apiKey)
-        // 空数组既可能是端点没返回、也可能是请求被整体拦下（打包版 CSP 只放行本机地址）。
-        // 两种都不能记成「已更新」：fetchedCount 会被写成上次成功时间旁的绿字。
-        if (ids.length > 0) {
-          nextList[i] = { ...m, availableModelIds: ids }
+        const probe = await runProviderProbe(m.provider, url, m.apiKey)
+        if (probe.status >= 200 && probe.status < 300 && probe.modelIds.length > 0) {
+          nextList[i] = { ...m, availableModelIds: probe.modelIds }
           okCount += 1
         } else {
           failedCount += 1
@@ -1270,6 +1296,13 @@ const AiTab: FC<{
         onBack={() => setEditingTarget(undefined)}
         onSave={handleDialogSave}
         onTest={handleTestConnection}
+        onFetchModels={async (baseUrl, apiKey, provider) => {
+          const probe = await runProviderProbe(provider, baseUrl, apiKey)
+          if (probe.status < 200 || probe.status >= 300) {
+            throw new Error(`Runtime HTTP ${probe.status}`)
+          }
+          return probe.modelIds
+        }}
       />
     )
   }
@@ -1473,6 +1506,7 @@ const AiTab: FC<{
                             m.baseUrl || pMeta?.defaultBaseUrl,
                             m.apiKey,
                             cardKey,
+                            m.provider,
                           )
                         }
                         className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
@@ -1602,8 +1636,9 @@ const ReadinessCard: FC<{
 const ConnectionTab: FC<{
   settings: AppSettings
   runtimeState: RuntimeReadiness
+  probeModelProvider?: SettingsViewProps['probeModelProvider']
   onReconnect?: () => void
-}> = ({ settings, runtimeState, onReconnect }) => {
+}> = ({ settings, runtimeState, probeModelProvider, onReconnect }) => {
   const model = settings.aiModel
   const providerBaseUrl = model
     ? model.baseUrl?.trim() || PROVIDER_META[model.provider]?.defaultBaseUrl?.trim()
@@ -1627,20 +1662,23 @@ const ConnectionTab: FC<{
     if (!model || !providerBaseUrl) return
     setProbe({ signature: probeSignature, state: 'probing' })
     try {
-      const { status, latency } = await probeModelEndpoint(providerBaseUrl, model.apiKey)
+      if (!probeModelProvider) throw new Error('Runtime 未连接，无法探测供应商端点')
+      const { status, latency } = await probeModelProvider({
+        provider: model.provider,
+        baseUrl: providerBaseUrl,
+        apiKey: model.apiKey,
+      })
       setProbe({
         signature: probeSignature,
         state: classifyProbeStatus(status),
         detail: `HTTP ${status} · ${latency} ms`,
       })
     } catch (error) {
-      // 抛异常意味着一个 HTTP 状态码都没拿到。打包版 CSP 的 connect-src 只放行本机地址，
-      // 所以这多半是探测通道本身不通，而不是用户的端点挂了——别说成「无法访问」。
       const reason = error instanceof Error ? error.name : String(error)
       setProbe({
         signature: probeSignature,
         state: 'blocked',
-        detail: `请求没有拿到端点回应（${reason}）。打包版只允许界面连接本机地址；AI 任务由 Runtime 进程发起，不受此限。`,
+        detail: `Runtime 探测失败（${reason}）。检查 Runtime 连接和供应商设置后重试。`,
       })
     }
   }

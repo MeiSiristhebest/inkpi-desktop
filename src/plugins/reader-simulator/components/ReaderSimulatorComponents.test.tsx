@@ -37,6 +37,8 @@ describe('ReaderSimulator Components', () => {
     render(<ReaderSimulatorMasterView projectId="proj-1" />)
 
     expect(screen.getByText(/读者认知镜像与段评预演沙盒/)).toBeInTheDocument()
+    expect(screen.getByText(/结果是规则提示，不代表真实评论或发布表现/)).toBeInTheDocument()
+    expect(screen.queryByText(/真实读者拟真反应/)).not.toBeInTheDocument()
     await waitFor(() => {
       expect(screen.getByText(/第一章 圣母降临与压级屈辱/)).toBeInTheDocument()
       expect(screen.getByText(/读者毒发弃书高危警示/)).toBeInTheDocument()

@@ -1090,10 +1090,18 @@ export class WorkspaceLifecycleService {
         }
 
         // 2. SettingsKV & Nested StoryState Object Graph Remapping
-        if (storeName === 'settingsKV' && 'key' in item && typeof item.key === 'string') {
-          item.key = item.key
+        const originalSettingsKey = item.key
+        if (storeName === 'settingsKV' && typeof originalSettingsKey === 'string') {
+          let remappedSettingsKey = originalSettingsKey
             .replaceAll(encodedOldWorkspaceId, encodedNewWorkspaceId)
             .replaceAll(oldWorkspaceId, newWorkspaceId)
+
+          const historyPrefix = `${newWorkspaceId}::chapter-history::`
+          if (remappedSettingsKey.startsWith(historyPrefix)) {
+            const oldChapterId = remappedSettingsKey.slice(historyPrefix.length)
+            remappedSettingsKey = `${historyPrefix}${chapterIdMap.get(oldChapterId) ?? oldChapterId}`
+          }
+          item.key = remappedSettingsKey
 
           const parsedValue = parseSettingsValue(item.value)
           if (parsedValue) {
@@ -1104,7 +1112,7 @@ export class WorkspaceLifecycleService {
               val.chapterId = chapterIdMap.get(val.chapterId)!
             }
 
-            const settingsKey = String(item.key)
+            const settingsKey = remappedSettingsKey
             const isStoryState =
               settingsKey.startsWith('storyState::') ||
               [

@@ -1,9 +1,15 @@
 import * as net from 'node:net'
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const fixtureDirectory = resolve(fileURLToPath(new URL('.', import.meta.url)))
 const inkpiRoot = resolve(fixtureDirectory, '../../../inkpi')
+const runtimeLock = JSON.parse(
+  await readFile(resolve(fixtureDirectory, '../../runtime.lock.json'), 'utf8'),
+)
+globalThis.__INKPI_RUNTIME_COMMIT__ = runtimeLock.pinnedCommit
+globalThis.__INKPI_SKILL_MANIFEST_HASH__ = runtimeLock.skillManifestHash
 const serverEntry = pathToFileURL(resolve(inkpiRoot, 'packages/server/dist/index.js')).href
 const { InkPiDaemon } = await import(serverEntry)
 

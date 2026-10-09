@@ -8,10 +8,8 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { Tooltip } from '../../../ui/primitives'
 
-const DEFAULT_CHAPTER_TEXT = `【示例文本】请在此粘贴章节正文，系统将基于台词结构生成拟真配音脚本。`
-
 export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
-  const [chapterText, setChapterText] = useState(DEFAULT_CHAPTER_TEXT)
+  const [chapterText, setChapterText] = useState('')
   const [casts, setCasts] = useState<VoiceCastProfileRecord[]>([])
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentLineIndex, setCurrentLineIndex] = useState<number | null>(null)
@@ -165,6 +163,7 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
               className="w-full h-48 p-3 text-xs border rounded font-serif bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-800 leading-relaxed"
               value={chapterText}
               onChange={(e) => setChapterText(e.target.value)}
+              placeholder="粘贴章节正文以提取对白台本"
             />
           </div>
 
@@ -181,6 +180,11 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
             </h3>
 
             <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              {script.lines.length === 0 && (
+                <p className="py-8 text-center text-xs text-slate-400">
+                  等待正文：粘贴包含角色对白的章节正文后显示试听内容。
+                </p>
+              )}
               {script.lines.map((line) => (
                 <div
                   key={line.lineIndex}

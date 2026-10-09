@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest'
 
 const CORE_ROOT = dirname(fileURLToPath(import.meta.url))
 const SRC_ROOT = join(CORE_ROOT, '..')
-const BUS_SOURCE = readFileSync(join(CORE_ROOT, 'pluginEventBus.ts'), 'utf8')
+const normalizeSource = (source: string) => source.replace(/\r\n?/g, '\n')
+const BUS_SOURCE = normalizeSource(readFileSync(join(CORE_ROOT, 'pluginEventBus.ts'), 'utf8'))
 
 function productionSources(directory: string): string[] {
   const files: string[] = []
@@ -33,14 +34,16 @@ function quotedUnionMembers(block: string): string[] {
   return [...block.matchAll(/'([A-Z][A-Z_]+)'/g)].map((match) => match[1])
 }
 
-function declaredEventNames(): string[] {
-  const union = /export type PluginEventType =([\s\S]*?)\n\n/.exec(BUS_SOURCE)?.[1]
+function declaredEventNames(source = BUS_SOURCE): string[] {
+  const union = /export type PluginEventType =([\s\S]*?)\n\n/.exec(normalizeSource(source))?.[1]
   if (!union) throw new Error('找不到 PluginEventType 联合类型，扫描规则需要跟着文件结构更新')
   return quotedUnionMembers(union)
 }
 
-function payloadInterfaceKeys(): string[] {
-  const iface = /export interface PluginEventPayloads \{([\s\S]*?)\n\}/.exec(BUS_SOURCE)?.[1]
+function payloadInterfaceKeys(source = BUS_SOURCE): string[] {
+  const iface = /export interface PluginEventPayloads \{([\s\S]*?)\n\}/.exec(
+    normalizeSource(source),
+  )?.[1]
   if (!iface) throw new Error('找不到 PluginEventPayloads，扫描规则需要跟着文件结构更新')
   return [...iface.matchAll(/^ {2}([A-Z][A-Z_]+): \{/gm)].map((match) => match[1])
 }
@@ -74,8 +77,8 @@ function subscribersByEvent(): Map<string, string[]> {
 }
 
 /** 联合类型里用箭头声明了「谁 -> 谁」的那些事件名（连接真假由下面的门控判定）。 */
-function eventsClaimingARoute(): string[] {
-  const union = /export type PluginEventType =([\s\S]*?)\n\n/.exec(BUS_SOURCE)?.[1]
+function eventsClaimingARoute(source = BUS_SOURCE): string[] {
+  const union = /export type PluginEventType =([\s\S]*?)\n\n/.exec(normalizeSource(source))?.[1]
   if (!union) throw new Error('找不到 PluginEventType 联合类型，扫描规则需要跟着文件结构更新')
   return union
     .split('\n')
@@ -87,6 +90,14 @@ function eventsClaimingARoute(): string[] {
 }
 
 describe('plugin event bus contract (§P2.12)', () => {
+  it('scans declarations from Windows CRLF checkouts', () => {
+    const windowsSource = BUS_SOURCE.replace(/\n/g, '\r\n')
+
+    expect(declaredEventNames(windowsSource)).toEqual(declaredEventNames())
+    expect(payloadInterfaceKeys(windowsSource)).toEqual(payloadInterfaceKeys())
+    expect(eventsClaimingARoute(windowsSource)).toEqual(eventsClaimingARoute())
+  })
+
   it('names and payload shapes are the same set in both directions', () => {
     expect(payloadInterfaceKeys().sort()).toEqual(declaredEventNames().sort())
   })

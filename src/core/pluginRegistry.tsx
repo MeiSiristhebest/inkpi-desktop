@@ -70,9 +70,10 @@ function defaultPluginIds(): Set<string> {
   )
 }
 
-/** Synchronous read used only for first paint and legacy migration. */
+/** Synchronous defaults for first paint. Persisted state is read from IndexedDB. */
 export function loadEnabledPluginIds(workspaceId?: string): Set<string> {
-  return legacyPluginIds(workspaceId) ?? defaultPluginIds()
+  void workspaceId
+  return defaultPluginIds()
 }
 
 export function saveEnabledPluginIds(ids: Set<string>, workspaceId?: string): Promise<void> {
@@ -100,7 +101,10 @@ export async function loadEnabledPluginIdsFromIDB(
       null,
     )
     const canonicalIds = parsePluginIds(canonical)
-    if (canonicalIds) return canonicalIds
+    if (canonicalIds) {
+      await removeLegacyPluginIds(workspaceId)
+      return canonicalIds
+    }
 
     const legacy = legacyPluginIds(workspaceId)
     if (!legacy) return null
@@ -110,13 +114,17 @@ export async function loadEnabledPluginIdsFromIDB(
       CANONICAL_PLUGIN_KEY,
       Array.from(legacy),
     )
-    await localStorageKeyValueStore.remove?.(getPluginStorageKey(workspaceId))
-    if (workspaceId) await localStorageKeyValueStore.remove?.(STORAGE_KEY_ENABLED_PLUGINS)
+    await removeLegacyPluginIds(workspaceId)
     return legacy
   } catch (error) {
     console.warn('Failed to load enabled plugins from IndexedDB:', error)
     return null
   }
+}
+
+async function removeLegacyPluginIds(workspaceId?: string): Promise<void> {
+  await localStorageKeyValueStore.remove?.(getPluginStorageKey(workspaceId))
+  if (workspaceId) await localStorageKeyValueStore.remove?.(STORAGE_KEY_ENABLED_PLUGINS)
 }
 
 // ── 共享状态（Context，单一来源、可注入）──
@@ -137,10 +145,10 @@ export const PluginProvider: FC<{ workspaceId?: string; children: ReactNode }> =
   workspaceId,
   children,
 }) => {
-  const [enabledIds, setEnabledIds] = useState<Set<string>>(() => loadEnabledPluginIds(workspaceId))
+  const [enabledIds, setEnabledIds] = useState<Set<string>>(() => defaultPluginIds())
 
   useEffect(() => {
-    setEnabledIds(loadEnabledPluginIds(workspaceId))
+    setEnabledIds(defaultPluginIds())
     let cancelled = false
     loadEnabledPluginIdsFromIDB(workspaceId).then((fromIDB) => {
       if (cancelled || !fromIDB) return

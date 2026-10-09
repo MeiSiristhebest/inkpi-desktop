@@ -8,7 +8,7 @@ export const DialogueDistillerDrawer: FC<DesktopPluginDrawerProps> = ({
   currentText,
 }) => {
   const [inputText, setInputText] = useState('')
-  const [charactersInput, setCharactersInput] = useState('陆沉, 林夕, 王铁柱')
+  const [charactersInput, setCharactersInput] = useState('')
   const [result, setResult] = useState<Array<{
     name: string
     quoteCount: number
@@ -17,17 +17,19 @@ export const DialogueDistillerDrawer: FC<DesktopPluginDrawerProps> = ({
   }> | null>(null)
 
   const textToScan = inputText || currentText || ''
+  const characterNames = charactersInput
+    .split(/[,，、\s]+/)
+    .map((name) => name.trim())
+    .filter(Boolean)
+  const canScan = Boolean(textToScan.trim() && characterNames.length > 0)
 
   const handleScan = () => {
-    const names = charactersInput
-      .split(/[,，、\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
+    if (!canScan) return
 
-    const quotesMap = dialogueDistillerEngine.extractCharacterQuotes(textToScan, names)
+    const quotesMap = dialogueDistillerEngine.extractCharacterQuotes(textToScan, characterNames)
     const list: Array<{ name: string; quoteCount: number; asl: number; tone: string }> = []
 
-    for (const name of names) {
+    for (const name of characterNames) {
       const q = quotesMap[name] || []
       if (q.length > 0) {
         const vp = dialogueDistillerEngine.computeVoiceprint(name, q, projectId)
@@ -63,6 +65,7 @@ export const DialogueDistillerDrawer: FC<DesktopPluginDrawerProps> = ({
           type="text"
           value={charactersInput}
           onChange={(e) => setCharactersInput(e.target.value)}
+          placeholder="输入作品中的角色名，以逗号分隔"
           className="w-full px-2 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
         />
 
@@ -73,12 +76,13 @@ export const DialogueDistillerDrawer: FC<DesktopPluginDrawerProps> = ({
           rows={3}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="如：陆沉冷笑道：“...” 林夕淡淡道：“...”"
+          placeholder="粘贴正文或使用当前编辑器正文"
           className="w-full p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
         />
 
         <button
           onClick={handleScan}
+          disabled={!canScan}
           className="w-full py-1.5 rounded-lg bg-[var(--ink-accent)] text-white font-medium hover:opacity-90 flex items-center justify-center gap-1.5"
         >
           <Search className="w-3.5 h-3.5" />

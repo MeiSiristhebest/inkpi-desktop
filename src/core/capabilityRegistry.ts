@@ -14,6 +14,18 @@ export type CapabilitySurface =
   | 'drawer' // 悬浮折叠抽屉
   | 'command' // 仅通过全局命令呼出
 
+/** Plugins with permanent sidebar entries. Other enabled plugins stay available through commands and tools. */
+export const PRIMARY_NAVIGATION_PLUGIN_IDS = [
+  'volume-master',
+  'living-codex',
+  'gold-chapters-eval',
+  'scrapbook-recycler',
+] as const
+
+export function isPrimaryNavigationPlugin(pluginId: string): boolean {
+  return (PRIMARY_NAVIGATION_PLUGIN_IDS as readonly string[]).includes(pluginId)
+}
+
 export type CapabilityCategory =
   'core' | 'worldbuilding' | 'plot' | 'intelligence' | 'format' | 'experimental'
 
