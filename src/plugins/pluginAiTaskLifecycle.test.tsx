@@ -32,7 +32,7 @@ const seamViews = viewSources(PLUGIN_ROOT).filter((file) =>
 )
 
 function renderSubtextView(onAiTask: (task: AiTask) => Promise<TaskResult | null>) {
-  return render(
+  const view = render(
     <DesktopPluginHostProvider
       projectId="p1"
       activeChapter={null}
@@ -42,6 +42,15 @@ function renderSubtextView(onAiTask: (task: AiTask) => Promise<TaskResult | null
       <SubtextMasterView projectId="p1" />
     </DesktopPluginHostProvider>,
   )
+
+  fireEvent.change(screen.getByPlaceholderText('填写角色名'), {
+    target: { value: '角色甲' },
+  })
+  fireEvent.change(screen.getByPlaceholderText('填写需要分析的对白'), {
+    target: { value: '我没事。' },
+  })
+
+  return view
 }
 
 describe('plugin AI task lifecycle (§P1.12)', () => {

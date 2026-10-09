@@ -4,14 +4,17 @@ import { indexedDbPovGuardRepository } from '../../../adapters/indexedDbPovGuard
 import { PovGuardEngine } from '../engine/PovGuardEngine'
 import type { PovAnalysisResult } from '../types'
 import { ShieldAlert, AlertTriangle, EyeOff } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [result, setResult] = useState<PovAnalysisResult | null>(null)
+  const [notice, setNotice] = useState('等待章节正文。')
 
   useEffect(() => {
     let disposed = false
     if (!currentText || currentText.trim().length === 0) {
       setResult(null)
+      setNotice('等待章节正文。')
       return
     }
 
@@ -19,33 +22,41 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
       const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
       if (disposed) return
       const latestSnapshot = snapshots[0]
-      const povChar = latestSnapshot?.povCharacterName || '未指定 POV 角色'
-      const povMode = latestSnapshot?.povMode || 'third_limited'
+      if (!latestSnapshot?.allowedCharacters?.length) {
+        setResult(null)
+        setNotice('没有保存的角色与秘密配置，无法进行 POV 规则审查。')
+        return
+      }
+      const povIsConfigured = latestSnapshot.allowedCharacters.some(
+        (character) =>
+          character.characterName === latestSnapshot.povCharacterName ||
+          character.characterId === latestSnapshot.povCharacterName ||
+          character.characterId === latestSnapshot.povCharacterId,
+      )
+      if (!povIsConfigured) {
+        setResult(null)
+        setNotice('POV 角色不在已保存的角色配置中，无法进行规则审查。')
+        return
+      }
 
       const auditRes = PovGuardEngine.analyze(currentText, {
-        povCharacter: povChar,
-        povMode,
-        allCharacters: latestSnapshot?.allowedCharacters || [
-          { characterId: 'c1', characterName: povChar, knownSecretIds: [] },
-          { characterId: 'c2', characterName: '苏雨柔', knownSecretIds: ['s-poison'] },
-          { characterId: 'c3', characterName: '黑衣人', knownSecretIds: ['s-secret'] },
-        ],
-        secrets: latestSnapshot?.secrets || [
-          {
-            id: 's-poison',
-            title: '噬灵绝命丹',
-            confidentialityLevel: 'top_secret',
-            originChapterOrder: 1,
-            holders: ['苏雨柔'],
-          },
-        ],
+        povCharacter: latestSnapshot.povCharacterName,
+        povMode: latestSnapshot.povMode,
+        allCharacters: latestSnapshot.allowedCharacters,
+        secrets: latestSnapshot.secrets,
       })
       if (!disposed) {
         setResult(auditRes)
+        setNotice('')
       }
     }
 
-    loadAndAudit().catch(console.error)
+    loadAndAudit().catch(() => {
+      if (!disposed) {
+        setResult(null)
+        setNotice('读取 POV 配置失败，未完成审查。')
+      }
+    })
     return () => {
       disposed = true
     }
@@ -63,10 +74,18 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
           </span>
         )}
       </div>
+      <ScoreProvenanceBadge
+        source="rule"
+        detail="按角色名称与已登记秘密做规则匹配，不代表完整的人工审读"
+      />
 
-      {!result || (!result.headHoppingCount && !result.leakageCount) ? (
+      {!result ? (
+        <div className="p-3 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-center">
+          {notice}
+        </div>
+      ) : !result.headHoppingCount && !result.leakageCount ? (
         <div className="p-3 rounded bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-center">
-          ✓ 心智视界纯正，未检测到跳视角或全知泄漏
+          当前规则未检出问题；请人工复核正文。
         </div>
       ) : (
         <div className="space-y-2">

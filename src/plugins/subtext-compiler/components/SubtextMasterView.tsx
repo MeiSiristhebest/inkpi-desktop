@@ -16,14 +16,14 @@ import { Select } from '../../../ui/primitives'
 export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
   const aiTask = usePluginAiTask('subtext-compiler')
-  const [spoken, setSpoken] = useState('你走吧，我一个人也可以很好。')
-  const [speakerName, setSpeakerName] = useState('苏雨柔')
+  const [spoken, setSpoken] = useState('')
+  const [speakerName, setSpeakerName] = useState('')
   const [emotion, setEmotion] = useState<
     'anger' | 'fear' | 'pride' | 'affection' | 'jealousy' | 'guilt'
   >('affection')
 
   const handleAiSubtextCompile = async () => {
-    if (!spoken.trim()) return
+    if (!spoken.trim() || !speakerName.trim()) return
     const analysisInput = {
       speaker: semanticTextFromContent('subtext-compiler-speaker', speakerName),
       emotion,
@@ -49,10 +49,12 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
     })
   }, [spoken, onStats])
 
-  const compiled = SubtextCompilerEngine.compile(spoken, speakerName, emotion)
-  const renderedParagraph = SubtextCompilerEngine.renderNovelParagraph(compiled)
+  const hasInput = Boolean(spoken.trim() && speakerName.trim())
+  const compiled = hasInput ? SubtextCompilerEngine.compile(spoken, speakerName, emotion) : null
+  const renderedParagraph = compiled ? SubtextCompilerEngine.renderNovelParagraph(compiled) : ''
 
   const handleSave = async () => {
+    if (!compiled) return
     const record: SubtextDialogueRecord = {
       id: idGenerator.generate('subtext'),
       projectId,
@@ -96,6 +98,7 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
             <input
               className="mt-1 w-full border px-3 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
               value={speakerName}
+              placeholder="填写角色名"
               onChange={(e) => setSpeakerName(e.target.value)}
             />
           </div>
@@ -124,13 +127,14 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
             <textarea
               className="mt-1 w-full h-24 p-3 border rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
               value={spoken}
+              placeholder="填写需要分析的对白"
               onChange={(e) => setSpoken(e.target.value)}
             />
           </div>
           {hostContext?.aiAssistant?.isAvailable && (
             <button
               onClick={handleAiSubtextCompile}
-              disabled={aiTask.isRunning}
+              disabled={aiTask.isRunning || !hasInput}
               className="px-3 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs mr-2"
             >
               <Bot className="w-3.5 h-3.5" />
@@ -140,7 +144,8 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
           <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSave}
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs flex items-center justify-center gap-1.5 transition"
+            disabled={!hasInput}
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded text-xs flex items-center justify-center gap-1.5 transition"
           >
             <Send className="w-4 h-4" /> 归档此三轨对白卡片
           </button>
@@ -152,40 +157,46 @@ export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSta
               <Layers className="w-4 h-4" /> 海明威冰山三轨重构视图
             </h3>
             <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950 border border-indigo-800 text-indigo-300">
-              张力指数: {compiled.tensionLevel} / 5
+              张力指数: {compiled?.tensionLevel ?? '—'} / 5
             </span>
           </div>
 
-          <div className="space-y-3 text-xs">
-            <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">
-                1. 表面台词 (Spoken - 露出水面 1/8)
+          {compiled ? (
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">
+                  1. 表面台词 (Spoken - 露出水面 1/8)
+                </div>
+                <div className="font-semibold text-amber-300">"{compiled.spoken}"</div>
               </div>
-              <div className="font-semibold text-amber-300">"{compiled.spoken}"</div>
-            </div>
 
-            <div className="p-3 rounded bg-slate-800/80 border border-indigo-800/60 space-y-1">
-              <div className="text-[10px] text-indigo-400 font-bold uppercase">
-                2. 水下潜台词 (Subtext - 掩藏水下 7/8)
+              <div className="p-3 rounded bg-slate-800/80 border border-indigo-800/60 space-y-1">
+                <div className="text-[10px] text-indigo-400 font-bold uppercase">
+                  2. 水下潜台词 (Subtext - 掩藏水下 7/8)
+                </div>
+                <div className="font-serif italic text-indigo-200">"{compiled.subtext}"</div>
+                <div className="text-[10px] text-slate-400 pt-1">
+                  防御机制: {compiled.defenseMechanism}
+                </div>
               </div>
-              <div className="font-serif italic text-indigo-200">"{compiled.subtext}"</div>
-              <div className="text-[10px] text-slate-400 pt-1">
-                防御机制: {compiled.defenseMechanism}
-              </div>
-            </div>
 
-            <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
-              <div className="text-[10px] text-emerald-400 font-bold uppercase">
-                3. 伴随肢体微反应 (Beat Action)
+              <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
+                <div className="text-[10px] text-emerald-400 font-bold uppercase">
+                  3. 伴随肢体微反应 (Beat Action)
+                </div>
+                <div className="text-emerald-300">{compiled.beatAction}</div>
               </div>
-              <div className="text-emerald-300">{compiled.beatAction}</div>
             </div>
-          </div>
+          ) : (
+            <div className="p-3 rounded bg-slate-800/80 text-slate-300 text-xs">
+              填写角色名和对白后显示规则推演结果。
+            </div>
+          )}
 
           <div className="pt-2 space-y-1">
             <div className="text-[10px] text-slate-400 font-bold uppercase">成稿小说段落试炼:</div>
             <div className="p-3 rounded bg-slate-950 border border-slate-800 font-serif text-xs text-slate-300 leading-relaxed">
-              {renderedParagraph}
+              {compiled ? renderedParagraph : '填写角色名和对白后显示成稿预览。'}
             </div>
           </div>
         </div>

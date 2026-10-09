@@ -6,15 +6,18 @@ import type { PovViolation } from '../types'
 import { ShieldAlert, AlertTriangle, EyeOff, Play } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { Select } from '../../../ui/primitives'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [currentText, setCurrentText] = useState('')
-  const [povChar, setPovChar] = useState('未指定 POV 角色')
+  const [povChar, setPovChar] = useState('')
   const [povMode, setPovMode] = useState<
     'first_person' | 'third_limited' | 'third_objective' | 'omniscient'
   >('third_limited')
   const [violations, setViolations] = useState<PovViolation[]>([])
   const [isAuditing, setIsAuditing] = useState(false)
+  const [hasAudited, setHasAudited] = useState(false)
+  const [auditMessage, setAuditMessage] = useState('')
 
   useEffect(() => {
     onStats?.({
@@ -26,36 +29,44 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
 
   const runAudit = async () => {
     setIsAuditing(true)
-    const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
-    const latestSnapshot = snapshots[0]
+    setHasAudited(false)
+    setAuditMessage('')
+    try {
+      const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
+      const latestSnapshot = snapshots[0]
+      if (!latestSnapshot?.allowedCharacters?.length) {
+        setViolations([])
+        setAuditMessage('没有保存的角色与秘密配置，无法进行 POV 规则审查。')
+        return
+      }
 
-    const result = PovGuardEngine.analyze(currentText, {
-      povCharacter: povChar,
-      povMode,
-      allCharacters: latestSnapshot?.allowedCharacters || [
-        { characterId: 'c1', characterName: povChar, knownSecretIds: [] },
-        { characterId: 'c2', characterName: '反派首领', knownSecretIds: ['sec-1'] },
-        { characterId: 'c3', characterName: '师尊', knownSecretIds: ['sec-2'] },
-      ],
-      secrets: latestSnapshot?.secrets || [
-        {
-          id: 'sec-1',
-          title: '噬灵魔典',
-          confidentialityLevel: 'top_secret',
-          originChapterOrder: 1,
-          holders: ['反派首领'],
-        },
-        {
-          id: 'sec-2',
-          title: '九霄禁术',
-          confidentialityLevel: 'secret',
-          originChapterOrder: 3,
-          holders: ['师尊'],
-        },
-      ],
-    })
-    setViolations(result.violations)
-    setIsAuditing(false)
+      const effectivePovChar = povChar.trim() || latestSnapshot.povCharacterName
+      const povIsConfigured = latestSnapshot.allowedCharacters.some(
+        (character) =>
+          character.characterName === effectivePovChar ||
+          character.characterId === effectivePovChar,
+      )
+      if (!effectivePovChar || !povIsConfigured) {
+        setViolations([])
+        setAuditMessage('当前 POV 角色不在已保存的角色配置中，无法进行规则审查。')
+        return
+      }
+
+      setPovChar(effectivePovChar)
+      const result = PovGuardEngine.analyze(currentText, {
+        povCharacter: effectivePovChar,
+        povMode,
+        allCharacters: latestSnapshot.allowedCharacters,
+        secrets: latestSnapshot.secrets,
+      })
+      setViolations(result.violations)
+      setHasAudited(true)
+    } catch {
+      setViolations([])
+      setAuditMessage('读取 POV 配置失败，未完成审查。')
+    } finally {
+      setIsAuditing(false)
+    }
   }
 
   return (
@@ -67,8 +78,12 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
             <span>POV 心智防火墙 (PovGuard)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            基于心智理论(Theory of Mind)与模态逻辑，阻断非受控跳视角(Head-Hopping)与全知视角泄漏
+            使用角色与秘密配置中的规则检查视角切换和信息泄漏。
           </p>
+          <ScoreProvenanceBadge
+            source="rule"
+            detail="按角色名称与已登记秘密做规则匹配，不代表完整的人工审读"
+          />
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs">
@@ -76,6 +91,7 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
             <input
               className="border px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
               value={povChar}
+              placeholder="填写 POV 角色"
               onChange={(e) => setPovChar(e.target.value)}
             />
           </div>
@@ -117,12 +133,22 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               违规阻断列表:
             </label>
-            <span className="text-xs text-slate-500">检出 {violations.length} 处越界</span>
+            <span className="text-xs text-slate-500">
+              {hasAudited ? `规则命中 ${violations.length} 处` : '尚未完成审查'}
+            </span>
           </div>
           <div className="w-full h-96 overflow-y-auto border rounded p-3 space-y-3 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 text-xs">
-            {violations.length === 0 ? (
+            {auditMessage ? (
+              <div className="h-full flex items-center justify-center text-amber-700 dark:text-amber-300 text-center">
+                {auditMessage}
+              </div>
+            ) : !hasAudited ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-center">
+                输入正文并运行规则审查后显示结果。
+              </div>
+            ) : violations.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-400">
-                心智视界纯正，未检测到视角越界或信息泄露
+                当前规则未检出问题；请人工复核正文。
               </div>
             ) : (
               violations.map((v) => (

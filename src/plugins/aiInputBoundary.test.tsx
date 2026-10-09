@@ -144,6 +144,9 @@ describe('plugin AI input boundaries', () => {
       .getAllByRole('textbox')
       .find((element) => element.tagName === 'TEXTAREA')
     expect(spokenInput).toBeDefined()
+    fireEvent.change(screen.getByPlaceholderText('填写角色名'), {
+      target: { value: '角色甲' },
+    })
     fireEvent.change(spokenInput!, { target: { value: '<p>表面台词</p><p>第二句</p>' } })
     fireEvent.click(screen.getByRole('button', { name: 'AI 潜台词与微表情深度编译' }))
 
