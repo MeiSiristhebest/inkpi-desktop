@@ -607,6 +607,37 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     ])
   })
 
+  it('ignores a Ghost Text response after the chapter text changes', async () => {
+    let resolveSuggestion: ((value: string) => void) | undefined
+    const onRequestGhost = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveSuggestion = resolve
+        }),
+    )
+    h.getText = () => '这是一段足够长的正文内容用于续写'
+    render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    act(() => {
+      h.capturedOnUpdate?.()
+    })
+    await waitFor(() => expect(onRequestGhost).toHaveBeenCalledTimes(1), { timeout: 8000 })
+
+    h.getText = () => '这是一段足够长的新正文，旧请求不应覆盖它'
+    act(() => {
+      h.capturedOnUpdate?.()
+    })
+
+    await act(async () => {
+      resolveSuggestion?.('旧章节的过期续写')
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('Tab 采纳续写')).not.toBeInTheDocument()
+    expect(h.chainCalls.find(([name]) => name === 'insertContent')).toBeUndefined()
+  })
+
   it('counts only keystroke growth in 今日新增, never the adopted AI text', async () => {
     render(<RichEditor projectId="p-origin" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
