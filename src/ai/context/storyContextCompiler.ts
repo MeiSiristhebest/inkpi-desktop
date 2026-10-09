@@ -155,9 +155,11 @@ function toContextItem(collection: string, value: unknown): StoryContextItem {
   const factLevel = String(provenance.factLevel || 'ai-inference')
   const confidence = typeof provenance.confidence === 'number' ? provenance.confidence : 0
   const label = String(record.name || record.title || record.label || record.id || collection)
-  const summary = String(
+  const baseSummary = String(
     record.summary || record.description || record.statement || record.content || label,
   )
+  const legacyDetails = legacyDataSummary(record)
+  const summary = legacyDetails ? `${baseSummary}；${legacyDetails}` : baseSummary
   return {
     id: String(record.id),
     collection,
@@ -168,6 +170,38 @@ function toContextItem(collection: string, value: unknown): StoryContextItem {
     canonical: isCanonicalFact({ ...provenance, factLevel } as never),
     ...(typeof record.status === 'string' ? { status: record.status } : {}),
   }
+}
+
+function legacyDataSummary(record: Record<string, unknown>): string | undefined {
+  const attributes = asRecord(record.attributes)
+  const data = asRecord(attributes?.data)
+  if (typeof attributes?.legacySource !== 'string' || !data) return undefined
+
+  const fields = Object.entries(data).flatMap(([key, value]) => {
+    const field = key.trim()
+    const content = legacyValueText(value)
+    return field && content ? [`${field}：${content}`] : []
+  })
+  return fields.length > 0 ? fields.join('；') : undefined
+}
+
+function legacyValueText(value: unknown): string | undefined {
+  if (typeof value === 'string') return value.trim() || undefined
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const items = value.flatMap((item) => {
+      const text = legacyValueText(item)
+      return text ? [text] : []
+    })
+    return items.length > 0 ? items.join('、') : undefined
+  }
+  return undefined
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 function stableSerialize(value: unknown): string {

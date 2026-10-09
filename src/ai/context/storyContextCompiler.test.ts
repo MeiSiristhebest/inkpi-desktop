@@ -65,6 +65,41 @@ describe('story context compiler', () => {
     expect(provider.provide({ task: { contextPolicy: { metadata: {} } } })).toEqual([])
   })
 
+  it('includes legacy module fields in AI context without promoting them to canonical facts', () => {
+    let state = createStoryState(5)
+    state = upsertEntity(
+      state,
+      createStoryEntity({
+        id: 'legacy:formData:project-1::worldbase',
+        kind: 'world-setting',
+        name: '云州',
+        attributes: {
+          legacySource: 'formData',
+          data: {
+            世界核心规则: '灵脉决定修行者可吸纳的灵气',
+            地域别称: ['北境', '云原'],
+          },
+        },
+        provenance: { sourceType: 'derived', factLevel: 'hypothesis' },
+      }),
+    )
+
+    const context = compileStoryContext(state)!
+
+    expect(context.entities).toContainEqual(
+      expect.objectContaining({
+        id: 'legacy:formData:project-1::worldbase',
+        label: '云州',
+        summary: '云州；世界核心规则：灵脉决定修行者可吸纳的灵气；地域别称：北境、云原',
+        canonical: false,
+      }),
+    )
+    expect(context.hypotheses.map((item) => item.id)).toContain(
+      'legacy:formData:project-1::worldbase',
+    )
+    expect(context.canonicalFacts).toEqual([])
+  })
+
   it('provides canonical serialized data only when project state is requested', () => {
     const state = createStoryState(6)
     const provider = createStoryContextProvider(() => state)
