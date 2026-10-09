@@ -129,7 +129,16 @@ describe('WorkspaceLifecycleService', () => {
 
   it('backs up and remaps workspace-scoped localStorage without exporting credentials', async () => {
     localStorage.clear()
-    const chapterHistory = JSON.stringify([{ id: 'snapshot-1', content: '<p>历史版本</p>' }])
+    const chapterHistory = JSON.stringify([
+      {
+        id: 'snapshot-1',
+        content: '<p>里程碑版本</p>',
+        kind: 'milestone',
+        timestamp: 1000,
+        wordCount: 6,
+      },
+    ])
+    const authorStats = JSON.stringify({ sessionWords: 120, writingSeconds: 60, idleSeconds: 5 })
     const originalHistoryKey = 'orig-proj::chapter-history::orig-ch-1'
     await db.put('settingsKV', { key: originalHistoryKey, value: chapterHistory })
     localStorage.setItem(
@@ -142,7 +151,10 @@ describe('WorkspaceLifecycleService', () => {
         updatedAt: 2000,
       }),
     )
-    localStorage.setItem('chapter-history-orig-ch-1', JSON.stringify([{ content: '历史版本' }]))
+    localStorage.setItem('chapter-history-orig-ch-1', chapterHistory)
+    localStorage.setItem('inkpi_last_active_chapter:orig-proj', 'orig-ch-1')
+    localStorage.setItem('inkpi-author-stats-orig-proj-2026-10-09', authorStats)
+    localStorage.setItem('inkpi-daily-goal-orig-proj', '1200')
     localStorage.setItem('inkpi-settings', JSON.stringify({ aiModel: { apiKey: 'do-not-export' } }))
 
     const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
@@ -152,6 +164,9 @@ describe('WorkspaceLifecycleService', () => {
       expect.arrayContaining([
         expect.objectContaining({ key: 'inkpi_draft_journal:orig-proj:orig-ch-1' }),
         expect.objectContaining({ key: 'chapter-history-orig-ch-1' }),
+        expect.objectContaining({ key: 'inkpi_last_active_chapter:orig-proj' }),
+        expect.objectContaining({ key: 'inkpi-author-stats-orig-proj-2026-10-09' }),
+        expect.objectContaining({ key: 'inkpi-daily-goal-orig-proj' }),
       ]),
     )
     expect(backup?.localStorageData?.some(({ value }) => value.includes('do-not-export'))).toBe(
@@ -172,6 +187,14 @@ describe('WorkspaceLifecycleService', () => {
     expect(
       localStorage.getItem(`inkpi_draft_journal:${result.workspaceId}:ch_generated_3`),
     ).toContain('未落盘草稿')
+    expect(localStorage.getItem(`inkpi_last_active_chapter:${result.workspaceId}`)).toBe(
+      'ch_generated_3',
+    )
+    expect(localStorage.getItem(`inkpi-author-stats-${result.workspaceId}-2026-10-09`)).toBe(
+      authorStats,
+    )
+    expect(localStorage.getItem(`inkpi-daily-goal-${result.workspaceId}`)).toBe('1200')
+    expect(localStorage.getItem('chapter-history-ch_generated_3')).toBe(chapterHistory)
     expect(localStorage.getItem('inkpi_draft_journal:orig-proj:orig-ch-1')).toContain('未落盘草稿')
 
     await service.purgeWorkspace(result.workspaceId!)

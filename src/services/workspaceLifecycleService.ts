@@ -133,6 +133,8 @@ function remapWorkspaceLocalStorage(
         draftObject.chapterId = chapterIdMap.get(draftObject.chapterId) ?? draftObject.chapterId
       }
       value = JSON.stringify(draftObject)
+    } else if (key === `inkpi_last_active_chapter:${newWorkspaceId}`) {
+      value = chapterIdMap.get(value) ?? value
     } else if (key === `inkpi-excluded-nums-${newWorkspaceId}`) {
       const excludedIds = parseJsonArray(value)
       if (excludedIds) {
