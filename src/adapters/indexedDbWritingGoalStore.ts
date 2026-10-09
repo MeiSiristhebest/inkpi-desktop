@@ -11,15 +11,22 @@ const DAILY_GOAL_KEY = 'goalDaily'
  */
 export const indexedDbWritingGoalStore: WritingGoalStore = {
   async get(projectId: string): Promise<number | null> {
+    const legacyKey = `inkpi-daily-goal-${projectId}`
     const stored = await indexedDbSettingsKVRepository.get<unknown>(projectId, DAILY_GOAL_KEY, null)
     const canonical = parseGoal(stored)
-    if (canonical !== null) return canonical
+    if (canonical !== null) {
+      await localStorageKeyValueStore.remove?.(legacyKey)
+      return canonical
+    }
 
-    const legacy = parseGoal(localStorageKeyValueStore.getSync(`inkpi-daily-goal-${projectId}`))
-    if (legacy === null) return null
+    const legacy = parseGoal(localStorageKeyValueStore.getSync(legacyKey))
+    if (legacy === null) {
+      await localStorageKeyValueStore.remove?.(legacyKey)
+      return null
+    }
 
     await indexedDbSettingsKVRepository.set(projectId, DAILY_GOAL_KEY, legacy)
-    await localStorageKeyValueStore.remove?.(`inkpi-daily-goal-${projectId}`)
+    await localStorageKeyValueStore.remove?.(legacyKey)
     return legacy
   },
 

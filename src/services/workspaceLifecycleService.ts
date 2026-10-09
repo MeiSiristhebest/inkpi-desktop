@@ -4,6 +4,7 @@ import type { ProjectRepository } from '../ports/projectRepository'
 import type { IdGenerator } from '../ports/idGenerator'
 import type { Clock } from '../ports/clock'
 import { indexedDbProjectRepository } from '../adapters/indexedDbProjectRepository'
+import { indexedDbWritingGoalStore } from '../adapters/indexedDbWritingGoalStore'
 import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 import { idGenerator } from '../adapters/idGenerator'
 import { clock } from '../adapters/clock'
@@ -797,6 +798,9 @@ export class WorkspaceLifecycleService {
       (chapter) => chapter.projectId === workspaceId,
     )
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
+    // Move any pre-IndexedDB goal into the canonical store before collecting
+    // the archive so the backup contains only one authority for this value.
+    await indexedDbWritingGoalStore.get(workspaceId)
     const localStorageData = collectWorkspaceLocalStorage(
       workspaceId,
       chapters.map((chapter) => chapter.id),
@@ -1436,6 +1440,10 @@ export class WorkspaceLifecycleService {
           }
         }
       }
+      // Older archives can still carry the goal only in localStorage. Reading
+      // it after domain records are restored migrates it into settingsKV and
+      // removes the legacy copy; when both exist, settingsKV remains canonical.
+      await indexedDbWritingGoalStore.get(newWorkspaceId)
       await storyStateMaterializer.materialize(newWorkspaceId)
     } catch (err) {
       // 导入失败时立刻彻底回滚已写入的半拉子工作区数据，实现 0% 破损残留 (INV-08)
