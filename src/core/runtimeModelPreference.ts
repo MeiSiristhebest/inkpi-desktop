@@ -3,6 +3,7 @@ import type {
   RuntimeModelRouteRegistration,
 } from '../ports/runtimeModelRoutes'
 import type { ModelConfig } from './settings'
+import { modelSecretKey } from './modelSecrets'
 
 /**
  * 用户“选择哪个模型驱动 Runtime”的运行时偏好快照。
@@ -79,7 +80,7 @@ function createRuntimeModelRoute(
     id: model.id.trim(),
     name: model.name?.trim() || model.id.trim(),
     provider,
-    ...(model.apiKey?.trim() ? { apiKey: model.apiKey.trim() } : {}),
+    credentialRef: modelSecretKey(model),
     ...(baseUrl ? { baseUrl } : {}),
     ...(positiveNumber(model.maxTokens) ? { maxTokens: model.maxTokens } : {}),
     ...(finiteNumber(model.temperature) ? { temperature: model.temperature } : {}),

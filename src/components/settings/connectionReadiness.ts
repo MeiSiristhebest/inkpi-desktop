@@ -44,7 +44,7 @@ export function deriveAiReadiness(settings: Pick<AppSettings, 'aiModel'>): AiRea
 
   const baseUrl = model.baseUrl?.trim() || meta?.defaultBaseUrl?.trim()
   if (!baseUrl) return 'degraded'
-  if (meta?.streamKind !== 'ollama' && !model.apiKey?.trim()) return 'degraded'
+  if (meta?.streamKind !== 'ollama' && !model.credentialConfigured) return 'degraded'
   return 'ready'
 }
 

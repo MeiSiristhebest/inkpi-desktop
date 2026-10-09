@@ -55,6 +55,8 @@ import {
 import { MODEL_CATALOG, catalogUpdatedAtLabel, type CatalogMeta } from '../../core/modelCatalog'
 import { ASSISTANT_HISTORY_TURN_LIMIT } from '../../ai/context/requestScope'
 import { readCatalogMeta, writeCatalogMeta } from '../../adapters/localStorageCatalogMetaStore'
+import { secretStore } from '../../adapters/secretStore'
+import { modelSecretKey } from '../../core/modelSecrets'
 import { ProviderDetailView } from './ProviderDetailView'
 import {
   classifyProbeStatus,
@@ -1134,9 +1136,23 @@ const AiTab: FC<{
     provider: string,
     baseUrl: string,
     apiKey?: string,
+    credentialRef?: string,
   ): Promise<RuntimeModelProviderProbeResult> => {
     if (!probeModelProvider) throw new Error('Runtime 未连接，无法从运行时探测供应商端点')
-    return probeModelProvider({ provider, baseUrl, apiKey })
+    const enteredKey = apiKey?.trim()
+    const temporaryRef = enteredKey ? `inkpi.model.probe.${crypto.randomUUID()}` : undefined
+    if (temporaryRef && enteredKey) await secretStore.set(temporaryRef, enteredKey)
+    try {
+      return await probeModelProvider({
+        provider,
+        baseUrl,
+        ...((temporaryRef ?? credentialRef)
+          ? { credentialRef: temporaryRef ?? credentialRef }
+          : {}),
+      })
+    } finally {
+      if (temporaryRef) await secretStore.remove(temporaryRef)
+    }
   }
 
   // Provider network requests stay in Runtime; the WebView only renders the result.
@@ -1144,9 +1160,10 @@ const AiTab: FC<{
     targetUrl: string,
     targetKey?: string,
     provider = 'custom',
+    credentialRef?: string,
   ) => {
     try {
-      const probe = await runProviderProbe(provider, targetUrl, targetKey)
+      const probe = await runProviderProbe(provider, targetUrl, targetKey, credentialRef)
       if (probe.status >= 200 && probe.status < 300) {
         return { ok: true, msg: `${probe.latency}ms 连接正常 (HTTP ${probe.status})` }
       }
@@ -1162,12 +1179,12 @@ const AiTab: FC<{
   // 快速测速按钮
   const handleQuickSpeedTest = async (
     url?: string,
-    key?: string,
+    credentialRef?: string,
     targetId?: string,
     provider = 'custom',
   ) => {
     if (!url) return
-    const res = await handleTestConnection(url, key, provider)
+    const res = await handleTestConnection(url, undefined, provider, credentialRef)
     if (targetId) {
       setCardSpeedResults((prev) => ({
         ...prev,
@@ -1182,7 +1199,13 @@ const AiTab: FC<{
   }
 
   // 删除供应商
-  const handleDeleteProvider = (target: ModelConfig) => {
+  const handleDeleteProvider = async (target: ModelConfig) => {
+    try {
+      await secretStore.remove(modelSecretKey(target))
+    } catch {
+      setCatalogMsg('无法从系统凭据存储删除该供应商的密钥')
+      return
+    }
     const updatedList = savedList.filter(
       (m) => !(m.id === target.id && m.provider === target.provider && m.name === target.name),
     )
@@ -1231,7 +1254,12 @@ const AiTab: FC<{
       const url = m.baseUrl || PROVIDER_META[m.provider]?.defaultBaseUrl
       if (m.enabled === false || !url) continue
       try {
-        const probe = await runProviderProbe(m.provider, url, m.apiKey)
+        const probe = await runProviderProbe(
+          m.provider,
+          url,
+          undefined,
+          m.credentialConfigured ? modelSecretKey(m) : undefined,
+        )
         if (probe.status >= 200 && probe.status < 300 && probe.modelIds.length > 0) {
           nextList[i] = { ...m, availableModelIds: probe.modelIds }
           okCount += 1
@@ -1259,7 +1287,27 @@ const AiTab: FC<{
   }
 
   // 弹窗保存成功回调
-  const handleDialogSave = (saved: ModelConfig) => {
+  const handleDialogSave = async (draft: ModelConfig) => {
+    const { apiKey, ...savedModel } = draft
+    const enteredKey = apiKey?.trim()
+    const previousModel = savedList.find(
+      (model) => model.id === savedModel.id && model.provider === savedModel.provider,
+    )
+    if (enteredKey) await secretStore.set(modelSecretKey(savedModel), enteredKey)
+    if (
+      editingTarget &&
+      (editingTarget.id !== savedModel.id || editingTarget.provider !== savedModel.provider)
+    ) {
+      try {
+        await secretStore.remove(modelSecretKey(editingTarget))
+      } catch {
+        setCatalogMsg('模型已保存，但旧的系统凭据未能删除')
+      }
+    }
+    const saved: ModelConfig = {
+      ...savedModel,
+      credentialConfigured: Boolean(enteredKey) || previousModel?.credentialConfigured === true,
+    }
     const currentList = [...savedList]
     const existingIndex = currentList.findIndex(
       (m) =>
@@ -1504,7 +1552,7 @@ const AiTab: FC<{
                         onClick={() =>
                           handleQuickSpeedTest(
                             m.baseUrl || pMeta?.defaultBaseUrl,
-                            m.apiKey,
+                            m.credentialConfigured ? modelSecretKey(m) : undefined,
                             cardKey,
                             m.provider,
                           )
@@ -1647,7 +1695,7 @@ const ConnectionTab: FC<{
 
   // 探测结果绑定到当时的配置指纹：改了模型/地址/密钥就自动回到「未检测」，
   // 否则屏幕上会留着一个已经不代表现状的绿色结论（INV-09）。
-  const probeSignature = `${model?.id ?? ''}|${providerBaseUrl ?? ''}|${model?.apiKey ? 'key' : 'nokey'}`
+  const probeSignature = `${model?.id ?? ''}|${providerBaseUrl ?? ''}|${model?.credentialConfigured ? 'key' : 'nokey'}`
   const [probe, setProbe] = useState<{
     signature: string
     state: ProviderReadiness
@@ -1666,7 +1714,7 @@ const ConnectionTab: FC<{
       const { status, latency } = await probeModelProvider({
         provider: model.provider,
         baseUrl: providerBaseUrl,
-        apiKey: model.apiKey,
+        ...(model.credentialConfigured ? { credentialRef: modelSecretKey(model) } : {}),
       })
       setProbe({
         signature: probeSignature,

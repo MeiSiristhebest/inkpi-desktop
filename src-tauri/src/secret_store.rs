@@ -22,8 +22,7 @@ pub fn secret_store_set(key: String, value: String) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
-pub fn secret_store_get(key: String) -> Result<Option<String>, String> {
+pub(crate) fn secret_store_get(key: String) -> Result<Option<String>, String> {
     validate_key(&key)?;
 
     #[cfg(windows)]
@@ -41,6 +40,11 @@ pub fn secret_store_get(key: String) -> Result<Option<String>, String> {
         let _ = key;
         Err("OS credential storage is only enabled for the Windows desktop build".to_string())
     }
+}
+
+#[tauri::command]
+pub fn secret_store_has(key: String) -> Result<bool, String> {
+    Ok(secret_store_get(key)?.is_some())
 }
 
 #[tauri::command]
@@ -64,11 +68,11 @@ pub fn secret_store_remove(key: String) -> Result<(), String> {
 }
 
 fn validate_key(key: &str) -> Result<(), String> {
-    if key.trim().is_empty() {
-        return Err("secret key must not be empty".to_string());
+    if !key.starts_with("inkpi.model.") || key.len() <= "inkpi.model.".len() || key.len() > 256 {
+        return Err("secret key must be a valid InkPi model credential reference".to_string());
     }
-    if key.len() > 256 {
-        return Err("secret key is too long".to_string());
+    if key.chars().any(char::is_control) {
+        return Err("secret key must not contain control characters".to_string());
     }
     Ok(())
 }

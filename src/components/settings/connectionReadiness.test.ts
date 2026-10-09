@@ -34,18 +34,22 @@ describe('deriveAiReadiness — 只看用户真实配了什么', () => {
     expect(deriveAiReadiness({ aiModel: model({ enabled: false }) })).toBe('unavailable')
   })
 
-  it('缺 API Key 是 degraded，补上后是 ready', () => {
+  it('缺少系统凭据是 degraded，凭据已配置后是 ready', () => {
     expect(deriveAiReadiness({ aiModel: model({}) })).toBe('degraded')
-    expect(deriveAiReadiness({ aiModel: model({ apiKey: 'sk-x' }) })).toBe('ready')
+    expect(deriveAiReadiness({ aiModel: model({ credentialConfigured: true }) })).toBe('ready')
   })
 
   it('既没有 baseUrl 也没有 provider 默认地址时是 degraded', () => {
-    expect(deriveAiReadiness({ aiModel: model({ provider: 'custom', apiKey: 'k' }) })).toBe(
-      'degraded',
-    )
+    expect(
+      deriveAiReadiness({ aiModel: model({ provider: 'custom', credentialConfigured: true }) }),
+    ).toBe('degraded')
     expect(
       deriveAiReadiness({
-        aiModel: model({ provider: 'custom', apiKey: 'k', baseUrl: 'https://my.llm/v1' }),
+        aiModel: model({
+          provider: 'custom',
+          credentialConfigured: true,
+          baseUrl: 'https://my.llm/v1',
+        }),
       }),
     ).toBe('ready')
   })

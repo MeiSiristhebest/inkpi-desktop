@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppSettings } from './settings'
 import {
-  hydrateModelSecrets,
+  hydrateModelCredentialStatus,
+  migrateModelSecrets,
   modelSecretKey,
   persistModelSecrets,
   withoutModelSecrets,
@@ -32,17 +33,49 @@ const settings: AppSettings = {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await secretStore.remove(modelSecretKey(settings.aiModel!))
 })
 
 describe('model SecretStore boundary', () => {
-  it('redacts credentials before settings persistence and hydrates them from the session store', async () => {
+  it('redacts credentials and hydrates only their configured status', async () => {
     const safe = withoutModelSecrets(settings)
     expect(safe.aiModel?.apiKey).toBeUndefined()
 
     await persistModelSecrets(settings)
-    const hydrated = await hydrateModelSecrets(safe)
-    expect(hydrated.aiModel?.apiKey).toBe('secret-value')
+    const hydrated = await hydrateModelCredentialStatus(safe)
+    expect(hydrated.aiModel?.apiKey).toBeUndefined()
+    expect(hydrated.aiModel?.credentialConfigured).toBe(true)
     expect(JSON.stringify(safe)).not.toContain('secret-value')
+  })
+
+  it('does not remove a stored credential when a redacted settings snapshot is saved', async () => {
+    const key = modelSecretKey(settings.aiModel!)
+    await secretStore.set(key, 'existing-secret')
+
+    await persistModelSecrets(withoutModelSecrets(settings))
+
+    await expect(secretStore.has(key)).resolves.toBe(true)
+  })
+
+  it('does not save a redacted migration snapshot when credential persistence fails', async () => {
+    vi.spyOn(secretStore, 'set').mockRejectedValueOnce(new Error('credential store unavailable'))
+    const saveRedactedSettings = vi.fn(async () => undefined)
+
+    await expect(migrateModelSecrets(settings, saveRedactedSettings)).rejects.toThrow(
+      'credential store unavailable',
+    )
+    expect(saveRedactedSettings).not.toHaveBeenCalled()
+  })
+
+  it('writes the credential before saving the redacted migration snapshot', async () => {
+    const key = modelSecretKey(settings.aiModel!)
+    const saveRedactedSettings = vi.fn(async () => {
+      await expect(secretStore.has(key)).resolves.toBe(true)
+    })
+
+    await migrateModelSecrets(settings, saveRedactedSettings)
+
+    expect(saveRedactedSettings).toHaveBeenCalledWith(withoutModelSecrets(settings))
   })
 })

@@ -23,43 +23,50 @@ export async function persistModelSecrets(settings: AppSettings): Promise<void> 
     models.map(async (model) => {
       const key = modelSecretKey(model)
       if (model.apiKey?.trim()) await secretStore.set(key, model.apiKey.trim())
-      else await secretStore.remove(key)
       return undefined
     }),
   )
 }
 
-export async function hydrateModelSecrets(settings: AppSettings): Promise<AppSettings> {
+/** Persist credentials before replacing a legacy settings snapshot with its redacted form. */
+export async function migrateModelSecrets(
+  settings: AppSettings,
+  saveRedactedSettings: (settings: AppSettings) => Promise<void>,
+): Promise<void> {
+  await persistModelSecrets(settings)
+  await saveRedactedSettings(withoutModelSecrets(settings))
+}
+
+export async function hydrateModelCredentialStatus(settings: AppSettings): Promise<AppSettings> {
   const models = dedupeModels([
     ...(settings.savedAiModels ?? []),
     ...(settings.aiModel ? [settings.aiModel] : []),
   ])
-  const secrets = new Map<string, string>()
+  const configured = new Set<string>()
   await Promise.all(
     models.map(async (model) => {
-      const value = await secretStore.get(modelSecretKey(model))
-      if (value) secrets.set(modelSecretKey(model), value)
+      if (await secretStore.has(modelSecretKey(model))) configured.add(modelSecretKey(model))
       return undefined
     }),
   )
   return {
     ...settings,
     aiModel: settings.aiModel
-      ? withSecret(settings.aiModel, secrets.get(modelSecretKey(settings.aiModel)))
+      ? withCredentialStatus(settings.aiModel, configured.has(modelSecretKey(settings.aiModel)))
       : null,
     savedAiModels: settings.savedAiModels?.map((model) =>
-      withSecret(model, secrets.get(modelSecretKey(model))),
+      withCredentialStatus(model, configured.has(modelSecretKey(model))),
     ),
   }
 }
 
 function withoutModelSecret(model: ModelConfig): ModelConfig {
-  const { apiKey: _apiKey, ...safeModel } = model
+  const { apiKey: _apiKey, credentialConfigured: _credentialConfigured, ...safeModel } = model
   return safeModel
 }
 
-function withSecret(model: ModelConfig, secret: string | undefined): ModelConfig {
-  return secret ? { ...model, apiKey: secret } : model
+function withCredentialStatus(model: ModelConfig, configured: boolean): ModelConfig {
+  return { ...model, credentialConfigured: configured }
 }
 
 function dedupeModels(models: readonly ModelConfig[]): ModelConfig[] {

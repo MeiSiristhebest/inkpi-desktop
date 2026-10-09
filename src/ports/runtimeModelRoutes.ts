@@ -11,7 +11,7 @@ export interface RuntimeModelRegistrationConfig {
   id: string
   name: string
   provider: string
-  apiKey?: string
+  credentialRef?: string
   baseUrl?: string
   temperature?: number
   topP?: number

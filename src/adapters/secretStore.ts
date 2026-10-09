@@ -8,12 +8,12 @@ const browserSecrets = new Map<string, string>()
  * session-only: it never falls back to localStorage or IndexedDB.
  */
 export const secretStore: SecretStore = {
-  async get(key) {
+  async has(key) {
     validateKey(key)
     if (isTauriRuntime()) {
-      return invoke<string | null>('secret_store_get', { key })
+      return invoke<boolean>('secret_store_has', { key })
     }
-    return browserSecrets.get(key) ?? null
+    return browserSecrets.has(key)
   },
 
   async set(key, value) {
@@ -44,6 +44,12 @@ function isTauriRuntime(): boolean {
 }
 
 function validateKey(key: string): void {
-  if (!key.trim()) throw new Error('SecretStore key must not be empty')
-  if (key.length > 256) throw new Error('SecretStore key is too long')
+  if (!key.startsWith('inkpi.model.') || key.length <= 'inkpi.model.'.length || key.length > 256) {
+    throw new Error('SecretStore key must be a valid InkPi model credential reference')
+  }
+  if (
+    [...key].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)
+  ) {
+    throw new Error('SecretStore key must not contain control characters')
+  }
 }

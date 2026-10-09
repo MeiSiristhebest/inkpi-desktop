@@ -50,7 +50,6 @@ describe('runtimeModelPreference — 用户选定模型 → Runtime modelRoute �
       id: 'gpt-4o',
       name: 'GPT-4o',
       provider: 'openai',
-      apiKey: 'sk-secret',
       baseUrl: 'https://api.openai.com/v1',
       contextWindow: 128000,
       maxTokens: 4096,
@@ -69,7 +68,11 @@ describe('runtimeModelPreference — 用户选定模型 → Runtime modelRoute �
     expect(getRuntimeModelRoutes()).toMatchObject([
       {
         id: 'desktop:openai:gpt-4o',
-        model: { id: 'gpt-4o', provider: 'openai', apiKey: 'sk-secret' },
+        model: {
+          id: 'gpt-4o',
+          provider: 'openai',
+          credentialRef: 'inkpi.model.openai.gpt-4o',
+        },
         priority: 100,
         capabilities: {
           network: 'required',
@@ -80,6 +83,8 @@ describe('runtimeModelPreference — 用户选定模型 → Runtime modelRoute �
         },
       },
     ])
+    expect(JSON.stringify(getRuntimeModelRoutes())).not.toContain('apiKey')
+    expect(JSON.stringify(getRuntimeModelRoutes())).not.toContain('sk-secret')
     expect(getRuntimeModelRoutes()).toHaveLength(1)
   })
 })

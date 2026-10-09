@@ -19,7 +19,7 @@ import { Tooltip, Select } from '../../ui/primitives'
 export interface ProviderDetailViewProps {
   initialConfig?: ModelConfig | null
   onBack: () => void
-  onSave: (config: ModelConfig) => void
+  onSave: (config: ModelConfig) => void | Promise<void>
   onTest?: (
     baseUrl: string,
     apiKey: string,
@@ -262,7 +262,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
     setCustomModelInput('')
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const primaryId = expandedModelId || selectedIds[0] || initialConfig?.id || ''
     if (!primaryId) {
       setTestResult({ ok: false, msg: '请至少选择一个模型' })
@@ -292,7 +292,14 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
       enabled: initialConfig?.enabled ?? true,
     }
 
-    onSave(saved)
+    try {
+      await onSave(saved)
+    } catch (error) {
+      setTestResult({
+        ok: false,
+        msg: error instanceof Error ? error.message : '无法安全保存模型凭据',
+      })
+    }
   }
 
   return (

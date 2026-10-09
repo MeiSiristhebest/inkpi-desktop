@@ -13,7 +13,12 @@ import type { SettingsRepository } from '../ports/settingsRepository'
 import { indexedDbSettingsRepository } from '../adapters/indexedDbSettingsRepository'
 import { localStorageSettingsRepository } from '../adapters/localStorageSettingsRepository'
 import { withMirror } from '../adapters/mirroringSettingsRepository'
-import { hydrateModelSecrets, persistModelSecrets, withoutModelSecrets } from './modelSecrets'
+import {
+  hydrateModelCredentialStatus,
+  migrateModelSecrets,
+  persistModelSecrets,
+  withoutModelSecrets,
+} from './modelSecrets'
 import { setRuntimeModelPreference, setRuntimeModelRoutes } from './runtimeModelPreference'
 
 // ─────────────────────────────────────────────────────────────
@@ -88,6 +93,8 @@ export interface ModelConfig {
   name: string
   provider: ProviderType
   baseUrl?: string
+  /** Runtime status read from the native credential store; never persisted as authority. */
+  credentialConfigured?: boolean
   apiKey?: string
   maxTokens?: number
   temperature?: number
@@ -281,6 +288,21 @@ const settingsRepo: SettingsRepository = withMirror(
   indexedDbSettingsRepository,
 )
 
+let pendingModelSecretMigration: Promise<boolean> = Promise.resolve(true)
+
+function migrateAndRedactSettings(
+  settings: AppSettings,
+  saveRedacted: (settings: AppSettings) => Promise<void> = (redacted) =>
+    settingsRepo.save(redacted),
+): Promise<boolean> {
+  return migrateModelSecrets(settings, saveRedacted)
+    .then(() => true)
+    .catch(() => {
+      console.error('[InkPi] Model credential migration failed; stored settings were kept')
+      return false
+    })
+}
+
 const mergeSettings = (partial: Partial<AppSettings> | null): AppSettings => ({
   ...DEFAULT_SETTINGS,
   ...(partial ?? {}),
@@ -289,27 +311,44 @@ const mergeSettings = (partial: Partial<AppSettings> | null): AppSettings => ({
 /** 同步快速路径（useState 初始化器要求同步）：仓储适配器同步读 + 默认回退 */
 export function loadSettings(): AppSettings {
   const loaded = localStorageSettingsRepository.loadSync()
-  if (!loaded) return { ...DEFAULT_SETTINGS }
+  if (!loaded) {
+    pendingModelSecretMigration = Promise.resolve(true)
+    return { ...DEFAULT_SETTINGS }
+  }
 
   const merged = mergeSettings(loaded)
   const safe = withoutModelSecrets(merged)
-  // One-time migration: scrub legacy plaintext credentials immediately, then
-  // move them to the secure store. Do not defer the scrub until the async
-  // credential operation finishes: a later user update must not be overwritten
-  // by this startup migration's stale snapshot.
-  void settingsRepo.save(safe)
-  void persistModelSecrets(merged).catch(() => undefined)
+  const hasLegacySecrets = [merged.aiModel, ...(merged.savedAiModels ?? [])].some((model) =>
+    Boolean(model?.apiKey?.trim()),
+  )
+
+  if (hasLegacySecrets) {
+    // Keep the legacy copy until the OS credential manager confirms the write.
+    // saveSettings waits on this promise so a concurrent preference update
+    // cannot overwrite the only durable copy while migration is in flight.
+    pendingModelSecretMigration = migrateAndRedactSettings(merged)
+  } else {
+    pendingModelSecretMigration = Promise.resolve(true)
+    void settingsRepo.save(safe)
+  }
   return safe
 }
 
 /** 双写：设置镜像永远不包含 API 凭证；凭证单独进入 SecretStore。 */
 export function saveSettings(s: AppSettings): void {
   const safe = withoutModelSecrets(s)
-  void settingsRepo.save(safe)
-  void persistModelSecrets(s).catch(() => {
-    // Do not reintroduce plaintext persistence when the OS credential store is unavailable.
-    console.error('[InkPi] Secure model credential storage is unavailable')
-  })
+  void pendingModelSecretMigration
+    .then((migrationSucceeded) => {
+      if (!migrationSucceeded) throw new Error('Model credential migration failed')
+      return persistModelSecrets(s)
+    })
+    .then(() => settingsRepo.save(safe))
+    .catch(() => {
+      // Do not overwrite a legacy credential copy when secure storage is unavailable.
+      console.error(
+        '[InkPi] Secure model credential storage is unavailable; settings were not saved',
+      )
+    })
 }
 
 /** 启动时从镜像（IndexedDB）回读，与主存储（localStorage）对齐（§8.2） */
@@ -342,11 +381,29 @@ export const SettingsProvider: FC<{ children: ReactNode }> = ({ children }) => {
     let active = true
     const initialSettings = settings
     void (async () => {
+      try {
+        if (!(await pendingModelSecretMigration)) return
+      } catch {
+        // Keep the original persisted copy intact if the OS credential manager is unavailable.
+        return
+      }
       const fromIDB = await loadSettingsFromIDB()
-      const base = fromIDB ?? initialSettings
+      let base = fromIDB ?? initialSettings
+      const hasLegacySecrets = [base.aiModel, ...(base.savedAiModels ?? [])].some((model) =>
+        Boolean(model?.apiKey?.trim()),
+      )
+      if (hasLegacySecrets) {
+        pendingModelSecretMigration = migrateAndRedactSettings(base, (redacted) =>
+          active && settingsRef.current === initialSettings
+            ? settingsRepo.save(redacted)
+            : Promise.resolve(),
+        )
+        if (!(await pendingModelSecretMigration)) return
+        base = withoutModelSecrets(base)
+      }
       let hydrated = base
       try {
-        hydrated = await hydrateModelSecrets(base)
+        hydrated = await hydrateModelCredentialStatus(base)
       } catch {
         // Keep the redacted settings if the OS credential manager is unavailable.
       }

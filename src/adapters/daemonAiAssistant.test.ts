@@ -111,11 +111,16 @@ describe('createDaemonAiAssistant instruction registration', () => {
     expect(harness.calls[0].params).toMatchObject({
       routes: [
         {
-          model: { id: 'writer', provider: 'openai', apiKey: 'sk-secret' },
+          model: {
+            id: 'writer',
+            provider: 'openai',
+            credentialRef: 'inkpi.model.openai.writer',
+          },
           priority: 100,
         },
       ],
     })
+    expect(JSON.stringify(harness.calls[0].params)).not.toContain('sk-secret')
     const submitted = harness.calls.find((call) => call.method === 'task.submit')
     expect(JSON.stringify(submitted?.params)).not.toContain('sk-secret')
   })

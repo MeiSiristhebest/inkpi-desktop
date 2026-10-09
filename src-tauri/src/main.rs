@@ -11,6 +11,7 @@ use std::os::windows::process::CommandExt;
 use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
+mod credential_broker;
 mod instance_config;
 mod menu;
 mod secret_store;
@@ -19,6 +20,8 @@ use instance_config::InstanceConfig;
 
 // 后台管理的 inkpi daemon 子进程（应用退出时回收）
 static DAEMON_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+static CREDENTIAL_BROKER: OnceLock<Mutex<Option<credential_broker::CredentialBroker>>> =
+    OnceLock::new();
 
 /// 解析 inkpi daemon 可执行文件路径。
 /// 优先级：
@@ -108,6 +111,7 @@ fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
     };
 
     let daemon_log_path = instance_config.daemon_log_path();
+    let credential_broker = credential_broker::CredentialBroker::start()?;
     let mut binding = Command::new(&bin);
     let cmd = binding.args(instance_config.daemon_args());
     match daemon_log_stdio(&daemon_log_path) {
@@ -127,6 +131,11 @@ fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
     for (key, value) in instance_config.environment_overrides() {
         cmd.env(key, value);
     }
+    cmd.env(
+        "INKPI_CREDENTIAL_BROKER_ADDRESS",
+        credential_broker.address().to_string(),
+    );
+    cmd.env("INKPI_CREDENTIAL_BROKER_TOKEN", credential_broker.token());
     if let Some(profile_dir) = &instance_config.profile_dir {
         cmd.current_dir(profile_dir);
     }
@@ -147,6 +156,7 @@ fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
     match cmd.spawn() {
         Ok(child) => {
             DAEMON_CHILD.get_or_init(|| Mutex::new(Some(child)));
+            CREDENTIAL_BROKER.get_or_init(|| Mutex::new(Some(credential_broker)));
             println!(
                 "[inkpi-desktop] InkPi daemon spawned ({:?}) (profile={:?}, instance={:?}, http={}, ws={}, state_db={:?}, log={:?})",
                 bin,
@@ -177,6 +187,11 @@ fn kill_daemon() {
                 let _ = child.kill();
                 println!("[inkpi-desktop] InkPi daemon stopped");
             }
+        }
+    }
+    if let Some(lock) = CREDENTIAL_BROKER.get() {
+        if let Ok(mut guard) = lock.lock() {
+            guard.take();
         }
     }
 }
@@ -224,7 +239,7 @@ mod tests {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            secret_store::secret_store_get,
+            secret_store::secret_store_has,
             secret_store::secret_store_set,
             secret_store::secret_store_remove,
         ])
