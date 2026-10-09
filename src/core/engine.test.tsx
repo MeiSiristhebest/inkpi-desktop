@@ -8,6 +8,7 @@ import {
   act,
 } from '@testing-library/react'
 import { Engine } from './engine'
+import { projectEnabledPluginIds } from './defaultCommands'
 import { db } from '../db/indexedDB'
 import { SettingsProvider } from './settings'
 
@@ -62,10 +63,14 @@ const setViewportWidth = (width: number) => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
 }
 
-beforeEach(() => setViewportWidth(1440))
+beforeEach(() => {
+  setViewportWidth(1440)
+  projectEnabledPluginIds(null)
+})
 
 afterEach(() => {
   cleanup()
+  projectEnabledPluginIds(null)
   setViewportWidth(defaultViewportWidth)
 })
 
@@ -75,15 +80,22 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
-  it('switches to plugin category views and isolates the editor when navigating away', () => {
+  it('opens an enabled plugin from the command palette and returns to the editor', async () => {
+    projectEnabledPluginIds(new Set(['living-codex']))
     render(<Engine projectId="p1" />)
-    // 新版侧栏：分类折叠面板展示插件
-    expect(screen.getByPlaceholderText('搜索插件…')).toBeInTheDocument()
-    // 点击「写作面板」切回工作台视图
-    fireEvent.click(screen.getByRole('button', { name: '打开写作面板' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '搜索命令与插件' }))
+    const searchInput = screen.getByRole('textbox', { name: '搜索命令' })
+    fireEvent.change(searchInput, { target: { value: '活体世界观' } })
+    fireEvent.click(screen.getByTestId('command-item-cmd-capability-living-codex'))
+
+    expect(await screen.findByText('活体世界观')).toBeInTheDocument()
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
-    // 点击「正文写作」回到编辑器
-    fireEvent.click(screen.getAllByText('正文写作')[0])
+
+    fireEvent.click(screen.getByRole('button', { name: '搜索命令与插件' }))
+    const returnSearch = screen.getByRole('textbox', { name: '搜索命令' })
+    fireEvent.change(returnSearch, { target: { value: '正文编辑器' } })
+    fireEvent.click(screen.getByTestId('command-item-cmd-nav-editor'))
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
 
@@ -279,40 +291,32 @@ describe('Engine — 主视口路由与多栏布局', () => {
     expect(screen.queryByText(/退出聚焦/)).not.toBeInTheDocument()
   })
 
-  it('renders plugin data table when a table-type plugin is selected', () => {
+  it('renders the faction table after selecting its enabled command', async () => {
+    projectEnabledPluginIds(new Set(['faction-matrix']))
     render(<Engine projectId="p1" />)
-    // 新版侧栏：通过搜索找到台账类插件
-    const searchInput = screen.getByPlaceholderText('搜索插件…')
-    fireEvent.change(searchInput, { target: { value: '台账' } })
-    const tablePlugin = screen.queryByText(/台账|势力分立/)
-    if (tablePlugin) {
-      fireEvent.click(tablePlugin)
-      expect(document.body).toBeInTheDocument()
-    } else {
-      expect(searchInput).toBeInTheDocument()
-    }
-    // 恢复
-    fireEvent.change(searchInput, { target: { value: '' } })
-    fireEvent.click(screen.getByText('正文写作'))
+
+    fireEvent.click(screen.getByRole('button', { name: '搜索命令与插件' }))
+    const searchInput = screen.getByRole('textbox', { name: '搜索命令' })
+    fireEvent.change(searchInput, { target: { value: '势力外交盘' } })
+    fireEvent.click(screen.getByTestId('command-item-cmd-capability-faction-matrix'))
+
+    expect(await screen.findByRole('table')).toBeInTheDocument()
   })
 
-  it('handles guide, material, check, inspire, fallback views via plugin search', () => {
+  it('filters plugin commands by the enabled-plugin projection', () => {
+    projectEnabledPluginIds(new Set(['living-codex']))
     render(<Engine projectId="p1" />)
-    const searchInput = screen.getByPlaceholderText('搜索插件…')
+    fireEvent.click(screen.getByRole('button', { name: '搜索命令与插件' }))
+    const searchInput = screen.getByRole('textbox', { name: '搜索命令' })
 
-    // 搜索「创作指南」类插件
-    fireEvent.change(searchInput, { target: { value: '指南' } })
-    const guideBtn = screen.queryByText('创作指南') || screen.queryByText('新手指南')
-    if (guideBtn) fireEvent.click(guideBtn)
+    fireEvent.change(searchInput, { target: { value: '活体世界观' } })
+    expect(screen.getByTestId('command-item-cmd-capability-living-codex')).toBeInTheDocument()
 
-    // 搜索「势力分立」类插件
-    fireEvent.change(searchInput, { target: { value: '势力' } })
-    const tableBtn = screen.queryByText('势力分立')
-    if (tableBtn) fireEvent.click(tableBtn)
-
-    // 清空搜索，回到编辑器
-    fireEvent.change(searchInput, { target: { value: '' } })
-    fireEvent.click(screen.getByText('正文写作'))
+    fireEvent.change(searchInput, { target: { value: '势力外交盘' } })
+    expect(
+      screen.queryByTestId('command-item-cmd-capability-faction-matrix'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('未找到匹配的命令或能力')).toBeInTheDocument()
   })
 
   it('renders custom inspector and supports closing it via callback', () => {
