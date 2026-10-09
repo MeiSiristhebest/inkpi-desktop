@@ -13,6 +13,7 @@ import {
 import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from '../../core/pluginRegistry'
+import { shortcutLabel } from '../../core/editorShortcuts'
 import { Tooltip } from '../../ui/primitives'
 
 interface SidebarNavProps {
@@ -164,7 +165,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             <Search className="w-3.5 h-3.5" />
             <span className="flex-1">搜索命令与插件</span>
             <kbd className="px-1 rounded border border-[var(--ink-border)] font-mono text-[10px]">
-              Ctrl/⌘ K
+              {shortcutLabel('commandPalette')}
             </kbd>
           </button>
         </div>
