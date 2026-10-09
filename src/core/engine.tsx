@@ -444,7 +444,7 @@ export const Engine: FC<EngineProps> = ({
       data-chrome-hidden={isFullscreen || focusMode}
       className="project-engine-root relative h-screen w-screen flex overflow-hidden bg-[var(--ink-bg)] text-[var(--ink-text)]"
     >
-      {/* 42 模块与全景侧边栏 */}
+      {/* 核心工作区导航 */}
       {!isFullscreen && !focusMode && leftOpen && (
         <SidebarNav
           activeTabId={activeTabId}
@@ -452,6 +452,7 @@ export const Engine: FC<EngineProps> = ({
           projectName={projectName || ''}
           onBackToHome={leaveWorkspace}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
           onClose={() => setLeftOpen(false)}
         />
       )}

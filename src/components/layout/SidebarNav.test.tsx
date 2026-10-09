@@ -12,6 +12,7 @@ describe('SidebarNav workspaces', () => {
         onSelectTab={onSelectTab}
         projectName="Test project"
         onOpenSettings={vi.fn()}
+        onOpenCommandPalette={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -33,9 +34,10 @@ describe('SidebarNav workspaces', () => {
     expect(onSelectTab).toHaveBeenLastCalledWith('dashboard')
   })
 
-  it('shows other plugins in search results instead of permanent navigation', () => {
+  it('keeps plugin discovery in the command palette instead of the sidebar catalog', () => {
     const plugin = ALL_AVAILABLE_PLUGINS.find((entry) => entry.id === 'multiverse-whatif')
     expect(plugin).toBeDefined()
+    const onOpenCommandPalette = vi.fn()
 
     render(
       <SidebarNav
@@ -43,14 +45,14 @@ describe('SidebarNav workspaces', () => {
         onSelectTab={vi.fn()}
         projectName="Test project"
         onOpenSettings={vi.fn()}
+        onOpenCommandPalette={onOpenCommandPalette}
         onClose={vi.fn()}
       />,
     )
 
     expect(screen.queryByRole('button', { name: new RegExp(plugin!.name) })).not.toBeInTheDocument()
-    fireEvent.change(screen.getByRole('textbox', { name: '搜索插件' }), {
-      target: { value: plugin!.id },
-    })
-    expect(screen.getByRole('button', { name: new RegExp(plugin!.name) })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: '搜索插件' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '搜索命令与插件' }))
+    expect(onOpenCommandPalette).toHaveBeenCalledOnce()
   })
 })

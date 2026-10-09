@@ -754,10 +754,6 @@
     justify-content: flex-start;
   }
 
-  .project-engine-root[data-nav-open='true'] > .sidebar-nav .sidebar-nav-categories button {
-    justify-content: space-between;
-  }
-
   /* 窄窗口保留图标入口，完整名称由 title 提供。 */
   .editor-toolbar-menu-trigger,
   .editor-toolbar-action-button {

@@ -66,6 +66,23 @@ describe('defaultCommands', () => {
     unregister()
   })
 
+  it('keeps non-core navigation plugins searchable and routable through the command palette', () => {
+    const unregister = registerDefaultCommands()
+    try {
+      projectEnabledPluginIds(new Set(['multiverse-whatif']))
+      const command = commandRegistry
+        .search('multiverse')
+        .find((candidate) => candidate.id === 'cmd-capability-multiverse-whatif')
+
+      expect(command).toBeDefined()
+      command!.execute()
+      expect(mockHandler.openView).toHaveBeenCalledWith('multiverse-whatif')
+    } finally {
+      unregister()
+      projectEnabledPluginIds(null)
+    }
+  })
+
   it('禁用的插件不出 Command：可用性取决于启用投影，系统级能力不受影响（P2.9）', () => {
     const unregister = registerDefaultCommands()
     try {
