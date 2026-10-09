@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { EDITOR_SHORTCUTS } from './editorShortcuts'
+import { commandRegistry, EDITOR_SHORTCUT_COMMAND_IDS } from './commandRegistry'
 import { DESKTOP_MENU_EVENT } from './desktopMenu'
 
 /**
@@ -26,7 +26,11 @@ function extractCommandIds(source: string): string[] {
 
 /** 返回菜单里有、但前端 chord 注册表里找不到对应条目的 id。 */
 function menuIdsWithoutChord(ids: string[]): string[] {
-  const known = new Set<string>(EDITOR_SHORTCUTS.map((entry) => entry.id))
+  const known = new Set(
+    Object.entries(EDITOR_SHORTCUT_COMMAND_IDS)
+      .filter(([, commandId]) => Boolean(commandRegistry.get(commandId)?.shortcut))
+      .map(([shortcutId]) => shortcutId),
+  )
   return ids.filter((id) => !known.has(id))
 }
 

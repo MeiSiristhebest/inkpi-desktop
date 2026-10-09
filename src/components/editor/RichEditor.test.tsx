@@ -18,6 +18,7 @@ import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosti
 import { continuityDiagnosticsPluginKey } from '../../extensions/continuity-diagnostics'
 import { draftJournal } from '../../services/draftJournal'
 import { shortcutHint } from '../../core/editorShortcuts'
+import { dispatchCommandShortcut } from '../../core/commandRegistry'
 import { chapterMutationService } from '../../services/defaultChapterMutationService'
 import { SESSION_WORDS_LABEL } from './hooks/useWritingSessionStats'
 import { WRITE_ORIGIN_META } from './writeOrigin'
@@ -131,6 +132,8 @@ const seedClear = async () => {
 
 beforeEach(async () => {
   await seedClear()
+  // RichEditor is tested without Engine, which owns the app-wide shortcut listener.
+  window.addEventListener('keydown', dispatchCommandShortcut)
   // 为所有测试用的项目写入 templateType: 'demo' 记录，确保其在 fail-closed 语义下加载预期的仙侠示例章节
   const testProjectIds = [
     'p-rich',
@@ -208,6 +211,7 @@ beforeEach(async () => {
   h.chainCalls.length = 0
 })
 afterEach(() => {
+  window.removeEventListener('keydown', dispatchCommandShortcut)
   cleanup()
   h.capturedOnUpdate = null
   editorInstance = null

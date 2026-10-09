@@ -3,8 +3,8 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { EDITOR_SHORTCUTS, formatShortcutLabel, shortcutHint } from './editorShortcuts'
-import { commandRegistry } from './commandRegistry'
+import { formatShortcutLabel, shortcutHint } from './editorShortcuts'
+import { commandRegistry, EDITOR_SHORTCUT_COMMAND_IDS } from './commandRegistry'
 import { registerDefaultCommands } from './defaultCommands'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -43,21 +43,23 @@ function findConflicts(entries: { id?: string; title?: string; shortcut: string 
 
 describe('editor shortcut registry', () => {
   it('binds each chord to exactly one action', () => {
-    expect(findConflicts(EDITOR_SHORTCUTS as unknown as { shortcut: string }[])).toEqual([])
+    expect(findConflicts(commandRegistry.getAll().filter((command) => command.shortcut))).toEqual(
+      [],
+    )
   })
 
   it('does not steal a chord from a command-registry command', () => {
     // registerDefaultCommands 才是登记入口（engine.tsx 挂载时调用），裸 import 不会注册任何命令。
     const unregister = registerDefaultCommands()
     try {
-      const commandShortcuts = commandRegistry
+      const registeredShortcuts = commandRegistry
         .getAll()
         .filter((command) => command.shortcut)
         .map((command) => ({ title: command.title, shortcut: command.shortcut! }))
       // 计划点名的现场就是这类冲突：编辑器把 Mod+B 当加粗，全局层却拿它去收章节树。
       // 先确认命令侧真的带快捷键，否则这条门控只是在拿空数组自证。
-      expect(commandShortcuts.length).toBeGreaterThan(0)
-      expect(findConflicts([...commandShortcuts, ...EDITOR_SHORTCUTS])).toEqual([])
+      expect(registeredShortcuts.length).toBeGreaterThan(0)
+      expect(findConflicts(registeredShortcuts)).toEqual([])
     } finally {
       unregister()
     }
@@ -73,8 +75,25 @@ describe('editor shortcut registry', () => {
     expect(conflicts[0]).toContain('bold / collapseTree')
   })
 
+  it('rejects duplicate chords when a command is registered', () => {
+    expect(() =>
+      commandRegistry.register({
+        id: 'cmd-test-conflicting-shortcut',
+        title: '冲突测试',
+        keywords: [],
+        shortcut: 'Ctrl+B',
+        shortcutScope: 'editor',
+        category: 'edit',
+        execute: () => {},
+      }),
+    ).toThrow(/conflicts with cmd-editor-bold/)
+  })
+
   it('renders every chord for the only platform this product ships', () => {
-    for (const { id, shortcut } of EDITOR_SHORTCUTS) {
+    for (const [id, commandId] of Object.entries(EDITOR_SHORTCUT_COMMAND_IDS)) {
+      const shortcut = commandRegistry.get(commandId)?.shortcut
+      expect(shortcut, `${id} 没有在命令注册表中定义 chord`).toBeTruthy()
+      if (!shortcut) continue
       const label = formatShortcutLabel(shortcut)
       expect(label, `${id} 的展示文案泄漏了跨平台记法`).not.toMatch(/\bMod\b/)
       expect(label).not.toContain('⌘')
@@ -135,7 +154,7 @@ describe('rendered shortcut strings stay derived from the registry', () => {
     const literalChord = /(?:Ctrl|Control|Shift|Alt|Win)\s*\+\s*[A-Za-z0-9\\/]/
     forEachCodeLine((text, location) => {
       // 注册表自己写的就是键位记法（Alt+ArrowUp），那是唯一的真源，不是界面文案。
-      if (location.startsWith('core/editorShortcuts.ts')) return
+      if (location.startsWith('core/commandRegistry.ts')) return
       if (!literalChord.test(text)) return
       offenders.push(`${location} ${text.slice(0, 70)}`)
     })

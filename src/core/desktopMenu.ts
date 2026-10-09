@@ -1,10 +1,10 @@
-import { EDITOR_SHORTCUTS, getEditorShortcut, type EditorShortcutId } from './editorShortcuts'
+import { getEditorShortcut, isEditorShortcutId } from './editorShortcuts'
 
 /**
  * 原生菜单 → 前端命令（§P4.7）。
  *
  * Windows 原生菜单在 Rust 侧（src-tauri/src/menu.rs）只带命令 id，不带快捷键：
- * chord 的唯一主人是 EDITOR_SHORTCUTS（§P4.6）。这里把 id 翻译回那条 chord，并以一次
+ * CommandRegistry 保存 chord。这里把 id 翻译回该 chord，并以一次
  * 与键盘完全相同的 window keydown 派发出去，于是鼠标路径和键盘路径命中的是同一个
  * handler。若在原生侧再注册一份 Ctrl+S，一次按键就会被执行两遍。
  *
@@ -40,9 +40,9 @@ export function keyboardInitForChord(shortcut: string): KeyboardEventInit {
  * 所以 defaultPrevented 就是消费凭证。未知 id 不派发，直接 false。
  */
 export function dispatchDesktopMenuCommand(id: string): boolean {
-  if (!EDITOR_SHORTCUTS.some((candidate) => candidate.id === id)) return false
+  if (!isEditorShortcutId(id)) return false
   if (typeof window === 'undefined') return false
-  const { shortcut } = getEditorShortcut(id as EditorShortcutId)
+  const { shortcut } = getEditorShortcut(id)
   const event = new KeyboardEvent('keydown', keyboardInitForChord(shortcut))
   window.dispatchEvent(event)
   return event.defaultPrevented

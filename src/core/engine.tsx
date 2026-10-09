@@ -27,8 +27,12 @@ import { CheckTools } from '../components/tools/CheckTools'
 import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
-import { commandRegistry } from './commandRegistry'
-import { matchesEditorShortcut, shortcutLabel } from './editorShortcuts'
+import {
+  commandRegistry,
+  dispatchCommandShortcut,
+  EDITOR_SHORTCUT_COMMAND_IDS,
+} from './commandRegistry'
+import { shortcutLabel } from './editorShortcuts'
 import { createMenuCommandRouter, subscribeDesktopMenu } from './desktopMenu'
 import { CommandPaletteModal } from '../components/CommandPaletteModal'
 import {
@@ -173,6 +177,10 @@ export const Engine: FC<EngineProps> = ({
 
   useEffect(() => {
     const unreg = registerDefaultCommands()
+    const unregisterCommandPalette = commandRegistry.registerHandler(
+      EDITOR_SHORTCUT_COMMAND_IDS.commandPalette,
+      () => setCommandPaletteOpen((previous) => !previous),
+    )
     setNavigationHandler({
       openView: (tabId) => navigateToViewRef.current(tabId),
       openAssistant: openAssistant,
@@ -199,25 +207,15 @@ export const Engine: FC<EngineProps> = ({
     })
     return () => {
       unreg()
+      unregisterCommandPalette()
       setNavigationHandler(null)
     }
   }, [onOpenAssistant, openAssistant, pluginHostCtx])
 
   // 全局快捷键监听：Cmd/Ctrl+K 打开全局指令面板
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (matchesEditorShortcut('commandPalette', e)) {
-        e.preventDefault()
-        setCommandPaletteOpen((prev) => !prev)
-        return
-      }
-
-      const commandContext = activeWritingCtx ?? undefined
-      const command = commandRegistry.findByShortcut(e, commandContext)
-      if (!command) return
-      e.preventDefault()
-      void command.execute(commandContext)
-    }
+    const onKey = (event: KeyboardEvent) =>
+      dispatchCommandShortcut(event, activeWritingCtx ?? undefined)
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [activeWritingCtx])

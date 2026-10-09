@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { matchesEditorShortcut, EDITOR_SHORTCUTS } from './editorShortcuts'
+import { matchesEditorShortcut } from './editorShortcuts'
+import { commandRegistry, EDITOR_SHORTCUT_COMMAND_IDS } from './commandRegistry'
 import {
   DESKTOP_MENU_EVENT,
   createMenuCommandRouter,
@@ -43,7 +44,10 @@ describe('desktop menu command bridge', () => {
   })
 
   it('每个编辑器 chord 都能被还原成一次真实匹配的 keydown', () => {
-    for (const { id, shortcut } of EDITOR_SHORTCUTS) {
+    for (const [id, commandId] of Object.entries(EDITOR_SHORTCUT_COMMAND_IDS)) {
+      const shortcut = commandRegistry.get(commandId)?.shortcut
+      expect(shortcut, `${id} 没有在命令注册表中定义 chord`).toBeTruthy()
+      if (!shortcut) continue
       const handler = installHandler(id)
 
       expect(dispatchDesktopMenuCommand(id), `${id}（${shortcut}）应被认领`).toBe(true)

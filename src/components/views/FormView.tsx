@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react'
 import type { FormDataRepository } from '../../ports/formDataRepository'
 import { useFormViewModel } from '../../hooks/useFormViewModel'
-import { matchesEditorShortcut, shortcutHint } from '../../core/editorShortcuts'
+import { shortcutHint } from '../../core/editorShortcuts'
+import { commandRegistry, EDITOR_SHORTCUT_COMMAND_IDS } from '../../core/commandRegistry'
 import { Save } from 'lucide-react'
 import { Tooltip } from '../../ui/primitives'
 
@@ -22,14 +23,7 @@ export const FormView: React.FC<FormViewProps> = ({ projectId, tabId, tabMeta, r
   const modules = tabMeta?.modules || []
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (matchesEditorShortcut('saveChapter', e)) {
-        e.preventDefault()
-        save()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return commandRegistry.registerHandler(EDITOR_SHORTCUT_COMMAND_IDS.saveChapter, save)
   }, [save])
 
   return (

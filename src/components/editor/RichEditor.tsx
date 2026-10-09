@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback, useState, type FC } from 'react'
 import { useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
 import CharacterCount from '@tiptap/extension-character-count'
 import Placeholder from '@tiptap/extension-placeholder'
 
@@ -49,8 +48,13 @@ import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
 import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
-import { matchesEditorShortcut } from '../../core/editorShortcuts'
+import { commandRegistry, EDITOR_SHORTCUT_COMMAND_IDS } from '../../core/commandRegistry'
 import { hashText } from '../../ai/proposals'
+import {
+  RegistryFormattingShortcuts,
+  RegistryStarterKit,
+  registerFormattingShortcutHandlers,
+} from '../../extensions/registry-shortcuts'
 import {
   semanticTextFromContent,
   semanticDocumentFromProseMirror,
@@ -362,7 +366,8 @@ export const RichEditor: FC<RichEditorProps> = ({
   /* ── TipTap 编辑器内核装配 ─────────────────────────────── */
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      RegistryStarterKit,
+      RegistryFormattingShortcuts,
       CharacterCount,
       Placeholder.configure({ placeholder: '在此处挥洒你的灵感与笔墨……' }),
       GhostText,
@@ -531,7 +536,7 @@ export const RichEditor: FC<RichEditorProps> = ({
     }
   }, [editor])
 
-  /* ── 全局快捷键：⌘S 保存 / ⌘F 查找 / ⌘\ 折叠目录（⌘B 归还给 Bold）/ ⌘N 新建章节 / ⌘H 时光机 / Alt+↑/↓ 切章 / Esc 关闭 ── */
+  /* ── 命令注册表处理快捷键；编辑器只注册当前可执行的动作。 ── */
   const uiRef = useRef({
     showFindReplace,
     isSidebarOpen: model.isSidebarOpen,
@@ -549,6 +554,41 @@ export const RichEditor: FC<RichEditorProps> = ({
     activeChapter,
   }
   useEffect(() => {
+    if (!editor) return
+
+    const unregisterFormattingHandlers = registerFormattingShortcutHandlers(editor)
+    const handlers: Array<[string, () => void | Promise<void>]> = [
+      [EDITOR_SHORTCUT_COMMAND_IDS.saveChapter, () => actions.save()],
+      [EDITOR_SHORTCUT_COMMAND_IDS.newChapter, () => uiRef.current.newChapter()],
+      [
+        EDITOR_SHORTCUT_COMMAND_IDS.findReplace,
+        () => actions.setShowFindReplace(!uiRef.current.showFindReplace),
+      ],
+      [
+        EDITOR_SHORTCUT_COMMAND_IDS.toggleChapterTree,
+        () => actions.setSidebar(!uiRef.current.isSidebarOpen),
+      ],
+      [EDITOR_SHORTCUT_COMMAND_IDS.history, () => actions.setShowHistoryModal(true)],
+      [
+        EDITOR_SHORTCUT_COMMAND_IDS.renameChapter,
+        () => {
+          const chapter = uiRef.current.activeChapter
+          if (!chapter) return
+          actions.setRenamingChapter(chapter)
+          actions.setRenamingTitle(chapter.title)
+        },
+      ],
+      [EDITOR_SHORTCUT_COMMAND_IDS.previousChapter, () => uiRef.current.prevChapter()],
+      [EDITOR_SHORTCUT_COMMAND_IDS.nextChapter, () => uiRef.current.nextChapter()],
+    ]
+    const unregister = handlers.map(([id, handler]) => commandRegistry.registerHandler(id, handler))
+    return () => {
+      unregisterFormattingHandlers()
+      unregister.reverse().forEach((remove) => remove())
+    }
+  }, [actions, editor])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         actions.setChapterContextMenu(null)
@@ -557,41 +597,6 @@ export const RichEditor: FC<RichEditorProps> = ({
         if (uiRef.current.showFindReplace) actions.setShowFindReplace(false)
         actions.setShowHistoryModal(false)
         setShowReferencesSidebar(false)
-        return
-      }
-      if (matchesEditorShortcut('renameChapter', e)) {
-        e.preventDefault()
-        if (uiRef.current.activeChapter) {
-          actions.setRenamingChapter(uiRef.current.activeChapter)
-          actions.setRenamingTitle(uiRef.current.activeChapter.title)
-        }
-        return
-      }
-      if (matchesEditorShortcut('previousChapter', e)) {
-        e.preventDefault()
-        uiRef.current.prevChapter()
-        return
-      }
-      if (matchesEditorShortcut('nextChapter', e)) {
-        e.preventDefault()
-        uiRef.current.nextChapter()
-        return
-      }
-      if (matchesEditorShortcut('saveChapter', e)) {
-        e.preventDefault()
-        actions.save()
-      } else if (matchesEditorShortcut('findReplace', e)) {
-        e.preventDefault()
-        actions.setShowFindReplace(!uiRef.current.showFindReplace)
-      } else if (matchesEditorShortcut('toggleChapterTree', e)) {
-        e.preventDefault()
-        actions.setSidebar(!uiRef.current.isSidebarOpen)
-      } else if (matchesEditorShortcut('newChapter', e)) {
-        e.preventDefault()
-        uiRef.current.newChapter()
-      } else if (matchesEditorShortcut('history', e)) {
-        e.preventDefault()
-        actions.setShowHistoryModal(true)
       }
     }
     window.addEventListener('keydown', onKey)

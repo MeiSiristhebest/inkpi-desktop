@@ -1,18 +1,13 @@
 import type { FC } from 'react'
 import { commandRegistry } from '../../core/commandRegistry'
-import { EDITOR_SHORTCUTS, formatShortcutLabel } from '../../core/editorShortcuts'
+import { formatShortcutLabel } from '../../core/editorShortcuts'
 import { Section } from './SettingsShared'
 
 export const ShortcutsTab: FC = () => {
-  const commandItems = commandRegistry
+  const shortcutItems = commandRegistry
     .getAll()
     .filter((command) => command.shortcut)
     .map((command) => ({ action: command.title, key: formatShortcutLabel(command.shortcut!) }))
-  const editorShortcutItems = EDITOR_SHORTCUTS.map(({ action, shortcut }) => ({
-    action,
-    key: formatShortcutLabel(shortcut),
-  }))
-  const shortcutItems = [...editorShortcutItems, ...commandItems]
 
   return (
     <Section title="快捷键速查" desc="以下列表只展示当前编辑器与命令注册表实际监听的快捷键。">
