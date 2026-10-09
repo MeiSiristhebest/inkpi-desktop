@@ -2,11 +2,28 @@ import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbPovGuardRepository } from '../../../adapters/indexedDbPovGuardRepository'
 import { PovGuardEngine } from '../engine/PovGuardEngine'
-import type { PovViolation } from '../types'
-import { ShieldAlert, AlertTriangle, EyeOff, Play } from 'lucide-react'
+import type { CharacterKnowledge, PovViolation, SecretItem } from '../types'
+import { ShieldAlert, AlertTriangle, EyeOff, Play, Save } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { Select } from '../../../ui/primitives'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import {
+  findPovConfiguration,
+  POV_PROJECT_CONFIG_CHAPTER_ID,
+  povProjectConfigRecordId,
+} from '../config'
+
+const parseUniqueLines = (value: string) => [
+  ...new Set(
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  ),
+]
+
+const characterRecordId = (name: string) => `pov-character:${name}`
+const secretRecordId = (title: string) => `pov-secret:${title}`
 
 export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [currentText, setCurrentText] = useState('')
@@ -14,6 +31,15 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
   const [povMode, setPovMode] = useState<
     'first_person' | 'third_limited' | 'third_objective' | 'omniscient'
   >('third_limited')
+  const [characterText, setCharacterText] = useState('')
+  const [secretText, setSecretText] = useState('')
+  const [knownSecretTitlesByCharacter, setKnownSecretTitlesByCharacter] = useState<
+    Record<string, string[]>
+  >({})
+  const [loadedProjectId, setLoadedProjectId] = useState('')
+  const [isSavingConfig, setIsSavingConfig] = useState(false)
+  const [configDirty, setConfigDirty] = useState(false)
+  const [configMessage, setConfigMessage] = useState('')
   const [violations, setViolations] = useState<PovViolation[]>([])
   const [isAuditing, setIsAuditing] = useState(false)
   const [hasAudited, setHasAudited] = useState(false)
@@ -27,21 +53,174 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
     })
   }, [currentText, onStats])
 
+  useEffect(() => {
+    let disposed = false
+    const loadConfig = async () => {
+      try {
+        const records = await indexedDbPovGuardRepository.getAll(projectId)
+        if (disposed) return
+        const config = findPovConfiguration(records, projectId)
+        if (!config) {
+          setCharacterText('')
+          setSecretText('')
+          setPovChar('')
+          setPovMode('third_limited')
+          setKnownSecretTitlesByCharacter({})
+          setConfigDirty(false)
+          setConfigMessage('尚未保存 POV 配置。')
+          return
+        }
+
+        const secretTitleById = new Map(config.secrets.map((secret) => [secret.id, secret.title]))
+        setCharacterText(
+          config.allowedCharacters.map((character) => character.characterName).join('\n'),
+        )
+        setSecretText(config.secrets.map((secret) => secret.title).join('\n'))
+        setPovChar(config.povCharacterName)
+        setPovMode(config.povMode)
+        setKnownSecretTitlesByCharacter(
+          Object.fromEntries(
+            config.allowedCharacters.map((character) => [
+              character.characterName,
+              character.knownSecretIds
+                .map((secretId) => secretTitleById.get(secretId))
+                .filter((title): title is string => Boolean(title)),
+            ]),
+          ),
+        )
+        setConfigDirty(false)
+        setConfigMessage('已载入保存的 POV 配置。')
+      } catch {
+        if (!disposed) setConfigMessage('读取 POV 配置失败。')
+      } finally {
+        if (!disposed) setLoadedProjectId(projectId)
+      }
+    }
+
+    void loadConfig()
+    return () => {
+      disposed = true
+    }
+  }, [projectId])
+
+  const characterNames = parseUniqueLines(characterText)
+  const secretTitles = parseUniqueLines(secretText)
+  const isConfigLoading = loadedProjectId !== projectId
+
+  const markConfigDirty = () => {
+    setConfigDirty(true)
+    setConfigMessage('配置有未保存更改。')
+  }
+
+  const handleCharacterTextChange = (value: string) => {
+    const nextNames = parseUniqueLines(value)
+    setCharacterText(value)
+    setPovChar((current) =>
+      nextNames.includes(current.trim()) ? current.trim() : (nextNames[0] ?? ''),
+    )
+    markConfigDirty()
+  }
+
+  const handleSecretTextChange = (value: string) => {
+    const nextTitles = parseUniqueLines(value)
+    setSecretText(value)
+    setKnownSecretTitlesByCharacter((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([character, titles]) => [
+          character,
+          titles.filter((title) => nextTitles.includes(title)),
+        ]),
+      ),
+    )
+    markConfigDirty()
+  }
+
+  const toggleKnownSecret = (characterName: string, title: string) => {
+    setKnownSecretTitlesByCharacter((current) => {
+      const currentTitles = current[characterName] ?? []
+      const nextTitles = currentTitles.includes(title)
+        ? currentTitles.filter((knownTitle) => knownTitle !== title)
+        : [...currentTitles, title]
+      return { ...current, [characterName]: nextTitles }
+    })
+    markConfigDirty()
+  }
+
+  const saveConfiguration = async () => {
+    const normalizedPovCharacter = povChar.trim()
+    if (!characterNames.includes(normalizedPovCharacter)) {
+      setConfigMessage('主视角角色必须来自角色名单。')
+      return
+    }
+
+    const allowedCharacters: CharacterKnowledge[] = characterNames.map((characterName) => ({
+      characterId: characterRecordId(characterName),
+      characterName,
+      knownSecretIds: (knownSecretTitlesByCharacter[characterName] ?? [])
+        .filter((title) => secretTitles.includes(title))
+        .map(secretRecordId),
+    }))
+    const secrets: SecretItem[] = secretTitles.map((title) => {
+      const id = secretRecordId(title)
+      return {
+        id,
+        title,
+        confidentialityLevel: 'secret',
+        originChapterOrder: 0,
+        holders: allowedCharacters
+          .filter((character) => character.knownSecretIds.includes(id))
+          .map((character) => character.characterName),
+      }
+    })
+
+    const record = {
+      id: povProjectConfigRecordId(projectId),
+      projectId,
+      chapterId: POV_PROJECT_CONFIG_CHAPTER_ID,
+      chapterOrder: 0,
+      povCharacterId: characterRecordId(normalizedPovCharacter),
+      povCharacterName: normalizedPovCharacter,
+      povMode,
+      allowedCharacters,
+      secrets,
+      headHoppingViolationsCount: 0,
+      omniscienceLeaksCount: 0,
+      updatedAt: clock.now(),
+    }
+
+    setIsSavingConfig(true)
+    try {
+      await indexedDbPovGuardRepository.save(record)
+      setConfigDirty(false)
+      setConfigMessage('POV 配置已保存。')
+    } catch {
+      setConfigMessage('保存 POV 配置失败。')
+    } finally {
+      setIsSavingConfig(false)
+    }
+  }
+
   const runAudit = async () => {
     setIsAuditing(true)
     setHasAudited(false)
     setAuditMessage('')
     try {
       const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
-      const latestSnapshot = snapshots[0]
-      if (!latestSnapshot?.allowedCharacters?.length) {
+      if (configDirty) {
+        setViolations([])
+        setAuditMessage('POV 配置有未保存更改，请先保存后再审查。')
+        return
+      }
+
+      const config = findPovConfiguration(snapshots, projectId)
+      if (!config?.allowedCharacters.length) {
         setViolations([])
         setAuditMessage('没有保存的角色与秘密配置，无法进行 POV 规则审查。')
         return
       }
 
-      const effectivePovChar = povChar.trim() || latestSnapshot.povCharacterName
-      const povIsConfigured = latestSnapshot.allowedCharacters.some(
+      const effectivePovChar = config.povCharacterName
+      const povIsConfigured = config.allowedCharacters.some(
         (character) =>
           character.characterName === effectivePovChar ||
           character.characterId === effectivePovChar,
@@ -52,12 +231,11 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
         return
       }
 
-      setPovChar(effectivePovChar)
       const result = PovGuardEngine.analyze(currentText, {
         povCharacter: effectivePovChar,
-        povMode,
-        allCharacters: latestSnapshot.allowedCharacters,
-        secrets: latestSnapshot.secrets,
+        povMode: config.povMode,
+        allCharacters: config.allowedCharacters,
+        secrets: config.secrets,
       })
       setViolations(result.violations)
       setHasAudited(true)
@@ -85,27 +263,139 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
             detail="按角色名称与已登记秘密做规则匹配，不代表完整的人工审读"
           />
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="font-semibold text-slate-500">主视角角色:</span>
-            <input
-              className="border px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+      </div>
+
+      <section
+        aria-labelledby="pov-config-heading"
+        className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 id="pov-config-heading" className="text-sm font-semibold">
+              POV 配置
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              每行填写一个角色或敏感信息。保存后，规则会按这些条目检查正文。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={saveConfiguration}
+            disabled={
+              isConfigLoading ||
+              isSavingConfig ||
+              characterNames.length === 0 ||
+              !characterNames.includes(povChar.trim())
+            }
+            className="shrink-0 px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <Save className="w-3.5 h-3.5" />
+              {isSavingConfig ? '正在保存…' : '保存 POV 配置'}
+            </span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            角色名单（每行一个）
+            <textarea
+              aria-label="角色名单（每行一个）"
+              rows={4}
+              value={characterText}
+              disabled={isConfigLoading || isSavingConfig}
+              onChange={(event) => handleCharacterTextChange(event.target.value)}
+              className="w-full p-2 rounded border font-normal bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 disabled:opacity-50"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+            敏感信息（每行一项）
+            <textarea
+              aria-label="敏感信息（每行一项）"
+              rows={4}
+              value={secretText}
+              disabled={isConfigLoading || isSavingConfig}
+              onChange={(event) => handleSecretTextChange(event.target.value)}
+              className="w-full p-2 rounded border font-normal bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 disabled:opacity-50"
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              主视角角色
+            </span>
+            <Select
+              label="主视角角色"
               value={povChar}
-              placeholder="填写 POV 角色"
-              onChange={(e) => setPovChar(e.target.value)}
+              disabled={isConfigLoading || isSavingConfig || characterNames.length === 0}
+              onValueChange={(value) => {
+                setPovChar(value)
+                markConfigDirty()
+              }}
+              placeholder="选择角色"
+              options={characterNames.map((name) => ({ value: name, label: name }))}
             />
           </div>
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="font-semibold text-slate-500">视角模式:</span>
-            <Select size="sm" value={povMode} onValueChange={(v) => setPovMode(v as any)}>
-              <option value="third_limited">第三人称受限 (Third Limited)</option>
-              <option value="first_person">第一人称 (First Person)</option>
-              <option value="third_objective">第三人称客观 (Objective)</option>
-              <option value="omniscient">全知视角 (Omniscient)</option>
-            </Select>
+          <div className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              视角模式
+            </span>
+            <Select
+              label="视角模式"
+              value={povMode}
+              disabled={isConfigLoading || isSavingConfig}
+              onValueChange={(value) => {
+                setPovMode(value as typeof povMode)
+                markConfigDirty()
+              }}
+              options={[
+                { value: 'third_limited', label: '第三人称受限' },
+                { value: 'first_person', label: '第一人称' },
+                { value: 'third_objective', label: '第三人称客观' },
+                { value: 'omniscient', label: '全知视角' },
+              ]}
+            />
           </div>
         </div>
-      </div>
+
+        {characterNames.length > 0 && secretTitles.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              角色已知信息
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {characterNames.map((characterName) => (
+                <fieldset
+                  key={characterName}
+                  className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-1"
+                >
+                  <legend className="px-1 text-xs font-medium">{characterName}</legend>
+                  {secretTitles.map((title) => (
+                    <label key={title} className="flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        aria-label={`${characterName} 知道：${title}`}
+                        checked={(knownSecretTitlesByCharacter[characterName] ?? []).includes(
+                          title,
+                        )}
+                        disabled={isConfigLoading || isSavingConfig}
+                        onChange={() => toggleKnownSecret(characterName, title)}
+                      />
+                      知道：{title}
+                    </label>
+                  ))}
+                </fieldset>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p role="status" aria-live="polite" className="text-xs text-slate-500 dark:text-slate-400">
+          {isConfigLoading ? '正在读取保存配置…' : configMessage}
+        </p>
+      </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col space-y-2">

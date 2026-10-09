@@ -5,6 +5,7 @@ import { PovGuardEngine } from '../engine/PovGuardEngine'
 import type { PovAnalysisResult } from '../types'
 import { ShieldAlert, AlertTriangle, EyeOff } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { findPovConfiguration } from '../config'
 
 export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [result, setResult] = useState<PovAnalysisResult | null>(null)
@@ -21,17 +22,17 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
     const loadAndAudit = async () => {
       const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
       if (disposed) return
-      const latestSnapshot = snapshots[0]
-      if (!latestSnapshot?.allowedCharacters?.length) {
+      const config = findPovConfiguration(snapshots, projectId)
+      if (!config?.allowedCharacters.length) {
         setResult(null)
         setNotice('没有保存的角色与秘密配置，无法进行 POV 规则审查。')
         return
       }
-      const povIsConfigured = latestSnapshot.allowedCharacters.some(
+      const povIsConfigured = config.allowedCharacters.some(
         (character) =>
-          character.characterName === latestSnapshot.povCharacterName ||
-          character.characterId === latestSnapshot.povCharacterName ||
-          character.characterId === latestSnapshot.povCharacterId,
+          character.characterName === config.povCharacterName ||
+          character.characterId === config.povCharacterName ||
+          character.characterId === config.povCharacterId,
       )
       if (!povIsConfigured) {
         setResult(null)
@@ -40,10 +41,10 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
       }
 
       const auditRes = PovGuardEngine.analyze(currentText, {
-        povCharacter: latestSnapshot.povCharacterName,
-        povMode: latestSnapshot.povMode,
-        allCharacters: latestSnapshot.allowedCharacters,
-        secrets: latestSnapshot.secrets,
+        povCharacter: config.povCharacterName,
+        povMode: config.povMode,
+        allCharacters: config.allowedCharacters,
+        secrets: config.secrets,
       })
       if (!disposed) {
         setResult(auditRes)

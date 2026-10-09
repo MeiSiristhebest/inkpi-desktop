@@ -44,4 +44,51 @@ describe('PovGuard UI Components', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/未检出问题/)).not.toBeInTheDocument()
   })
+
+  it("saves configured roles, sensitive information, and each role's knowledge", async () => {
+    vi.spyOn(indexedDbPovGuardRepository, 'getAll').mockResolvedValue([])
+    const save = vi.spyOn(indexedDbPovGuardRepository, 'save').mockResolvedValue()
+    render(<PovGuardMasterView projectId="p1" />)
+
+    await screen.findByText('尚未保存 POV 配置。')
+    fireEvent.change(screen.getByLabelText('角色名单（每行一个）'), {
+      target: { value: '林凡\n苏雨柔' },
+    })
+    fireEvent.change(screen.getByLabelText('敏感信息（每行一项）'), {
+      target: { value: '古戒来历' },
+    })
+    fireEvent.click(screen.getByRole('checkbox', { name: '林凡 知道：古戒来历' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存 POV 配置' }))
+
+    await screen.findByText('POV 配置已保存。')
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'pov-config:p1',
+        projectId: 'p1',
+        chapterId: '__project_pov_config__',
+        povCharacterId: 'pov-character:林凡',
+        povCharacterName: '林凡',
+        allowedCharacters: [
+          {
+            characterId: 'pov-character:林凡',
+            characterName: '林凡',
+            knownSecretIds: ['pov-secret:古戒来历'],
+          },
+          {
+            characterId: 'pov-character:苏雨柔',
+            characterName: '苏雨柔',
+            knownSecretIds: [],
+          },
+        ],
+        secrets: [
+          expect.objectContaining({
+            id: 'pov-secret:古戒来历',
+            title: '古戒来历',
+            confidentialityLevel: 'secret',
+            holders: ['林凡'],
+          }),
+        ],
+      }),
+    )
+  })
 })
