@@ -48,7 +48,7 @@ describe('MultiCalendar Components', () => {
 
     expect(screen.getByText(/跨纪元多历法与故事时间轴引擎/)).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText(/平行历法双向精准换算器/)).toBeInTheDocument()
+      expect(screen.getByText(/平行历法日期换算/)).toBeInTheDocument()
     })
 
     const saveBtn = screen.getByText('保存历法时间线')

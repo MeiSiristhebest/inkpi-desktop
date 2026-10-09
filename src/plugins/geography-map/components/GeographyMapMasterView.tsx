@@ -130,7 +130,7 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
             物理拓扑网格地图与战局沙盘 (Geography Map)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            2D 离散拓扑网格画板、行军阻尼时间测算与无飞地拓扑校验，从物理距离根除时间线 Bug。
+            编辑网格地图，估算路线行军时间并检查拓扑连通性。请按故事设定复核距离和耗时。
           </p>
           <ScoreProvenanceBadge source="rule" detail="在作者标注的地点与路线上做确定性推导" />
         </div>

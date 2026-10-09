@@ -256,7 +256,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                 尚无时空大纲网格
               </h3>
               <p className="text-xs text-[var(--ink-text-muted)] mb-5 leading-relaxed">
-                无需复杂运筹建档。主线、支线与暗线交织演进，实时杜绝因果死锁与逻辑吃书。
+                为主线、支线和暗线建立因果关系，并检查循环依赖和时间顺序冲突。
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
                 {hostContext?.aiAssistant?.isAvailable && (

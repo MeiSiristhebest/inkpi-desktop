@@ -7,6 +7,7 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { ListChecks, CheckCircle2, Circle } from 'lucide-react'
 import { Tooltip } from '../../../ui/primitives'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
@@ -90,6 +91,10 @@ export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curr
             {wordCount} 字 / 目标 {currentPlan?.targetWordCount || 3000}
           </span>
         </div>
+        <ScoreProvenanceBadge
+          source="rule"
+          detail="按正文长度与节拍预算估算进度；情绪值来自计划参数"
+        />
 
         {/* 进度条 */}
         {pacingReport && (

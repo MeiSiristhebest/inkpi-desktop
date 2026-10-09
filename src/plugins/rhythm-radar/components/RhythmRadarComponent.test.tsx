@@ -31,5 +31,7 @@ describe('RhythmRadar UI Components', () => {
   it('RhythmRadarDrawer renders correctly', () => {
     render(<RhythmRadarDrawer projectId="p1" currentText="林凡拔剑怒斩！" />)
     expect(screen.getByText(/断章张力雷达/)).toBeDefined()
+    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
+    expect(screen.getByText(/不代表真实读者反馈/)).toBeInTheDocument()
   })
 })

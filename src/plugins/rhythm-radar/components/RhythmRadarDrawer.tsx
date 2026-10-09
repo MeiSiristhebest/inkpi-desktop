@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { RhythmRadarEngine } from '../engine/RhythmRadarEngine'
 import { Activity } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const RhythmRadarDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const analysis = RhythmRadarEngine.analyzeChapter(currentText, 'cur', 1)
@@ -16,6 +17,11 @@ export const RhythmRadarDrawer: FC<DesktopPluginDrawerProps> = ({ currentText })
           张力: {Math.round(analysis.tensionScore * 100)}%
         </span>
       </div>
+
+      <ScoreProvenanceBadge
+        source="rule"
+        detail="按动作词、情绪词和冲突词密度计算，不代表真实读者反馈"
+      />
 
       <div className="p-2.5 rounded bg-slate-100 dark:bg-slate-800 space-y-1.5">
         <div className="flex justify-between text-[11px]">

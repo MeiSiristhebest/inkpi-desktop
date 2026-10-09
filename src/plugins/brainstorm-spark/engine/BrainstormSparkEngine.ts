@@ -111,7 +111,7 @@ export class BrainstormSparkEngine {
 
         case 'op_sacrifice_break':
           concretePlot = `【以沉重代价换取翻盘空间】：面对「${problem}」，主角在不可抗力下断然自碎本命灵兵/自降一个小境界，强行越阶引动反噬杀阵打破死锁。`
-          pros = '极大增强危机真实性与悲壮感，杜绝无脑无伤推图的虚假悬念。'
+          pros = '方案要求主角付出明确代价，避免将这次胜利写成无代价翻盘。'
           cons = '主角付出的代价不可在下章轻易逆转或复原，否则会严重伤害读者代入信誉。'
           break
 

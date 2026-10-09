@@ -202,10 +202,10 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
           </div>
         </div>
 
-        {/* 高密度 AI 摘要 */}
+        {/* 上下文摘要 */}
         <div className="space-y-1">
           <label className="text-[12px] font-medium text-[var(--ink-text-muted)]">
-            AI 高密度切片摘要 (50字以内，供上下文精准注入)
+            上下文摘要（50字以内，供后续上下文使用）
           </label>
           <textarea
             rows={2}

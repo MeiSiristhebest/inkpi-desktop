@@ -12,6 +12,8 @@ describe('SceneBeatsDrawer — 细纲节拍写作随动抽屉', () => {
 
   it('renders empty prompt when no plan exists and allows initializing default plan', async () => {
     render(<SceneBeatsDrawer projectId="p1" currentText="" />)
+    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
+    expect(screen.getByText(/情绪值来自计划参数/)).toBeInTheDocument()
     expect(await screen.findByText('当前章节暂无绑定的细纲节拍')).toBeInTheDocument()
 
     const initBtn = screen.getByText('生成四段式高潮节拍')

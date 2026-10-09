@@ -320,7 +320,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
               </span>
             ) : (
               <span className="text-rose-500 flex items-center gap-1">
-                <ShieldAlert className="w-3.5 h-3.5" /> 存在违规风险
+                <ShieldAlert className="w-3.5 h-3.5" /> 命中本地规则
               </span>
             )}
           </div>
@@ -336,7 +336,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             ) : filteredViolations.length === 0 ? (
               <div className="text-center py-16 text-[var(--ink-text-muted)] text-xs">
                 <ShieldCheck className="w-8 h-8 mx-auto text-emerald-500 mb-2 opacity-80" />
-                <p className="font-medium text-emerald-500">此分类下无敏感风险</p>
+                <p className="font-medium text-emerald-500">此分类未命中本地规则</p>
                 <p className="text-[10px] text-[var(--ink-text-faint)] mt-1">
                   当前文本未命中该分级的本地词库条目
                 </p>

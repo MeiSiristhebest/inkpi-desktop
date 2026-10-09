@@ -14,6 +14,7 @@ import type { ChapterRecord } from '../../../types'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import {
@@ -198,8 +199,9 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             跨纪元多历法与故事时间轴引擎 (Multi-Calendar)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            并行史诗历法定义、全宇宙绝对标量日双向换算与章节时间单调性巡检，根除编年史倒流 Bug。
+            设置平行历法、换算日期并检查章节时间顺序。检查结果取决于已录入的历法参数和章节日期。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="按历法参数换算日期并检查章节顺序" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -344,7 +346,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
       <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
         <div className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
           <ArrowRightLeft className="w-4 h-4" />
-          平行历法双向精准换算器
+          平行历法日期换算
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs items-end">

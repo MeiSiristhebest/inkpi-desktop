@@ -169,13 +169,16 @@ export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
           {/* 实时抽取对白台本音轨 */}
           <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-3">
+            <p className="text-xs text-slate-500">
+              规则解析：按对话标点和说话动词提取角色与台词，情绪标签由词表匹配。结果可能不完整，请核对原文。
+            </p>
             <h3 className="text-sm font-bold flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Mic className="w-4 h-4 text-emerald-500" />
                 <span>广播剧音轨台本 ({script.lines.length} 句)</span>
               </span>
               <span className="text-xs text-slate-400">
-                已识别人数: {script.characterSpeakers.length}
+                解析到角色数: {script.characterSpeakers.length}
               </span>
             </h3>
 

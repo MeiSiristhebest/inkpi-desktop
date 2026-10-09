@@ -9,6 +9,7 @@ import regexRules from '../data/regex-rules.json'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { ShieldCheck, ShieldAlert, Sparkles, Check } from 'lucide-react'
 import { Tooltip } from '../../../ui/primitives'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsRed as SensitiveWord[]),
@@ -56,11 +57,15 @@ export const SafeGateDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) =>
             文学平替
           </span>
         </div>
+        <ScoreProvenanceBadge
+          source="rule"
+          detail="只检查本地词库和正则规则；不代表平台审核或合规结论"
+        />
 
         {/* 状态徽章条 */}
         <div className="flex items-center justify-between text-[11px] pt-1">
           <span className="text-[var(--ink-text-muted)]">
-            违规总数：{scanResult.violations.length}
+            规则命中数：{scanResult.violations.length}
           </span>
           <div className="flex items-center gap-1.5 font-medium">
             {scanResult.redCount > 0 && (
@@ -74,7 +79,7 @@ export const SafeGateDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) =>
             )}
             {scanResult.isClean && (
               <span className="text-emerald-500 flex items-center gap-0.5">
-                <ShieldCheck className="w-3 h-3" /> 合规
+                <ShieldCheck className="w-3 h-3" /> 未命中本地规则
               </span>
             )}
           </div>
@@ -85,9 +90,9 @@ export const SafeGateDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) =>
         {scanResult.violations.length === 0 ? (
           <div className="text-center py-12 text-[var(--ink-text-muted)]">
             <ShieldCheck className="w-7 h-7 mx-auto text-emerald-500 mb-2 opacity-80" />
-            <p className="font-medium text-emerald-500">当前正文合规无风险</p>
+            <p className="font-medium text-emerald-500">当前正文未命中本地规则</p>
             <p className="text-[10px] text-[var(--ink-text-faint)] mt-1">
-              本地词库实时监听中，如出现敏感词将即刻提示文学平替
+              按本地词库和正则规则扫描，并提供可选替换建议
             </p>
           </div>
         ) : (

@@ -13,15 +13,19 @@ describe('ExpectationDrawer — 期待感写作随动抽屉', () => {
   it('renders drawer header and assesses empty text', () => {
     render(<ExpectationDrawer projectId="p1" currentText="" />)
     expect(screen.getByText('期待感与节奏监测')).toBeInTheDocument()
+    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
+    expect(screen.getByText(/不代表真实读者反馈/)).toBeInTheDocument()
     expect(screen.getByText(/SPR: 1/)).toBeInTheDocument()
-    expect(screen.getByText('节奏平稳，张力与反击平衡。')).toBeInTheDocument()
+    expect(screen.getByText('当前文本未触发节奏阈值提示。')).toBeInTheDocument()
   })
 
   it('displays suppression warning when chapter is heavy on frustration', () => {
     const heavyText = '屈辱！嘲讽！打压！吐血！命悬一线！敌人冷笑羞辱他是废物！'
     render(<ExpectationDrawer projectId="p1" currentText={heavyText} />)
 
-    expect(screen.getByText('当前段落压抑过重，请注意伏笔反转契机！')).toBeInTheDocument()
+    expect(
+      screen.getByText('规则检测到压抑线索偏多，请核对后续反转或兑现安排。'),
+    ).toBeInTheDocument()
   })
 
   it('loads and lists active contracts', async () => {

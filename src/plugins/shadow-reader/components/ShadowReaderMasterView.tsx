@@ -16,6 +16,7 @@ import {
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
@@ -48,7 +49,7 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
   useEffect(() => {
     onStats?.({
-      title: '读者弹幕与毒点模拟器',
+      title: '规则读者反馈预览',
       wordCount: chapterText.length,
       updatedAt: clock.now(),
     })
@@ -84,11 +85,12 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <MessageSquare className="w-6 h-6 text-indigo-500" />
-            <span>读者弹幕与毒点预判模拟器 (ShadowReader)</span>
+            <span>规则读者反馈预览 (ShadowReader)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            基于 5 大认知肖像模型实时推演读者心智弹幕、识别圣母/送女/憋屈等商业毒点警报
+            按固定词条匹配正文片段并生成模拟弹幕，不代表真实读者反馈。
           </p>
+          <ScoreProvenanceBadge source="rule" detail="内置词条匹配，非真实读者数据或模型输出" />
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500 dark:text-slate-400">

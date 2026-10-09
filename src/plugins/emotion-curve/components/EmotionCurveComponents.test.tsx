@@ -38,5 +38,7 @@ describe('EmotionCurve Components', () => {
 
     expect(screen.getByText(/读者情绪心电图/)).toBeInTheDocument()
     expect(screen.getByText(/六维情绪光谱分解/)).toBeInTheDocument()
+    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
+    expect(screen.getByText(/不代表真实读者情绪/)).toBeInTheDocument()
   })
 })

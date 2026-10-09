@@ -4,6 +4,7 @@ import type { ExpectationContract } from '../types'
 import { expectationEngine } from '../engine/ExpectationEngine'
 import { indexedDbExpectationRepository } from '../../../adapters/indexedDbExpectationRepository'
 import { Sparkles, AlertTriangle, CheckCircle2, Flame } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const ExpectationDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [contracts, setContracts] = useState<ExpectationContract[]>([])
@@ -41,6 +42,7 @@ export const ExpectationDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
             SPR: {rhythm.spr}
           </span>
         </div>
+        <ScoreProvenanceBadge source="rule" detail="按内置压抑与爽点词条计数；不代表真实读者反馈" />
 
         {/* 压抑与爆发对比条 */}
         <div className="p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] space-y-1.5">
@@ -76,19 +78,19 @@ export const ExpectationDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cur
           {rhythm.riskLevel === 'suppression_heavy' && (
             <div className="flex items-center gap-1 text-[10px] text-rose-500 font-medium pt-0.5">
               <AlertTriangle className="w-3 h-3 shrink-0" />
-              <span>当前段落压抑过重，请注意伏笔反转契机！</span>
+              <span>规则检测到压抑线索偏多，请核对后续反转或兑现安排。</span>
             </div>
           )}
           {rhythm.riskLevel === 'fatigue_slap' && (
             <div className="flex items-center gap-1 text-[10px] text-amber-500 font-medium pt-0.5">
               <AlertTriangle className="w-3 h-3 shrink-0" />
-              <span>爽点过密无阻力，警惕审美疲劳与通胀！</span>
+              <span>规则检测到爽点线索较集中，建议核对章节阻力和节奏安排。</span>
             </div>
           )}
           {rhythm.riskLevel === 'healthy' && (
             <div className="flex items-center gap-1 text-[10px] text-emerald-500 font-medium pt-0.5">
               <CheckCircle2 className="w-3 h-3 shrink-0" />
-              <span>节奏平稳，张力与反击平衡。</span>
+              <span>当前文本未触发节奏阈值提示。</span>
             </div>
           )}
         </div>

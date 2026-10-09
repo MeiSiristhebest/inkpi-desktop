@@ -6,7 +6,9 @@ describe('SafeGateDrawer — 写作台敏感词审查随动感知抽屉', () => 
   it('renders clean state when current text has no violations', () => {
     render(<SafeGateDrawer projectId="p1" currentText="山间清风拂面，道人盘膝而坐。" />)
     expect(screen.getByText('实时敏感词审查')).toBeInTheDocument()
-    expect(screen.getByText('当前正文合规无风险')).toBeInTheDocument()
+    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
+    expect(screen.getByText(/不代表平台审核或合规结论/)).toBeInTheDocument()
+    expect(screen.getByText('当前正文未命中本地规则')).toBeInTheDocument()
   })
 
   it('detects violations and renders literary replacement pills', async () => {

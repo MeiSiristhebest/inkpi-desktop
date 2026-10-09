@@ -7,6 +7,7 @@ describe('VoicePreview UI Components', () => {
   it('VoicePreviewMasterView renders correctly', () => {
     render(<VoicePreviewMasterView projectId="p1" />)
     expect(screen.getByText(/角色拟真有声对白试听器/)).toBeDefined()
+    expect(screen.getByText(/规则解析：按对话标点和说话动词提取角色与台词/)).toBeInTheDocument()
   })
 
   it('starts without sample chapter text or counted writing words', async () => {

@@ -6,6 +6,8 @@ describe('WaterMeterDrawer', () => {
   it('renders drawer header and recalculates on input', () => {
     render(<WaterMeterDrawer activeChapterId="ch1" />)
     expect(screen.getByText('正文水分与信息熵')).toBeDefined()
+    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
+    expect(screen.getByText(/仅供人工复核/)).toBeInTheDocument()
     const textarea = screen.getByPlaceholderText(/粘贴待审文字/)
     fireEvent.change(textarea, {
       target: {
@@ -15,6 +17,6 @@ describe('WaterMeterDrawer', () => {
     expect(screen.getByText(/捕获水词/)).toBeDefined()
     const cleanBtn = screen.getByText(/一键剔除当前抓捕到的水词/)
     fireEvent.click(cleanBtn)
-    expect(screen.getByText(/动词密度/)).toBeDefined()
+    expect(screen.getByText('动词密度 (AVR)')).toBeDefined()
   })
 })

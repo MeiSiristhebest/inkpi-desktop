@@ -214,11 +214,11 @@ export const ClueWeaverMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold tracking-tight">信息差与认知织机</h2>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-medium">
-              认识论模态逻辑 · 天降全知巡检
+              线索掌握状态与信息差检查
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            掌控“谁知道什么”，杜绝全知视角泄露，精准量化多角色情报博弈优势差
+            记录角色掌握的线索，并按收录与回收条目展示信息差。结果需要作者复核。
           </p>
           <ScoreProvenanceBadge source="rule" detail="按线索条目的收录与回收计数推算" />
         </div>

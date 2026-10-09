@@ -152,7 +152,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               </span>
             </div>
             <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-              监控压抑爆发比（SPR），杜绝虐主弃书与审美疲劳，闭环追踪读者核心爽点契约
+              按登记契约与提示词匹配计算压抑和释放指标，供作者检查节奏；不代表真实读者留存反馈。
             </p>
             <ScoreProvenanceBadge source="rule" detail="基准 50 分，按契约与cue词命中加减" />
           </div>

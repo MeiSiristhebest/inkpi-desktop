@@ -7,7 +7,9 @@ import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
 describe('ShadowReader UI Components', () => {
   it('ShadowReaderMasterView renders correctly', () => {
     render(<ShadowReaderMasterView projectId="p1" />)
-    expect(screen.getByText(/读者弹幕与毒点预判模拟器/)).toBeDefined()
+    expect(screen.getByText(/规则读者反馈预览/)).toBeDefined()
+    expect(screen.getByText(/不代表真实读者反馈/)).toBeDefined()
+    expect(screen.getByText(/来源：即时规则/)).toBeDefined()
   })
 
   it('ShadowReaderDrawer renders correctly', () => {

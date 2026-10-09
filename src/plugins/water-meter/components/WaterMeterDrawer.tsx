@@ -2,6 +2,7 @@ import { useState, useMemo, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { waterMeterEngine } from '../engine/WaterMeterEngine'
 import { Droplet, Sparkles, Scissors } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
   const [text, setText] = useState('')
@@ -38,6 +39,11 @@ export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
           {report.waterScore} 分 · {report.waterLevel}
         </span>
       </div>
+
+      <ScoreProvenanceBadge
+        source="rule"
+        detail="按固定词表、动词密度与文本熵计算；结果仅供人工复核"
+      />
 
       <div className="space-y-2">
         <label className="text-[11px] text-[var(--ink-text-muted)] block">

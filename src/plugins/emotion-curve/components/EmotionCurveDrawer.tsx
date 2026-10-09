@@ -4,6 +4,7 @@ import { EmotionCurveEngine } from '../engine/EmotionCurveEngine'
 import type { ChapterEmotionEvaluation } from '../types'
 import { pluginEventBus } from '../../../core/pluginEventBus'
 import { Activity } from 'lucide-react'
+import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
 export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [inputText, setInputText] = useState('')
@@ -47,6 +48,8 @@ export const EmotionCurveDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
           {currentText ? '编辑器正文联动' : '手动输入'}
         </span>
       </div>
+
+      <ScoreProvenanceBadge source="rule" detail="按内置情绪词表统计命中次数；不代表真实读者情绪" />
 
       {auditNotice && (
         <div className="p-2 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[11px] flex justify-between items-center">

@@ -169,7 +169,7 @@ export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            掌控长篇分卷宏观戏剧弧，分配大高潮爆发点，杜绝中后期战力通胀与水文崩盘
+            按分卷安排剧情阶段和高潮节点，辅助检查章节节奏与设定变化。
           </p>
           <ScoreProvenanceBadge source="rule" detail="对各章字数做线性拟合后打分" />
         </div>
