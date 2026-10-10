@@ -24,7 +24,7 @@ describe('Runtime Compatibility Gate (CI Contract Enforcement)', () => {
     expect(runtimeLock.pinnedCommit).toBe('ccb4a67a33177bedfd73e8ccea76a7e1446ca088')
     expect(runtimeLock.protocolVersion).toBe(RUNTIME_PROTOCOL_VERSION)
     expect(runtimeLock.skillManifestHash).toMatch(/^[0-9a-f]{64}$/)
-    expect(runtimeLock.storageSchemaVersion).toBeGreaterThan(0)
+    expect(runtimeLock.storageSchemaVersion).toBe(3)
     expect(runtimeLock.contractVersion).toBe(RUNTIME_CONTRACT_VERSION)
     expect(runtimeLock.schemaHash).toBe(RUNTIME_SCHEMA_HASH)
   })
