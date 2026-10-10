@@ -513,6 +513,7 @@ describe('useAiConversation pre-send request scope', () => {
     const context = payload.context as Record<string, unknown>
     const history = payload.conversationHistory as Array<{ role: string; text: string }>
 
+    expect(submitted[1].contextPolicy?.providerIds).toContain('creative.conversation-history')
     expect(context.text).toBe(chapterText)
     expect((context.selectionText as string).length).toBe(promised.selectionChars)
     expect(countStoryRecords(context.storyState as StoryState)).toBe(promised.storyFactCount)

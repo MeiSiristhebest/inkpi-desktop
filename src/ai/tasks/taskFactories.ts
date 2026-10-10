@@ -247,7 +247,12 @@ function createCreativeTask(
       },
     },
     contextPolicy: {
-      providerIds: ['creative.document', 'creative.story', 'retrieval.jit'],
+      providerIds: [
+        'creative.document',
+        'creative.story',
+        'creative.conversation-history',
+        'retrieval.jit',
+      ],
       includeSelection: true,
       includeProjectState: Boolean(input.storyState),
       metadata: {
