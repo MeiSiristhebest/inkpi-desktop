@@ -21,7 +21,7 @@ describe('Runtime Compatibility Gate (CI Contract Enforcement)', () => {
     // The release lock must move only when this exact Runtime commit has passed
     // the cross-boundary verification suite; do not replace this with HEAD or a
     // loose ancestry check.
-    expect(runtimeLock.pinnedCommit).toBe('ccb4a67a33177bedfd73e8ccea76a7e1446ca088')
+    expect(runtimeLock.pinnedCommit).toBe('fce13ec008a5c497f8fa3cc5a6814758736a3726')
     expect(runtimeLock.protocolVersion).toBe(RUNTIME_PROTOCOL_VERSION)
     expect(runtimeLock.skillManifestHash).toMatch(/^[0-9a-f]{64}$/)
     expect(runtimeLock.storageSchemaVersion).toBe(3)
