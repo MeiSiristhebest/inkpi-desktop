@@ -13,6 +13,7 @@ import type {
   TaskStatusSnapshot,
 } from '@inkpi/protocol'
 import {
+  RPC_ERROR_CODES,
   RUNTIME_ARTIFACT_TYPES,
   calculateDomainChangeSetChecksum,
   calculateProposalProjectionStateHash,
@@ -951,7 +952,8 @@ async function assertPackagedCapabilityRouting(client: RpcClient): Promise<void>
     },
   }
   await expect(client.request('task.submit', { task: mismatchTask })).rejects.toMatchObject({
-    code: 'CAPABILITY_MISMATCH',
+    code: RPC_ERROR_CODES.INTERNAL_ERROR,
+    data: { domainCode: 'CAPABILITY_MISMATCH' },
   })
 }
 
