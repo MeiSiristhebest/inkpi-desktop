@@ -118,6 +118,25 @@ describe('desktop task recovery bootstrap', () => {
     expect(getTaskExecution).toHaveBeenNthCalledWith(2, task.id)
   })
 
+  it('treats a persisted completing task as interrupted after restart', async () => {
+    const task = makeTask('completing-task')
+    const store = makeStore([makeRecord(task, 'completing')])
+    const getTaskExecution = vi.fn(async () => makeExecution(task, 'interrupted', 30))
+
+    const report = await bootstrapDesktopTaskRecovery({
+      projectId,
+      store,
+      clock: fixedClock,
+      getTaskExecution,
+    })
+
+    expect(getTaskExecution).toHaveBeenCalledWith(task.id)
+    expect(report.records).toHaveLength(1)
+    expect(report.records[0].snapshot.status).toBe('interrupted')
+    expect(store.records[0].snapshot.status).toBe('interrupted')
+    expect(report.recoveredTaskIds).toEqual([task.id])
+  })
+
   it('keeps recoverable tasks and filters both local and daemon-completed tasks', async () => {
     const interruptedTask = makeTask('interrupted-task')
     const failedTask = makeTask('failed-task')

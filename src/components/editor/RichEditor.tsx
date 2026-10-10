@@ -911,6 +911,7 @@ function isTaskInFlight(status: TaskStatusSnapshot['status']): boolean {
     status === 'created' ||
     status === 'queued' ||
     status === 'running' ||
+    status === 'completing' ||
     status === 'checkpointed' ||
     status === 'interrupted'
   )
@@ -924,6 +925,8 @@ function taskStatusLabel(status: TaskStatusSnapshot['status']): string {
       return 'AI 任务排队中…'
     case 'running':
       return 'AI 长任务运行中…'
+    case 'completing':
+      return 'AI 长任务正在完成…'
     case 'checkpointed':
       return 'AI 任务已保存检查点'
     case 'waiting-user':

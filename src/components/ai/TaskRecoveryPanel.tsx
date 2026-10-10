@@ -17,6 +17,7 @@ const statusLabels: Record<TaskStatus, string> = {
   created: '已创建',
   queued: '排队中',
   running: '运行中',
+  completing: '正在完成',
   checkpointed: '已保存检查点',
   'waiting-user': '等待确认',
   interrupted: '已中断，可恢复',
@@ -34,7 +35,10 @@ const canResume = (status: TaskStatus): boolean =>
   status === 'waiting-user'
 
 const canCancel = (status: TaskStatus): boolean =>
-  status === 'queued' || status === 'running' || status === 'checkpointed'
+  status === 'queued' ||
+  status === 'running' ||
+  status === 'completing' ||
+  status === 'checkpointed'
 
 export const TaskRecoveryPanel: React.FC<TaskRecoveryPanelProps> = ({
   records,

@@ -14,6 +14,7 @@ const RESTART_RESUMABLE_STATUSES: readonly TaskStatus[] = [
   'created',
   'queued',
   'running',
+  'completing',
   'checkpointed',
 ]
 

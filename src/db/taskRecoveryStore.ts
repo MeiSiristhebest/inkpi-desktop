@@ -29,6 +29,7 @@ const TASK_STATUSES: readonly TaskStatus[] = [
   'created',
   'queued',
   'running',
+  'completing',
   'checkpointed',
   'waiting-user',
   'interrupted',

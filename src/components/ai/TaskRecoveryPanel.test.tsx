@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AiTask } from '@inkpi/protocol'
 import { TaskRecoveryPanel } from './TaskRecoveryPanel'
 
-const makeRecord = (id: string, status: 'interrupted' | 'running' | 'failed') => {
+const makeRecord = (id: string, status: 'interrupted' | 'running' | 'completing' | 'failed') => {
   const task: AiTask = {
     id,
     kind: 'creative.continue',
@@ -34,6 +34,7 @@ describe('TaskRecoveryPanel', () => {
           makeRecord('restart-task', 'interrupted'),
           makeRecord('failed-task', 'failed'),
           makeRecord('running-task', 'running'),
+          makeRecord('completing-task', 'completing'),
         ]}
         onResume={onResume}
         onCancel={onCancel}
@@ -46,6 +47,7 @@ describe('TaskRecoveryPanel', () => {
     expect(screen.getByTestId('task-status-failed-task')).toHaveTextContent('失败')
     expect(screen.getByTestId('task-recovery-failed-task')).toHaveTextContent('provider failed')
     expect(screen.getByTestId('task-status-running-task')).toHaveTextContent('运行中')
+    expect(screen.getByTestId('task-status-completing-task')).toHaveTextContent('正在完成')
 
     fireEvent.click(
       screen.getByTestId('task-recovery-restart-task').querySelector('button') as HTMLButtonElement,
@@ -53,9 +55,15 @@ describe('TaskRecoveryPanel', () => {
     fireEvent.click(
       screen.getByTestId('task-recovery-running-task').querySelector('button') as HTMLButtonElement,
     )
+    fireEvent.click(
+      screen
+        .getByTestId('task-recovery-completing-task')
+        .querySelector('button') as HTMLButtonElement,
+    )
 
     expect(onResume).toHaveBeenCalledWith('restart-task')
     expect(onCancel).toHaveBeenCalledWith('running-task')
+    expect(onCancel).toHaveBeenCalledWith('completing-task')
     expect(onDismiss).not.toHaveBeenCalled()
   })
 

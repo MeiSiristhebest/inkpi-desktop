@@ -811,6 +811,21 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.getByTestId('editor-long-task-waiting')).toHaveTextContent('等待人工输入')
   })
 
+  it('keeps a completing task visible as in flight', () => {
+    const snapshot: TaskStatusSnapshot = {
+      taskId: 'completing-task',
+      kind: 'narrative.deep.reason',
+      status: 'completing',
+    }
+
+    render(<RichEditor projectId="p-completing-task" taskProgress={snapshot} />)
+
+    const status = screen.getByTestId('editor-long-task-status')
+    expect(status).toHaveAttribute('data-task-status', 'completing')
+    expect(status).toHaveAttribute('aria-busy', 'true')
+    expect(status).toHaveTextContent('AI 长任务正在完成')
+  })
+
   it('tracks an editor AI task while the runtime Promise is pending', async () => {
     let resolveTask!: (result: TaskResult | null) => void
     const pendingTask = new Promise<TaskResult | null>((resolve) => {
