@@ -10,6 +10,7 @@ export type ChapterMutationOrigin =
   | 'history-restore'
   | 'ghost-accept'
   | 'title-edit'
+  | 'chapter-metadata'
   | 'draft-recovery'
   | 'import'
 
@@ -40,11 +41,24 @@ export interface ChapterSynopsisEditMutation {
   synopsis: string
 }
 
+export interface ChapterStatusMutation {
+  type: 'update-status'
+  status: ChapterRecord['status']
+}
+
+export interface ChapterLocationMutation {
+  type: 'move-to-volume'
+  volumeId: string
+  order: number
+}
+
 export type ChapterMutation =
   | ChapterContentReplaceMutation
   | ChapterRangePatchMutation
   | ChapterTitleEditMutation
   | ChapterSynopsisEditMutation
+  | ChapterStatusMutation
+  | ChapterLocationMutation
 
 export interface ChapterMutationCommand {
   workspaceId: string

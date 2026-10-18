@@ -14,12 +14,13 @@ function getDraftKey(workspaceId: string, chapterId: string): string {
 
 export const draftJournal = {
   /** Record rapid unpersisted draft content */
-  record(entry: DraftJournalEntry): void {
-    if (typeof localStorage === 'undefined') return
+  record(entry: DraftJournalEntry): boolean {
+    if (typeof localStorage === 'undefined') return false
     try {
       localStorage.setItem(getDraftKey(entry.workspaceId, entry.chapterId), JSON.stringify(entry))
+      return true
     } catch {
-      // Ignore quota errors in private browsing/full storage
+      return false
     }
   },
 
@@ -42,6 +43,19 @@ export const draftJournal = {
       localStorage.removeItem(getDraftKey(workspaceId, chapterId))
     } catch {
       // ignore
+    }
+  },
+
+  /** Clear a draft only when it contains the content that just became canonical. */
+  clearIfContentMatches(workspaceId: string, chapterId: string, content: string): boolean {
+    if (typeof localStorage === 'undefined') return false
+    const current = this.get(workspaceId, chapterId)
+    if (!current || current.editorContent !== content) return false
+    try {
+      localStorage.removeItem(getDraftKey(workspaceId, chapterId))
+      return true
+    } catch {
+      return false
     }
   },
 }

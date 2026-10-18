@@ -8,6 +8,7 @@ import { AUTHORITATIVE_STORES, db, STORES } from '../db/indexedDB'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 import { PROJECT_DOMAIN_STORES } from './workspaceLifecycleService'
+import type { GoldChapterEvalRecord, GoldOpeningSnapshot } from '../ports/goldChaptersRepository'
 
 describe('WorkspaceLifecycleService', () => {
   let projectRepo: ProjectRepository
@@ -47,7 +48,7 @@ describe('WorkspaceLifecycleService', () => {
     updatedAt: 1000,
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     idCounter = 1
     idGen = {
       generate: (prefix) => `${prefix}_generated_${idCounter++}`,
@@ -57,6 +58,17 @@ describe('WorkspaceLifecycleService', () => {
     const projects = [mockProject]
     const volumes = [mockVolume]
     const chapters = [mockChapter]
+
+    await Promise.all([
+      db.delete('projects', mockProject.id),
+      db.delete('volumes', mockVolume.id),
+      db.delete('chapters', mockChapter.id),
+    ])
+    await Promise.all([
+      db.put('projects', mockProject),
+      db.put('volumes', mockVolume),
+      db.put('chapters', mockChapter),
+    ])
 
     projectRepo = {
       getAllProjects: vi.fn(async () => projects),
@@ -127,9 +139,188 @@ describe('WorkspaceLifecycleService', () => {
     }
   })
 
+  it('exports only settingsKV keys scoped to the exact workspace ID', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const workspaceId = mockProject.id
+    const neighbourId = workspaceId + '-other'
+    const ownKeys = [
+      workspaceId + '::backup-isolation',
+      'storyState::' + encodeURIComponent(workspaceId),
+      'ai-task-recovery::' + encodeURIComponent(workspaceId) + '::task-1',
+      'distillation-review::' + encodeURIComponent(workspaceId) + '::item-1',
+      'ai-distillation-checkpoint::' + encodeURIComponent(workspaceId) + '::task-1',
+      'domainProposal::' + encodeURIComponent(workspaceId) + '::proposal-1',
+      'inkpi-excluded-nums-' + workspaceId,
+      'inkpi-daily-goal-' + workspaceId,
+    ]
+    const neighbourKeys = [
+      neighbourId + '::backup-isolation',
+      'storyState::' + encodeURIComponent(neighbourId),
+      'ai-task-recovery::' + encodeURIComponent(neighbourId) + '::task-1',
+      'distillation-review::' + encodeURIComponent(neighbourId) + '::item-1',
+      'ai-distillation-checkpoint::' + encodeURIComponent(neighbourId) + '::task-1',
+      'domainProposal::' + encodeURIComponent(neighbourId) + '::proposal-1',
+      'inkpi-excluded-nums-' + neighbourId,
+      'inkpi-daily-goal-' + neighbourId,
+    ]
+    try {
+      await Promise.all([
+        ...ownKeys.map((key) => db.put('settingsKV', { key, value: { projectId: workspaceId } })),
+        ...neighbourKeys.map((key) =>
+          db.put('settingsKV', { key, value: { projectId: neighbourId } }),
+        ),
+      ])
+
+      const backup = await service.exportWorkspaceBackup(workspaceId)
+      const exportedKeys = backup?.domainData.settingsKV?.map((record) => record.key) ?? []
+
+      expect(exportedKeys).toEqual(expect.arrayContaining(ownKeys))
+      expect(exportedKeys.some((key) => neighbourKeys.includes(String(key)))).toBe(false)
+    } finally {
+      await Promise.all([...ownKeys, ...neighbourKeys].map((key) => db.delete('settingsKV', key)))
+    }
+  })
+
+  it('preserves opening evidence and legacy scores through backup export and import as a copy', async () => {
+    const snapshot: GoldOpeningSnapshot = {
+      status: 'observed',
+      sourceLength: 7,
+      scannedCharacters: 7,
+      complete: true,
+      ranges: [{ start: 0, end: 7, text: '本文没有复仇。' }],
+      observations: [{ dimension: 'motivation', start: 4, end: 6, quote: '复仇' }],
+    }
+    const legacy: GoldChapterEvalRecord = {
+      id: 'backup-gold-legacy',
+      projectId: mockProject.id,
+      score: 91,
+      isQualified: true,
+      motiveScore: 95,
+      goldFingerScore: 90,
+      conflictScore: 90,
+      expectationScore: 88,
+      keyDiagnosis: ['legacy diagnostic'],
+      suggestions: [],
+      evaluatedAt: 1,
+    }
+    const current: GoldChapterEvalRecord = {
+      id: 'backup-gold-evidence',
+      projectId: mockProject.id,
+      observationSnapshot: snapshot,
+      keyDiagnosis: [],
+      suggestions: [],
+      evaluatedAt: 2,
+    }
+    const importedIds: string[] = []
+    try {
+      await db.put('goldChapterEvals', legacy)
+      await db.put('goldChapterEvals', current)
+      const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+      const backup = await service.exportWorkspaceBackup(mockProject.id)
+      expect(backup?.domainData.goldChapterEvals).toEqual(expect.arrayContaining([legacy, current]))
+      const result = await service.importWorkspaceAsCopy(backup)
+      expect(result.ok, result.error).toBe(true)
+      expect(result.workspaceId).not.toBe(mockProject.id)
+      const imported = await db.getByIndex<GoldChapterEvalRecord>(
+        'goldChapterEvals',
+        'projectId',
+        result.workspaceId!,
+      )
+      importedIds.push(...imported.map((record) => record.id))
+      const importedEvidence = imported.find((record) => record.observationSnapshot)
+      expect(importedEvidence?.observationSnapshot).toEqual(snapshot)
+      expect(importedEvidence).not.toHaveProperty('score')
+      expect(imported.find((record) => record.score !== undefined)).toMatchObject({
+        score: 91,
+        isQualified: true,
+        keyDiagnosis: legacy.keyDiagnosis,
+      })
+      expect(await db.get('goldChapterEvals', legacy.id)).toEqual(legacy)
+      expect(await db.get('goldChapterEvals', current.id)).toEqual(current)
+    } finally {
+      for (const id of [legacy.id, current.id, ...importedIds])
+        await db.delete('goldChapterEvals', id)
+    }
+  })
+
+  it('does not return a full backup when a required domain store cannot be read', async () => {
+    const snapshotSpy = vi
+      .spyOn(db, 'getAllSnapshot')
+      .mockRejectedValue(new Error('IndexedDB read failed'))
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+
+    try {
+      await expect(service.exportWorkspaceBackup('orig-proj')).rejects.toThrow(
+        '完整备份失败：无法读取必要数据表“工作区快照”。',
+      )
+    } finally {
+      snapshotSpy.mockRestore()
+    }
+  })
+
+  it('does not return a full backup when workspace localStorage cannot be read', async () => {
+    const historyKey = 'chapter-history-orig-ch-1'
+    localStorage.setItem(historyKey, JSON.stringify([]))
+    const availableStorage = globalThis.localStorage
+    vi.stubGlobal('localStorage', {
+      get length() {
+        throw new DOMException('Storage is unavailable', 'SecurityError')
+      },
+    } as Storage)
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+
+    try {
+      await expect(service.exportWorkspaceBackup('orig-proj')).rejects.toThrow(
+        '完整备份失败：无法读取必要的本地存储数据。',
+      )
+    } finally {
+      vi.stubGlobal('localStorage', availableStorage)
+      availableStorage.removeItem(historyKey)
+    }
+  })
+
+  it('reads the project and all backup stores through one consistent snapshot', async () => {
+    const snapshotSpy = vi.spyOn(db, 'getAllSnapshot')
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+
+    expect(snapshotSpy).toHaveBeenCalledTimes(1)
+    expect(snapshotSpy).toHaveBeenCalledWith(
+      expect.arrayContaining(['projects', 'volumes', 'chapters', ...PROJECT_DOMAIN_STORES]),
+    )
+    expect(backup?.project.id).toBe('orig-proj')
+    expect(backup?.volumes).toEqual([mockVolume])
+    expect(backup?.chapters).toEqual([mockChapter])
+  })
+
   it('backs up and remaps workspace-scoped localStorage without exporting credentials', async () => {
     localStorage.clear()
-    const chapterHistory = JSON.stringify([{ id: 'snapshot-1', content: '<p>历史版本</p>' }])
+    const chapterHistory = JSON.stringify([
+      {
+        id: 'snapshot-1',
+        content: '<p>里程碑版本</p>',
+        kind: 'milestone',
+        timestamp: 1000,
+        wordCount: 6,
+      },
+    ])
+    const authorStats = JSON.stringify({ sessionWords: 120, writingSeconds: 60, idleSeconds: 5 })
+    const neighbourId = 'orig-proj-other'
+    const scratchpadKey = 'inkpi-scratchpad-orig-proj-orig-ch-1'
+    const scratchpadValue = JSON.stringify([
+      { id: 'note-1', text: '草稿卡片', done: false, createdAt: 1000 },
+    ])
+    const neighbourLocalStorageKeys = [
+      'inkpi_draft_journal:' + neighbourId + ':orig-ch-1',
+      'inkpi_enabled_plugins_' + neighbourId,
+      'inkpi-scratchpad-' + neighbourId + '-orig-ch-1',
+      'inkpi_last_active_chapter:' + neighbourId,
+      'inkpi-author-stats-' + neighbourId + '-2026-10-09',
+      'inkpi-excluded-nums-' + neighbourId,
+      'inkpi-daily-goal-' + neighbourId,
+      'other-plugin-data-' + neighbourId,
+    ]
     const originalHistoryKey = 'orig-proj::chapter-history::orig-ch-1'
     await db.put('settingsKV', { key: originalHistoryKey, value: chapterHistory })
     localStorage.setItem(
@@ -142,8 +333,13 @@ describe('WorkspaceLifecycleService', () => {
         updatedAt: 2000,
       }),
     )
-    localStorage.setItem('chapter-history-orig-ch-1', JSON.stringify([{ content: '历史版本' }]))
+    localStorage.setItem('chapter-history-orig-ch-1', chapterHistory)
+    localStorage.setItem('inkpi_last_active_chapter:orig-proj', 'orig-ch-1')
+    localStorage.setItem('inkpi-author-stats-orig-proj-2026-10-09', authorStats)
+    localStorage.setItem(scratchpadKey, scratchpadValue)
+    localStorage.setItem('inkpi-daily-goal-orig-proj', '1200')
     localStorage.setItem('inkpi-settings', JSON.stringify({ aiModel: { apiKey: 'do-not-export' } }))
+    for (const key of neighbourLocalStorageKeys) localStorage.setItem(key, 'neighbor')
 
     const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
     const backup = await service.exportWorkspaceBackup('orig-proj')
@@ -152,7 +348,16 @@ describe('WorkspaceLifecycleService', () => {
       expect.arrayContaining([
         expect.objectContaining({ key: 'inkpi_draft_journal:orig-proj:orig-ch-1' }),
         expect.objectContaining({ key: 'chapter-history-orig-ch-1' }),
+        expect.objectContaining({ key: 'inkpi_last_active_chapter:orig-proj' }),
+        expect.objectContaining({ key: 'inkpi-author-stats-orig-proj-2026-10-09' }),
+        expect.objectContaining({ key: scratchpadKey, value: scratchpadValue }),
       ]),
+    )
+    expect(
+      backup?.localStorageData?.some(({ key }) => neighbourLocalStorageKeys.includes(key)),
+    ).toBe(false)
+    expect(backup?.localStorageData?.some(({ key }) => key === 'inkpi-daily-goal-orig-proj')).toBe(
+      false,
     )
     expect(backup?.localStorageData?.some(({ value }) => value.includes('do-not-export'))).toBe(
       false,
@@ -161,6 +366,11 @@ describe('WorkspaceLifecycleService', () => {
       key: originalHistoryKey,
       value: chapterHistory,
     })
+    expect(backup?.domainData.settingsKV).toContainEqual({
+      key: 'orig-proj::goalDaily',
+      value: 1200,
+    })
+    expect(localStorage.getItem('inkpi-daily-goal-orig-proj')).toBeNull()
 
     const result = await service.importWorkspace(backup)
     expect(result.ok).toBe(true)
@@ -172,6 +382,21 @@ describe('WorkspaceLifecycleService', () => {
     expect(
       localStorage.getItem(`inkpi_draft_journal:${result.workspaceId}:ch_generated_3`),
     ).toContain('未落盘草稿')
+    expect(localStorage.getItem(`inkpi_last_active_chapter:${result.workspaceId}`)).toBe(
+      'ch_generated_3',
+    )
+    expect(localStorage.getItem(`inkpi-author-stats-${result.workspaceId}-2026-10-09`)).toBe(
+      authorStats,
+    )
+    expect(localStorage.getItem(`inkpi-scratchpad-${result.workspaceId}-ch_generated_3`)).toBe(
+      scratchpadValue,
+    )
+    expect(localStorage.getItem(`inkpi-daily-goal-${result.workspaceId}`)).toBeNull()
+    await expect(db.get('settingsKV', `${result.workspaceId}::goalDaily`)).resolves.toEqual({
+      key: `${result.workspaceId}::goalDaily`,
+      value: 1200,
+    })
+    expect(localStorage.getItem('chapter-history-ch_generated_3')).toBe(chapterHistory)
     expect(localStorage.getItem('inkpi_draft_journal:orig-proj:orig-ch-1')).toContain('未落盘草稿')
 
     await service.purgeWorkspace(result.workspaceId!)
@@ -179,6 +404,61 @@ describe('WorkspaceLifecycleService', () => {
     expect(
       localStorage.getItem(`inkpi_draft_journal:${result.workspaceId}:ch_generated_3`),
     ).toBeNull()
+    localStorage.clear()
+  })
+
+  it('migrates a legacy daily goal from an older archive into settingsKV', async () => {
+    await db.delete('settingsKV', 'orig-proj::goalDaily')
+    localStorage.removeItem('inkpi-daily-goal-orig-proj')
+
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+    if (!backup) return
+
+    const legacyArchive = {
+      ...backup,
+      domainData: {
+        ...backup.domainData,
+        settingsKV: (backup.domainData.settingsKV ?? []).filter(
+          (record) => record.key !== 'orig-proj::goalDaily',
+        ),
+      },
+      localStorageData: [
+        ...(backup.localStorageData ?? []),
+        { key: 'inkpi-daily-goal-orig-proj', value: '1500' },
+      ],
+    }
+
+    const result = await service.importWorkspace(legacyArchive)
+    expect(result.ok).toBe(true)
+    await expect(db.get('settingsKV', `${result.workspaceId}::goalDaily`)).resolves.toEqual({
+      key: `${result.workspaceId}::goalDaily`,
+      value: 1500,
+    })
+    expect(localStorage.getItem(`inkpi-daily-goal-${result.workspaceId}`)).toBeNull()
+
+    await service.purgeWorkspace(result.workspaceId!)
+    localStorage.clear()
+  })
+
+  it('keeps the IndexedDB daily goal when a stale localStorage value exists', async () => {
+    await db.put('settingsKV', { key: 'orig-proj::goalDaily', value: 2400 })
+    localStorage.setItem('inkpi-daily-goal-orig-proj', '1200')
+
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+
+    expect(backup?.domainData.settingsKV).toContainEqual({
+      key: 'orig-proj::goalDaily',
+      value: 2400,
+    })
+    expect(backup?.localStorageData?.some(({ key }) => key === 'inkpi-daily-goal-orig-proj')).toBe(
+      false,
+    )
+    expect(localStorage.getItem('inkpi-daily-goal-orig-proj')).toBeNull()
+
+    await db.delete('settingsKV', 'orig-proj::goalDaily')
     localStorage.clear()
   })
 
@@ -329,7 +609,7 @@ describe('WorkspaceLifecycleService', () => {
     // over-broad match that also deletes a neighbouring project would be caught here.
     const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
     const own = 'purge-real-ws'
-    const neighbour = 'purge-real-neighbour'
+    const neighbour = own + '-neighbour'
 
     await db.put('domainChangeSets', { id: 'pr-cs-own', workspaceId: own })
     await db.put('domainChangeSets', { id: 'pr-cs-neighbour', workspaceId: neighbour })
@@ -340,23 +620,72 @@ describe('WorkspaceLifecycleService', () => {
       id: 'pr-art-neighbour',
       ownership: { workspaceId: neighbour },
     })
-    await db.put('settingsKV', { key: `storyState::${own}`, value: { projectId: own } })
-    await db.put('settingsKV', { key: `ai-task-recovery::${own}`, value: {} })
-    await db.put('settingsKV', { key: `storyState::${neighbour}`, value: {} })
+    const ownSettingsKeys = [
+      'storyState::' + encodeURIComponent(own),
+      'ai-task-recovery::' + encodeURIComponent(own) + '::task-1',
+      'distillation-review::' + encodeURIComponent(own) + '::item-1',
+      'ai-distillation-checkpoint::' + encodeURIComponent(own) + '::task-1',
+      'domainProposal::' + encodeURIComponent(own) + '::proposal-1',
+      own + '::goalDaily',
+      'inkpi-excluded-nums-' + own,
+      'inkpi-daily-goal-' + own,
+    ]
+    const neighbourSettingsKeys = [
+      'storyState::' + encodeURIComponent(neighbour),
+      'ai-task-recovery::' + encodeURIComponent(neighbour) + '::task-1',
+      'distillation-review::' + encodeURIComponent(neighbour) + '::item-1',
+      'ai-distillation-checkpoint::' + encodeURIComponent(neighbour) + '::task-1',
+      'domainProposal::' + encodeURIComponent(neighbour) + '::proposal-1',
+      neighbour + '::goalDaily',
+      'inkpi-excluded-nums-' + neighbour,
+      'inkpi-daily-goal-' + neighbour,
+    ]
+    const ownLocalStorageKeys = [
+      'inkpi_enabled_plugins_' + own,
+      'inkpi_last_active_chapter:' + own,
+      'inkpi-scratchpad-' + own + '-global',
+      'inkpi-author-stats-' + own + '-2026-10-09',
+      'inkpi-excluded-nums-' + own,
+    ]
+    const neighbourLocalStorageKeys = [
+      'inkpi_enabled_plugins_' + neighbour,
+      'inkpi_last_active_chapter:' + neighbour,
+      'inkpi-scratchpad-' + neighbour + '-global',
+      'inkpi-author-stats-' + neighbour + '-2026-10-09',
+      'inkpi-excluded-nums-' + neighbour,
+      'other-plugin-data-' + neighbour,
+    ]
+    localStorage.clear()
+    for (const key of ownLocalStorageKeys) localStorage.setItem(key, 'own')
+    for (const key of neighbourLocalStorageKeys) localStorage.setItem(key, 'neighbor')
+    await Promise.all([
+      ...ownSettingsKeys.map((key) => db.put('settingsKV', { key, value: { projectId: own } })),
+      ...neighbourSettingsKeys.map((key) =>
+        db.put('settingsKV', { key, value: { projectId: neighbour } }),
+      ),
+    ])
 
     await service.purgeWorkspace(own)
 
     expect(await db.get('domainChangeSets', 'pr-cs-own')).toBeUndefined()
     expect(await db.get('codexEntities', 'pr-ent-own')).toBeUndefined()
     expect(await db.get('aiArtifacts', 'pr-art-own')).toBeUndefined()
-    expect(await db.get('settingsKV', `storyState::${own}`)).toBeUndefined()
-    expect(await db.get('settingsKV', `ai-task-recovery::${own}`)).toBeUndefined()
+    for (const key of ownSettingsKeys) {
+      expect(await db.get('settingsKV', key)).toBeUndefined()
+    }
 
     // The neighbouring project shares every one of these stores and must survive untouched.
     expect(await db.get('domainChangeSets', 'pr-cs-neighbour')).toBeDefined()
     expect(await db.get('codexEntities', 'pr-ent-neighbour')).toBeDefined()
     expect(await db.get('aiArtifacts', 'pr-art-neighbour')).toBeDefined()
-    expect(await db.get('settingsKV', `storyState::${neighbour}`)).toBeDefined()
+    for (const key of neighbourSettingsKeys) {
+      expect(await db.get('settingsKV', key)).toBeDefined()
+    }
+    for (const key of ownLocalStorageKeys) expect(localStorage.getItem(key)).toBeNull()
+    for (const key of neighbourLocalStorageKeys) {
+      expect(localStorage.getItem(key)).toBe('neighbor')
+    }
+    localStorage.clear()
   })
 
   it('fails and rolls back if referential integrity is broken in Pass 3 (P0-1, INV-08)', async () => {
@@ -381,6 +710,32 @@ describe('WorkspaceLifecycleService', () => {
     const result = await service.importWorkspace(brokenBackup)
     expect(result.ok).toBe(false)
     expect(result.error).toContain('Referential integrity violation')
+  })
+
+  it('returns persistence failures after rolling back the partially imported workspace', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const backup = await service.exportWorkspaceBackup('orig-proj')
+    expect(backup).not.toBeNull()
+    const backupWithDomainRecord = {
+      ...backup!,
+      domainData: {
+        ...backup!.domainData,
+        codexEntities: [{ id: 'entity-import-failure', projectId: 'orig-proj', name: '测试实体' }],
+      },
+    }
+    const putSpy = vi.spyOn(db, 'put').mockRejectedValueOnce(new Error('write denied'))
+
+    try {
+      const result = await service.importWorkspace(backupWithDomainRecord)
+
+      expect(result).toMatchObject({ ok: false })
+      expect(result.error).toContain('write denied')
+      expect(await projectRepo.getAllProjects()).toEqual([mockProject])
+      expect(await projectRepo.getAllVolumes()).toEqual([mockVolume])
+      expect(await projectRepo.getAllChapters()).toEqual([mockChapter])
+    } finally {
+      putSpy.mockRestore()
+    }
   })
 
   it('calls remote purgeWorkspace before local purge when remoteClient is provided (P0-2)', async () => {

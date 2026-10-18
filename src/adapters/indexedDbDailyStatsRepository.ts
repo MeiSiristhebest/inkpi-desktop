@@ -1,5 +1,6 @@
 import { db } from '../db/indexedDB'
 import type { DailyStatItem } from '../domain/dashboard'
+import { dailyStatsEvents } from '../ports/dailyStatsEvents'
 
 export interface DailyStatsRepository {
   getDailyStats(projectId: string): Promise<DailyStatItem[]>
@@ -17,14 +18,26 @@ export class IndexedDbDailyStatsRepository implements DailyStatsRepository {
     const now = new Date()
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const key = `${projectId}::${dateStr}`
-    const existing = await db.get<DailyStatItem>('dailyStats', key)
-    const nextWords = Math.max(0, (existing?.words || 0) + deltaWords)
-    await db.put('dailyStats', {
-      key,
-      projectId,
-      date: dateStr,
-      words: nextWords,
+    await db.runTransaction(['dailyStats'], (transaction, fail) => {
+      const store = transaction.objectStore('dailyStats')
+      const request = store.get(key)
+      request.onerror = () =>
+        fail(request.error ?? new Error('Could not read daily writing statistics'))
+      request.onsuccess = () => {
+        try {
+          const existing = request.result as DailyStatItem | undefined
+          store.put({
+            key,
+            projectId,
+            date: dateStr,
+            words: Math.max(0, (existing?.words || 0) + deltaWords),
+          })
+        } catch (error) {
+          fail(error)
+        }
+      }
     })
+    dailyStatsEvents.publish(projectId)
   }
 }
 

@@ -88,6 +88,28 @@ export function useWritingSessionStats({
     [kvStore, storageKey],
   )
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey || event.newValue === null) return
+
+      try {
+        const parsed: unknown = JSON.parse(event.newValue)
+        if (!parsed || typeof parsed !== 'object') return
+        const sessionWords = Number((parsed as { sessionWords?: unknown }).sessionWords)
+        if (!Number.isFinite(sessionWords)) return
+
+        setStats((prev) => (prev.sessionWords === sessionWords ? prev : { ...prev, sessionWords }))
+      } catch {
+        // Ignore malformed writes from another tab.
+      }
+    }
+
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [storageKey])
+
   // 2. 纯键盘手打字数注入（排除粘贴）
   const recordTypedWords = useCallback(
     (count: number) => {
