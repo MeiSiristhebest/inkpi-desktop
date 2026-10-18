@@ -5,6 +5,7 @@ import type { ProjectRepository } from '../ports/projectRepository'
 import type { Clock } from '../ports/clock'
 import { chapterSaveEvents } from '../ports/chapterSaveEvents'
 import { draftJournal } from './draftJournal'
+import { db } from '../db/indexedDB'
 
 describe('DefaultChapterMutationService', () => {
   const fakeChapter: ChapterRecord = {
@@ -53,7 +54,7 @@ describe('DefaultChapterMutationService', () => {
       workspaceId: 'proj-1',
       chapterId: 'ch-1',
       baseRevision: 1,
-      editorContent: '草稿内容',
+      editorContent: '新世界降临。',
       updatedAt: 1500,
     })
 
@@ -85,6 +86,92 @@ describe('DefaultChapterMutationService', () => {
     expect(draftJournal.get('proj-1', 'ch-1')).toBeNull()
 
     unsub()
+  })
+
+  it('records positive word growth from an author save in dailyStats', async () => {
+    const workspaceId = `author-daily-stats-${Date.now()}`
+    const repo = createMockRepo([
+      { ...fakeChapter, projectId: workspaceId, content: '', wordCount: 0 },
+    ])
+    const service = new DefaultChapterMutationService(repo, mockClock)
+
+    try {
+      const result = await service.mutate({
+        workspaceId,
+        chapterId: 'ch-1',
+        expectedRevision: 1,
+        mutation: { type: 'replace-content', content: '新世界降临。' },
+        origin: 'user-typing',
+        countAsAuthorWriting: true,
+      })
+
+      expect(result.success).toBe(true)
+      const stats = (await db.getAll<{ projectId: string; words: number }>('dailyStats')).filter(
+        (item) => item.projectId === workspaceId,
+      )
+      expect(stats).toHaveLength(1)
+      expect(stats[0]?.words).toBe(6)
+    } finally {
+      for (const item of await db.getAll<{ key: string; projectId: string }>('dailyStats')) {
+        if (item.projectId === workspaceId) await db.delete('dailyStats', item.key)
+      }
+    }
+  })
+
+  it('does not serialize an undefined optional status from a legacy chapter record', async () => {
+    const legacyChapter: ChapterRecord = { ...fakeChapter }
+    delete legacyChapter.status
+    const repo = createMockRepo([legacyChapter])
+    const service = new DefaultChapterMutationService(repo, mockClock)
+
+    const result = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      expectedRevision: 1,
+      mutation: { type: 'replace-content', content: '修订正文。' },
+      origin: 'user-typing',
+    })
+
+    expect(result.success).toBe(true)
+    const saved = vi.mocked(repo.saveChapter).mock.calls[0]?.[0]
+    expect(saved).toBeDefined()
+    expect(Object.hasOwn(saved!, 'status')).toBe(false)
+  })
+
+  it('preserves a newer draft written while an older snapshot is being saved', async () => {
+    const chapters = [fakeChapter]
+    const repo = createMockRepo(chapters)
+    vi.mocked(repo.saveChapter).mockImplementation(async (chapter) => {
+      draftJournal.record({
+        workspaceId: 'proj-1',
+        chapterId: 'ch-1',
+        baseRevision: 1,
+        editorContent: '<p>newer edit</p>',
+        updatedAt: 2001,
+      })
+      const index = chapters.findIndex((item) => item.id === chapter.id)
+      if (index >= 0) chapters[index] = chapter
+    })
+    const service = new DefaultChapterMutationService(repo, mockClock)
+
+    draftJournal.record({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      baseRevision: 1,
+      editorContent: '<p>saved snapshot</p>',
+      updatedAt: 1500,
+    })
+
+    const result = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      expectedRevision: 1,
+      mutation: { type: 'replace-content', content: '<p>saved snapshot</p>' },
+      origin: 'user-typing',
+    })
+
+    expect(result.success).toBe(true)
+    expect(draftJournal.get('proj-1', 'ch-1')?.editorContent).toBe('<p>newer edit</p>')
   })
 
   it('persists canonical title edits through the same revisioned mutation path', async () => {
@@ -138,6 +225,69 @@ describe('DefaultChapterMutationService', () => {
       expect(result.currentRevision).toBe(1)
       expect(result.error).toContain('CAS Conflict')
     }
+    expect(repo.saveChapter).not.toHaveBeenCalled()
+  })
+
+  it('applies chapter metadata to the latest record and preserves its body', async () => {
+    const latest: ChapterRecord = {
+      ...fakeChapter,
+      content: '<p>另一窗口刚保存的新正文。</p>',
+      synopsis: '最新梗概',
+      revision: 2,
+    }
+    const repo = createMockRepo([latest])
+    vi.mocked(repo.getVolumesByProject).mockResolvedValue([
+      { id: 'vol-2', projectId: 'proj-1', title: '第二卷', order: 1, createdAt: 1, updatedAt: 1 },
+    ])
+    repo.saveChapterCAS = vi.fn(async ({ chapter, expectedRevision }) => {
+      expect(expectedRevision).toBe(2)
+      expect(chapter.content).toBe(latest.content)
+      expect(chapter.synopsis).toBe(latest.synopsis)
+      return { success: true, conflict: false, currentRevision: chapter.revision }
+    })
+    const service = new DefaultChapterMutationService(repo, mockClock)
+
+    const result = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      expectedRevision: 2,
+      mutation: { type: 'move-to-volume', volumeId: 'vol-2', order: 0 },
+      origin: 'chapter-metadata',
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      chapter: {
+        content: latest.content,
+        synopsis: latest.synopsis,
+        volumeId: 'vol-2',
+        order: 0,
+        revision: 3,
+      },
+    })
+    expect(repo.saveChapter).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale chapter metadata without writing the newer body', async () => {
+    const latest: ChapterRecord = { ...fakeChapter, content: '<p>新正文</p>', revision: 2 }
+    const repo = createMockRepo([latest])
+    repo.saveChapterCAS = vi.fn().mockResolvedValue({
+      success: false,
+      conflict: true,
+      currentRevision: 2,
+      error: 'CAS Conflict',
+    })
+    const service = new DefaultChapterMutationService(repo, mockClock)
+
+    const result = await service.mutate({
+      workspaceId: 'proj-1',
+      chapterId: 'ch-1',
+      expectedRevision: 1,
+      mutation: { type: 'update-status', status: 'review' },
+      origin: 'chapter-metadata',
+    })
+
+    expect(result).toMatchObject({ success: false, conflict: true, currentRevision: 2 })
     expect(repo.saveChapter).not.toHaveBeenCalled()
   })
 

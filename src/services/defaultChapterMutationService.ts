@@ -66,6 +66,9 @@ export class DefaultChapterMutationService implements ChapterMutationService {
     let newContent = existing.content || ''
     let newTitle = existing.title
     let newSynopsis = existing.synopsis
+    let newStatus = existing.status
+    let newVolumeId = existing.volumeId
+    let newOrder = existing.order
 
     if (mutation.type === 'replace-content') {
       newContent = mutation.content
@@ -78,6 +81,20 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       newTitle = mutation.title
     } else if (mutation.type === 'update-synopsis') {
       newSynopsis = mutation.synopsis
+    } else if (mutation.type === 'update-status') {
+      newStatus = mutation.status
+    } else if (mutation.type === 'move-to-volume') {
+      const volumes = await this.projectRepo.getVolumesByProject(workspaceId)
+      if (!volumes.some((volume) => volume.id === mutation.volumeId)) {
+        return {
+          success: false,
+          conflict: false,
+          currentRevision,
+          error: `Target volume not found in workspace '${workspaceId}'`,
+        }
+      }
+      newVolumeId = mutation.volumeId
+      newOrder = Math.max(0, Math.floor(mutation.order))
     }
 
     // Canonical title writes are exact-idempotent: retrying the same title must
@@ -106,6 +123,32 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       }
     }
 
+    if (mutation.type === 'update-status' && existing.status === mutation.status) {
+      return {
+        success: true,
+        conflict: false,
+        previousRevision: currentRevision,
+        newRevision: currentRevision,
+        chapter: existing,
+        wordCountDelta: 0,
+      }
+    }
+
+    if (
+      mutation.type === 'move-to-volume' &&
+      existing.volumeId === mutation.volumeId &&
+      existing.order === Math.max(0, Math.floor(mutation.order))
+    ) {
+      return {
+        success: true,
+        conflict: false,
+        previousRevision: currentRevision,
+        newRevision: currentRevision,
+        chapter: existing,
+        wordCountDelta: 0,
+      }
+    }
+
     const newRevision = currentRevision + 1
     const newWordCount = countWords(newContent)
     const previousWordCount = existing.wordCount ?? countWords(existing.content || '')
@@ -116,11 +159,15 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       ...existing,
       title: newTitle,
       content: newContent,
+      volumeId: newVolumeId,
+      order: newOrder,
       ...(newSynopsis === undefined ? {} : { synopsis: newSynopsis }),
       wordCount: newWordCount,
       revision: newRevision,
       updatedAt: now,
     }
+    if (newStatus === undefined) delete updatedChapter.status
+    else updatedChapter.status = newStatus
 
     // 4. Durable persistence (下沉至 repository 真正的 saveChapterCAS)
     try {
@@ -136,6 +183,13 @@ export class DefaultChapterMutationService implements ChapterMutationService {
             currentRevision: casResult.currentRevision ?? currentRevision,
             error: casResult.error || 'Repository CAS 冲突',
           }
+        }
+      } else if (mutation.type === 'update-status' || mutation.type === 'move-to-volume') {
+        return {
+          success: false,
+          conflict: false,
+          currentRevision,
+          error: 'Chapter metadata updates require repository compare-and-swap support',
         }
       } else {
         await this.projectRepo.saveChapter(updatedChapter)
@@ -161,8 +215,9 @@ export class DefaultChapterMutationService implements ChapterMutationService {
       }
     }
 
-    // 5. Clear draft journal since durable save succeeded
-    draftJournal.clear(workspaceId, chapterId)
+    // 5. Clear only the draft that matches this durable snapshot. A newer edit
+    // may have replaced the journal while this save was in flight.
+    draftJournal.clearIfContentMatches(workspaceId, chapterId, updatedChapter.content || '')
 
     // 6. Emit chapterSaved event
     chapterSaveEvents.publish(updatedChapter)

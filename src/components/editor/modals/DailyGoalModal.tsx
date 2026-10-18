@@ -111,7 +111,12 @@ export const DailyGoalModal: React.FC<DailyGoalModalProps> = ({
           <span>写作提醒</span>
           <HelpCircle className="w-3.5 h-3.5 text-[var(--ink-text-faint)]" />
         </div>
-        <Select value={remindOption} onValueChange={(v) => setRemindOption(v)} size="sm">
+        <Select
+          aria-label="写作提醒时间"
+          value={remindOption}
+          onValueChange={(v) => setRemindOption(v)}
+          size="sm"
+        >
           <option value="none">不提醒</option>
           <option value="20:00">每日 20:00</option>
           <option value="21:00">每日 21:00</option>
