@@ -59,20 +59,22 @@ function collectWorkspaceLocalStorage(
   workspaceId: string,
   chapterIds: readonly string[],
 ): WorkspaceLocalStorageEntry[] {
-  if (typeof localStorage === 'undefined') return []
-  const encodedWorkspaceId = encodeURIComponent(workspaceId)
+  if (typeof localStorage === 'undefined') {
+    throw new Error('完整备份失败：无法读取必要的本地存储数据。')
+  }
   const entries: WorkspaceLocalStorageEntry[] = []
   try {
     for (let index = 0; index < localStorage.length; index += 1) {
       const key = localStorage.key(index)
-      if (!key || !isWorkspaceLocalStorageKey(key, workspaceId, encodedWorkspaceId, chapterIds)) {
+      if (!key || !isWorkspaceLocalStorageKey(key, workspaceId, chapterIds)) {
         continue
       }
       const value = localStorage.getItem(key)
       if (value !== null) entries.push({ key, value })
     }
   } catch {
-    // A blocked/private localStorage must not make a durable IndexedDB backup fail.
+    // Legacy workspace data can still live here, so a partial archive is not complete.
+    throw new Error('完整备份失败：无法读取必要的本地存储数据。')
   }
   return entries.sort((left, right) => left.key.localeCompare(right.key))
 }
@@ -80,24 +82,50 @@ function collectWorkspaceLocalStorage(
 function isWorkspaceLocalStorageKey(
   key: string,
   workspaceId: string,
-  encodedWorkspaceId: string,
   chapterIds: readonly string[],
 ): boolean {
   if (WORKSPACE_LOCAL_STORAGE_EXCLUDED_KEYS.has(key) || SECRET_LOCAL_STORAGE_KEY.test(key)) {
     return false
   }
+
+  const scratchpadPrefix = `inkpi-scratchpad-${workspaceId}-`
+  const scratchpadChapterId = key.startsWith(scratchpadPrefix)
+    ? key.slice(scratchpadPrefix.length)
+    : ''
+  const statsPrefix = `inkpi-author-stats-${workspaceId}-`
+  const statsDate = key.startsWith(statsPrefix) ? key.slice(statsPrefix.length) : ''
+
   if (
     key.startsWith(`inkpi_draft_journal:${workspaceId}:`) ||
-    key.startsWith(`inkpi_enabled_plugins_${workspaceId}`) ||
-    key.startsWith(`inkpi-scratchpad-${workspaceId}-`) ||
+    key === `inkpi_enabled_plugins_${workspaceId}` ||
+    key === `inkpi_last_active_chapter:${workspaceId}` ||
     key === `inkpi-excluded-nums-${workspaceId}` ||
     key === `inkpi-daily-goal-${workspaceId}` ||
-    key.includes(workspaceId) ||
-    key.includes(encodedWorkspaceId)
+    (key.startsWith(scratchpadPrefix) &&
+      (scratchpadChapterId === 'global' || chapterIds.includes(scratchpadChapterId))) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(statsDate)
   ) {
     return true
   }
   return chapterIds.some((chapterId) => key === `chapter-history-${chapterId}`)
+}
+
+function isWorkspaceSettingsKey(key: string, workspaceId: string): boolean {
+  const encodedWorkspaceId = encodeURIComponent(workspaceId)
+  const scopedPrefixes = [
+    workspaceId + '::',
+    'ai-task-recovery::' + encodedWorkspaceId + '::',
+    'distillation-review::' + encodedWorkspaceId + '::',
+    'ai-distillation-checkpoint::' + encodedWorkspaceId + '::',
+    'domainProposal::' + encodedWorkspaceId + '::',
+  ]
+
+  return (
+    scopedPrefixes.some((prefix) => key.startsWith(prefix)) ||
+    key === 'storyState::' + encodedWorkspaceId ||
+    key === 'inkpi-excluded-nums-' + workspaceId ||
+    key === 'inkpi-daily-goal-' + workspaceId
+  )
 }
 
 function remapWorkspaceLocalStorage(
@@ -108,12 +136,22 @@ function remapWorkspaceLocalStorage(
 ): WorkspaceLocalStorageEntry[] {
   const encodedOldWorkspaceId = encodeURIComponent(oldWorkspaceId)
   const encodedNewWorkspaceId = encodeURIComponent(newWorkspaceId)
+  const oldDraftPrefix = `inkpi_draft_journal:${oldWorkspaceId}:`
+  const oldScratchpadPrefix = `inkpi-scratchpad-${oldWorkspaceId}-`
   return entries.flatMap((entry) => {
     if (!entry || typeof entry.key !== 'string' || typeof entry.value !== 'string') return []
     let key = entry.key
     if (key.startsWith('chapter-history-')) {
       const oldChapterId = key.slice('chapter-history-'.length)
       key = `chapter-history-${chapterIdMap.get(oldChapterId) ?? oldChapterId}`
+    } else if (key.startsWith(oldDraftPrefix)) {
+      const oldChapterId = key.slice(oldDraftPrefix.length)
+      key = `inkpi_draft_journal:${newWorkspaceId}:${chapterIdMap.get(oldChapterId) ?? oldChapterId}`
+    } else if (key.startsWith(oldScratchpadPrefix)) {
+      const oldChapterId = key.slice(oldScratchpadPrefix.length)
+      const newChapterId =
+        oldChapterId === 'global' ? 'global' : (chapterIdMap.get(oldChapterId) ?? oldChapterId)
+      key = `inkpi-scratchpad-${newWorkspaceId}-${newChapterId}`
     } else {
       key = key
         .replaceAll(encodedOldWorkspaceId, encodedNewWorkspaceId)
@@ -731,11 +769,33 @@ export class WorkspaceLifecycleService {
    * 真实践行 INV-04：“叫完整备份就必须真的完整”。
    */
   async exportWorkspaceBackup(workspaceId: string): Promise<WorkspaceBackupArchive | null> {
-    const project = await this.projectRepo.getProject(workspaceId)
+    // Normalize any legacy goal before opening the read-only snapshot. The core
+    // tables and every portable domain table are then read in one transaction.
+    await indexedDbWritingGoalStore.get(workspaceId)
+    const snapshotStores: StoreName[] = [
+      'projects',
+      'volumes',
+      'chapters',
+      ...PROJECT_DOMAIN_STORES,
+    ]
+    let snapshot: Partial<Record<StoreName, unknown[]>>
+    try {
+      snapshot = await db.getAllSnapshot(snapshotStores)
+    } catch (error) {
+      const match = error instanceof Error ? error.message.match(/store "([^"]+)"/) : null
+      const failedStore = match?.[1] ?? '工作区快照'
+      throw new Error(`完整备份失败：无法读取必要数据表“${failedStore}”。`)
+    }
+
+    const project = (snapshot.projects as ProjectRecord[] | undefined)?.find(
+      (record) => record.id === workspaceId,
+    )
     if (!project) return null
 
-    const allVolumes = await this.projectRepo.getAllVolumes()
-    const chapters = await this.projectRepo.getChaptersByProject(workspaceId)
+    const allVolumes = (snapshot.volumes as VolumeRecord[] | undefined) ?? []
+    const chapters = ((snapshot.chapters as ChapterRecord[] | undefined) ?? []).filter(
+      (chapter) => chapter.projectId === workspaceId,
+    )
     const volumes = allVolumes.filter((v) => v.projectId === workspaceId)
     const localStorageData = collectWorkspaceLocalStorage(
       workspaceId,
@@ -747,38 +807,33 @@ export class WorkspaceLifecycleService {
     const domainStoresIncluded: string[] = []
 
     for (const storeName of PROJECT_DOMAIN_STORES) {
-      if (typeof db.getAll === 'function') {
-        try {
-          const records = await db.getAll<Record<string, unknown>>(storeName)
-          const filtered = records.filter((r) => {
-            if (storeName === 'settingsKV') {
-              const key = String((r as any).key || '')
-              return (
-                key.includes(workspaceId) ||
-                key.startsWith(`storyState::${workspaceId}`) ||
-                key.startsWith(`inkpi-excluded-nums-${workspaceId}`) ||
-                key.startsWith(`inkpi-daily-goal-${workspaceId}`)
-              )
-            }
-            if (storeName === 'aiArtifacts') {
-              const ownership = (r as any).ownership
-              return (
-                r.projectId === workspaceId ||
-                r.workspaceId === workspaceId ||
-                ownership?.workspaceId === workspaceId ||
-                ownership?.projectId === workspaceId
-              )
-            }
-            return r.projectId === workspaceId || r.workspaceId === workspaceId
-          })
-          if (filtered.length > 0) {
-            domainData[storeName] = filtered
-            domainStoresIncluded.push(storeName)
-            totalRecordsCount += filtered.length
-          }
-        } catch {
-          // ignore uninitialized stores
+      const records = (snapshot[storeName] as Record<string, unknown>[] | undefined) ?? []
+
+      const filtered = records.filter((r) => {
+        if (storeName === 'settingsKV') {
+          const record = r
+          const key = typeof record.key === 'string' ? record.key : ''
+          return (
+            record.projectId === workspaceId ||
+            record.workspaceId === workspaceId ||
+            isWorkspaceSettingsKey(key, workspaceId)
+          )
         }
+        if (storeName === 'aiArtifacts') {
+          const ownership = (r as any).ownership
+          return (
+            r.projectId === workspaceId ||
+            r.workspaceId === workspaceId ||
+            ownership?.workspaceId === workspaceId ||
+            ownership?.projectId === workspaceId
+          )
+        }
+        return r.projectId === workspaceId || r.workspaceId === workspaceId
+      })
+      if (filtered.length > 0) {
+        domainData[storeName] = filtered
+        domainStoresIncluded.push(storeName)
+        totalRecordsCount += filtered.length
       }
     }
 
@@ -1501,7 +1556,6 @@ export class WorkspaceLifecycleService {
     await this.projectRepo.deleteProject(workspaceId)
 
     // 3. Purge all related domain & plugin stores
-    const encodedWorkspaceId = encodeURIComponent(workspaceId)
     for (const storeName of PROJECT_DOMAIN_STORES) {
       if (typeof db.getAll === 'function' && typeof db.delete === 'function') {
         try {
@@ -1513,15 +1567,8 @@ export class WorkspaceLifecycleService {
               (rec as any).ownership?.workspaceId === workspaceId
 
             if (!matches && storeName === 'settingsKV') {
-              const key = String((rec as any).key || '')
-              matches =
-                key.includes(workspaceId) ||
-                key.includes(encodedWorkspaceId) ||
-                key.startsWith(`ai-task-recovery::${encodedWorkspaceId}`) ||
-                key.startsWith(`distillation-review::${encodedWorkspaceId}`) ||
-                key.startsWith(`storyState::${workspaceId}`) ||
-                key.startsWith(`inkpi-excluded-nums-${workspaceId}`) ||
-                key.startsWith(`inkpi-daily-goal-${workspaceId}`)
+              const key = typeof rec.key === 'string' ? rec.key : ''
+              matches = isWorkspaceSettingsKey(key, workspaceId)
             }
 
             if (matches) {
