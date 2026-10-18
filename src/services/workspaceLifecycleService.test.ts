@@ -350,8 +350,12 @@ describe('WorkspaceLifecycleService', () => {
         expect.objectContaining({ key: 'chapter-history-orig-ch-1' }),
         expect.objectContaining({ key: 'inkpi_last_active_chapter:orig-proj' }),
         expect.objectContaining({ key: 'inkpi-author-stats-orig-proj-2026-10-09' }),
+        expect.objectContaining({ key: scratchpadKey, value: scratchpadValue }),
       ]),
     )
+    expect(
+      backup?.localStorageData?.some(({ key }) => neighbourLocalStorageKeys.includes(key)),
+    ).toBe(false)
     expect(backup?.localStorageData?.some(({ key }) => key === 'inkpi-daily-goal-orig-proj')).toBe(
       false,
     )
@@ -383,6 +387,9 @@ describe('WorkspaceLifecycleService', () => {
     )
     expect(localStorage.getItem(`inkpi-author-stats-${result.workspaceId}-2026-10-09`)).toBe(
       authorStats,
+    )
+    expect(localStorage.getItem(`inkpi-scratchpad-${result.workspaceId}-ch_generated_3`)).toBe(
+      scratchpadValue,
     )
     expect(localStorage.getItem(`inkpi-daily-goal-${result.workspaceId}`)).toBeNull()
     await expect(db.get('settingsKV', `${result.workspaceId}::goalDaily`)).resolves.toEqual({
