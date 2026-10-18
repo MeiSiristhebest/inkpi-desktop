@@ -4,16 +4,29 @@ import { indexedDbAftermathRepository } from '../../../adapters/indexedDbAfterma
 import type { AftermathPatchRecord } from '../types'
 import { GitPullRequest } from 'lucide-react'
 
-export const AftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
+export const AftermathDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <ProjectAftermathDrawer key={props.projectId} {...props} />
+)
+const ProjectAftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
   const [pendingPatches, setPendingPatches] = useState<AftermathPatchRecord[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
+    let disposed = false
     indexedDbAftermathRepository
       .getAll(projectId)
       .then((all) => {
+        if (disposed) return
         setPendingPatches(all.filter((p) => p.status === 'pending'))
+        setLoaded(true)
       })
-      .catch(console.error)
+      .catch(() => {
+        if (!disposed) setError('提案读取失败，请重新打开重试。')
+      })
+    return () => {
+      disposed = true
+    }
   }, [projectId])
 
   return (
@@ -25,7 +38,10 @@ export const AftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => 
         <span className="text-[10px] text-amber-500 font-bold">{pendingPatches.length} 待审阅</span>
       </div>
 
-      {pendingPatches.length === 0 ? (
+      {error && <p role="alert">{error}</p>}
+      {!loaded ? (
+        <p>正在读取提案</p>
+      ) : pendingPatches.length === 0 ? (
         <div className="p-3 rounded bg-slate-50 dark:bg-slate-800/50 text-slate-400 text-center">
           当前暂无待回写的世界观设定变更
         </div>
@@ -41,6 +57,10 @@ export const AftermathDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => 
                 {p.beforeValue} ➔{' '}
                 <span className="font-semibold text-emerald-600">{p.afterValue}</span>
               </div>
+              <p className="text-[11px]">
+                {p.evidenceStatus === 'candidate' ? '候选，尚待作者确认' : '旧提案，尚未复核'}：
+                {p.evidenceSnippet}
+              </p>
             </div>
           ))}
         </div>

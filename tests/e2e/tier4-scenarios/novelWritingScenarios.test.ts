@@ -116,6 +116,14 @@ describe('Tier 4: Novel writing scenarios', () => {
       protagonistRank: 10,
       enemyRank: 40,
       compensatoryAssets: [],
+      constraints: [
+        {
+          id: 'gate-defense',
+          description: '主角无法抵御城门前的威压',
+          status: 'violated',
+          rationale: '作者核对已登记的能力限制，确认此处没有护体手段。',
+        },
+      ],
     })
     expect(breach).toMatchObject({ isBreached: true, riskLevel: 'CRITICAL_COLLAPSE' })
     // 越级结论只是沙盘里算出来的草稿，作者还没落库，总线上一条事件都不许有（§P2.12）。
@@ -164,6 +172,7 @@ describe('Tier 4: Novel writing scenarios', () => {
         chapterId: `${projectId}::chapter-0`,
         chapterOrder: 0,
         chapterTitle: '旧历终结',
+        sequenceRole: 'mainline',
         timePoint: {
           calendarId: ancient.id,
           year: 1000,
@@ -177,6 +186,7 @@ describe('Tier 4: Novel writing scenarios', () => {
         chapterId: chapter.id,
         chapterOrder: chapter.order,
         chapterTitle: chapter.title,
+        sequenceRole: 'mainline',
         timePoint: {
           calendarId: dynasty.id,
           ...conversion.targetDate,
@@ -210,15 +220,15 @@ describe('Tier 4: Novel writing scenarios', () => {
       projectId,
       chapterId: chapter.id,
       wordCount: 2400,
-      waterScore: 18,
     })
     await harness.mutateCodexEntity(protagonist.id, (previous) => ({
       attributes: { ...previous.attributes, timelineDay: conversion.absoluteDayIndex },
     }))
 
-    expect(chronology.hasParadox).toBe(false)
+    expect(chronology.status).toBe('consistent')
+    expect(chronology.hasConflict).toBe(false)
     expect(causal).toHaveLength(0)
-    expect(audited).toEqual([{ projectId, chapterId: chapter.id, wordCount: 2400, waterScore: 18 }])
+    expect(audited).toEqual([{ projectId, chapterId: chapter.id, wordCount: 2400 }])
     expect(harness.getCodexEntity(protagonist.id)?.attributes.timelineDay).toBe(
       conversion.absoluteDayIndex,
     )
@@ -235,11 +245,7 @@ describe('Tier 4: Novel writing scenarios', () => {
     expect(diff.hunks.length).toBeGreaterThan(0)
     const merged = DiffReviewerEngine.applyHunks(
       original,
-      diff.hunks.map((hunk) => ({
-        lines: hunk.lines,
-        oldStartLine: hunk.oldStartLine,
-        resolution: 'applied' as const,
-      })),
+      diff.hunks.map((hunk) => ({ ...hunk, resolution: 'applied' as const })),
     )
     const committed = await harness.mutateActiveChapter({
       chapterId: chapter.id,

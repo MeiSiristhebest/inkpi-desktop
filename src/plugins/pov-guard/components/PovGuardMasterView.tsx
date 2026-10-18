@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { indexedDbPovGuardRepository } from '../../../adapters/indexedDbPovGuardRepository'
 import { PovGuardEngine } from '../engine/PovGuardEngine'
@@ -7,6 +7,7 @@ import { ShieldAlert, AlertTriangle, EyeOff, Play, Save } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { Select } from '../../../ui/primitives'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 import {
   findPovConfiguration,
   POV_PROJECT_CONFIG_CHAPTER_ID,
@@ -25,7 +26,11 @@ const parseUniqueLines = (value: string) => [
 const characterRecordId = (name: string) => `pov-character:${name}`
 const secretRecordId = (title: string) => `pov-secret:${title}`
 
-export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+export const PovGuardMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <PovGuardProjectView key={props.projectId} {...props} />
+)
+
+const PovGuardProjectView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const [currentText, setCurrentText] = useState('')
   const [povChar, setPovChar] = useState('')
   const [povMode, setPovMode] = useState<
@@ -44,6 +49,22 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
   const [isAuditing, setIsAuditing] = useState(false)
   const [hasAudited, setHasAudited] = useState(false)
   const [auditMessage, setAuditMessage] = useState('')
+  const auditScope = JSON.stringify([
+    currentText,
+    povChar,
+    povMode,
+    characterText,
+    secretText,
+    knownSecretTitlesByCharacter,
+    configDirty,
+  ])
+  const scopeRef = useRef(auditScope)
+  scopeRef.current = auditScope
+  useEffect(() => {
+    setHasAudited(false)
+    setViolations([])
+    setAuditMessage('')
+  }, [auditScope])
 
   useEffect(() => {
     onStats?.({
@@ -191,6 +212,7 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
     setIsSavingConfig(true)
     try {
       await indexedDbPovGuardRepository.save(record)
+      pluginEventBus.emit('POV_GUARD_CONFIG_SAVED', { projectId })
       setConfigDirty(false)
       setConfigMessage('POV 配置已保存。')
     } catch {
@@ -201,11 +223,13 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
   }
 
   const runAudit = async () => {
+    const submittedScope = auditScope
     setIsAuditing(true)
     setHasAudited(false)
     setAuditMessage('')
     try {
       const snapshots = await indexedDbPovGuardRepository.getAll(projectId)
+      if (scopeRef.current !== submittedScope) return
       if (configDirty) {
         setViolations([])
         setAuditMessage('POV 配置有未保存更改，请先保存后再审查。')
@@ -421,7 +445,7 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
         <div className="flex flex-col space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              违规阻断列表:
+              视角与知情范围待复核候选:
             </label>
             <span className="text-xs text-slate-500">
               {hasAudited ? `规则命中 ${violations.length} 处` : '尚未完成审查'}
@@ -453,7 +477,7 @@ export const PovGuardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onSt
                       ) : (
                         <EyeOff className="w-4 h-4" />
                       )}
-                      {v.type === 'head_hopping' ? '🚨 视角越界(Head-Hopping)' : '🔒 全知信息泄漏'}
+                      {v.type === 'head_hopping' ? '心理叙述候选' : '未登记知情来源的词项'}
                     </span>
                     <span className="text-slate-400 font-normal">第 {v.paragraphIndex + 1} 段</span>
                   </div>

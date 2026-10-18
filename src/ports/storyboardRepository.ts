@@ -11,6 +11,10 @@ export interface ShotFrame {
     'rule_of_thirds' | 'diagonal_impact' | 'leading_sightlines' | 'center_monumental'
   lightingMood: string // "冷峻月光", "赤炎残阳", "雷暴雷光", "幽暗地窟"
   visualPrompt: string
+  sourceQuote?: string
+  sourceStart?: number
+  sourceEnd?: number
+  status?: 'staging-option'
 }
 
 export interface CharacterVisualCard {
@@ -18,6 +22,7 @@ export interface CharacterVisualCard {
   characterName: string
   visualFeatures: string // 发型发色、服饰装束、兵器配饰、神态气场
   stableDiffusionPrompt: string
+  source?: 'author-record'
 }
 
 export interface StoryboardSceneRecord {
@@ -28,6 +33,9 @@ export interface StoryboardSceneRecord {
   shotFrames: ShotFrame[]
   characterCards: CharacterVisualCard[]
   createdAt: number
+  sourceRevision?: number
+  schemaVersion?: 2
+  coverage?: { totalPassages: number; suppliedPassages: number; complete: boolean }
 }
 
 export interface StoryboardRepository {

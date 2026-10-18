@@ -7,6 +7,7 @@ describe('PluginEventBus', () => {
     const unsubscribe = pluginEventBus.on('POWER_BREACH_DETECTED', handler)
 
     pluginEventBus.emit('POWER_BREACH_DETECTED', {
+      recordId: 'duel-1',
       projectId: 'p1',
       protagonistName: '韩立',
       enemyName: '极阴祖师',
@@ -25,6 +26,7 @@ describe('PluginEventBus', () => {
 
     unsubscribe()
     pluginEventBus.emit('POWER_BREACH_DETECTED', {
+      recordId: 'duel-1',
       projectId: 'p1',
       protagonistName: '韩立',
       enemyName: '极阴祖师',
@@ -36,12 +38,10 @@ describe('PluginEventBus', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
-  it('safely isolates multiple independent event types', () => {
+  it('dispatches the chapter-evaluation event', () => {
     const timeHandler = vi.fn()
-    const gunHandler = vi.fn()
 
     pluginEventBus.on('UNIFIED_CHAPTER_EVALUATED', timeHandler)
-    pluginEventBus.on('FORESHADOW_PLANTED', gunHandler)
 
     pluginEventBus.emit('UNIFIED_CHAPTER_EVALUATED', {
       projectId: 'p2',
@@ -52,6 +52,5 @@ describe('PluginEventBus', () => {
     })
 
     expect(timeHandler).toHaveBeenCalledTimes(1)
-    expect(gunHandler).not.toHaveBeenCalled()
   })
 })

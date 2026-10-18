@@ -1,195 +1,109 @@
-import { useState, useEffect, useMemo, useCallback, type FC } from 'react'
+import { useEffect, useState, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { ChapterBeatPlan } from '../types'
 import { sceneBeatsEngine } from '../engine/SceneBeatsEngine'
 import { indexedDbSceneBeatRepository } from '../../../adapters/indexedDbSceneBeatRepository'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { clock } from '../../../adapters/clock'
-import { idGenerator } from '../../../adapters/idGenerator'
-import { ListChecks, CheckCircle2, Circle } from 'lucide-react'
-import { Tooltip } from '../../../ui/primitives'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-
-export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
+import { Select } from '../../../ui/primitives'
+export const SceneBeatsDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <SceneDrawerBody key={props.projectId} {...props} />
+)
+function SceneDrawerBody({ projectId, currentText }: DesktopPluginDrawerProps) {
+  const host = useOptionalPluginHostContext()
+  const activeId = host?.projectId === projectId ? host.activeChapter?.id : undefined
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
-
-  const wordCount = useMemo(
-    () => (currentText ? currentText.replace(/\s+/g, '').length : 0),
-    [currentText],
-  )
-
-  const loadPlans = useCallback(async () => {
-    try {
-      const all = await indexedDbSceneBeatRepository.getAll()
-      const projectPlans = all.filter((p) => p.projectId === projectId)
-      setPlans(projectPlans)
-      if (projectPlans.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(projectPlans[0].id)
-      }
-    } catch (e) {
-      console.error('Failed to load scene beats in drawer:', e)
-    }
-  }, [projectId, selectedPlanId])
-
+  const [selected, setSelected] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   useEffect(() => {
-    void loadPlans()
-  }, [loadPlans])
-
-  const currentPlan = useMemo(
-    () => plans.find((p) => p.id === selectedPlanId) || plans[0],
-    [plans, selectedPlanId],
-  )
-
-  // 进度计算
-  const pacingReport = useMemo(() => {
-    if (!currentPlan || !currentPlan.beats) return null
-    return sceneBeatsEngine.calculatePacingStatus(currentPlan, wordCount)
-  }, [currentPlan, wordCount])
-
-  const handleToggleComplete = async (beatId: string) => {
-    if (!currentPlan) return
-    const updatedBeats = currentPlan.beats.map((b) =>
-      b.id === beatId ? { ...b, isCompleted: !b.isCompleted } : b,
-    )
-    const updated: ChapterBeatPlan = {
-      ...currentPlan,
-      beats: updatedBeats,
-      updatedAt: clock.now(),
+    let disposed = false
+    indexedDbSceneBeatRepository
+      .getAll()
+      .then((all) => {
+        if (!disposed) {
+          const matching = all.filter((p) => p.projectId === projectId && p.chapterId === activeId)
+          setPlans(matching)
+          setSelected(matching[0]?.id ?? '')
+        }
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
     }
-    await indexedDbSceneBeatRepository.save(updated)
-    await loadPlans()
-  }
-
-  const handleInitDefaultPlan = async () => {
-    const now = clock.now()
-    const beats = sceneBeatsEngine.generatePresetPlan('climax_burst', 'ch-current')
-    const newPlan: ChapterBeatPlan = {
-      id: idGenerator.generate('plan'),
-      projectId,
-      chapterId: '本章细纲',
-      targetWordCount: 3000,
-      beats,
-      createdAt: now,
-      updatedAt: now,
-    }
-    await indexedDbSceneBeatRepository.save(newPlan)
-    await loadPlans()
-  }
-
+  }, [projectId, activeId])
+  const visiblePlans = plans.filter((p) => p.projectId === projectId && p.chapterId === activeId)
+  const plan = visiblePlans.find((p) => p.id === selected)
+  const validation = plan ? sceneBeatsEngine.validatePlan(plan) : []
+  const count = Array.from((currentText || '').replace(/\s/g, '')).length
+  const report =
+    plan && activeId && !validation.length
+      ? sceneBeatsEngine.calculatePacingStatus(plan, count)
+      : null
   return (
-    <aside
-      className="w-72 h-full flex flex-col bg-[var(--ink-bg-panel)] border-l border-[var(--ink-border)] text-[var(--ink-text)] text-xs"
-      data-testid="scene-beats-drawer"
-    >
-      <div className="p-3 border-b border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/40 shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 font-semibold text-[var(--ink-text)]">
-            <ListChecks className="w-3.5 h-3.5 text-blue-500" />
-            <span>细纲节拍随动</span>
-          </div>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text-muted)]">
-            {wordCount} 字 / 目标 {currentPlan?.targetWordCount || 3000}
-          </span>
-        </div>
-        <ScoreProvenanceBadge
-          source="rule"
-          detail="按正文长度与节拍预算估算进度；情绪值来自计划参数"
-        />
-
-        {/* 进度条 */}
-        {pacingReport && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-[var(--ink-text-muted)]">
-              <span>进度达成</span>
-              <span className="font-semibold text-[var(--ink-accent)]">
-                {pacingReport.progressPct}%
-              </span>
-            </div>
-            <div className="w-full h-1.5 bg-[var(--ink-bg-canvas)] rounded-full overflow-hidden">
-              <div
-                style={{ width: `${Math.min(100, pacingReport.progressPct)}%` }}
-                className="h-full bg-[var(--ink-accent)] rounded-full transition-all duration-300"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-        {!currentPlan ? (
-          <div className="text-center py-10 text-[var(--ink-text-muted)]">
-            <p className="mb-2 text-xs">当前章节暂无绑定的细纲节拍</p>
-            <button
-              onClick={handleInitDefaultPlan}
-              className="px-3 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90"
-            >
-              生成四段式高潮节拍
-            </button>
-          </div>
-        ) : (
-          pacingReport?.beatProgresses.map(({ beat, startWord, endWord }, i) => {
-            const isActive = pacingReport.activeBeatIndex === i
-            return (
-              <div
-                key={beat.id}
-                className={`p-2.5 rounded-xl border transition-all ${
-                  isActive
-                    ? 'border-[var(--ink-accent)] bg-[var(--ink-accent)]/10 shadow-xs'
-                    : beat.isCompleted
-                      ? 'border-emerald-500/30 bg-emerald-500/5 opacity-75'
-                      : 'border-[var(--ink-border)] bg-[var(--ink-bg-canvas)]'
-                }`}
+    <aside data-testid="scene-beats-drawer" className="p-4 space-y-3 text-xs">
+      <h3>当前章节节拍预算</h3>
+      <p>字符数表示预算位置；剧情完成须由作者确认。</p>
+      {error && <p role="alert">{error}</p>}
+      {validation.map((e) => (
+        <p key={e} role="alert">
+          {e}
+        </p>
+      ))}
+      {!activeId ? (
+        <p>当前正文未绑定保存章节，不能使用其他章节的细纲进度。</p>
+      ) : !visiblePlans.length ? (
+        <p>当前章节尚无已保存细纲。</p>
+      ) : (
+        <>
+          <Select aria-label="当前章细纲计划" value={selected} onValueChange={setSelected}>
+            {visiblePlans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id}
+              </option>
+            ))}
+          </Select>
+          {report && (
+            <p>
+              正文 {count} / 预算 {report.targetTotalWords}，预算比 {report.progressPct.toFixed(1)}
+              %。
+            </p>
+          )}
+          {plan?.beats.map((beat) => (
+            <section key={beat.id}>
+              <p>
+                {beat.title}：{beat.goalOrConflict}
+              </p>
+              <button
+                disabled={busy}
+                onClick={async () => {
+                  setError('')
+                  setBusy(true)
+                  try {
+                    const updated = {
+                      ...plan,
+                      beats: plan.beats.map((b) =>
+                        b.id === beat.id ? { ...b, isCompleted: !b.isCompleted } : b,
+                      ),
+                      updatedAt: clock.now(),
+                    }
+                    await indexedDbSceneBeatRepository.save(updated)
+                    setPlans((current) => current.map((p) => (p.id === updated.id ? updated : p)))
+                  } catch (cause) {
+                    setError(String(cause))
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
               >
-                <div className="flex items-center justify-between gap-1 mb-1">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <Tooltip content={beat.isCompleted ? '标记未完成' : '标记已达成'}>
-                      <button
-                        onClick={() => handleToggleComplete(beat.id)}
-                        className="text-[var(--ink-text-muted)] hover:text-emerald-500"
-                      >
-                        {beat.isCompleted ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                        ) : (
-                          <Circle className="w-4 h-4 shrink-0" />
-                        )}
-                      </button>
-                    </Tooltip>
-                    <span
-                      className={`font-semibold truncate text-xs ${
-                        beat.isCompleted
-                          ? 'line-through text-[var(--ink-text-muted)]'
-                          : 'text-[var(--ink-text)]'
-                      }`}
-                    >
-                      {i + 1}. {beat.title}
-                    </span>
-                  </div>
-
-                  {isActive && (
-                    <span className="text-[9px] px-1 py-0.2 rounded bg-[var(--ink-accent)] text-white shrink-0 font-medium">
-                      当前戏
-                    </span>
-                  )}
-                </div>
-
-                <p className="text-[11px] text-[var(--ink-text-muted)] line-clamp-2 leading-relaxed">
-                  {beat.goalOrConflict}
-                </p>
-
-                <div className="flex items-center justify-between text-[10px] text-[var(--ink-text-faint)] pt-1.5 border-t border-[var(--ink-border)]/40 mt-1.5">
-                  <span>
-                    预计 {startWord}~{endWord} 字
-                  </span>
-                  <span>
-                    情绪：{beat.emotionalIn > 0 ? `+${beat.emotionalIn}` : beat.emotionalIn} →{' '}
-                    {beat.emotionalOut > 0 ? `+${beat.emotionalOut}` : beat.emotionalOut}
-                  </span>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
+                {beat.isCompleted ? '作者标记未完成' : '作者标记完成'}
+              </button>
+            </section>
+          ))}
+        </>
+      )}
     </aside>
   )
 }

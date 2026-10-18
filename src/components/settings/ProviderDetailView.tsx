@@ -12,9 +12,11 @@ import {
   formatTokenCount,
   type ModelCatalogSnapshot,
 } from '../../core/modelCatalog'
+import { formatProviderPrice, mergeProviderCatalog } from '../../core/providerModelCatalog'
 import { fieldLabel, inputCls, PrimaryButton, SecondaryButton, Switch } from './SettingsShared'
 import { spring, variants, gesture } from '../../motion'
-import { Tooltip, Select } from '../../ui/primitives'
+import { Button, Tooltip, Select } from '../../ui/primitives'
+import type { RuntimeModelCatalogEntry, RuntimeModelProviderProbeResult } from '@inkpi/protocol'
 
 export interface ProviderDetailViewProps {
   initialConfig?: ModelConfig | null
@@ -25,7 +27,11 @@ export interface ProviderDetailViewProps {
     apiKey: string,
     provider: string,
   ) => Promise<{ ok: boolean; msg: string }>
-  onFetchModels?: (baseUrl: string, apiKey: string, provider: string) => Promise<string[]>
+  onFetchModels?: (
+    baseUrl: string,
+    apiKey: string,
+    provider: string,
+  ) => Promise<RuntimeModelProviderProbeResult>
 }
 
 const THINKING_CHOICES: { level: ThinkingLevel; label: string }[] = [
@@ -36,6 +42,12 @@ const THINKING_CHOICES: { level: ThinkingLevel; label: string }[] = [
   { level: 'xhigh', label: '高' },
   { level: 'max', label: '极高' },
 ]
+
+function normalizeCatalogBaseUrl(provider: string, value: string): string {
+  return (value.trim() || PROVIDER_META[provider as ProviderType]?.defaultBaseUrl || '')
+    .trim()
+    .replace(/\/+$/, '')
+}
 
 export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
   initialConfig,
@@ -65,8 +77,26 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
   // 模型选择与拉取状态
   const [fetching, setFetching] = useState(false)
   const [fetchedIds, setFetchedIds] = useState<string[]>([])
+  const [fetchedCatalogModels, setFetchedCatalogModels] = useState<RuntimeModelCatalogEntry[]>([])
+  const [catalogFetchedAt, setCatalogFetchedAt] = useState<string>()
+  const [catalogInputRevision, setCatalogInputRevision] = useState(0)
+  const [fetchedCatalogRevision, setFetchedCatalogRevision] = useState<number | null>(null)
   const [customModelInput, setCustomModelInput] = useState('')
   const [modelSearch, setModelSearch] = useState('')
+
+  const invalidateFetchedCatalog = () => setCatalogInputRevision((revision) => revision + 1)
+  const initialCatalogMatches = Boolean(
+    initialConfig &&
+    initialConfig.provider === service &&
+    normalizeCatalogBaseUrl(initialConfig.provider, initialConfig.baseUrl ?? '') ===
+      normalizeCatalogBaseUrl(service, baseUrl) &&
+    (initialConfig.apiKey ?? '').trim() === apiKey.trim(),
+  )
+  const fetchedCatalogMatches = fetchedCatalogRevision === catalogInputRevision
+  const currentInitialCatalog = initialCatalogMatches
+    ? (initialConfig?.availableModelCatalog ?? [])
+    : []
+  const currentFetchedCatalog = fetchedCatalogMatches ? fetchedCatalogModels : []
 
   // 当前勾选的模型 ID 集合
   const [selectedIds, setSelectedIds] = useState<string[]>(() => {
@@ -117,35 +147,60 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
   // 3. 用户手动填写的初始模型 ID (initialConfig.id)
   // 坚决不提前塞入内置静态全量目录！没拉取就是没拉取，必须真实！
   const allCandidateRows = useMemo(() => {
-    const map = new Map<string, { id: string; entry?: ModelCatalogSnapshot }>()
+    const catalogById = new Map<string, RuntimeModelCatalogEntry>()
+    for (const model of currentInitialCatalog) {
+      catalogById.set(model.id, { ...catalogById.get(model.id), ...model })
+    }
+    for (const model of currentFetchedCatalog) {
+      catalogById.set(model.id, { ...catalogById.get(model.id), ...model })
+    }
+    const map = new Map<
+      string,
+      { id: string; entry?: ModelCatalogSnapshot; catalogModel?: RuntimeModelCatalogEntry }
+    >()
+    const add = (id: string) =>
+      map.set(id, {
+        id,
+        entry: lookupCatalogModel(id),
+        catalogModel: catalogById.get(id),
+      })
 
     // 1. 本服务历史上已持久化拉取到的模型
     ;(initialConfig?.availableModelIds ?? []).forEach((id) => {
-      map.set(id, { id, entry: lookupCatalogModel(id) })
+      add(id)
     })
 
     // 2. 本次点击「获取列表」从真实端点拉取到的模型
-    fetchedIds.forEach((id) => {
-      if (!map.has(id)) map.set(id, { id, entry: lookupCatalogModel(id) })
-    })
-
-    // 3. 当前初始 ID（若已保存过）
-    if (initialConfig?.id && !map.has(initialConfig.id)) {
-      map.set(initialConfig.id, {
-        id: initialConfig.id,
-        entry: lookupCatalogModel(initialConfig.id),
+    if (fetchedCatalogMatches) {
+      fetchedIds.forEach((id) => {
+        if (!map.has(id)) add(id)
       })
     }
 
+    // 3. 当前初始 ID（若已保存过）
+    if (initialConfig?.id && !map.has(initialConfig.id)) {
+      add(initialConfig.id)
+    }
+
     return Array.from(map.values())
-  }, [initialConfig, fetchedIds])
+  }, [
+    initialConfig,
+    currentInitialCatalog,
+    currentFetchedCatalog,
+    fetchedCatalogMatches,
+    fetchedIds,
+  ])
 
   // 搜索过滤后的模型列表
   const visibleRows = useMemo(() => {
     const q = modelSearch.trim().toLowerCase()
     if (!q) return allCandidateRows
     return allCandidateRows.filter((r) => {
-      return r.id.toLowerCase().includes(q) || (r.entry?.name.toLowerCase().includes(q) ?? false)
+      return (
+        r.id.toLowerCase().includes(q) ||
+        (r.catalogModel?.name?.toLowerCase().includes(q) ?? false) ||
+        (r.entry?.name.toLowerCase().includes(q) ?? false)
+      )
     })
   }, [allCandidateRows, modelSearch])
 
@@ -181,14 +236,28 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
       setExpandedModelId(id)
       if (!modelOverrides[id]) {
         const entry = lookupCatalogModel(id)
+        const catalogModel =
+          currentFetchedCatalog.find((model) => model.id === id) ??
+          currentInitialCatalog.find((model) => model.id === id)
         if (entry) {
           setModelOverrides((prev) => ({
             ...prev,
             [id]: {
-              contextWindow: entry.contextWindow,
-              maxTokens: entry.maxTokens,
+              contextWindow: catalogModel?.contextTokens ?? entry.contextWindow,
+              maxTokens: catalogModel?.maxOutputTokens ?? entry.maxTokens,
               thinkingLevel: entry.supportsThinking ? 'high' : 'none',
-              supportsImages: Boolean(entry.supportsVision),
+              supportsImages: catalogModel?.inputModalities
+                ? catalogModel.inputModalities.includes('image')
+                : Boolean(entry.supportsVision),
+            },
+          }))
+        } else if (catalogModel) {
+          setModelOverrides((prev) => ({
+            ...prev,
+            [id]: {
+              contextWindow: catalogModel.contextTokens,
+              maxTokens: catalogModel.maxOutputTokens,
+              supportsImages: catalogModel.inputModalities?.includes('image'),
             },
           }))
         }
@@ -206,8 +275,24 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
     setFetching(true)
     try {
       if (!onFetchModels) throw new Error('Runtime 未连接，无法从运行时查询模型列表')
-      const ids = await onFetchModels(targetUrl, apiKey, service)
-      setFetchedIds((prev) => Array.from(new Set([...prev, ...ids])))
+      const requestRevision = catalogInputRevision
+      const result = await onFetchModels(targetUrl, apiKey, service)
+      if (result.status < 200 || result.status >= 300) {
+        throw new Error(`Runtime HTTP ${result.status}`)
+      }
+      const ids = [...new Set(result.modelIds.map((id) => id.trim()).filter(Boolean))]
+      if (ids.length === 0) throw new Error('该端点没有返回可用模型列表')
+      const previousCatalog = fetchedCatalogMatches
+        ? fetchedCatalogModels
+        : initialCatalogMatches
+          ? currentInitialCatalog
+          : []
+      setFetchedIds(ids)
+      setFetchedCatalogModels(
+        mergeProviderCatalog(ids, previousCatalog, result.catalogModels ?? []),
+      )
+      setFetchedCatalogRevision(requestRevision)
+      setCatalogFetchedAt(new Date().toISOString())
       setTestResult({ ok: true, msg: `成功拉取到 ${ids.length} 个模型` })
       if (selectedIds.length === 0 && ids.length > 0) {
         setSelectedIds([ids[0]])
@@ -247,14 +332,28 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
     setExpandedModelId(id)
     if (!modelOverrides[id]) {
       const entry = lookupCatalogModel(id)
+      const catalogModel =
+        currentFetchedCatalog.find((model) => model.id === id) ??
+        currentInitialCatalog.find((model) => model.id === id)
       if (entry) {
         setModelOverrides((prev) => ({
           ...prev,
           [id]: {
-            contextWindow: entry.contextWindow,
-            maxTokens: entry.maxTokens,
+            contextWindow: catalogModel?.contextTokens ?? entry.contextWindow,
+            maxTokens: catalogModel?.maxOutputTokens ?? entry.maxTokens,
             thinkingLevel: entry.supportsThinking ? 'high' : 'none',
-            supportsImages: Boolean(entry.supportsVision),
+            supportsImages: catalogModel?.inputModalities
+              ? catalogModel.inputModalities.includes('image')
+              : Boolean(entry.supportsVision),
+          },
+        }))
+      } else if (catalogModel) {
+        setModelOverrides((prev) => ({
+          ...prev,
+          [id]: {
+            contextWindow: catalogModel.contextTokens,
+            maxTokens: catalogModel.maxOutputTokens,
+            supportsImages: catalogModel.inputModalities?.includes('image'),
           },
         }))
       }
@@ -271,6 +370,12 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
 
     const currentOverride = modelOverrides[primaryId] || {}
     const entry = lookupCatalogModel(primaryId)
+    const hasCurrentFetchedCatalog = fetchedCatalogMatches && fetchedIds.length > 0
+    const availableModelCatalog = hasCurrentFetchedCatalog
+      ? fetchedCatalogModels
+      : initialCatalogMatches
+        ? initialConfig?.availableModelCatalog
+        : undefined
 
     const saved: ModelConfig = {
       id: primaryId,
@@ -279,6 +384,12 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
       baseUrl: baseUrl.trim() || undefined,
       apiKey: apiKey.trim() || undefined,
       availableModelIds: selectedIds.length > 0 ? selectedIds : [primaryId],
+      availableModelCatalog,
+      catalogFetchedAt: hasCurrentFetchedCatalog
+        ? catalogFetchedAt
+        : initialCatalogMatches
+          ? initialConfig?.catalogFetchedAt
+          : undefined,
       alias: currentOverride.alias?.trim() || undefined,
       contextWindow:
         currentOverride.contextWindow ?? entry?.contextWindow ?? initialConfig?.contextWindow,
@@ -324,9 +435,15 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
-          <SecondaryButton onClick={handleTestConnection} disabled={testing}>
-            {testing ? '测试中…' : '测试连接'}
-          </SecondaryButton>
+          <Button
+            variant="outline"
+            isLoading={testing}
+            loadingText="测试中…"
+            onClick={handleTestConnection}
+            className="!h-auto !gap-1.5 !px-3.5 !py-1.5 !text-[12px] !rounded-lg border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] cursor-pointer [&>span>svg]:!mr-0"
+          >
+            测试连接
+          </Button>
           <SecondaryButton onClick={onBack}>取消</SecondaryButton>
           <PrimaryButton onClick={handleSave}>保存服务</PrimaryButton>
         </div>
@@ -358,10 +475,12 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
             服务提供商
           </label>
           <Select
+            aria-label="服务提供商"
             id={`${uid}-service`}
             value={service}
             onValueChange={(v) => {
               const s = v
+              if (s !== service) invalidateFetchedCatalog()
               setService(s)
               if (s !== 'custom') {
                 const m = PROVIDER_META[s as ProviderType]
@@ -371,11 +490,13 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
             }}
             className="w-full"
           >
-            {Object.entries(PROVIDER_META).map(([key, meta]) => (
-              <option key={key} value={key}>
-                {meta.label}
-              </option>
-            ))}
+            {Object.entries(PROVIDER_META)
+              .filter(([key]) => key !== 'openai-chatgpt-plan')
+              .map(([key, meta]) => (
+                <option key={key} value={key}>
+                  {meta.label}
+                </option>
+              ))}
           </Select>
         </div>
 
@@ -403,7 +524,10 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
               type="text"
               value={baseUrl}
               placeholder="https://api.example.com/v1"
-              onChange={(e) => setBaseUrl(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value !== baseUrl) invalidateFetchedCatalog()
+                setBaseUrl(e.target.value)
+              }}
               className={`${inputCls} font-mono`}
             />
           </div>
@@ -420,7 +544,10 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
               type="password"
               value={apiKey}
               placeholder={isEditing ? '留空则保留已保存的密钥' : 'sk-...'}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value !== apiKey) invalidateFetchedCatalog()
+                setApiKey(e.target.value)
+              }}
               className={`${inputCls} font-mono`}
             />
             <span className="block text-[10.5px] text-[var(--ink-text-faint)] mt-1">
@@ -451,14 +578,19 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                 </button>
               </Tooltip>
               <span className="text-[13px] font-semibold text-[var(--ink-text)]">该服务的模型</span>
-              <SecondaryButton
+              <Button
+                variant="outline"
+                size="xs"
+                isLoading={fetching}
+                loadingText="获取中…"
                 onClick={handleFetchList}
-                disabled={fetching}
-                className="!px-2 !py-0.5 !text-[11px]"
+                className="!h-auto !gap-1.5 !px-2 !py-0.5 !text-[11px] !rounded-lg border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] cursor-pointer [&>span>svg]:!mr-0"
               >
-                <RefreshCw className={`w-3 h-3 ${fetching ? 'animate-spin' : ''}`} />
-                <span>{fetching ? '获取中…' : '获取列表'}</span>
-              </SecondaryButton>
+                <span className="flex items-center gap-1.5">
+                  <RefreshCw className="w-3 h-3" />
+                  获取列表
+                </span>
+              </Button>
             </div>
 
             <div className="relative w-36 sm:w-44">
@@ -503,6 +635,18 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
               visibleRows.map((r) => {
                 const isChecked = selectedIds.includes(r.id)
                 const isCurrentExpanded = expandedModelId === r.id
+                const contextTokens = r.catalogModel?.contextTokens ?? r.entry?.contextWindow
+                const maxOutputTokens = r.catalogModel?.maxOutputTokens ?? r.entry?.maxTokens
+                const modelDetails = [
+                  contextTokens === undefined
+                    ? undefined
+                    : `上下文 ${formatTokenCount(contextTokens)}`,
+                  maxOutputTokens === undefined
+                    ? undefined
+                    : `输出 ${formatTokenCount(maxOutputTokens)}`,
+                  formatProviderPrice('输入', r.catalogModel?.promptPricePerToken),
+                  formatProviderPrice('输出', r.catalogModel?.completionPricePerToken),
+                ].filter((part): part is string => Boolean(part))
                 return (
                   <div
                     key={r.id}
@@ -525,19 +669,28 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
                       >
                         {isChecked && <Check className="w-2.5 h-2.5" />}
                       </span>
-                      <span className="font-mono text-[11.5px] text-[var(--ink-text)] truncate">
-                        {r.id}
-                      </span>
-                      {r.entry?.name && r.entry.name !== r.id && (
-                        <span className="text-[10px] text-[var(--ink-text-faint)] truncate max-w-[90px]">
-                          {r.entry.name}
+                      <span className="flex flex-col min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono text-[11.5px] text-[var(--ink-text)] truncate">
+                            {r.id}
+                          </span>
+                          {(r.catalogModel?.name ?? r.entry?.name) &&
+                            (r.catalogModel?.name ?? r.entry?.name) !== r.id && (
+                              <span className="text-[10px] text-[var(--ink-text-faint)] truncate max-w-[90px]">
+                                {r.catalogModel?.name ?? r.entry?.name}
+                              </span>
+                            )}
                         </span>
-                      )}
+                        {modelDetails.length > 0 && (
+                          <span
+                            className="text-[9px] text-[var(--ink-text-faint)] truncate"
+                            title={modelDetails.join(' · ')}
+                          >
+                            {modelDetails.join(' · ')}
+                          </span>
+                        )}
+                      </span>
                     </div>
-                    <span className="text-[10px] text-[var(--ink-text-faint)] tabular-nums shrink-0">
-                      {formatTokenCount(r.entry?.contextWindow)} ·{' '}
-                      {formatTokenCount(r.entry?.maxTokens)}
-                    </span>
                   </div>
                 )
               })
@@ -573,16 +726,23 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
             ) : (
               selectedIds.map((modelId) => {
                 const entry = lookupCatalogModel(modelId)
+                const catalogModel =
+                  currentFetchedCatalog.find((model) => model.id === modelId) ??
+                  currentInitialCatalog.find((model) => model.id === modelId)
                 const override = modelOverrides[modelId] || {}
                 const isExpanded = expandedModelId === modelId
 
-                const ctxVal = override.contextWindow ?? entry?.contextWindow
-                const maxVal = override.maxTokens ?? entry?.maxTokens
+                const ctxVal =
+                  override.contextWindow ?? catalogModel?.contextTokens ?? entry?.contextWindow
+                const maxVal =
+                  override.maxTokens ?? catalogModel?.maxOutputTokens ?? entry?.maxTokens
                 const thkVal = override.thinkingLevel ?? (entry?.supportsThinking ? 'high' : 'none')
                 const imgVal =
                   override.supportsImages !== undefined
                     ? override.supportsImages
-                    : Boolean(entry?.supportsVision)
+                    : catalogModel?.inputModalities
+                      ? catalogModel.inputModalities.includes('image')
+                      : Boolean(entry?.supportsVision)
 
                 return (
                   <div

@@ -8,6 +8,8 @@ export class SprintEngine {
    * 根据字符增量与时间差计算瞬时 WPM（Words Per Minute）
    */
   public calculateWpm(charsDelta: number, secondsDelta: number): number {
+    if (!Number.isFinite(charsDelta) || !Number.isFinite(secondsDelta))
+      throw new Error('计数和时差必须为有限数。')
     if (secondsDelta <= 0 || charsDelta <= 0) return 0
     const wpm = (charsDelta / secondsDelta) * 60
     return Math.round(wpm)
@@ -18,7 +20,8 @@ export class SprintEngine {
    * 抑制单次击键或标点停顿带来的离散剧烈抖动
    */
   public smoothWpm(prevEma: number, currentInstantWpm: number, alpha = 0.3): number {
-    if (prevEma <= 0) return currentInstantWpm
+    if (![prevEma, currentInstantWpm, alpha].every(Number.isFinite) || alpha < 0 || alpha > 1)
+      throw new Error('平滑参数无效。')
     return Math.round(alpha * currentInstantWpm + (1 - alpha) * prevEma)
   }
 
@@ -47,7 +50,12 @@ export class SprintEngine {
    */
   public isComboSustained(nowMs: number, lastKeyMs: number, maxGapMs = 3500): boolean {
     if (lastKeyMs <= 0) return true
-    return nowMs - lastKeyMs <= maxGapMs
+    return (
+      [nowMs, lastKeyMs, maxGapMs].every(Number.isFinite) &&
+      maxGapMs >= 0 &&
+      nowMs >= lastKeyMs &&
+      nowMs - lastKeyMs <= maxGapMs
+    )
   }
 }
 

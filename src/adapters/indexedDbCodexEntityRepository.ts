@@ -12,6 +12,7 @@ import {
  */
 export const indexedDbCodexEntityRepository: CodexEntityRepository = {
   getAll: () => db.getAll<CodexEntity>('codexEntities'),
+  getByProject: (projectId) => db.getByIndex<CodexEntity>('codexEntities', 'projectId', projectId),
   save: async (entity) => {
     const existing = await db.get<CodexEntity>('codexEntities', entity.id)
     await appendAuthoritativePluginUpsert({

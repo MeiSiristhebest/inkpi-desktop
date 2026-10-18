@@ -278,7 +278,7 @@ describe('SettingsView', () => {
   it('按 Esc 键触发 onClose', () => {
     const onClose = vi.fn()
     renderSettings({ open: true, onClose })
-    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

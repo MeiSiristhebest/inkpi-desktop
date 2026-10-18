@@ -21,7 +21,15 @@ const documents = ['d1', 'd2', 'd3'].map((documentId, index) => ({
   representation: 'text',
 })) as unknown as SemanticDocument[]
 
-function makeGateway(failTaskIds: Set<string> = new Set()) {
+function makeGateway(
+  failTaskIds: Set<string> = new Set(),
+  distillationData: Record<string, unknown> = {
+    summary: '项目摘要',
+    entities: [],
+    events: [],
+    promises: [],
+  },
+) {
   const submitted = new Set<string>()
   return {
     submitTask: async (task: { id: string }) => {
@@ -46,7 +54,7 @@ function makeGateway(failTaskIds: Set<string> = new Set()) {
               status: 'completed' as const,
               output: {
                 format: 'structured' as const,
-                data: { summary: taskId, entities: [], events: [], promises: [] },
+                data: { ...distillationData, summary: taskId },
               },
             }
           : {
@@ -313,6 +321,43 @@ describe('vertical slice orchestration', () => {
     expect(resumed.complete).toBe(true)
     expect(resumed.completedChunks).toBe(2)
     expect(resumed.chunkTaskIds).toEqual(['distill:chunk:1'])
+  })
+
+  it('preserves validated candidate evidence and source revision in project checkpoints', async () => {
+    const gateway = makeGateway(new Set(), {
+      entities: [
+        {
+          kind: 'item',
+          name: '青铜鼎',
+          sourceDocumentId: 'd2',
+          evidence: '章节 2',
+        },
+      ],
+    })
+    const workflow = new ProjectDistillationWorkflow(
+      new CreativeIntelligence(gateway, { artifactStore: createMemoryArtifactStore() }),
+    )
+
+    const result = await workflow.run(
+      { taskId: 'distill-evidence', workspaceId: 'test-ws', documents },
+      { chunkSize: 2, pollIntervalMs: 0 },
+    )
+
+    expect(result.facts.entities[0]).toMatchObject({
+      sourceDocumentId: 'd2',
+      sourceBlockId: 'd2-block',
+      sourceRevision: 2,
+      evidence: [
+        {
+          documentId: 'd2',
+          blockId: 'd2-block',
+          excerpt: '章节 2',
+          semanticFrom: 0,
+          semanticTo: 4,
+        },
+      ],
+    })
+    expect(result.checkpoint.facts.entities[0]).toEqual(result.facts.entities[0])
   })
 
   it('rejects invalid distillation chunk sizes before submitting work', async () => {

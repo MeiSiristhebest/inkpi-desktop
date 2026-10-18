@@ -1,14 +1,10 @@
 import type { ChamberStatus, IronChamberRecord, LockProgress } from '../types'
 
-/**
- * IronChamberEngine (黑曜石小黑屋锁定器引擎)
- *
- * 理论基础：心流承诺契约模型 (Flow Commitment Contract) 与不可逆有限状态机 (FSM)
- * - 状态机：IDLE -> LOCKED -> COMPLETED / EMERGENCY_ABORT
- * - 防刷字数判别：基于有效正文编辑计算 deltaWords，过滤暴力批量粘贴
- * - 倒计时与字数达成判定
- */
+/** Counts chapter length changes and elapsed time. It cannot classify editing intent. */
 export class IronChamberEngine {
+  public static countCharacters(text: string): number {
+    return Array.from(text.replace(/\s/g, '')).length
+  }
   /**
    * 计算当前任务达成进度
    */
@@ -17,6 +13,33 @@ export class IronChamberEngine {
     currentWordCount: number,
     nowMs: number,
   ): LockProgress {
+    const nonnegativeInteger = (value: number) => Number.isSafeInteger(value) && value >= 0
+    const valid =
+      ['words', 'minutes', 'dual'].includes(record.mode) &&
+      [
+        record.startWords,
+        record.targetWords,
+        record.targetMinutes,
+        currentWordCount,
+        record.pledgedAt,
+        nowMs,
+      ].every(nonnegativeInteger) &&
+      nowMs >= record.pledgedAt &&
+      (record.mode === 'minutes' || record.targetWords > 0) &&
+      (record.mode === 'words' || record.targetMinutes > 0) &&
+      Number.isSafeInteger(record.targetMinutes * 60)
+    if (!valid)
+      return {
+        valid: false,
+        error: '目标、计数或时间无效，未判定达标；仍可自愿结束。',
+        deltaWords: 0,
+        targetWords: 0,
+        elapsedSeconds: 0,
+        targetSeconds: 0,
+        wordsPercentage: 0,
+        timePercentage: 0,
+        isFulfilled: false,
+      }
     const deltaWords = Math.max(0, currentWordCount - record.startWords)
     const elapsedSeconds = Math.max(0, Math.floor((nowMs - record.pledgedAt) / 1000))
     const targetSeconds = record.targetMinutes * 60
@@ -39,6 +62,7 @@ export class IronChamberEngine {
     }
 
     return {
+      valid: true,
       deltaWords,
       targetWords: record.targetWords,
       elapsedSeconds,
@@ -70,28 +94,21 @@ export class IronChamberEngine {
       return {
         nextStatus: 'completed',
         canUnlock: true,
-        message: '恭喜！契约目标已圆满达成，小黑屋门禁已安全解除。',
+        message: '目标已达成，可以保存为完成。',
       }
     }
 
     return {
       nextStatus: 'locked',
       canUnlock: false,
-      message: `尚未达成契约目标！还需编写 ${Math.max(0, record.targetWords - progress.deltaWords)} 字或坚持 ${Math.max(0, Math.ceil((record.targetMinutes * 60 - progress.elapsedSeconds) / 60))} 分钟。`,
+      message: progress.error ?? '尚未达成所选目标；可以继续，也可以自愿结束。',
     }
   }
 
   /**
-   * 紧急脱逃反思验证：必须提交反思原因，防止轻易放弃
+   * Voluntary termination does not require an explanation.
    */
-  public static validateEmergencyAbort(reason: string): { valid: boolean; error?: string } {
-    const trimmed = reason.trim()
-    if (trimmed.length < 15) {
-      return {
-        valid: false,
-        error: '紧急脱逃反思说明不得少于15字，请如实记录被迫中断创作的原因与代价。',
-      }
-    }
+  public static validateEmergencyAbort(_reason: string): { valid: boolean; error?: string } {
     return { valid: true }
   }
 }

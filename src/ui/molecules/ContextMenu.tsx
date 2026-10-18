@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, type ReactNode } from 'react'
+import { useOverlayDismiss } from '../useOverlayFocus'
 
 export interface ContextMenuItem {
   key: string
@@ -49,6 +50,7 @@ interface ContextMenuProps {
  *   - Enter / Space activates the focused item
  *   - Esc closes the menu
  *   - First item gains focus on open
+ *   - Closing returns focus to the element that opened the menu
  */
 export const ContextMenu = ({
   items,
@@ -58,9 +60,47 @@ export const ContextMenu = ({
   ariaLabel = '选项菜单',
   onClose,
 }: ContextMenuProps) => {
-  const [focusedIndex, setFocusedIndex] = useState(-1)
+  const [focusedIndex, setFocusedIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const focusedIndexRef = useRef(0)
+  useOverlayDismiss({ active: true, onClose: () => onClose?.() })
+
+  useLayoutEffect(() => {
+    const updatePlacement = () => {
+      const menu = containerRef.current
+      if (!menu) return
+
+      const margin = 8
+      const gap = 8
+      const anchor = menu.parentElement?.getBoundingClientRect()
+      let menuRect = menu.getBoundingClientRect()
+      const maxHeight = Math.max(margin * 2, window.innerHeight - margin * 2)
+      if (menuRect.height > maxHeight) {
+        menu.style.maxHeight = `${maxHeight}px`
+        menu.style.overflowY = 'auto'
+        menuRect = menu.getBoundingClientRect()
+      }
+
+      const requestedLeft = position?.x ?? (anchor ? anchor.right - menuRect.width : menuRect.left)
+      let requestedTop = position?.y ?? (anchor ? anchor.bottom + gap : menuRect.top)
+      if (!position && anchor && requestedTop + menuRect.height > window.innerHeight - margin) {
+        requestedTop = anchor.top - menuRect.height - gap
+      }
+
+      const maxLeft = Math.max(margin, window.innerWidth - menuRect.width - margin)
+      const maxTop = Math.max(margin, window.innerHeight - menuRect.height - margin)
+      menu.style.left = `${Math.min(Math.max(requestedLeft, margin), maxLeft)}px`
+      menu.style.top = `${Math.min(Math.max(requestedTop, margin), maxTop)}px`
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    document.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      window.removeEventListener('resize', updatePlacement)
+      document.removeEventListener('scroll', updatePlacement, true)
+    }
+  }, [position])
 
   // Keep ref in sync with state for keyboard handlers
   useEffect(() => {
@@ -69,7 +109,10 @@ export const ContextMenu = ({
 
   // Focus first item on mount
   useEffect(() => {
-    setFocusedIndex(0)
+    const returnTo =
+      document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+        ? document.activeElement
+        : null
     focusedIndexRef.current = 0
     const buttons = containerRef.current?.querySelectorAll<HTMLElement>('button') ?? []
     buttons.forEach((btn, idx) => {
@@ -78,20 +121,11 @@ export const ContextMenu = ({
     const firstBtn = buttons[0]
     firstBtn?.focus()
 
-    // Listen for Escape at window level so it works even if container loses focus
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose?.()
-      }
-    }
-    window.addEventListener('keydown', handleEsc)
     return () => {
-      window.removeEventListener('keydown', handleEsc)
-      setFocusedIndex(-1)
       focusedIndexRef.current = -1
+      if (returnTo?.isConnected) returnTo.focus({ preventScroll: true })
     }
-  }, [onClose])
+  }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const buttons = Array.from(containerRef.current?.querySelectorAll<HTMLElement>('button') ?? [])
@@ -161,10 +195,8 @@ export const ContextMenu = ({
       ref={containerRef}
       role="menu"
       aria-label={ariaLabel}
-      className={`z-50 ${widthClass} py-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12.5px] ${
-        position ? 'fixed' : 'absolute right-0 top-8'
-      }`}
-      style={position ? { left: position.x, top: position.y } : undefined}
+      className={`fixed z-50 ${widthClass} py-1.5 rounded-xl bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] shadow-[var(--ink-shadow)] text-[12.5px]`}
+      style={{ left: position?.x ?? 0, top: position?.y ?? 0 }}
       onKeyDown={handleKeyDown}
     >
       {header && (

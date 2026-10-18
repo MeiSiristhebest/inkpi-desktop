@@ -1,126 +1,93 @@
 import * as Diff from 'diff'
 import type { ScrapbookFragmentRecord, ScrapRecommendation } from '../types'
 
-/**
- * ScrapbookEngine (废稿灵感碎纸机回收站引擎)
- *
- * 理论基础：
- * 1. 差异删除捕获：监控文本流变更，当且仅当删除文本块长度 >= 15 字时，自动萃取为灵感切片
- * 2. TF-IDF + Cosine 余弦相似度：离线计算光标上下文与废稿片段的语义共鸣度，支持“一键还魂”
- */
 export class ScrapbookEngine {
-  /**
-   * 从旧文本与新文本的差异中萃取被删除的废稿片段 (字数 >= 15)
-   */
-  public static extractDeletedFragments(
+  static extractDeletedFragments(
     oldText: string,
     newText: string,
     sourceChapterId?: string,
     sourceChapterTitle?: string,
   ): Array<Omit<ScrapbookFragmentRecord, 'id' | 'projectId' | 'deletedAt'>> {
-    if (!oldText || oldText === newText) return []
-
-    const diffs = Diff.diffChars(oldText, newText)
     const fragments: Array<Omit<ScrapbookFragmentRecord, 'id' | 'projectId' | 'deletedAt'>> = []
-
-    for (const part of diffs) {
-      if (part.removed) {
-        const trimmed = part.value.trim()
-        if (trimmed.length >= 15) {
-          // 抽取前 3 个主要词作为 tag
-          const words = this.tokenize(trimmed)
-          const tags = words.slice(0, 4)
-
-          fragments.push({
-            sourceChapterId,
-            sourceChapterTitle,
-            snippet: trimmed,
-            wordCount: trimmed.length,
-            tags,
-            isReused: false,
-          })
-        }
-      }
+    let sourceOffset = 0
+    for (const part of Diff.diffChars(oldText, newText)) {
+      if (part.removed && part.value.trim())
+        fragments.push({
+          sourceChapterId,
+          sourceChapterTitle,
+          sourceOffset,
+          snippet: part.value,
+          wordCount: Array.from(part.value.replace(/\s/gu, '')).length,
+          tags: [...new Set(this.tokenize(part.value))].slice(0, 4),
+          isReused: false,
+        })
+      if (!part.added) sourceOffset += part.value.length
     }
-
     return fragments
   }
 
-  /**
-   * 纯前端分词切分 (简易中文 2-Gram 与标点停用词过滤)
-   */
-  public static tokenize(text: string): string[] {
-    const cleaned = text.replace(/[，。！？；、“”’（）《》\s\r\n]/g, ' ')
-    const rawTokens = cleaned.split(' ').filter((t) => t.length >= 2)
-    const grams: string[] = []
-
-    // 提取连续双字与原始词
-    rawTokens.forEach((tok) => {
-      grams.push(tok)
-      if (tok.length >= 4) {
-        for (let i = 0; i < tok.length - 1; i++) {
-          grams.push(tok.slice(i, i + 2))
-        }
-      }
-    })
-
-    return grams
+  static tokenize(text: string): string[] {
+    const tokens: string[] = []
+    for (const word of text.split(/[^\p{L}\p{N}]+/u).filter(Boolean)) {
+      tokens.push(word)
+      const characters = Array.from(word)
+      if (characters.length > 2)
+        for (let i = 0; i < characters.length - 1; i++)
+          tokens.push(characters[i] + characters[i + 1])
+    }
+    return tokens
   }
 
-  /**
-   * 基于 TF-IDF 思想与余弦相似度计算光标上下文与历史废稿的契合度
-   */
-  public static recommendFragments(
+  static recommendFragments(
     contextText: string,
     fragments: ScrapbookFragmentRecord[],
     topK = 5,
   ): ScrapRecommendation[] {
-    if (!contextText || fragments.length === 0) return []
-
-    const queryTokens = this.tokenize(contextText)
-    if (queryTokens.length === 0) return []
-
-    const queryFreq = new Map<string, number>()
-    queryTokens.forEach((t) => queryFreq.set(t, (queryFreq.get(t) || 0) + 1))
-
-    const recommendations: ScrapRecommendation[] = []
-
-    for (const frag of fragments) {
-      if (frag.isReused) continue
-
-      const fragTokens = this.tokenize(frag.snippet)
-      const fragFreq = new Map<string, number>()
-      fragTokens.forEach((t) => fragFreq.set(t, (fragFreq.get(t) || 0) + 1))
-
-      let dotProduct = 0
-      const matchedKeywords: string[] = []
-
-      queryFreq.forEach((qCount, word) => {
-        const fCount = fragFreq.get(word)
-        if (fCount) {
-          dotProduct += qCount * fCount
-          matchedKeywords.push(word)
-        }
-      })
-
-      // 计算模长
-      let normQ = 0
-      queryFreq.forEach((c) => (normQ += c * c))
-      let normF = 0
-      fragFreq.forEach((c) => (normF += c * c))
-
-      const similarity =
-        normQ > 0 && normF > 0 ? dotProduct / (Math.sqrt(normQ) * Math.sqrt(normF)) : 0
-
-      if (similarity > 0.05) {
-        recommendations.push({
-          fragment: frag,
-          similarityScore: Math.round(similarity * 100) / 100,
-          matchedKeywords,
-        })
-      }
+    if (!Number.isInteger(topK) || topK < 0) throw new Error('检索数量必须为非负整数。')
+    if (topK === 0 || !contextText.trim()) return []
+    const available = fragments.filter((f) => !f.isReused)
+    const docs = available.map((f) => this.tokenize(f.snippet))
+    const query = this.tokenize(contextText)
+    if (!query.length) return []
+    const frequency = new Map<string, number>()
+    for (const doc of docs)
+      for (const word of new Set(doc)) frequency.set(word, (frequency.get(word) ?? 0) + 1)
+    const vector = (tokens: string[]) => {
+      const result = new Map<string, number>()
+      for (const word of tokens) result.set(word, (result.get(word) ?? 0) + 1)
+      for (const [word, count] of result)
+        result.set(
+          word,
+          count * (1 + Math.log((docs.length + 1) / ((frequency.get(word) ?? 0) + 1))),
+        )
+      return result
     }
-
-    return recommendations.sort((a, b) => b.similarityScore - a.similarityScore).slice(0, topK)
+    const queryVector = vector(query)
+    const norm = (v: Map<string, number>) =>
+      Math.sqrt([...v.values()].reduce((sum, x) => sum + x * x, 0))
+    const qNorm = norm(queryVector)
+    const results: ScrapRecommendation[] = []
+    available.forEach((fragment, i) => {
+      const docVector = vector(docs[i])
+      const matchedKeywords = [...queryVector.keys()].filter((word) => docVector.has(word))
+      const dot = matchedKeywords.reduce(
+        (sum, word) => sum + queryVector.get(word)! * docVector.get(word)!,
+        0,
+      )
+      const denominator = qNorm * norm(docVector)
+      if (dot > 0 && denominator > 0)
+        results.push({
+          fragment,
+          similarityScore: Math.min(1, dot / denominator),
+          matchedKeywords,
+          rankingMethod: 'literal-tfidf',
+        })
+    })
+    return results
+      .sort(
+        (a, b) =>
+          b.similarityScore - a.similarityScore || a.fragment.id.localeCompare(b.fragment.id),
+      )
+      .slice(0, topK)
   }
 }

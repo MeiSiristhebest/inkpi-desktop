@@ -11,8 +11,10 @@ export interface FactionDiplomacyRecord {
   factionBId: string
   factionBName: string
   stance: FactionStance
-  reputationScore: number // -100 到 +100
+  reputationScore?: number // -100 到 +100
   notes?: string
+  rippleCoefficient?: number
+  rippleRationale?: string
   updatedAt: number
   provenance?: Provenance
 }

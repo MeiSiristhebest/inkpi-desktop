@@ -1,370 +1,357 @@
-import { useState, useMemo, type FC } from 'react'
+import { useEffect, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { NameCategory, NameStyle, GeneratedNameItem } from '../types'
 import { nameForgeEngine } from '../engine/NameForgeEngine'
+import { PhoneticsEvaluator } from '../engine/PhoneticsEvaluator'
+import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { codexApplicationService } from '../../../services/domainApplicationServices'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { Select } from '../../../ui/primitives'
 import type { CodexCategory } from '../../living-codex/types'
-import {
-  User,
-  Globe2,
-  Shield,
-  Zap,
-  Sword,
-  Compass,
-  Copy,
-  Check,
-  BookmarkPlus,
-  BookmarkCheck,
-  RefreshCw,
-} from 'lucide-react'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select, Tooltip } from '../../../ui/primitives'
-
-const CATEGORY_TABS: { id: NameCategory; label: string; icon: typeof User }[] = [
-  { id: 'character_cn', label: '修仙东方人名', icon: User },
-  { id: 'character_western', label: '西方史诗奇幻', icon: Globe2 },
-  { id: 'sect_faction', label: '宗门帮派势力', icon: Shield },
-  { id: 'technique_spell', label: '功法神通秘典', icon: Zap },
-  { id: 'item_artifact', label: '法宝神兵灵物', icon: Sword },
-  { id: 'location_realm', label: '秘境禁地地理', icon: Compass },
-]
-
-const STYLE_OPTIONS: { id: NameStyle; label: string }[] = [
-  { id: 'balanced', label: '平正均衡' },
-  { id: 'cold_sharp', label: '冷峻肃杀' },
-  { id: 'domineering', label: '霸道狂傲' },
-  { id: 'ethereal', label: '飘逸出尘' },
-  { id: 'demonic', label: '邪魅诡异' },
-  { id: 'elegant', label: '古雅温润' },
-]
-
-export const NameForgeView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const [selectedCategory, setSelectedCategory] = useState<NameCategory>('character_cn')
-  const [selectedStyle, setSelectedStyle] = useState<NameStyle>('balanced')
-  const [fixedPrefix, setFixedPrefix] = useState('')
-  const [fixedKern, setFixedKern] = useState('')
+const CATEGORIES: Record<NameCategory, string> = {
+  character_cn: '东方人名',
+  character_western: '西式词库人名',
+  sect_faction: '组织势力',
+  technique_spell: '能力与术式',
+  item_artifact: '物品',
+  location_realm: '地点',
+}
+const STYLES: Record<NameStyle, string> = {
+  balanced: '全部词库',
+  cold_sharp: '冷峻词库',
+  domineering: '强势词库',
+  ethereal: '轻灵词库',
+  demonic: '幽暗词库',
+  elegant: '文雅词库',
+}
+export const NameForgeView: FC<DesktopPluginViewProps> = (props) => (
+  <NamingWorkspace key={props.projectId} {...props} />
+)
+function NamingWorkspace({ projectId }: DesktopPluginViewProps) {
+  const [category, setCategory] = useState<NameCategory>('character_cn')
+  const [style, setStyle] = useState<NameStyle>('balanced')
   const [gender, setGender] = useState<'male' | 'female' | 'neutral'>('neutral')
-  const [count, setCount] = useState<number>(10)
-
-  // 结果列表与操作反馈
-  const [results, setResults] = useState<GeneratedNameItem[]>(() =>
-    nameForgeEngine.generateNames({ category: 'character_cn', count: 10, style: 'balanced' }),
-  )
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
-
-  const handleGenerate = () => {
-    const list = nameForgeEngine.generateNames({
-      category: selectedCategory,
-      style: selectedStyle,
-      count,
-      fixedPrefix: fixedPrefix.trim() || undefined,
-      fixedKern: fixedKern.trim() || undefined,
-      gender,
-    })
-    setResults(list)
-    setSavedIds(new Set())
-  }
-
-  const handleCopy = async (item: GeneratedNameItem) => {
+  const [prefix, setPrefix] = useState('')
+  const [core, setCore] = useState('')
+  const [count, setCount] = useState('10')
+  const [min, setMin] = useState('1')
+  const [max, setMax] = useState('12')
+  const [excluded, setExcluded] = useState('')
+  const [forbidden, setForbidden] = useState('')
+  const [existing, setExisting] = useState<string[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [reload, setReload] = useState(0)
+  const [generation, setGeneration] = useState<{
+    scope: string
+    items: GeneratedNameItem[]
+  } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [savedNames, setSavedNames] = useState<Set<string>>(new Set())
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [nameToRead, setNameToRead] = useState('')
+  const [readings, setReadings] = useState('')
+  const scope = JSON.stringify([
+    projectId,
+    category,
+    style,
+    gender,
+    prefix,
+    core,
+    count,
+    min,
+    max,
+    excluded,
+    forbidden,
+  ])
+  const items = generation?.scope === scope ? generation.items : []
+  useEffect(() => {
+    let disposed = false
+    setLoaded(false)
+    indexedDbCodexEntityRepository
+      .getAll()
+      .then((entities) => {
+        if (disposed) return
+        setExisting(
+          entities
+            .filter((e) => e.projectId === projectId)
+            .flatMap((e) => [e.name, ...(e.aliases ?? [])]),
+        )
+        setLoaded(true)
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
+    }
+  }, [projectId, reload])
+  const generate = () => {
+    setError('')
+    setMessage('')
     try {
-      await clipboardWriter.writeText(item.name)
-      setCopiedId(item.id)
-      setTimeout(() => setCopiedId(null), 1500)
-    } catch (e) {
-      console.error('Failed to copy name:', e)
+      if (count === '' || min === '' || max === '') throw new Error('填写候选数量和长度范围。')
+      const results = nameForgeEngine.generateNames({
+        category,
+        style,
+        gender,
+        count: Number(count),
+        minLength: Number(min),
+        maxLength: Number(max),
+        fixedPrefix: prefix.trim() || undefined,
+        fixedKern: core.trim() || undefined,
+        excludedNames: [
+          ...existing,
+          ...excluded
+            .split(/[\n,，]+/)
+            .map((s) => s.trim())
+            .filter(Boolean),
+        ],
+        forbiddenFragments: forbidden
+          .split(/[\n,，]+/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      })
+      setGeneration({ scope, items: results })
+      setMessage(
+        '请求 ' + count + ' 条，得到 ' + results.length + ' 条不同候选；约束或重复可能限制数量。',
+      )
+    } catch (cause) {
+      setGeneration(null)
+      setError(String(cause))
     }
   }
-
-  const handleSaveToCodex = async (item: GeneratedNameItem) => {
-    if (savedIds.has(item.id)) return
-    if (!projectId || !projectId.trim()) {
-      console.error('Cannot save to living codex: missing required projectId')
-      return
-    }
-
-    let codexCategory: CodexCategory = 'character'
-    if (item.category === 'sect_faction') codexCategory = 'faction'
-    else if (item.category === 'technique_spell' || item.category === 'item_artifact')
-      codexCategory = 'item'
-    else if (item.category === 'location_realm') codexCategory = 'location'
-
-    const now = clock.now()
-    const entity = {
-      id: idGenerator.generate('codex'),
-      projectId,
-      name: item.name,
-      aliases: [],
-      category: codexCategory,
-      attributes: {
-        style: item.style,
-        phoneticsScore: item.phoneticsScore,
-      },
-      relations: [],
-      summary: item.meaningOrVibe,
-      detailMarkdown: `### 设定简述\n${item.meaningOrVibe}\n\n*由中西奇幻起名姬（Name Forge）智能熔铸生成。*`,
-      createdAt: now,
-      updatedAt: now,
-    }
-
+  const save = async (item: GeneratedNameItem) => {
+    setSaving(true)
+    setError('')
+    setMessage('')
     try {
-      await codexApplicationService.saveEntity(entity, 'author-confirmed')
-      setSavedIds((prev) => new Set([...prev, item.id]))
-    } catch (e) {
-      console.error('Failed to save to living codex:', e)
+      if (!projectId.trim()) throw new Error('选择实际作品后才能收录。')
+      const fresh = await indexedDbCodexEntityRepository.getAll()
+      if (
+        fresh.some(
+          (e) =>
+            e.projectId === projectId && (e.name === item.name || e.aliases?.includes(item.name)),
+        )
+      )
+        throw new Error('该名称或别名已存在，未重复收录。')
+      const category: CodexCategory =
+        item.category === 'sect_faction'
+          ? 'faction'
+          : item.category === 'location_realm'
+            ? 'location'
+            : item.category === 'technique_spell' || item.category === 'item_artifact'
+              ? 'item'
+              : 'character'
+      if (nameToRead === item.name && readingError) throw new Error(readingError)
+      const now = clock.now()
+      await codexApplicationService.saveEntity(
+        {
+          id: idGenerator.generate('codex'),
+          projectId,
+          name: item.name,
+          aliases: [],
+          category,
+          attributes: {
+            namingStyle: item.style,
+            ...(nameToRead === item.name && phonetics ? { authorReadingTones: readings } : {}),
+          },
+          relations: [],
+          summary: '',
+          detailMarkdown: '',
+          createdAt: now,
+          updatedAt: now,
+        },
+        'author-confirmed',
+      )
+      setSavedNames((previous) => new Set([...previous, item.name]))
+      setExisting((previous) => [...previous, item.name])
+      setMessage('已收录名称草案；人物背景和设定尚待作者填写。')
+    } catch (cause) {
+      setError(String(cause))
+    } finally {
+      setSaving(false)
     }
   }
-
-  const currentCategoryInfo = useMemo(
-    () => CATEGORY_TABS.find((t) => t.id === selectedCategory) || CATEGORY_TABS[0],
-    [selectedCategory],
-  )
-
+  let phonetics: ReturnType<typeof PhoneticsEvaluator.evaluatePhonetics> | null = null,
+    readingError = ''
+  if (nameToRead && readings.trim()) {
+    try {
+      const tones = readings
+        .trim()
+        .split(/[\s,，]+/)
+        .map((value) => {
+          if (value === '?') return null
+          if (!/^[0-4]$/.test(value)) throw new Error('声调只接受 1 至 4；未知或轻声用 0、?。')
+          return Number(value)
+        })
+      phonetics = PhoneticsEvaluator.evaluatePhonetics(nameToRead, tones)
+    } catch (cause) {
+      readingError = String(cause)
+    }
+  }
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
-      {/* 顶栏：标题与能力说明 */}
-      <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 space-y-3">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold tracking-tight">中西奇幻起名姬</h2>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--ink-accent)]/15 text-[var(--ink-accent)] font-medium">
-                CFG 文法 · 平仄音韵
-              </span>
-            </div>
-            <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-              规避死板字词拼接，结合汉语平仄音律与经典奇幻文法，一键联动 Living Codex 活体世界观
-            </p>
-            <ScoreProvenanceBadge source="rule" detail="按声调与用字规则打分" />
-          </div>
-
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>作者约束命名</h2>
+      <p>
+        候选按词库片段组合；字义、文化背景和读音尚未校核。收录只写入名称草案，不生成角色历史或能力。
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      {!loaded && <p>作品名称尚未读取；可重试后生成，避免遗漏已登记名称。</p>}
+      <button onClick={() => setReload((n) => n + 1)}>重新读取作品名称</button>
+      <Select
+        aria-label="命名类别"
+        value={category}
+        onValueChange={(value) => setCategory(value as NameCategory)}
+      >
+        {Object.entries(CATEGORIES).map(([id, label]) => (
+          <option key={id} value={id}>
+            {label}
+          </option>
+        ))}
+      </Select>
+      <Select
+        aria-label="命名词库风格"
+        value={style}
+        onValueChange={(value) => setStyle(value as NameStyle)}
+      >
+        {Object.entries(STYLES).map(([id, label]) => (
+          <option key={id} value={id}>
+            {label}
+          </option>
+        ))}
+      </Select>
+      {category === 'character_western' && (
+        <Select
+          aria-label="西式人名词库"
+          value={gender}
+          onValueChange={(v) => setGender(v as 'male' | 'female' | 'neutral')}
+        >
+          <option value="neutral">合并人名词库</option>
+          <option value="male">词库 A</option>
+          <option value="female">词库 B</option>
+        </Select>
+      )}
+      <input
+        aria-label="固定名称开头"
+        value={prefix}
+        onChange={(e) => setPrefix(e.target.value)}
+        placeholder="固定姓氏或开头片段"
+      />
+      <input
+        aria-label="固定名称核心"
+        value={core}
+        onChange={(e) => setCore(e.target.value)}
+        placeholder="必须保留的字辈或片段"
+      />
+      <label>
+        数量
+        <input
+          aria-label="候选数量"
+          type="number"
+          min="0"
+          max="100"
+          value={count}
+          onChange={(e) => setCount(e.target.value)}
+        />
+      </label>
+      <label>
+        最短
+        <input
+          aria-label="名称最短长度"
+          type="number"
+          min="1"
+          value={min}
+          onChange={(e) => setMin(e.target.value)}
+        />
+      </label>
+      <label>
+        最长
+        <input
+          aria-label="名称最长长度"
+          type="number"
+          min="1"
+          max="80"
+          value={max}
+          onChange={(e) => setMax(e.target.value)}
+        />
+      </label>
+      <textarea
+        aria-label="排除的完整名称"
+        value={excluded}
+        onChange={(e) => setExcluded(e.target.value)}
+        placeholder="完整名称，逗号或换行分隔"
+      />
+      <textarea
+        aria-label="禁用名称片段"
+        value={forbidden}
+        onChange={(e) => setForbidden(e.target.value)}
+        placeholder="不允许出现的片段，逗号或换行分隔"
+      />
+      <button disabled={!loaded} onClick={generate}>
+        生成约束内候选
+      </button>
+      {!items.length && <p>当前没有候选；调整条件后生成。</p>}
+      {items.map((item) => (
+        <article key={item.id} className="border rounded p-3 space-y-2">
+          <h3>{item.name}</h3>
+          <p>{item.meaningOrVibe}</p>
           <button
-            onClick={handleGenerate}
-            className="px-4 py-2 rounded-xl bg-[var(--ink-accent)] text-white text-xs font-semibold hover:opacity-90 flex items-center gap-1.5 shadow-sm transition-all"
+            onClick={async () => {
+              setError('')
+              setMessage('')
+              try {
+                await clipboardWriter.writeText(item.name)
+                setMessage('已复制名称。')
+              } catch (cause) {
+                setError(String(cause))
+              }
+            }}
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>重新熔铸锻名</span>
+            复制名称
           </button>
-        </div>
-
-        {/* 类别分类 Tab */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pt-1">
-          {CATEGORY_TABS.map((tab) => {
-            const Icon = tab.icon
-            const isSelected = selectedCategory === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setSelectedCategory(tab.id)
-                  // 切换类别时自动生成一批对应名称
-                  const list = nameForgeEngine.generateNames({
-                    category: tab.id,
-                    style: selectedStyle,
-                    count,
-                    fixedPrefix: fixedPrefix.trim() || undefined,
-                    fixedKern: fixedKern.trim() || undefined,
-                    gender,
-                  })
-                  setResults(list)
-                  setSavedIds(new Set())
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 border transition-all ${
-                  isSelected
-                    ? 'border-[var(--ink-accent)] bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] font-semibold shadow-xs'
-                    : 'border-transparent hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* 控制台参数微调 */}
-        <div className="flex flex-wrap items-center gap-3 p-2.5 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/50 text-xs">
-          {/* 风格选择 */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[var(--ink-text-muted)] text-[11px]">风格：</span>
-            <div className="flex items-center gap-1">
-              {STYLE_OPTIONS.map((st) => (
-                <button
-                  key={st.id}
-                  onClick={() => setSelectedStyle(st.id)}
-                  className={`px-2 py-1 rounded text-[11px] transition-colors ${
-                    selectedStyle === st.id
-                      ? 'bg-[var(--ink-accent)] text-white font-medium'
-                      : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]'
-                  }`}
-                >
-                  {st.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="h-4 w-px bg-[var(--ink-border)]" />
-
-          {/* 前缀/姓氏固定 */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[var(--ink-text-muted)] text-[11px]">固定姓氏/前缀：</span>
-            <input
-              type="text"
-              value={fixedPrefix}
-              onChange={(e) => setFixedPrefix(e.target.value)}
-              placeholder="如 楚 / 姬 / 太玄"
-              className="w-24 px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-            />
-          </div>
-
-          {/* 字辈/核心字固定 */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[var(--ink-text-muted)] text-[11px]">字辈/核心意象：</span>
-            <input
-              type="text"
-              value={fixedKern}
-              onChange={(e) => setFixedKern(e.target.value)}
-              placeholder="如 云 / 雷 / 剑"
-              className="w-24 px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-            />
-          </div>
-
-          {/* 性别（西幻专用） */}
-          {selectedCategory === 'character_western' && (
-            <>
-              <div className="h-4 w-px bg-[var(--ink-border)]" />
-              <div className="flex items-center gap-1">
-                <span className="text-[var(--ink-text-muted)] text-[11px]">性别：</span>
-                <Select
-                  value={gender}
-                  onValueChange={(v) => setGender(v as 'male' | 'female' | 'neutral')}
-                  size="sm"
-                >
-                  <option value="neutral">随机混搭</option>
-                  <option value="male">男性氏族</option>
-                  <option value="female">女性法师/贵族</option>
-                </Select>
-              </div>
-            </>
-          )}
-
-          {/* 数量 */}
-          <div className="flex items-center gap-1 ml-auto">
-            <span className="text-[var(--ink-text-muted)] text-[11px]">批次：</span>
-            <Select value={count} onValueChange={(v) => setCount(Number(v))} size="sm">
-              <option value={5}>5 条</option>
-              <option value={10}>10 条</option>
-              <option value={20}>20 条</option>
-            </Select>
-          </div>
-        </div>
-      </div>
-
-      {/* 熔铸结果展示区 */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="flex items-center justify-between text-xs text-[var(--ink-text-muted)] mb-4">
-          <div className="flex items-center gap-2">
-            <span>当前熔铸品类：{currentCategoryInfo.label}</span>
-            <span>·</span>
-            <span>本次生成 {results.length} 个候选命名</span>
-          </div>
-          <span className="text-[11px]">点击「收录至图谱」可直通 Living Codex 世界观图谱</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {results.map((item) => {
-            const isCopied = copiedId === item.id
-            const isSaved = savedIds.has(item.id)
-
-            return (
-              <div
-                key={item.id}
-                className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex flex-col justify-between hover:border-[var(--ink-accent)]/50 transition-all group"
-              >
-                <div className="space-y-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-base font-bold text-[var(--ink-text)] tracking-tight">
-                        {item.name}
-                      </h3>
-                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-[var(--ink-text-muted)]">
-                        {item.parts.prefix && <span>前缀: {item.parts.prefix}</span>}
-                        <span>核心: {item.parts.core}</span>
-                        {item.parts.suffix && <span>形制: {item.parts.suffix}</span>}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
-                        音律 {item.phoneticsScore}
-                      </span>
-                      <span className="text-[9px] text-[var(--ink-text-faint)]">
-                        {STYLE_OPTIONS.find((s) => s.id === item.style)?.label}
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-[var(--ink-text-muted)] leading-relaxed bg-[var(--ink-bg-canvas)] p-2.5 rounded-lg border border-[var(--ink-border)]/50">
-                    {item.meaningOrVibe}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-[var(--ink-border)]/40 text-xs">
-                  <Tooltip content="收录至活体世界观图谱">
-                    <button
-                      onClick={() => handleSaveToCodex(item)}
-                      className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 transition-colors ${
-                        isSaved
-                          ? 'bg-emerald-500/20 text-emerald-500 font-medium'
-                          : 'bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] hover:text-[var(--ink-accent)]'
-                      }`}
-                    >
-                      {isSaved ? (
-                        <>
-                          <BookmarkCheck className="w-3.5 h-3.5" />
-                          <span>已收录图谱</span>
-                        </>
-                      ) : (
-                        <>
-                          <BookmarkPlus className="w-3.5 h-3.5" />
-                          <span>收录至图谱</span>
-                        </>
-                      )}
-                    </button>
-                  </Tooltip>
-
-                  <Tooltip content="复制名称">
-                    <button
-                      onClick={() => handleCopy(item)}
-                      className={`p-1.5 rounded-lg flex items-center gap-1 transition-colors ${
-                        isCopied
-                          ? 'bg-emerald-500/20 text-emerald-500 font-semibold'
-                          : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] group-hover:text-[var(--ink-text)]'
-                      }`}
-                    >
-                      {isCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span className="text-[11px]">已复制</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span className="text-[11px]">复制</span>
-                        </>
-                      )}
-                    </button>
-                  </Tooltip>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+          <button disabled={saving || savedNames.has(item.name)} onClick={() => save(item)}>
+            {savedNames.has(item.name) ? '已收录' : '收录名称草案'}
+          </button>
+          <button
+            onClick={() => {
+              setNameToRead(item.name)
+              setReadings('')
+            }}
+          >
+            填写此名读音
+          </button>
+        </article>
+      ))}
+      <h3>作者读音核对</h3>
+      <input
+        aria-label="待记录读音的名称"
+        value={nameToRead}
+        onChange={(e) => {
+          setNameToRead(e.target.value)
+          setReadings('')
+        }}
+      />
+      <input
+        aria-label="作者提供的声调"
+        value={readings}
+        onChange={(e) => setReadings(e.target.value)}
+        placeholder="每个字符对应一个现代声调；用空格分隔"
+      />
+      <p>
+        只按作者提供的现代声调分组；多音字须按实际名字的读法填写，轻声与缺失读音不归入平仄。不判断名字美感。
+      </p>
+      {readingError && <p role="alert">{readingError}</p>}
+      {phonetics && (
+        <p>
+          已提供 {phonetics.knownToneCount}/{phonetics.totalCharacters} 个字符读音；分组{' '}
+          {phonetics.pattern}；严格交替：
+          {phonetics.isAlternating === null ? '未知' : phonetics.isAlternating ? '是' : '否'}。
+        </p>
+      )}
     </div>
   )
 }

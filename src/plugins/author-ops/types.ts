@@ -8,4 +8,8 @@ export interface RetentionDropAnalysis {
   isSevereCliff: boolean
   probableReason: string
   recommendedCounterAction: string
+  previousChapter?: number
+  period?: string
+  cohort?: string
+  metricDefinition?: string
 }

@@ -17,7 +17,9 @@ export interface CycleBeatStatus {
 export interface StagnationReport {
   isStagnant: boolean
   stagnantChapters: number
-  pacingPacingScore: number // 0 - 100 节奏健康度
+  sampleCount: number
+  averageCharacters: number | null
+  coefficientOfVariation: number | null
   diagnostic: string
   remedyAction: string
 }

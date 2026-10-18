@@ -31,6 +31,8 @@ export interface ProjectLibrary {
   createDemo: () => Promise<void>
   /** 完整工作区备份（含设定/时间线/插件/AI 数据） */
   exportProject: (id: string) => Promise<void>
+  exportError: string | null
+  dismissExportError: () => void
   /** 纯正文导出，不含任何中间状态 */
   exportManuscript: (id: string) => Promise<void>
   updateProject: (project: ProjectRecord) => Promise<void>
@@ -46,6 +48,7 @@ export function useProjectLibrary(): ProjectLibrary {
   const [projects, setProjects] = useState<ProjectRecord[]>([])
   const [archivedProjects, setArchivedProjects] = useState<ProjectRecord[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   useEffect(() => {
     loadProjects().then((list) => setProjects(list))
@@ -65,7 +68,7 @@ export function useProjectLibrary(): ProjectLibrary {
 
   const handleImportProject = useCallback(async (file: File) => {
     const result = await importProject(file)
-    if (!result.ok) return
+    if (!result.ok) throw new Error(result.error)
     setProjects((prev) => [result.project, ...prev])
     setActiveProjectId(result.project.id)
   }, [])
@@ -77,7 +80,14 @@ export function useProjectLibrary(): ProjectLibrary {
   }, [])
 
   const handleExportProject = useCallback(async (id: string) => {
-    await exportProject(id)
+    setExportError(null)
+    try {
+      await exportProject(id)
+    } catch (error) {
+      console.warn('[InkPi Desktop] Workspace backup failed:', error)
+      const message = error instanceof Error ? error.message : String(error)
+      setExportError(`完整备份失败，未生成备份文件。${message}`)
+    }
   }, [])
 
   const handleExportManuscript = useCallback(async (id: string) => {
@@ -85,8 +95,8 @@ export function useProjectLibrary(): ProjectLibrary {
   }, [])
 
   const handleUpdateProject = useCallback(async (project: ProjectRecord) => {
-    await updateProject(project)
-    setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)))
+    const updated = await updateProject(project)
+    setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
   }, [])
 
   const handleDeleteProject = useCallback(
@@ -125,6 +135,8 @@ export function useProjectLibrary(): ProjectLibrary {
     importProject: handleImportProject,
     createDemo: handleCreateDemo,
     exportProject: handleExportProject,
+    exportError,
+    dismissExportError: () => setExportError(null),
     exportManuscript: handleExportManuscript,
     updateProject: handleUpdateProject,
     deleteProject: handleDeleteProject,

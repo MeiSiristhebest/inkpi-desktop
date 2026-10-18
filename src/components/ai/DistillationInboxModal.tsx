@@ -1,16 +1,26 @@
-import { useState, type FC, useId } from 'react'
+import { useState, type FC, useId, useRef } from 'react'
 import { Check, X, Edit2, AlertCircle, Quote, HelpCircle, GitMerge } from 'lucide-react'
 import { Modal } from '../../ui/molecules/Modal'
-import type { DistillationItem } from '../../ai/proposals/distillationReviewInbox'
+import type {
+  DistillationAcceptOverrides,
+  DistillationItem,
+} from '../../ai/proposals/distillationReviewInbox'
 import { Tooltip } from '../../ui/primitives'
+import type { ChapterRecord } from '../../types'
+import type {
+  SourceNavigationRequest,
+  SourceNavigationResult,
+} from '../../core/activeWritingContext'
 
 interface DistillationInboxModalProps {
   items: DistillationItem[]
-  onAccept: (itemId: string, overrides?: { name?: string; summary?: string }) => Promise<void>
+  onAccept: (itemId: string, overrides?: DistillationAcceptOverrides) => Promise<void>
   onKeepHypothesis?: (itemId: string) => Promise<void>
   onMerge?: (itemId: string) => Promise<void>
   onReject: (itemId: string) => void | Promise<void>
   onClose: () => void
+  sourceChapters?: readonly (Pick<ChapterRecord, 'id' | 'revision'> & { title?: string })[]
+  onOpenSource?: (request: SourceNavigationRequest) => Promise<SourceNavigationResult>
 }
 
 export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
@@ -20,12 +30,58 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
   onMerge,
   onReject,
   onClose,
+  sourceChapters,
+  onOpenSource,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editSummary, setEditSummary] = useState('')
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const actionInFlight = useRef(false)
+  const [actionError, setActionError] = useState<{ itemId: string; message: string } | null>(null)
+  const [chapterChoices, setChapterChoices] = useState<Record<string, string>>({})
+  const [sourceNavigationMessage, setSourceNavigationMessage] = useState<{
+    itemId: string
+    message: string
+  } | null>(null)
   const titleId = useId()
+
+  const handleOpenSource = async (itemId: string, request: SourceNavigationRequest) => {
+    if (!onOpenSource || actionInFlight.current) return
+    actionInFlight.current = true
+    setProcessingId(itemId)
+    setSourceNavigationMessage(null)
+    let closeAfterNavigation = false
+    try {
+      const result = await onOpenSource(request)
+      if (result.status === 'opened' && result.highlighted) {
+        closeAfterNavigation = true
+      } else if (result.status === 'opened') {
+        setSourceNavigationMessage({
+          itemId,
+          message: '已打开来源章节，但原文引用已变更或不唯一，请按下方摘录核对。',
+        })
+      } else if (result.status === 'save-blocked') {
+        setSourceNavigationMessage({
+          itemId,
+          message: '当前稿件未能保存，无法切换章节。请先处理保存提示。',
+        })
+      } else if (result.status === 'not-found') {
+        setSourceNavigationMessage({ itemId, message: '来源章节已不存在。' })
+      } else {
+        setSourceNavigationMessage({ itemId, message: '请先打开正文编辑器，再查看原文。' })
+      }
+    } catch {
+      setSourceNavigationMessage({ itemId, message: '打开来源章节失败，请重试。' })
+    } finally {
+      actionInFlight.current = false
+      if (!closeAfterNavigation) setProcessingId(null)
+    }
+    if (closeAfterNavigation) {
+      setProcessingId(null)
+      onClose()
+    }
+  }
 
   const handleStartEdit = (item: DistillationItem) => {
     setEditingId(item.id)
@@ -33,54 +89,57 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
     setEditSummary(item.summary)
   }
 
-  const handleSaveAndAccept = async (itemId: string) => {
+  const runReviewAction = async (
+    itemId: string,
+    label: string,
+    action: () => void | Promise<void>,
+  ) => {
+    if (actionInFlight.current) return false
+    actionInFlight.current = true
+    setActionError(null)
     try {
       setProcessingId(itemId)
-      await onAccept(itemId, {
+      await action()
+      return true
+    } catch (error) {
+      setActionError({
+        itemId,
+        message: `${label}失败：${error instanceof Error ? error.message : '操作未完成'}。请重试。`,
+      })
+      return false
+    } finally {
+      actionInFlight.current = false
+      setProcessingId(null)
+    }
+  }
+
+  const handleSaveAndAccept = async (itemId: string) => {
+    const succeeded = await runReviewAction(itemId, '采纳', () =>
+      onAccept(itemId, {
         name: editName.trim() || undefined,
         summary: editSummary.trim() || undefined,
-      })
-      setEditingId(null)
-    } catch (e) {
-      console.error('Failed to accept item:', e)
-    } finally {
-      setProcessingId(null)
-    }
+        ...(chapterChoices[itemId] ? { chapterId: chapterChoices[itemId] } : {}),
+      }),
+    )
+    if (succeeded) setEditingId(null)
   }
 
-  const handleDirectAccept = async (itemId: string) => {
-    try {
-      setProcessingId(itemId)
-      await onAccept(itemId)
-    } catch (e) {
-      console.error('Failed to accept item:', e)
-    } finally {
-      setProcessingId(null)
-    }
+  const handleDirectAccept = (itemId: string) => {
+    return runReviewAction(itemId, '采纳', () =>
+      chapterChoices[itemId]
+        ? onAccept(itemId, { chapterId: chapterChoices[itemId] })
+        : onAccept(itemId),
+    )
   }
 
-  const handleHypothesis = async (itemId: string) => {
+  const handleHypothesis = (itemId: string) => {
     if (!onKeepHypothesis) return
-    try {
-      setProcessingId(itemId)
-      await onKeepHypothesis(itemId)
-    } catch (e) {
-      console.error('Failed to keep hypothesis:', e)
-    } finally {
-      setProcessingId(null)
-    }
+    return runReviewAction(itemId, '保留推测', () => onKeepHypothesis(itemId))
   }
 
-  const handleMerge = async (itemId: string) => {
+  const handleMerge = (itemId: string) => {
     if (!onMerge) return
-    try {
-      setProcessingId(itemId)
-      await onMerge(itemId)
-    } catch (e) {
-      console.error('Failed to merge item:', e)
-    } finally {
-      setProcessingId(null)
-    }
+    return runReviewAction(itemId, '打开合并', () => onMerge(itemId))
   }
 
   return (
@@ -120,6 +179,35 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
           items.map((item) => {
             const isEditing = editingId === item.id
             const isProcessing = processingId === item.id
+            const isBusy = processingId !== null
+            const sourceDocumentId = item.sourceDocumentId ?? item.evidence?.[0]?.documentId
+            const sourceBlockId = item.sourceBlockId ?? item.evidence?.[0]?.blockId
+            const sourceEvidence =
+              item.evidence?.find((evidence) => evidence.documentId === sourceDocumentId) ??
+              item.evidence?.[0]
+            const sourceChapter = sourceChapters?.find((chapter) => chapter.id === sourceDocumentId)
+            const sourceIsMissing =
+              Boolean(sourceDocumentId) && Boolean(sourceChapters) && !sourceChapter
+            const sourceIsStale =
+              Boolean(sourceChapter) &&
+              item.sourceRevision !== undefined &&
+              item.sourceRevision !== (sourceChapter?.revision ?? 0)
+            const sourceNavigationRequest: SourceNavigationRequest | undefined = sourceDocumentId
+              ? {
+                  documentId: sourceDocumentId,
+                  ...(sourceBlockId ? { blockId: sourceBlockId } : {}),
+                  ...(item.sourceRevision !== undefined
+                    ? { sourceRevision: item.sourceRevision }
+                    : {}),
+                  ...(sourceEvidence?.excerpt ? { excerpt: sourceEvidence.excerpt } : {}),
+                  ...(sourceEvidence?.semanticFrom !== undefined
+                    ? { semanticFrom: sourceEvidence.semanticFrom }
+                    : {}),
+                  ...(sourceEvidence?.semanticTo !== undefined
+                    ? { semanticTo: sourceEvidence.semanticTo }
+                    : {}),
+                }
+              : undefined
 
             return (
               <div
@@ -145,6 +233,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                     {isEditing ? (
                       <div className="mt-2 space-y-2">
                         <input
+                          disabled={isBusy}
                           type="text"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
@@ -152,6 +241,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                           placeholder="设定名称"
                         />
                         <textarea
+                          disabled={isBusy}
                           value={editSummary}
                           onChange={(e) => setEditSummary(e.target.value)}
                           rows={2}
@@ -177,7 +267,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                       <>
                         <button
                           onClick={() => handleSaveAndAccept(item.id)}
-                          disabled={isProcessing}
+                          disabled={isBusy}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors disabled:opacity-50"
                         >
                           <Check className="w-3.5 h-3.5" />
@@ -185,6 +275,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                         </button>
                         <button
                           onClick={() => setEditingId(null)}
+                          disabled={isBusy}
                           className="px-2 py-1.5 rounded-lg text-[12px] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] transition-colors"
                         >
                           取消
@@ -195,6 +286,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                         <Tooltip content="编辑">
                           <button
                             onClick={() => handleStartEdit(item)}
+                            disabled={isBusy}
                             aria-label="编辑"
                             className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] hover:text-[var(--ink-text)] transition-colors"
                           >
@@ -205,7 +297,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                           <Tooltip content="保留为推测 (非正典)">
                             <button
                               onClick={() => void handleHypothesis(item.id)}
-                              disabled={isProcessing}
+                              disabled={isBusy}
                               aria-label="保留为推测"
                               className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
                             >
@@ -217,7 +309,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                           <Tooltip content="合并到已有实体">
                             <button
                               onClick={() => void handleMerge(item.id)}
-                              disabled={isProcessing}
+                              disabled={isBusy}
                               aria-label="合并已有实体"
                               className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-500/10 transition-colors disabled:opacity-50"
                             >
@@ -227,7 +319,10 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                         )}
                         <Tooltip content="拒绝">
                           <button
-                            onClick={() => void onReject(item.id)}
+                            onClick={() =>
+                              void runReviewAction(item.id, '拒绝', () => onReject(item.id))
+                            }
+                            disabled={isBusy}
                             aria-label="拒绝"
                             className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
                           >
@@ -237,7 +332,7 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                         <Tooltip content="采纳为正史">
                           <button
                             onClick={() => void handleDirectAccept(item.id)}
-                            disabled={isProcessing}
+                            disabled={isBusy}
                             aria-label="采纳"
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] transition-colors disabled:opacity-50"
                           >
@@ -250,12 +345,81 @@ export const DistillationInboxModal: FC<DistillationInboxModalProps> = ({
                   </div>
                 </div>
 
+                {item.category !== 'entity' && !sourceChapter && (
+                  <div className="text-[12px] text-[var(--ink-text-muted)] space-y-1">
+                    <p>没有可用的来源章节，采纳后暂不指定章节；你可以选择其章节位置。</p>
+                    <select
+                      aria-label={`${item.name}的章节位置`}
+                      value={chapterChoices[item.id] ?? ''}
+                      disabled={isBusy}
+                      onChange={(event) =>
+                        setChapterChoices((choices) => ({
+                          ...choices,
+                          [item.id]: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] px-2 py-1 text-[var(--ink-text)]"
+                    >
+                      <option value="">暂不指定章节</option>
+                      {sourceChapters?.map((chapter) => (
+                        <option key={chapter.id} value={chapter.id}>
+                          {chapter.title || chapter.id}
+                        </option>
+                      ))}
+                    </select>
+                    <p>章节位置不作为原文出处。</p>
+                  </div>
+                )}
+                {actionError?.itemId === item.id && (
+                  <p role="alert" className="text-[12px] text-red-500">
+                    {actionError.message}
+                  </p>
+                )}
+
                 {/* Original evidence snippet */}
+                <div className="pt-2 border-t border-[var(--ink-border)] text-[10px] text-[var(--ink-text-muted)]">
+                  {sourceDocumentId ? (
+                    <span>
+                      来源：文档 {sourceDocumentId}
+                      {sourceBlockId ? ` · 段落 ${sourceBlockId}` : ''}
+                      {item.sourceRevision !== undefined ? ` · 修订 ${item.sourceRevision}` : ''}
+                    </span>
+                  ) : (
+                    <span>尚无已核对的原文出处</span>
+                  )}
+                  {sourceIsStale && (
+                    <p role="status" className="mt-1 text-amber-500">
+                      原文已变更：当前修订 {sourceChapter?.revision ?? 0}，出处来自修订{' '}
+                      {item.sourceRevision}。
+                    </p>
+                  )}
+                  {sourceIsMissing && (
+                    <p role="status" className="mt-1 text-amber-500">
+                      来源章节已删除，无法跳转。
+                    </p>
+                  )}
+                </div>
                 {item.evidence && item.evidence.length > 0 && item.evidence[0].excerpt && (
-                  <div className="pt-2 border-t border-[var(--ink-border)] flex items-start gap-1.5 text-[11px] text-[var(--ink-text-muted)] bg-[var(--ink-bg-panel)]/50 p-2 rounded-lg">
+                  <div className="flex items-start gap-1.5 text-[11px] text-[var(--ink-text-muted)] bg-[var(--ink-bg-panel)]/50 p-2 rounded-lg">
                     <Quote className="w-3 h-3 shrink-0 text-[var(--ink-accent)] mt-0.5 opacity-70" />
                     <span className="italic">“{item.evidence[0].excerpt}”</span>
                   </div>
+                )}
+                {sourceNavigationRequest && onOpenSource && !sourceIsMissing && (
+                  <button
+                    type="button"
+                    aria-label={`查看原文：${item.name}`}
+                    disabled={isBusy}
+                    onClick={() => void handleOpenSource(item.id, sourceNavigationRequest)}
+                    className="text-[11px] text-[var(--ink-accent)] hover:underline disabled:opacity-50"
+                  >
+                    {isProcessing ? '正在打开…' : '查看原文'}
+                  </button>
+                )}
+                {sourceNavigationMessage?.itemId === item.id && (
+                  <p role="alert" className="text-[11px] text-amber-500">
+                    {sourceNavigationMessage.message}
+                  </p>
                 )}
               </div>
             )

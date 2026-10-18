@@ -7,14 +7,15 @@ describe('VoicePreview UI Components', () => {
   it('VoicePreviewMasterView renders correctly', () => {
     render(<VoicePreviewMasterView projectId="p1" />)
     expect(screen.getByText(/角色拟真有声对白试听器/)).toBeDefined()
-    expect(screen.getByText(/规则解析：按对话标点和说话动词提取角色与台词/)).toBeInTheDocument()
+    expect(screen.getByText(/浏览器语音不提供所称 DSP 音色滤波/)).toBeInTheDocument()
   })
 
   it('starts without sample chapter text or counted writing words', async () => {
     const onStats = vi.fn()
     render(<VoicePreviewMasterView projectId="p1" onStats={onStats} />)
 
-    expect(screen.getByRole('textbox')).toHaveValue('')
+    expect(screen.getByLabelText('章节对白正文输入区')).toHaveValue('')
+    expect(screen.getByLabelText('说话人名称清单')).toHaveValue('')
     expect(screen.getByPlaceholderText('粘贴章节正文以提取对白台本')).toBeInTheDocument()
     expect(screen.getByText(/等待正文：粘贴包含角色对白/)).toBeInTheDocument()
     expect(screen.queryByText('【示例文本】')).not.toBeInTheDocument()

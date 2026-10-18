@@ -28,7 +28,7 @@ describe('CAPABILITY_REGISTRY (P2.1, P2.2, INV-10)', () => {
     expect(multiverse?.maturity).toBe('demo')
 
     const storyboard = getCapabilityOverlay('storyboard-gen')
-    expect(storyboard?.surfaces).toContain('navigation')
+    expect(storyboard?.surfaces).not.toContain('navigation')
     expect(storyboard?.mutatesCanonicalState).toBe(false)
   })
 
@@ -80,6 +80,14 @@ describe('CAPABILITY_REGISTRY (P2.1, P2.2, INV-10)', () => {
     expect(PRIMARY_NAVIGATION_PLUGIN_IDS).toHaveLength(4)
     for (const plugin of ALL_PLUGIN_DEFINITIONS) {
       expect(isPrimaryNavigationPlugin(plugin.id), plugin.id).toBe(primary.has(plugin.id))
+      expect(capabilityFor(plugin.id)?.surfaces.includes('navigation'), plugin.id).toBe(
+        primary.has(plugin.id),
+      )
+    }
+    const pluginIds = new Set(ALL_PLUGIN_DEFINITIONS.map((plugin) => plugin.id))
+    for (const tab of TAB_DEFINITIONS) {
+      if (pluginIds.has(tab.id)) continue
+      expect(capabilityFor(tab.id)?.surfaces, tab.id).not.toContain('navigation')
     }
   })
 

@@ -5,17 +5,29 @@ import type { MultiCalendarProjectRecord } from '../types'
 import { indexedDbMultiCalendarRepository } from '../../../adapters/indexedDbMultiCalendarRepository'
 import { Calendar, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
-const DATE_TERM = /((?:大炎)?(?:天历|灵历|贞观|元丰|洪武|建安)[^，。\n]{2,15}(?:年|月|日))/
+const DATE_TERM =
+  /[^，。\n\s]{0,20}[零〇一二三四五六七八九十百千万\d]+年(?:[零〇一二三四五六七八九十\d]+月)?(?:[零〇一二三四五六七八九十\d]+日)?/
 
-export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
+export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <MultiCalendarProjectDrawer key={props.projectId} {...props} />
+)
+
+const MultiCalendarProjectDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [record, setRecord] = useState<MultiCalendarProjectRecord | null>(null)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
+    let disposed = false
     const load = async () => {
       const existing = await indexedDbMultiCalendarRepository.get(projectId)
-      if (existing) setRecord(existing)
+      if (!disposed) setRecord(existing ?? null)
     }
-    load()
+    void load().catch(() => {
+      if (!disposed) setNotice('读取历法失败。')
+    })
+    return () => {
+      disposed = true
+    }
   }, [projectId])
 
   // §P2.4：没有作者定义过的历法就是没有，不能退回内置的修真双历来凑一个"当前世界历法"
@@ -42,31 +54,36 @@ export const MultiCalendarDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, c
           </div>
           <div className="text-[11px] font-semibold">{detectedDate}</div>
           <div className="text-[10px] opacity-80">
-            可在大纲视图中与全书编年史对账，防止产生时间倒流或岁月吃书。
+            可在大纲视图登记故事时间，并将主线节点与章节顺序对照。
           </div>
         </div>
       )}
+      {notice && <p role="alert">{notice}</p>}
 
       {/* 编年史单调性状态条 */}
       {events.length === 0 ? (
         <div className="p-2.5 rounded-lg border border-dashed border-[var(--ink-border)] text-[11px] text-[var(--ink-text-muted)]">
-          全书尚未登记任何章节时间点，暂无时间线可自检。
+          全书尚未登记章节时间点，无法判断时间线是否一致。
         </div>
       ) : (
         <div
           className={`p-2.5 rounded-lg border text-[11px] space-y-1 ${
-            audit.hasParadox
+            audit.status === 'conflict'
               ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
-              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+              : audit.status === 'consistent'
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400'
           }`}
         >
           <div className="font-bold flex items-center gap-1">
-            {audit.hasParadox ? (
+            {audit.status === 'conflict' ? (
               <AlertTriangle className="w-3.5 h-3.5" />
-            ) : (
+            ) : audit.status === 'consistent' ? (
               <CheckCircle2 className="w-3.5 h-3.5" />
+            ) : (
+              <Clock className="w-3.5 h-3.5" />
             )}
-            全书时间线流动自检：
+            主线故事时间顺序检查：
           </div>
           <p className="text-[10px] opacity-90">{audit.diagnostic}</p>
         </div>

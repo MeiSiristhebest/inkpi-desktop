@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { CombatSandboxEngine } from './CombatSandboxEngine'
 
 describe('CombatSandboxEngine', () => {
-  it('detects critical power breach when jumping two major tiers without assets', () => {
+  it('requires reviewed constraints rather than inferring a breach from rank difference', () => {
     // 练气(1)打金丹(20)，无补偿
     const alert = CombatSandboxEngine.auditPowerBreach({
       protagonistRank: 1,
@@ -10,12 +10,14 @@ describe('CombatSandboxEngine', () => {
       compensatoryAssets: [],
     })
 
-    expect(alert.isBreached).toBe(true)
-    expect(alert.riskLevel).toBe('CRITICAL_COLLAPSE')
-    expect(alert.compensatoryFactorsNeeded.length).toBeGreaterThanOrEqual(3)
+    expect(alert.isBreached).toBe(false)
+    expect(alert.status).toBe('needs-review')
+    expect(alert.compensatoryFactorsNeeded).toContain(
+      '补充能力的适用条件、限制、代价以及每一步后果。',
+    )
   })
 
-  it('tolerates tier gap when sufficient compensatory assets are provided', () => {
+  it('does not treat asset names as proof of sufficient compensation', () => {
     // 筑基(10)打金丹(20)，提供法宝克制与大阵
     const alert = CombatSandboxEngine.auditPowerBreach({
       protagonistRank: 10,
@@ -23,7 +25,7 @@ describe('CombatSandboxEngine', () => {
       compensatoryAssets: ['天阶断剑克制', '护宗诛仙阵主场', '燃烧十年寿元'],
     })
 
-    expect(alert.riskLevel).toBe('SAFE')
+    expect(alert.status).toBe('needs-review')
     expect(alert.isBreached).toBe(false)
   })
 

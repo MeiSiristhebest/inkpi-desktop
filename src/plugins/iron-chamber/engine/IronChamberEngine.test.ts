@@ -45,10 +45,10 @@ describe('IronChamberEngine (黑曜石小黑屋契约引擎)', () => {
     expect(done.timePercentage).toBe(100)
   })
 
-  it('紧急脱逃反思验证，字数不足被拦截', () => {
+  it('作者可自愿结束，说明长度不阻止结束', () => {
     const bad = IronChamberEngine.validateEmergencyAbort('太累了不想写')
-    expect(bad.valid).toBe(false)
-    expect(bad.error).toContain('不得少于15字')
+    expect(bad.valid).toBe(true)
+    expect(bad.error).toBeUndefined()
 
     const good =
       IronChamberEngine.validateEmergencyAbort('突发紧急事务需要处理，稍后回来补齐今日所欠字数')

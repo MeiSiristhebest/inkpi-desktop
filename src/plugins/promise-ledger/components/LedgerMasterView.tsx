@@ -15,6 +15,10 @@ import { semanticTextFromContent } from '../../../domain/content'
 import { Plus, Search, Sparkles, Edit2, Trash2, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Tooltip } from '../../../ui/primitives'
+import {
+  projectChapterSequence,
+  latestPositionedChapterNumber,
+} from '../../../domain/chapter/chapterSequence'
 
 export const DEMO_PROMISES: Omit<
   PromiseLedgerEntry,
@@ -67,34 +71,39 @@ export const DEMO_PROMISES: Omit<
   },
 ]
 
-export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const LedgerMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <LedgerProjectView key={props.projectId} {...props} />
+)
+
+const LedgerProjectView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('promise-ledger')
   const [entries, setEntries] = useState<PromiseLedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | PromiseStatus | 'overdue'>('all')
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'gantt' | 'list'>('gantt')
   const [editingEntry, setEditingEntry] = useState<Partial<PromiseLedgerEntry> | null>(null)
-  const [currentChapter, setCurrentChapter] = useState(1)
+  const [currentChapter, setCurrentChapter] = useState(0)
+  const [error, setError] = useState('')
+  const aiTask = usePluginAiTask('promise-ledger', [projectId, entries, currentChapter])
 
   // 加载数据
   const loadEntries = async () => {
     try {
       setLoading(true)
-      const [all, allChapters] = await Promise.all([
+      const [all, allChapters, volumes] = await Promise.all([
         indexedDbPromiseLedgerRepository.getAll(),
         indexedDbProjectRepository.getChaptersByProject(projectId),
+        indexedDbProjectRepository.getVolumesByProject(projectId),
       ])
       const projectEntries = all.filter((e) => e.projectId === projectId)
       setEntries(projectEntries.sort((a, b) => a.plantChapter - b.plantChapter))
 
-      if (allChapters.length > 0) {
-        const maxCh = Math.max(...allChapters.map((c) => c.order))
-        setCurrentChapter(maxCh)
-      }
+      setCurrentChapter(
+        latestPositionedChapterNumber(projectChapterSequence(projectId, allChapters, volumes)),
+      )
     } catch (e) {
-      console.error('Failed to load promise ledger entries:', e)
+      setError('伏笔档案加载失败，请重试。')
     } finally {
       setLoading(false)
     }
@@ -103,14 +112,23 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   // 真实 AI 读者遗忘曲线与伏笔死锁审查
   const handleAiLedgerAudit = async () => {
     if (entries.length === 0) return
-    const entrySummaries = entries
-      .map(
-        (e) =>
-          `伏笔【${semanticTextFromContent(`promise-ledger-clue-${e.id}`, e.clueName)}】(${e.tier})：始于第 ${e.plantChapter} 章，承诺解决限期第 ${e.dueChapterLimit} 章，状态：${e.status}。埋设说明：${semanticTextFromContent(`promise-ledger-note-${e.id}`, e.plantNote)}`,
-      )
-      .join('\n')
-
-    const analysisInput = { currentChapter, promises: entrySummaries }
+    const analysisInput = {
+      currentChapter,
+      promises: entries.map((entry) => ({
+        ...entry,
+        plantNote: semanticTextFromContent(`${entry.id}-plant-note`, entry.plantNote),
+        progressHistory: entry.progressHistory.map((progress, index) => ({
+          ...progress,
+          note: semanticTextFromContent(`${entry.id}-progress-${index}`, progress.note),
+        })),
+        payoffNote:
+          entry.payoffNote === undefined
+            ? undefined
+            : semanticTextFromContent(`${entry.id}-payoff-note`, entry.payoffNote),
+      })),
+      measurementBoundary:
+        'Only author-recorded notes, deadlines and progress are supplied; reader recall and actual textual payoff are unknown.',
+    }
 
     await aiTask.run(analysisInput)
   }
@@ -120,14 +138,23 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }, [projectId])
 
   const handleSaveEntry = async (entry: PromiseLedgerEntry) => {
-    await promiseApplicationService.savePromise(entry, 'author-confirmed')
-    setEditingEntry(null)
-    await loadEntries()
+    try {
+      await promiseApplicationService.savePromise(entry, 'author-confirmed')
+      setEditingEntry(null)
+      setError('')
+      await loadEntries()
+    } catch {
+      setError('保存失败，修改尚未写入。请重试。')
+    }
   }
 
   const handleDeleteEntry = async (id: string) => {
-    await promiseApplicationService.deletePromise(id, projectId)
-    await loadEntries()
+    try {
+      await promiseApplicationService.deletePromise(id, projectId)
+      await loadEntries()
+    } catch {
+      setError('删除失败，请重试。')
+    }
   }
 
   const handleSeedDemo = async () => {
@@ -152,17 +179,17 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     [entries, currentChapter],
   )
 
-  const healthScore = useMemo(
-    () => ledgerEngine.computeNarrativeHealthScore(entries, currentChapter),
-    [entries, currentChapter],
-  )
-
   const overdueCount = useMemo(() => snapshots.filter((s) => s.isOverdue).length, [snapshots])
   const activeCount = useMemo(
     () => entries.filter((e) => e.status === 'planted' || e.status === 'progressing').length,
     [entries],
   )
   const paidCount = useMemo(() => entries.filter((e) => e.status === 'paid_off').length, [entries])
+  const unassessedCount = entries.filter(
+    (entry) =>
+      (entry.status === 'planted' || entry.status === 'progressing') &&
+      (entry.plantChapter < 1 || (entry.dueChapterLimit <= 0 && entry.softDeadline <= 0)),
+  ).length
 
   // 筛选过滤
   const filteredEntries = useMemo(() => {
@@ -197,24 +224,20 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
             Plant（埋设）→ Progress（发酵）→ Payoff（回收）生命周期管理与超期红线预警
           </p>
-          <ScoreProvenanceBadge source="rule" detail="按台账条目的到期与回收状态计分" />
+          <ScoreProvenanceBadge source="rule" detail="按作者登记的章节位置、期限和推进记录计算" />
+          {error && <p role="alert">{error}</p>}
+          {unassessedCount > 0 && (
+            <p className="mt-1 text-[11px] text-[var(--ink-text-muted)]">
+              {unassessedCount} 条伏笔未指定章节或期限，暂不能评估到期情况。
+            </p>
+          )}
         </div>
 
         {/* 核心叙事健康度指示盘 */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)]">
-            <div className="text-[10px] text-[var(--ink-text-muted)]">叙事健康分</div>
-            <div
-              className={`text-sm font-bold ${
-                healthScore >= 85
-                  ? 'text-emerald-500'
-                  : healthScore >= 70
-                    ? 'text-amber-500'
-                    : 'text-rose-500'
-              }`}
-            >
-              {healthScore}
-            </div>
+            <div className="text-[10px] text-[var(--ink-text-muted)]">本章到期</div>
+            <div className="text-sm font-bold">{snapshots.filter((s) => s.isDue).length}</div>
           </div>
 
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)]">
@@ -416,7 +439,11 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     </div>
 
                     <div className="pt-2 border-t border-[var(--ink-border)]/50 flex items-center justify-between text-[10px] text-[var(--ink-text-faint)]">
-                      <span>埋设：第 {entry.plantChapter} 章</span>
+                      <span>
+                        {entry.plantChapter >= 1
+                          ? `埋设：第 ${entry.plantChapter} 章`
+                          : '未指定章节'}
+                      </span>
                       <div className="flex items-center gap-2">
                         <Tooltip content="编辑">
                           <button
@@ -451,7 +478,7 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                   <th className="p-3">类型分层</th>
                   <th className="p-3">埋设章节</th>
                   <th className="p-3">硬红线</th>
-                  <th className="p-3">读者记忆热度</th>
+                  <th className="p-3">最近推进章节</th>
                   <th className="p-3">状态</th>
                   <th className="p-3 text-right">操作</th>
                 </tr>
@@ -459,24 +486,25 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
               <tbody className="divide-y divide-[var(--ink-border)]/50">
                 {filteredEntries.map((entry) => {
                   const snap = snapshots.find((s) => s.entry.id === entry.id)
-                  const heat = snap?.memoryHeat ?? 1.0
                   return (
                     <tr key={entry.id} className="hover:bg-[var(--ink-bg-hover)]">
                       <td className="p-3 font-medium text-[var(--ink-text)]">{entry.clueName}</td>
                       <td className="p-3 text-[var(--ink-text-muted)]">{entry.tier}</td>
-                      <td className="p-3">第 {entry.plantChapter} 章</td>
-                      <td className="p-3">第 {entry.plantChapter + entry.dueChapterLimit} 章</td>
                       <td className="p-3">
-                        <span
-                          className={`font-semibold ${
-                            heat < 0.2
-                              ? 'text-rose-400'
-                              : heat < 0.5
-                                ? 'text-amber-400'
-                                : 'text-emerald-400'
-                          }`}
-                        >
-                          {Math.round(heat * 100)}%
+                        {entry.plantChapter >= 1 ? `第 ${entry.plantChapter} 章` : '未指定章节'}
+                      </td>
+                      <td className="p-3">
+                        {entry.dueChapterLimit > 0
+                          ? entry.plantChapter >= 1
+                            ? `第 ${entry.plantChapter + entry.dueChapterLimit} 章`
+                            : `埋设后 ${entry.dueChapterLimit} 章`
+                          : '未设置期限'}
+                      </td>
+                      <td className="p-3">
+                        <span>
+                          {snap?.lastProgressChapter == null
+                            ? '未登记'
+                            : `第 ${snap.lastProgressChapter} 章`}
                         </span>
                       </td>
                       <td className="p-3">
@@ -486,6 +514,12 @@ export const LedgerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                           <span className="text-rose-500 font-semibold">⚠️ 已超期</span>
                         ) : snap?.isWarning ? (
                           <span className="text-amber-500">软预警</span>
+                        ) : snap?.isDue ? (
+                          <span className="text-amber-500">本章到期</span>
+                        ) : entry.plantChapter < 1 ? (
+                          <span className="text-[var(--ink-text-muted)]">待定位</span>
+                        ) : entry.dueChapterLimit <= 0 && entry.softDeadline <= 0 ? (
+                          <span className="text-[var(--ink-text-muted)]">期限未评估</span>
                         ) : (
                           <span className="text-emerald-500">正常</span>
                         )}

@@ -8,7 +8,8 @@
 
 export type PluginEventType =
   | 'POWER_BREACH_DETECTED' // combat-sandbox -> consistency-sentinel 的巡检抽屉
-  | 'FORESHADOW_PLANTED' // chekhov-radar -> promise-ledger 的记账抽屉
+  | 'COMBAT_DUEL_SAVED' // combat-sandbox -> consistency-sentinel：从已保存记录刷新预警
+  | 'POV_GUARD_CONFIG_SAVED' // pov-guard 主视图 -> POV 巡检抽屉
   | 'CODEX_ENTITY_TOUCHED' // codexApplicationService -> aftermath-sync 的对照名单
   | 'CHAPTER_CONTENT_AUDITED' // water-meter / reader-hook -> emotion-curve 的曲线抽屉
   // 综合评估结果由 evaluateChapter 的返回值直接交给调用方，这条广播目前没有面板订阅它，
@@ -17,6 +18,7 @@ export type PluginEventType =
 
 export interface PluginEventPayloads {
   POWER_BREACH_DETECTED: {
+    recordId: string
     projectId: string
     protagonistName: string
     enemyName: string
@@ -24,11 +26,12 @@ export interface PluginEventPayloads {
     riskLevel: 'WARNING' | 'CRITICAL_COLLAPSE'
     diagnostic: string
   }
-  FORESHADOW_PLANTED: {
+  COMBAT_DUEL_SAVED: {
+    recordId: string
     projectId: string
-    gunName: string
-    plantChapterOrder: number
-    category: string
+  }
+  POV_GUARD_CONFIG_SAVED: {
+    projectId: string
   }
   CODEX_ENTITY_TOUCHED: {
     projectId: string
@@ -42,13 +45,23 @@ export interface PluginEventPayloads {
     wordCount: number
     waterScore?: number
   }
-  UNIFIED_CHAPTER_EVALUATED: {
-    projectId: string
-    chapterId: string
-    compositeScore: number
-    pacingRating: string
-    cliffhangerScore: number
-  }
+  UNIFIED_CHAPTER_EVALUATED:
+    | {
+        projectId: string
+        chapterId: string
+        compositeScore: number
+        pacingRating: string
+        cliffhangerScore: number
+        schemaVersion?: 1
+      }
+    | {
+        projectId: string
+        chapterId: string
+        schemaVersion: 2
+        characterCount: number
+        observationCount: number
+        qualityStatus: 'not_assessed'
+      }
 }
 
 export type PluginEventListener<T extends PluginEventType> = (

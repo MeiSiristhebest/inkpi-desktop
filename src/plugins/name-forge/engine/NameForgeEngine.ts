@@ -1,270 +1,131 @@
-// 中西奇幻起名姬核心引擎
-// 基于上下文无关文法（CFG）与平仄声韵和谐度采样的智能命名系统
-
-import type { NameStyle, NameGenerateOptions, GeneratedNameItem } from '../types'
+import type { NameGenerateOptions, GeneratedNameItem, NameStyle } from '../types'
 import lexicons from '../data/lexicons.json'
 import type { RandomSource } from '../../../ports/randomSource'
 import { randomSource as defaultRandomSource } from '../../../adapters/randomSource'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { PhoneticsEvaluator } from './PhoneticsEvaluator'
-
 export class NameForgeEngine {
   private randomSource: RandomSource
-
-  constructor(random?: RandomSource) {
-    this.randomSource = random || defaultRandomSource
+  constructor(randomSource: RandomSource = defaultRandomSource) {
+    this.randomSource = randomSource
   }
-
-  /**
-   * 带倾斜权重的采样器：支持头部权重衰减分布（前排常用姓氏/字根获得更高采样先验）
-   */
-  private pickOne<T>(list: T[], rng: RandomSource, weighted = false): T {
-    if (!weighted || list.length <= 3) {
-      const idx = Math.floor(rng.next() * list.length)
-      return list[Math.min(idx, list.length - 1)]
-    }
-    // 指数衰减加权采样：P(i) 正比于 1 / (i + 1)^0.6
-    const r = Math.pow(rng.next(), 1.5)
-    const idx = Math.floor(r * list.length)
-    return list[Math.min(idx, list.length - 1)]
+  private pick(list: readonly string[], rng: RandomSource): string {
+    if (!list.length) throw new Error('候选词库为空。')
+    const value = rng.next()
+    if (!Number.isFinite(value) || value < 0 || value >= 1)
+      throw new Error('随机源须返回 [0,1) 范围内的数值。')
+    return list[Math.floor(value * list.length)]
   }
-
-  /**
-   * 生成指定类别与风格的名称候选列表
-   */
-  public generateNames(options: NameGenerateOptions, random?: RandomSource): GeneratedNameItem[] {
-    const rng = random || this.randomSource
-    const count = options.count && options.count > 0 ? options.count : 10
-    const style = options.style || 'balanced'
-    const results: GeneratedNameItem[] = []
-    const seen = new Set<string>()
-
-    for (let i = 0; i < count * 3 && results.length < count; i++) {
-      const item = this.generateSingle(options, style, rng)
-      if (!seen.has(item.name)) {
-        seen.add(item.name)
-        results.push(item)
-      }
+  generateNames(options: NameGenerateOptions, random?: RandomSource): GeneratedNameItem[] {
+    const count = options.count ?? 10,
+      minLength = options.minLength ?? 1,
+      maxLength = options.maxLength ?? 80
+    if (!Number.isSafeInteger(count) || count < 0 || count > 100)
+      throw new Error('候选数量须为 0 至 100 的整数。')
+    if (
+      !Number.isSafeInteger(minLength) ||
+      !Number.isSafeInteger(maxLength) ||
+      minLength < 1 ||
+      maxLength < minLength ||
+      maxLength > 80
+    )
+      throw new Error('名称长度范围须为 1 至 80 的整数。')
+    const categories = [
+      'character_cn',
+      'character_western',
+      'sect_faction',
+      'technique_spell',
+      'item_artifact',
+      'location_realm',
+    ]
+    const styles = ['balanced', 'cold_sharp', 'domineering', 'ethereal', 'demonic', 'elegant']
+    const style = options.style ?? 'balanced'
+    if (!categories.includes(options.category) || !styles.includes(style))
+      throw new Error('名称类别或词库风格无效。')
+    const rng = random ?? this.randomSource,
+      results: GeneratedNameItem[] = [],
+      seen = new Set<string>()
+    const excluded = new Set((options.excludedNames ?? []).map((name) => name.normalize('NFC')))
+    for (
+      let attempt = 0;
+      attempt < Math.max(100, count * 100) && results.length < count;
+      attempt++
+    ) {
+      const parts = this.parts(options, style, rng)
+      const name =
+        options.category === 'character_western'
+          ? parts.prefix + '·' + parts.core
+          : parts.prefix + parts.core + (parts.suffix ?? '')
+      const length = Array.from(name).length,
+        key = name.normalize('NFC')
+      if (
+        length < minLength ||
+        length > maxLength ||
+        seen.has(key) ||
+        excluded.has(key) ||
+        (options.forbiddenFragments ?? []).some((fragment) => fragment && name.includes(fragment))
+      )
+        continue
+      if (options.fixedPrefix && !name.startsWith(options.fixedPrefix)) continue
+      if (options.fixedKern && !name.includes(options.fixedKern)) continue
+      seen.add(key)
+      results.push({
+        id: idGenerator.generate('name'),
+        name,
+        category: options.category,
+        style,
+        parts,
+        meaningOrVibe: '词库组合候选；字义、读音、典故与是否适合人物须由作者复核。',
+      })
     }
-
     return results
   }
-
-  private generateSingle(
+  private parts(
     options: NameGenerateOptions,
     style: NameStyle,
     rng: RandomSource,
-  ): GeneratedNameItem {
-    const id = idGenerator.generate('name')
-
-    switch (options.category) {
-      case 'character_cn':
-        return this.generateChineseCharacter(id, options, style, rng)
-      case 'character_western':
-        return this.generateWesternCharacter(id, options, style, rng)
-      case 'sect_faction':
-        return this.generateSect(id, options, style, rng)
-      case 'technique_spell':
-        return this.generateTechnique(id, options, style, rng)
-      case 'item_artifact':
-        return this.generateArtifact(id, options, style, rng)
-      case 'location_realm':
-        return this.generateLocation(id, options, style, rng)
-      default:
-        return this.generateChineseCharacter(id, options, style, rng)
-    }
-  }
-
-  private getCharacterCharPool(style: NameStyle, rng: RandomSource): string[] {
-    if (style === 'balanced') {
-      const styles: (keyof typeof lexicons.characters_by_style)[] = [
-        'cold_sharp',
-        'domineering',
-        'ethereal',
-        'elegant',
-      ]
-      const chosen = this.pickOne(styles, rng)
-      return lexicons.characters_by_style[chosen]
-    }
-    const pool = lexicons.characters_by_style[style as keyof typeof lexicons.characters_by_style]
-    return pool || lexicons.characters_by_style.elegant
-  }
-
-  private generateChineseCharacter(
-    id: string,
-    options: NameGenerateOptions,
-    style: NameStyle,
-    rng: RandomSource,
-  ): GeneratedNameItem {
-    const surname = options.fixedPrefix || this.pickOne(lexicons.surnames_cn, rng)
-    const pool = this.getCharacterCharPool(style, rng)
-
-    let givenName = ''
-    if (options.fixedKern) {
-      const extra = this.pickOne(pool, rng)
-      givenName = rng.next() > 0.5 ? `${options.fixedKern}${extra}` : `${extra}${options.fixedKern}`
-    } else {
-      // 80% 概率双字名，20% 概率单字名
-      if (rng.next() < 0.2) {
-        givenName = this.pickOne(pool, rng)
-      } else {
-        const c1 = this.pickOne(pool, rng)
-        let c2 = this.pickOne(pool, rng)
-        let tries = 0
-        while (c2 === c1 && tries < 5) {
-          c2 = this.pickOne(pool, rng)
-          tries++
-        }
-        givenName = `${c1}${c2}`
+  ): { prefix: string; core: string; suffix?: string } {
+    const prefix = options.fixedPrefix,
+      core = options.fixedKern
+    if (options.category === 'character_cn') {
+      const pool =
+        style === 'balanced'
+          ? Object.values(lexicons.characters_by_style).flat()
+          : lexicons.characters_by_style[style as keyof typeof lexicons.characters_by_style]
+      return {
+        prefix: prefix ?? this.pick(lexicons.surnames_cn, rng),
+        core:
+          core !== undefined
+            ? core + this.pick(pool, rng)
+            : this.pick(pool, rng) + this.pick(pool, rng),
       }
     }
-
-    const fullName = `${surname}${givenName}`
-    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
-
-    let vibe = `【${evalResult.pattern}】${evalResult.toneVibe}`
-    if (style === 'cold_sharp') vibe += '。冷峻孤绝，如寒芒出匣，适合独行剑客或孤高道子'
-    else if (style === 'domineering') vibe += '。气势磅礴，威压四海，适合一方宗主或天命皇尊'
-    else if (style === 'ethereal') vibe += '。清灵出尘，飘逸洒脱，适合不染凡尘的羽化修士'
-    else if (style === 'demonic') vibe += '。邪魅桀骜，深不可测，适合魔道巨擘或宿命枭雄'
-    else if (style === 'elegant') vibe += '。古雅端庄，文质彬彬，适合书院儒侠或名门望族'
-
-    return {
-      id,
-      name: fullName,
-      category: 'character_cn',
-      style,
-      parts: { prefix: surname, core: givenName },
-      phoneticsScore: evalResult.score,
-      meaningOrVibe: vibe,
+    if (options.category === 'character_western') {
+      const pool =
+        options.gender === 'male'
+          ? lexicons.firstnames_western_male
+          : options.gender === 'female'
+            ? lexicons.firstnames_western_female
+            : [...lexicons.firstnames_western_male, ...lexicons.firstnames_western_female]
+      return {
+        prefix: prefix ?? this.pick(lexicons.surnames_western, rng),
+        core: core ?? this.pick(pool, rng),
+      }
     }
-  }
-
-  private generateWesternCharacter(
-    id: string,
-    options: NameGenerateOptions,
-    style: NameStyle,
-    rng: RandomSource,
-  ): GeneratedNameItem {
-    let firstNames = [...lexicons.firstnames_western_male, ...lexicons.firstnames_western_female]
-    if (options.gender === 'male') {
-      firstNames = lexicons.firstnames_western_male
-    } else if (options.gender === 'female') {
-      firstNames = lexicons.firstnames_western_female
-    }
-
-    const first = options.fixedKern || this.pickOne(firstNames, rng)
-    const last = options.fixedPrefix || this.pickOne(lexicons.surnames_western, rng)
-    const fullName = `${first}·${last}`
-
-    // 西方音律：音节对称度与轻重读步频（长名轻读、短名重读）
-    const totalSyllables = first.length + last.length
-    const cadenceRatio = Math.min(first.length, last.length) / Math.max(first.length, last.length)
-    const phoneticsScore = Math.min(
-      98,
-      Math.max(65, Math.round(75 + cadenceRatio * 15 + (totalSyllables % 3) * 3)),
-    )
-
+    const pools = {
+      sect_faction: [lexicons.sect_prefixes, lexicons.sect_cores, lexicons.sect_suffixes],
+      technique_spell: [
+        lexicons.technique_prefixes,
+        lexicons.technique_cores,
+        lexicons.technique_suffixes,
+      ],
+      item_artifact: [lexicons.artifact_prefixes, lexicons.artifact_forms, []],
+      location_realm: [lexicons.location_prefixes, lexicons.location_forms, []],
+    }[options.category]!
     return {
-      id,
-      name: fullName,
-      category: 'character_western',
-      style,
-      parts: { prefix: first, core: last },
-      phoneticsScore,
-      meaningOrVibe: '具备古典西方奇幻韵味，带有贵族氏族或古老魔法传承质感',
-    }
-  }
-
-  private generateSect(
-    id: string,
-    options: NameGenerateOptions,
-    style: NameStyle,
-    rng: RandomSource,
-  ): GeneratedNameItem {
-    const prefix = options.fixedPrefix || this.pickOne(lexicons.sect_prefixes, rng)
-    const core = options.fixedKern || this.pickOne(lexicons.sect_cores, rng)
-    const suffix = this.pickOne(lexicons.sect_suffixes, rng)
-    const fullName = `${prefix}${core}${suffix}`
-    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
-
-    return {
-      id,
-      name: fullName,
-      category: 'sect_faction',
-      style,
-      parts: { prefix, core, suffix },
-      phoneticsScore: evalResult.score,
-      meaningOrVibe: `传承久远的古老势力（${evalResult.pattern}），擅御【${core}】道，名震八方修真界`,
-    }
-  }
-
-  private generateTechnique(
-    id: string,
-    options: NameGenerateOptions,
-    style: NameStyle,
-    rng: RandomSource,
-  ): GeneratedNameItem {
-    const prefix = options.fixedPrefix || this.pickOne(lexicons.technique_prefixes, rng)
-    const core = options.fixedKern || this.pickOne(lexicons.technique_cores, rng)
-    const suffix = this.pickOne(lexicons.technique_suffixes, rng)
-    const fullName = `${prefix}${core}${suffix}`
-    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
-
-    return {
-      id,
-      name: fullName,
-      category: 'technique_spell',
-      style,
-      parts: { prefix, core, suffix },
-      phoneticsScore: evalResult.score,
-      meaningOrVibe: `威震寰宇的玄奥法门（${evalResult.pattern}），修至圆满可借【${core}】之力逆天改命`,
-    }
-  }
-
-  private generateArtifact(
-    id: string,
-    options: NameGenerateOptions,
-    style: NameStyle,
-    rng: RandomSource,
-  ): GeneratedNameItem {
-    const prefix = options.fixedPrefix || this.pickOne(lexicons.artifact_prefixes, rng)
-    const form = options.fixedKern || this.pickOne(lexicons.artifact_forms, rng)
-    const fullName = `${prefix}${form}`
-    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
-
-    return {
-      id,
-      name: fullName,
-      category: 'item_artifact',
-      style,
-      parts: { prefix, core: form },
-      phoneticsScore: evalResult.score,
-      meaningOrVibe: `采九天神料由大能修士淬炼而成的至宝神兵（${evalResult.pattern}），攻守莫测`,
-    }
-  }
-
-  private generateLocation(
-    id: string,
-    options: NameGenerateOptions,
-    style: NameStyle,
-    rng: RandomSource,
-  ): GeneratedNameItem {
-    const prefix = options.fixedPrefix || this.pickOne(lexicons.location_prefixes, rng)
-    const form = options.fixedKern || this.pickOne(lexicons.location_forms, rng)
-    const fullName = `${prefix}${form}`
-    const evalResult = PhoneticsEvaluator.evaluatePhonetics(fullName)
-
-    return {
-      id,
-      name: fullName,
-      category: 'location_realm',
-      style,
-      parts: { prefix, core: form },
-      phoneticsScore: evalResult.score,
-      meaningOrVibe: `传闻有上古仙魔陨落于此（${evalResult.pattern}），步步机锋凶险，伴随逆天机缘`,
+      prefix: prefix ?? this.pick(pools[0], rng),
+      core: core ?? this.pick(pools[1], rng),
+      suffix: pools[2].length ? this.pick(pools[2], rng) : undefined,
     }
   }
 }
-
 export const nameForgeEngine = new NameForgeEngine()

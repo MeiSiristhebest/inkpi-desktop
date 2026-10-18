@@ -1,6 +1,3 @@
-// 三级敏感词审查与文学平替核心算法引擎
-// AC 自动机极速匹配 + 正则模式分层 + 逆序无损批量平替
-
 import type {
   SensitiveWord,
   RegexRule,
@@ -14,201 +11,139 @@ import { GenericAhoCorasick } from '../../../utils/AhoCorasick'
 export class SafeGateEngine {
   private acEngine = new GenericAhoCorasick<SensitiveWord>()
   private regexList: { rule: RegexRule; regex: RegExp }[] = []
-  private wordMap = new Map<string, SensitiveWord>()
+  private buildErrors: SafeGateScanResult['ruleErrors'] = []
 
-  /**
-   * 初始化引擎：构建 AC 自动机树与编译正则
-   */
   public build(words: SensitiveWord[], regexRules: RegexRule[]): void {
-    this.wordMap.clear()
     this.regexList = []
-
-    const items = words.map((w) => {
-      this.wordMap.set(w.id, w)
-      return {
-        keyword: w.word,
-        payload: w,
-      }
+    this.buildErrors = []
+    const validWords = words.filter((word) => {
+      if (word.word.length > 0) return true
+      this.buildErrors.push({ ruleId: word.id, message: '词项为空，未执行此规则。' })
+      return false
     })
-    this.acEngine.build(items)
-
-    // 预编译正则表达式
+    this.acEngine.build(validWords.map((word) => ({ keyword: word.word, payload: word })))
     for (const rule of regexRules) {
       try {
         const flags = rule.flags.includes('g') ? rule.flags : `${rule.flags}g`
-        this.regexList.push({
-          rule,
-          regex: new RegExp(rule.pattern, flags),
-        })
-      } catch (e) {
-        console.warn(`Invalid regex pattern in safe-gate rule ${rule.id}:`, e)
+        this.regexList.push({ rule, regex: new RegExp(rule.pattern, flags) })
+      } catch {
+        this.buildErrors.push({ ruleId: rule.id, message: '正则表达式或标记无效，未执行此规则。' })
       }
     }
   }
 
-  /**
-   * 对正文执行分层扫描
-   */
-  public scan(text: string, genre: GenreStyle = 'xianxia'): SafeGateScanResult {
-    if (!text || text.length === 0) {
-      return { violations: [], redCount: 0, yellowCount: 0, blueCount: 0, isClean: true }
-    }
-
-    const violations: SafeGateViolation[] = []
-
-    // 阶段 1：通用 AC 自动机精确扫描
-    const matches = this.acEngine.scan(text)
-    for (const match of matches) {
-      const word = match.payload
-      violations.push({
-        id: `v-ac-${match.startIndex}-${match.endIndex}`,
-        ruleType: 'ac_exact',
-        wordId: word.id,
-        matchedText: word.word,
-        startIndex: match.startIndex,
-        endIndex: match.endIndex,
-        level: word.level,
-        category: word.category,
-        suggestions: this.sortSuggestions(word.literaryAlternatives, genre),
-      })
-    }
-
-    // 阶段 2：正则表达式模糊规则扫描
+  public scan(text: string, genre: GenreStyle = 'neutral'): SafeGateScanResult {
+    const ruleErrors = [...this.buildErrors]
+    const violations: SafeGateViolation[] = this.acEngine.scan(text).map((match) => ({
+      id: `v-ac-${match.payload.id}-${match.startIndex}-${match.endIndex}`,
+      ruleType: 'ac_exact',
+      wordId: match.payload.id,
+      matchedText: text.slice(match.startIndex, match.endIndex),
+      startIndex: match.startIndex,
+      endIndex: match.endIndex,
+      level: match.payload.level,
+      category: match.payload.category,
+      suggestions: this.sortSuggestions(match.payload.literaryAlternatives, genre),
+    }))
     for (const { rule, regex } of this.regexList) {
       regex.lastIndex = 0
+      let hasEmptyMatch = false
       let match: RegExpExecArray | null
       while ((match = regex.exec(text)) !== null) {
-        const startIndex = match.index
-        const endIndex = startIndex + match[0].length
+        if (match[0].length === 0) {
+          hasEmptyMatch = true
+          const point = text.codePointAt(regex.lastIndex)
+          regex.lastIndex += point !== undefined && point > 0xffff ? 2 : 1
+          continue
+        }
         violations.push({
-          id: `v-reg-${startIndex}-${endIndex}`,
+          id: `v-reg-${rule.id}-${match.index}-${match.index + match[0].length}`,
           ruleType: 'regex',
           regexRuleId: rule.id,
           matchedText: match[0],
-          startIndex,
-          endIndex,
+          startIndex: match.index,
+          endIndex: match.index + match[0].length,
           level: rule.level,
           category: rule.category,
           suggestions: this.sortSuggestions(rule.literaryAlternatives, genre),
         })
       }
+      if (hasEmptyMatch)
+        ruleErrors.push({ ruleId: rule.id, message: '规则产生空匹配；空匹配已忽略，请修改规则。' })
     }
-
-    // 阶段 3：区间去重与排序（按 startIndex 升序）
-    const deduplicated = this.deduplicateViolations(violations)
-
-    let redCount = 0
-    let yellowCount = 0
-    let blueCount = 0
-
-    for (const v of deduplicated) {
-      if (v.level === 'red') redCount++
-      else if (v.level === 'yellow') yellowCount++
-      else if (v.level === 'blue') blueCount++
-    }
-
+    const unique = [...new Map(violations.map((item) => [item.id, item])).values()].sort(
+      (a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex,
+    )
+    const complete = ruleErrors.length === 0
     return {
-      violations: deduplicated,
-      redCount,
-      yellowCount,
-      blueCount,
-      isClean: deduplicated.length === 0,
+      violations: unique,
+      redCount: unique.filter((item) => item.level === 'red').length,
+      yellowCount: unique.filter((item) => item.level === 'yellow').length,
+      blueCount: unique.filter((item) => item.level === 'blue').length,
+      isClean: complete && unique.length === 0,
+      complete,
+      ruleErrors,
+      sourceText: text,
     }
   }
 
-  /**
-   * 单项精准替换
-   */
-  public applyReplacement(
-    text: string,
-    violation: SafeGateViolation,
-    chosenAlternative: LiteraryAlternative,
-  ): string {
-    if (violation.startIndex < 0 || violation.endIndex > text.length) return text
+  private matchesSource(text: string, item: SafeGateViolation): boolean {
     return (
-      text.slice(0, violation.startIndex) +
-      chosenAlternative.replacement +
-      text.slice(violation.endIndex)
+      Number.isSafeInteger(item.startIndex) &&
+      Number.isSafeInteger(item.endIndex) &&
+      item.startIndex >= 0 &&
+      item.endIndex > item.startIndex &&
+      item.endIndex <= text.length &&
+      text.slice(item.startIndex, item.endIndex) === item.matchedText
     )
   }
 
-  /**
-   * 批量一键平替（数学关键：从后向前逆序替换）
-   * 逆序操作可确保前方的 startIndex / endIndex 绝对偏移量不发生漂移！
-   */
+  public applyReplacement(
+    text: string,
+    violation: SafeGateViolation,
+    alternative: LiteraryAlternative,
+  ): string {
+    if (!this.matchesSource(text, violation)) return text
+    return (
+      text.slice(0, violation.startIndex) + alternative.replacement + text.slice(violation.endIndex)
+    )
+  }
+
   public applyAllAuto(
     text: string,
     result: SafeGateScanResult,
-    genre: GenreStyle = 'xianxia',
+    genre: GenreStyle = 'neutral',
   ): string {
-    if (!result.violations || result.violations.length === 0) return text
-
-    // 按 startIndex 从大到小降序排列
-    const sorted = [...result.violations].sort((a, b) => b.startIndex - a.startIndex)
-
-    let modified = text
-    for (const v of sorted) {
-      if (!v.suggestions || v.suggestions.length === 0) continue
-      const sortedSuggestions = this.sortSuggestions(v.suggestions, genre)
-      const best = sortedSuggestions[0]
-      if (!best) continue
-      modified = modified.slice(0, v.startIndex) + best.replacement + modified.slice(v.endIndex)
-    }
-
-    return modified
+    if (!result.complete || result.sourceText !== text) return text
+    const edits = result.violations
+      .filter((item) => item.suggestions.length > 0)
+      .sort((a, b) => a.startIndex - b.startIndex)
+    if (
+      edits.some(
+        (item, index) =>
+          !this.matchesSource(text, item) ||
+          (index > 0 && item.startIndex < edits[index - 1].endIndex),
+      )
+    )
+      return text
+    return edits
+      .reverse()
+      .reduce(
+        (modified, item) =>
+          modified.slice(0, item.startIndex) +
+          this.sortSuggestions(item.suggestions, genre)[0].replacement +
+          modified.slice(item.endIndex),
+        text,
+      )
   }
 
-  /**
-   * 根据当前作品文风，将最贴合的平替词排在最前
-   */
   private sortSuggestions(
     suggestions: LiteraryAlternative[],
     genre: GenreStyle,
   ): LiteraryAlternative[] {
-    return [...suggestions].sort((a, b) => {
-      const aMatches = a.genre.includes(genre) || a.genre.includes('neutral')
-      const bMatches = b.genre.includes(genre) || b.genre.includes('neutral')
-      if (aMatches && !bMatches) return -1
-      if (!aMatches && bMatches) return 1
-      return b.confidence - a.confidence
-    })
-  }
-
-  /**
-   * 移除重叠命中，优先保留高危害等级 (red > yellow > blue) 或更长区间
-   */
-  private deduplicateViolations(violations: SafeGateViolation[]): SafeGateViolation[] {
-    if (violations.length <= 1) return violations
-
-    // 优先级权重：red: 3, yellow: 2, blue: 1
-    const levelWeight = { red: 3, yellow: 2, blue: 1 }
-
-    // 先按 startIndex 升序，同起点按权重降序、长度降序
-    const sorted = [...violations].sort((a, b) => {
-      if (a.startIndex !== b.startIndex) return a.startIndex - b.startIndex
-      const wDiff = levelWeight[b.level] - levelWeight[a.level]
-      if (wDiff !== 0) return wDiff
-      return b.endIndex - b.startIndex - (a.endIndex - a.startIndex)
-    })
-
-    const results: SafeGateViolation[] = []
-    let lastEnd = -1
-
-    for (const v of sorted) {
-      if (v.startIndex >= lastEnd) {
-        results.push(v)
-        lastEnd = v.endIndex
-      } else {
-        // 重叠场景：如果当前项级别严格高于已入选的上一项，替换上一项
-        const prev = results[results.length - 1]
-        if (prev && levelWeight[v.level] > levelWeight[prev.level]) {
-          results[results.length - 1] = v
-          lastEnd = Math.max(prev.endIndex, v.endIndex)
-        }
-      }
-    }
-
-    return results
+    const priority = (item: LiteraryAlternative) =>
+      item.genre.includes(genre) ? 2 : item.genre.includes('neutral') ? 1 : 0
+    return [...suggestions].sort((a, b) => priority(b) - priority(a))
   }
 }
 

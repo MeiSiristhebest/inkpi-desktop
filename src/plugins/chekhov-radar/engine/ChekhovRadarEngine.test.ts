@@ -25,6 +25,7 @@ describe('ChekhovRadarEngine', () => {
         category: 'promise',
         status: 'dormant',
         plantChapterOrder: 2,
+        expectedPayoffChapterOrder: 25,
         plantSnippet: '立下誓言',
         rustingDistance: 48,
         isRustingAlert: true,
@@ -37,6 +38,7 @@ describe('ChekhovRadarEngine', () => {
         category: 'secret',
         status: 'incubating',
         plantChapterOrder: 10,
+        expectedPayoffChapterOrder: 35,
         plantSnippet: '临终嘱托',
         rustingDistance: 40,
         isRustingAlert: true,
@@ -49,7 +51,7 @@ describe('ChekhovRadarEngine', () => {
     expect(stats.firedCount).toBe(1)
     expect(stats.rustingCount).toBe(2)
     expect(stats.closureRate).toBe(33)
-    expect(stats.healthGrade).toBe('DANGER')
+    expect(stats.unpositionedCount).toBe(0)
   })
 
   it('detects potential guns from narrative text', () => {

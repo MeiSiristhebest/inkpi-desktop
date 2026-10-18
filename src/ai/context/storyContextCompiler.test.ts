@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { createStoryEntity } from '../../domain/story/entities'
+import { createStoryEvent } from '../../domain/story/events'
 import { createStoryConstraint } from '../../domain/story/constraints'
 import { createNarrativePromise } from '../../domain/story/promises'
 import { createStoryRelation } from '../../domain/story/relations'
+import { createStoryScene } from '../../domain/story/scenes'
+import { createStoryTimeline } from '../../domain/story/timelines'
 import {
   createStoryState,
   upsertConstraint,
   upsertEntity,
+  upsertEvent,
   upsertPromise,
   upsertRelation,
+  upsertScene,
+  upsertTimeline,
 } from '../../domain/story/storyState'
+import type { Provenance } from '../../domain/story/provenance'
 import { compileStoryContext, createStoryContextProvider } from './storyContextCompiler'
 
 describe('story context compiler', () => {
@@ -258,5 +265,216 @@ describe('story context compiler', () => {
     expect(withKind.data).toMatchObject({ entities: [] })
     expect(withoutKind.data).toMatchObject({ entities: [{ id: 'fact-char' }] })
     expect(withKind.id).not.toBe(withoutKind.id)
+  })
+
+  it('projects chapter-related structured facts with references and source evidence', () => {
+    const author: Provenance = {
+      sourceType: 'author',
+      factLevel: 'canonical-fact',
+      confidence: 1,
+      sourceDocumentId: 'chapter-3',
+      sourceBlockId: 'block-2',
+      sourceRevision: 4,
+      evidence: [
+        {
+          documentId: 'chapter-3',
+          blockId: 'block-2',
+          excerpt: '林青把蓝色车票交给了阿岳。',
+          semanticFrom: 18,
+          semanticTo: 33,
+        },
+      ],
+    }
+    let state = createStoryState(11)
+    state = upsertEntity(
+      state,
+      createStoryEntity({
+        id: 'hero',
+        kind: 'character',
+        name: '林青',
+        aliases: ['青子'],
+        attributes: { role: 'narrator', age: 19, traits: ['direct', 'careful'] },
+        provenance: author,
+      }),
+    )
+    state = upsertEntity(
+      state,
+      createStoryEntity({
+        id: 'friend',
+        kind: 'character',
+        name: '阿岳',
+        provenance: author,
+      }),
+    )
+    state = upsertEntity(
+      state,
+      createStoryEntity({
+        id: 'unrelated',
+        kind: 'location',
+        name: '南港',
+        provenance: author,
+      }),
+    )
+    state = upsertRelation(
+      state,
+      createStoryRelation({
+        id: 'hero-friend',
+        sourceEntityId: 'hero',
+        targetEntityId: 'friend',
+        type: 'ally',
+        attributes: { since: 'childhood' },
+        provenance: author,
+      }),
+    )
+    state = upsertEvent(
+      state,
+      createStoryEvent({
+        id: 'ticket-handoff',
+        type: 'handoff',
+        title: '交出车票',
+        occurredAt: '冬至夜',
+        sceneId: 'scene-current',
+        entityIds: ['hero', 'friend'],
+        attributes: { item: '蓝色车票' },
+        provenance: author,
+      }),
+    )
+    state = upsertScene(
+      state,
+      createStoryScene({
+        id: 'scene-current',
+        title: '站台告别',
+        documentId: 'chapter-3',
+        blockIds: ['block-2'],
+        entityIds: ['hero', 'friend'],
+        eventIds: ['ticket-handoff'],
+        summary: '林青把车票交给阿岳。',
+        provenance: author,
+      }),
+    )
+    state = upsertTimeline(
+      state,
+      createStoryTimeline({
+        id: 'main-timeline',
+        label: '主线时间',
+        eventIds: ['ticket-handoff'],
+        constraints: [
+          { type: 'after', description: '交票发生在站台告别时', eventIds: ['ticket-handoff'] },
+        ],
+        provenance: author,
+      }),
+    )
+    state = upsertPromise(
+      state,
+      createNarrativePromise({
+        id: 'blue-ticket',
+        statement: '蓝色车票指向北方车站',
+        status: 'open',
+        evidence: author.evidence,
+        provenance: author,
+      }),
+    )
+    state = upsertConstraint(
+      state,
+      createStoryConstraint({
+        id: 'hero-rule',
+        type: 'knowledge',
+        description: '林青没有见过车票背面的地址。',
+        subjectIds: ['hero'],
+        severity: 'warning',
+        provenance: author,
+      }),
+    )
+    state = upsertConstraint(
+      state,
+      createStoryConstraint({
+        id: 'world-rule',
+        type: 'world',
+        description: '列车在午夜后停止运行。',
+        subjectIds: [],
+        severity: 'error',
+        provenance: author,
+      }),
+    )
+
+    const context = compileStoryContext(state, {
+      taskKind: 'creative.continue',
+      deduplicate: false,
+      activeEntityIds: ['hero', 'friend'],
+      activePromiseIds: ['blue-ticket'],
+      currentDocumentId: 'chapter-3',
+      maxCharacters: 20_000,
+    })!
+    const entity = context.entities.find((item) => item.id === 'hero')!
+    const relation = context.relations.find((item) => item.id === 'hero-friend')!
+    const event = context.events.find((item) => item.id === 'ticket-handoff')!
+
+    expect(context.entities.map((item) => item.id)).toEqual(['hero', 'friend'])
+    expect(entity.details).toMatchObject({
+      kind: 'character',
+      aliases: ['青子'],
+      attributes: { role: 'narrator', age: 19, traits: ['direct', 'careful'] },
+    })
+    expect(entity.provenance).toMatchObject({
+      sourceDocumentId: 'chapter-3',
+      sourceBlockId: 'block-2',
+      sourceRevision: 4,
+      evidence: [
+        { documentId: 'chapter-3', blockId: 'block-2', excerpt: '林青把蓝色车票交给了阿岳。' },
+      ],
+    })
+    expect(relation.details).toMatchObject({
+      type: 'ally',
+      source: { id: 'hero', label: '林青' },
+      target: { id: 'friend', label: '阿岳' },
+      attributes: { since: 'childhood' },
+    })
+    expect(event.details).toMatchObject({
+      occurredAt: '冬至夜',
+      sceneId: 'scene-current',
+      entities: [
+        { id: 'hero', label: '林青' },
+        { id: 'friend', label: '阿岳' },
+      ],
+    })
+    expect(context.scenes[0].details).toMatchObject({
+      documentId: 'chapter-3',
+      blockIds: ['block-2'],
+    })
+    expect(context.timelines[0].details).toMatchObject({
+      constraints: [{ type: 'after', description: '交票发生在站台告别时' }],
+    })
+    expect(context.promises[0]).toMatchObject({
+      id: 'blue-ticket',
+      status: 'open',
+      provenance: { evidence: [{ blockId: 'block-2' }] },
+    })
+    expect(context.constraints.map((item) => item.id)).toEqual(['hero-rule', 'world-rule'])
+    expect(JSON.stringify(context)).not.toContain('unrelated')
+  })
+
+  it('keeps the projected story context inside its serialized character budget', () => {
+    let state = createStoryState(12)
+    for (let index = 0; index < 24; index += 1) {
+      state = upsertEntity(
+        state,
+        createStoryEntity({
+          id: `character-${index}`,
+          kind: 'character',
+          name: `人物${index}`,
+          summary: '背景'.repeat(400),
+          attributes: { history: '经历'.repeat(400) },
+          provenance: { sourceType: 'author', factLevel: 'canonical-fact', confidence: 1 },
+        }),
+      )
+    }
+
+    const context = compileStoryContext(state, {
+      taskKind: 'creative.continue',
+      maxCharacters: 1_200,
+    })!
+
+    expect(JSON.stringify(context).length).toBeLessThanOrEqual(1_200)
+    expect(context.canonicalFacts.length).toBeLessThan(24)
   })
 })

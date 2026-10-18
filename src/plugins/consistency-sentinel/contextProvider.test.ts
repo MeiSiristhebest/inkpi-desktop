@@ -7,7 +7,6 @@ vi.mock('../../adapters/indexedDbPowerTierRepository', () => ({
   indexedDbPowerTierRepository: { get: getPowerTierSystem },
 }))
 
-import { consistencyEngine } from './engine/ConsistencyEngine'
 import { provideConsistencyContext } from './contextProvider'
 
 function system(overrides: Partial<PowerTierSystem> = {}): PowerTierSystem {
@@ -30,8 +29,8 @@ beforeEach(() => {
 })
 
 describe('provideConsistencyContext', () => {
-  it('injects an author-defined tier system as a canonical fact', async () => {
-    getPowerTierSystem.mockResolvedValue(system())
+  it('preserves stored constraints without inventing missing authorship', async () => {
+    getPowerTierSystem.mockResolvedValue(system({ relations: [] }))
 
     const fragment = await provideConsistencyContext({
       projectId: 'ws-1',
@@ -40,16 +39,19 @@ describe('provideConsistencyContext', () => {
     })
 
     expect(getPowerTierSystem).toHaveBeenCalledWith('ws-1')
-    expect(payload(fragment)).toEqual({
+    expect(payload(fragment)).toMatchObject({
       powerSystemDefined: true,
       tiers: ['星痕', '星徒', '星君'],
       rule: expect.any(String),
+      relations: [],
+      orderMode: 'explicit-partial-order',
+      validation: { isValid: true },
     })
     expect(fragment.priority).toBe(700)
     expect(fragment.metadata).toEqual({
       provenance: expect.objectContaining({
-        sourceType: 'author',
-        factLevel: 'canonical-fact',
+        sourceType: 'derived',
+        factLevel: 'hypothesis',
       }),
     })
   })
@@ -84,8 +86,8 @@ describe('provideConsistencyContext', () => {
 
     expect(data.tiers).toBeUndefined()
     expect(data.powerSystemDefined).toBe(false)
-    expect(data.candidateTiers).toEqual(consistencyEngine.getPresetSystems()[0].tiers)
-    expect(String(data.note)).toMatch(/never treat it as story canon/i)
+    expect(data.candidateTiers).toBeUndefined()
+    expect(String(data.note)).toMatch(/no recorded power system/i)
     expect(fragment.priority).toBeLessThan(700)
     expect(fragment.metadata?.provenance).toEqual(
       expect.objectContaining({ factLevel: 'proposal' }),
@@ -105,8 +107,8 @@ describe('provideConsistencyContext', () => {
     })
 
     expect(getPowerTierSystem).toHaveBeenCalledWith('ws-1')
-    expect(payload(fragment).candidateTiers).toEqual(consistencyEngine.getPresetSystems()[0].tiers)
-    expect(payload(fragment).candidateTiers).not.toContain('星痕')
+    expect(payload(fragment).candidateTiers).toBeUndefined()
+    expect(payload(fragment).powerSystemDefined).toBe(false)
   })
 
   it('degrades to an unavailable fragment rather than a fabricated world rule', async () => {

@@ -1,3 +1,7 @@
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { semanticTextFromContent } from '../../../domain/content'
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { BrainstormSparkEngine } from '../engine/BrainstormSparkEngine'
@@ -7,7 +11,14 @@ import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { Lightbulb, Sparkles, BookmarkCheck } from 'lucide-react'
 
-export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <SparkSession key={props.projectId} {...props} />
+)
+const SparkSession: FC<DesktopPluginViewProps> = ({ projectId }) => {
+  const host = useOptionalPluginHostContext()
+  const [error, setError] = useState<string | null>(null)
+  const [knownResourcesText, setKnownResourcesText] = useState('')
+  const [constraintsText, setConstraintsText] = useState('')
   const [historySparks, setHistorySparks] = useState<BrainstormSpark[]>([])
   const [dilemmaType, setDilemmaType] = useState<DilemmaType>('dead_end')
   // §P2.4：作者什么都没配时不替他选流派，四项困境要素一律从空白起步。
@@ -17,25 +28,62 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
   const [enemyAdvantage, setEnemyAdvantage] = useState('')
 
   // 旧实现在挂载时就用示例困境跑引擎，八条仙侠味「破局方案」会先于作者输入出现（INV-05）。
-  const [generatedSolutions, setGeneratedSolutions] = useState<SparkSolution[]>([])
+  const inputIdentity = JSON.stringify([
+    projectId,
+    dilemmaType,
+    coreProblem,
+    currentSituation,
+    protagonistGoal,
+    enemyAdvantage,
+    knownResourcesText,
+    constraintsText,
+  ])
+  const [generatedRun, setGeneratedRun] = useState<{
+    identity: string
+    solutions: SparkSolution[]
+  } | null>(null)
+  const generatedSolutions = generatedRun?.identity === inputIdentity ? generatedRun.solutions : []
+  const knownResources = knownResourcesText.split('\n').filter(Boolean)
+  const constraints = constraintsText.split('\n').filter(Boolean)
+  const semanticInput = {
+    dilemmaType,
+    coreProblem: semanticTextFromContent(`brainstorm-${projectId}-problem`, coreProblem),
+    currentSituation: semanticTextFromContent(
+      `brainstorm-${projectId}-situation`,
+      currentSituation,
+    ),
+    protagonistGoal: semanticTextFromContent(`brainstorm-${projectId}-goal`, protagonistGoal),
+    enemyAdvantage: semanticTextFromContent(`brainstorm-${projectId}-advantage`, enemyAdvantage),
+    knownResources: knownResources
+      .map((resource, index) =>
+        semanticTextFromContent(`brainstorm-${projectId}-resource-${index}`, resource),
+      )
+      .filter(Boolean),
+    constraints: constraints
+      .map((constraint, index) =>
+        semanticTextFromContent(`brainstorm-${projectId}-constraint-${index}`, constraint),
+      )
+      .filter(Boolean),
+  }
+  const ai = usePluginAiTask('brainstorm-spark', [inputIdentity])
 
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
   const loadHistory = async () => {
     const all = await indexedDbBrainstormRepository.getAll(projectId)
-    setHistorySparks(all)
+    setHistorySparks(all.filter((record) => record.projectId === projectId))
   }
 
   useEffect(() => {
-    loadHistory()
+    void loadHistory().catch((cause) => setError(String(cause)))
   }, [projectId])
 
   // 留空时引擎会自行补「死局受制」这类套话，那等于把引擎编的情节当成作者的设定，所以四项都要填。
   const emptyFields: string[] = []
-  if (!coreProblem.trim()) emptyFields.push('当前核心死局')
-  if (!currentSituation.trim()) emptyFields.push('危机现状与紧迫感')
-  if (!protagonistGoal.trim()) emptyFields.push('主角破局目标')
-  if (!enemyAdvantage.trim()) emptyFields.push('敌方压倒性优势')
+  if (!semanticInput.coreProblem.trim()) emptyFields.push('当前核心死局')
+  if (!semanticInput.currentSituation.trim()) emptyFields.push('危机现状与紧迫感')
+  if (!semanticInput.protagonistGoal.trim()) emptyFields.push('主角破局目标')
+  if (!semanticInput.enemyAdvantage.trim()) emptyFields.push('敌方压倒性优势')
   const missingHint = emptyFields.length
     ? `填写困境后再生成：${emptyFields.join('、')} 尚未填写`
     : null
@@ -43,17 +91,11 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
   const handleGenerate = () => {
     if (missingHint) {
       // 拒绝推演时把旧卡片一起撤下：界面不能留着与当前输入无关的结论（INV-09）。
-      setGeneratedSolutions([])
+      setGeneratedRun(null)
       return
     }
-    const res = BrainstormSparkEngine.generateSolutions({
-      dilemmaType,
-      coreProblem,
-      currentSituation,
-      protagonistGoal,
-      enemyAdvantage,
-    })
-    setGeneratedSolutions(res)
+    const res = BrainstormSparkEngine.generateSolutions(semanticInput)
+    setGeneratedRun({ identity: inputIdentity, solutions: res })
   }
 
   const handleSaveSpark = async (sol: SparkSolution) => {
@@ -67,15 +109,21 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
       currentSituation,
       protagonistGoal,
       enemyAdvantage,
+      knownResources,
+      constraints,
       selectedSolution: sol,
       generatedSolutions,
       tags: [dilemmaType],
       updatedAt: clock.now(),
     }
-    await indexedDbBrainstormRepository.save(record)
-    setSavedSuccessMsg(`已将「${sol.operatorName}」收录入灵感库`)
-    setTimeout(() => setSavedSuccessMsg(null), 2500)
-    loadHistory()
+    try {
+      await indexedDbBrainstormRepository.save(record)
+      setSavedSuccessMsg(`已将「${sol.operatorName}」收录入灵感库`)
+      await loadHistory()
+      setError(null)
+    } catch (cause) {
+      setError(String(cause))
+    }
   }
 
   return (
@@ -87,7 +135,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
             灵感火花与困境脱壳破局炉 (Brainstorm Spark)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            基于故事矛盾矩阵与八大逆向算子，终结卡文绝境（已收录 {historySparks.length}{' '}
+            基于故事矛盾矩阵与八大逆向算子，检查已有条件与备选方案（已收录 {historySparks.length}{' '}
             条备选灵感）。
           </p>
         </div>
@@ -98,6 +146,14 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
         )}
       </div>
 
+      {error && (
+        <p role="alert">
+          {error}
+          <button onClick={() => void loadHistory().catch((cause) => setError(String(cause)))}>
+            重新读取历史
+          </button>
+        </p>
+      )}
       {/* 困境输入面板 */}
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl space-y-3 shadow-sm">
         <div className="flex items-center gap-2 text-xs">
@@ -171,6 +227,18 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
           </div>
         </div>
 
+        <textarea
+          aria-label="已有筹码与线索"
+          placeholder="已有筹码与线索，每行一项"
+          value={knownResourcesText}
+          onChange={(e) => setKnownResourcesText(e.target.value)}
+        />
+        <textarea
+          aria-label="不可改变的条件"
+          placeholder="不可改变的条件，每行一项"
+          value={constraintsText}
+          onChange={(e) => setConstraintsText(e.target.value)}
+        />
         <div className="flex items-center justify-end gap-3 pt-1">
           {missingHint && (
             <span className="text-[11px] text-amber-600 dark:text-amber-400">{missingHint}</span>
@@ -185,6 +253,27 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
         </div>
       </div>
 
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={Boolean(missingHint) || ai.isRunning}
+          onClick={() =>
+            void ai.run({
+              ...BrainstormSparkEngine.buildAnalysisInput(semanticInput),
+              chapterText:
+                host?.projectId === projectId && host.activeChapter
+                  ? semanticTextFromContent(
+                      host.activeChapter.id,
+                      host.activeChapter.content ?? '',
+                      host.activeChapter.revision,
+                    )
+                  : '',
+            })
+          }
+        >
+          AI 受约束方案复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
       {/* 8大破局方案展示：只有作者填齐困境并点过推演之后才有内容 */}
       {generatedSolutions.length === 0 ? (
         <div className="p-8 border rounded-xl text-center text-slate-400 text-xs bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
@@ -193,7 +282,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
       ) : (
         <div className="space-y-2">
           <p className="text-[11px] text-slate-400">
-            以下是内置八大算子的模板文案，只喂了你填写的困境；套话部分请按本书口径改写。
+            以下是可选的设计问题与成立条件，使用作者提供的目标、筹码和限制；尚未决定具体情节。
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {generatedSolutions.map((sol) => (
@@ -213,7 +302,7 @@ export const BrainstormSparkMasterView: FC<DesktopPluginViewProps> = ({ projectI
                           : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
                       }`}
                     >
-                      {sol.twistImpact === 'earthshaking' ? '剧震级反转' : '精彩顿挫'}
+                      {sol.status === 'creative_option' ? '创作选项' : '旧模板未验证'}
                     </span>
                   </div>
 

@@ -1,5 +1,5 @@
 export type VoiceGender = 'male' | 'female' | 'neutral'
-export type VoiceAgeGroup = 'youth' | 'adult' | 'elder' | 'child'
+export type VoiceAgeGroup = 'unspecified' | 'youth' | 'adult' | 'elder' | 'child'
 export type VoiceTimbreFilter =
   'standard' | 'heroic_highpass' | 'villain_lowpass' | 'whisper_bandpass'
 
@@ -13,6 +13,9 @@ export interface VoiceCastProfileRecord {
   pitch: number // 0.5 ~ 2.0 (1.0 default)
   rate: number // 0.5 ~ 2.0 (1.0 default)
   timbreFilter: VoiceTimbreFilter
+  voiceURI?: string
+  language?: string
+  assignmentSource?: 'author' | 'neutral-default'
   updatedAt: number
 }
 

@@ -1,44 +1,66 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { EmotionCurveMasterView } from './EmotionCurveMasterView'
 import { EmotionCurveDrawer } from './EmotionCurveDrawer'
-import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
-
+import { indexedDbEmotionAuditRepository as repo } from '../../../adapters/indexedDbEmotionAuditRepository'
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
-    getChaptersByProject: vi.fn(),
+    getChaptersByProject: vi.fn().mockResolvedValue([
+      {
+        id: 'c',
+        projectId: 'p',
+        volumeId: 'v',
+        title: '保存章',
+        order: 0,
+        content: '作者喜悦。',
+        revision: 2,
+      },
+    ]),
+    getVolumesByProject: vi.fn().mockResolvedValue([{ id: 'v', projectId: 'p', order: 0 }]),
   },
 }))
-
-describe('EmotionCurve Components', () => {
-  const fakeChapters = [
-    {
-      id: 'ch-1',
-      projectId: 'proj-1',
-      title: '第一章 破天',
-      order: 1,
-      content: '暴爽！一剑秒杀神王，全场跪伏狂笑！',
-    },
-  ]
-
-  it('renders EmotionCurveMasterView with chapter evaluation cards', async () => {
-    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
-      fakeChapters as any,
-    )
-    render(<EmotionCurveMasterView projectId="proj-1" />)
-
-    expect(screen.getByText(/读者情绪心电图与心智共鸣计/)).toBeInTheDocument()
-    await waitFor(() => {
-      expect(screen.getByText(/第一章 破天/)).toBeInTheDocument()
+vi.mock('../../../adapters/indexedDbEmotionAuditRepository', () => ({
+  indexedDbEmotionAuditRepository: {
+    getAll: vi.fn().mockResolvedValue([]),
+    save: vi.fn().mockResolvedValue(undefined),
+  },
+}))
+describe('EmotionCurve views', () => {
+  it('saves only explicit author values and binds evidence to the actual chapter', async () => {
+    render(<EmotionCurveMasterView projectId="p" />)
+    await screen.findByText('作者喜悦。')
+    fireEvent.change(screen.getByLabelText('作者喜悦标注'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('作者标注说明'), {
+      target: { value: '作者安排的情绪转折' },
     })
+    fireEvent.change(screen.getByLabelText('标注原文引用'), { target: { value: '喜悦' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存作者情绪标注' }))
+    await waitFor(() =>
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'p',
+          chapterId: 'c',
+          chapterOrder: 1,
+          sourceText: '作者喜悦。',
+          sourceRevision: 2,
+          annotation: {
+            values: { joy: 0 },
+            note: '作者安排的情绪转折',
+            quote: '喜悦',
+            start: 2,
+            end: 4,
+          },
+        }),
+      ),
+    )
+    const record = vi.mocked(repo.save).mock.calls.at(-1)![0]
+    expect(record).not.toHaveProperty('resonanceScore')
   })
-
-  it('renders EmotionCurveDrawer with polarity', async () => {
-    render(<EmotionCurveDrawer projectId="proj-1" currentText="危机降临，杀意弥漫！" />)
-
-    expect(screen.getByText(/读者情绪心电图/)).toBeInTheDocument()
-    expect(screen.getByText(/六维情绪光谱分解/)).toBeInTheDocument()
-    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
-    expect(screen.getByText(/不代表真实读者情绪/)).toBeInTheDocument()
+  it('shows no false reader-emotion verdict in the drawer', () => {
+    const { rerender } = render(<EmotionCurveDrawer projectId="p" currentText="没有喜悦。" />)
+    expect(screen.getByText(/「喜悦」/)).toBeInTheDocument()
+    expect(screen.queryByText(/共鸣深度/)).not.toBeInTheDocument()
+    rerender(<EmotionCurveDrawer projectId="p" currentText="天气晴朗。" />)
+    expect(screen.queryByText(/「喜悦」/)).not.toBeInTheDocument()
   })
 })

@@ -1,9 +1,11 @@
-import { semanticTextFromContent } from '../../../domain/content'
+import { projectContent, resolveSourceEvidenceRange } from '../../../domain/content'
 import { useState, useEffect, useMemo, useCallback, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { MultiCalendarEngine } from '../engine/MultiCalendarEngine'
+import { buildChronologyScanInput } from '../engine/chronologyScanInput'
 import type {
   CalendarDefinition,
+  ChronologySequenceRole,
   ChapterChronologyEvent,
   MultiCalendarProjectRecord,
   ChronologyAuditResult,
@@ -13,6 +15,8 @@ import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRe
 import type { ChapterRecord } from '../../../types'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { createProvenance } from '../../../domain/story/provenance'
+import { useOptionalActiveWritingContext } from '../../../core/activeWritingContext'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
@@ -32,7 +36,7 @@ import { Select } from '../../../ui/primitives'
 
 export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('multi-calendar')
+  const activeWriting = useOptionalActiveWritingContext()
   const [record, setRecord] = useState<MultiCalendarProjectRecord | null>(null)
   // §P2.4：历法属于本书的世界设定。空工作区一律从空白开始，内置的修真双历只能由作者点「套用」拿到，
   // 不能在「用户没配置」时被当成默认历法写进档案。
@@ -52,15 +56,24 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const [newCalMonths, setNewCalMonths] = useState<number>(12)
   const [newCalDays, setNewCalDays] = useState<number>(30)
   const [newCalEpochOffset, setNewCalEpochOffset] = useState<number>(0)
+  const [calendarError, setCalendarError] = useState('')
 
   // 章节时间登记表单
   const [chapters, setChapters] = useState<ChapterRecord[]>([])
+  const chronologyScan = useMemo(() => buildChronologyScanInput(chapters), [chapters])
+  const aiTask = usePluginAiTask('multi-calendar', [projectId, chronologyScan.input])
   const [eventChapterId, setEventChapterId] = useState<string>('')
   const [eventCalId, setEventCalId] = useState<string>('')
   const [eventYear, setEventYear] = useState<number>(1)
   const [eventMonth, setEventMonth] = useState<number>(1)
   const [eventDay, setEventDay] = useState<number>(1)
+  const [eventSequenceRole, setEventSequenceRole] = useState<ChronologySequenceRole>('unknown')
   const [eventSummary, setEventSummary] = useState<string>('')
+  const [eventSourceExcerpt, setEventSourceExcerpt] = useState('')
+  const [eventSourceError, setEventSourceError] = useState<string | null>(null)
+  const [chronologyNavigationMessage, setChronologyNavigationMessage] = useState<string | null>(
+    null,
+  )
 
   const loadData = useCallback(async () => {
     const [existing, allChapters] = await Promise.all([
@@ -87,33 +100,30 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
   // AI 逆向扫描各章时间标注，防时间倒流
   const handleAiChronologyScan = async () => {
-    if (chapters.length === 0) return
-    const chaptersText = chapters
-      .slice(0, 15)
-      .map(
-        (c) =>
-          `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 250)}...`,
-      )
-      .join('\n\n')
-
-    const analysisInput = { chapterSamples: chaptersText }
-
-    await aiTask.run(analysisInput)
+    if (!chronologyScan.sampledChapterCount) return
+    await aiTask.run(chronologyScan.input)
   }
 
   // 历法换算计算：不足两套历法时不给出任何换算结果，而不是拿内置双历凑一个数
   const conversionResult = useMemo(() => {
     const sCal = calendars.find((c) => c.id === sourceCalId) || calendars[0]
     const tCal = calendars.find((c) => c.id === targetCalId) || calendars[1]
-    if (!sCal || !tCal || sCal.id === tCal.id) return null
-    return MultiCalendarEngine.convertCalendarDate({
-      sourceCalendar: sCal,
-      targetCalendar: tCal,
-      sourceDate: { year: inputYear, month: inputMonth, day: inputDay },
-    })
+    if (!sCal || !tCal || sCal.id === tCal.id) return { result: null, error: '' }
+    try {
+      return {
+        result: MultiCalendarEngine.convertCalendarDate({
+          sourceCalendar: sCal,
+          targetCalendar: tCal,
+          sourceDate: { year: inputYear, month: inputMonth, day: inputDay },
+        }),
+        error: '',
+      }
+    } catch (error) {
+      return { result: null, error: error instanceof Error ? error.message : '日期无法换算。' }
+    }
   }, [sourceCalId, targetCalId, inputYear, inputMonth, inputDay, calendars])
 
-  // 时间倒流悖论巡检
+  // Only author-marked mainline events are compared.
   const chronologyAudit: ChronologyAuditResult = useMemo(() => {
     return MultiCalendarEngine.validateChronology(events)
   }, [events])
@@ -125,15 +135,27 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const handleAddCalendar = () => {
     const name = newCalName.trim()
     if (!name) return
-    const months = Math.max(1, Math.round(newCalMonths))
+    const months = newCalMonths
+    if (
+      !Number.isSafeInteger(months) ||
+      months < 1 ||
+      months > 1000 ||
+      !Number.isSafeInteger(newCalDays) ||
+      newCalDays < 1 ||
+      !Number.isSafeInteger(newCalEpochOffset)
+    ) {
+      setCalendarError('请填写整数月份数、正整数月长和整数纪元偏移；当前最多支持 1000 个月。')
+      return
+    }
+    setCalendarError('')
     setCalendars([
       ...calendars,
       {
         id: idGenerator.generate('cal'),
         name,
-        epochOffsetDays: Math.round(newCalEpochOffset),
+        epochOffsetDays: newCalEpochOffset,
         monthsPerYear: months,
-        daysPerMonth: Array.from({ length: months }, () => Math.max(1, Math.round(newCalDays))),
+        daysPerMonth: Array.from({ length: months }, () => newCalDays),
       },
     ])
     setNewCalName('')
@@ -143,12 +165,54 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     e.preventDefault()
     const targetChap = chapters.find((c) => c.id === eventChapterId)
     const cal = calendars.find((c) => c.id === eventCalId)
-    if (!cal) return
-    const absDay = MultiCalendarEngine.toAbsoluteDay(cal, {
-      year: eventYear,
-      month: eventMonth,
-      day: eventDay,
-    })
+    if (!targetChap || !cal) return
+
+    const sourceExcerpt = eventSourceExcerpt.trim()
+    let provenance: ChapterChronologyEvent['provenance']
+    if (sourceExcerpt) {
+      const sourceDocument = projectContent(
+        targetChap.id,
+        targetChap.content || '',
+        targetChap.revision ?? 0,
+      )
+      const sourceRange = resolveSourceEvidenceRange(
+        sourceDocument,
+        { documentId: targetChap.id, excerpt: sourceExcerpt },
+        true,
+      )
+      if (!sourceRange) {
+        setEventSourceError('原文必须在关联章节当前保存版本中唯一出现。')
+        return
+      }
+
+      provenance = createProvenance({
+        sourceType: 'author',
+        factLevel: 'canonical-fact',
+        sourceDocumentId: targetChap.id,
+        sourceRevision: targetChap.revision ?? 0,
+        evidence: [
+          {
+            documentId: targetChap.id,
+            excerpt: sourceDocument.text.slice(sourceRange.from, sourceRange.to),
+            semanticFrom: sourceRange.from,
+            semanticTo: sourceRange.to,
+          },
+        ],
+      })
+    }
+
+    setEventSourceError(null)
+    let absDay: number
+    try {
+      absDay = MultiCalendarEngine.toAbsoluteDay(cal, {
+        year: eventYear,
+        month: eventMonth,
+        day: eventDay,
+      })
+    } catch (error) {
+      setEventSourceError(error instanceof Error ? error.message : '日期无效。')
+      return
+    }
 
     const newEvent: ChapterChronologyEvent = {
       chapterId: eventChapterId,
@@ -161,7 +225,9 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         day: eventDay,
         absoluteDayIndex: absDay,
       },
+      sequenceRole: eventSequenceRole,
       eventSummary: eventSummary.trim() || '主要剧情发生点',
+      ...(provenance ? { provenance } : {}),
     }
 
     // 过滤掉同章节原事件并追加
@@ -169,6 +235,35 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
     updated.sort((a, b) => a.chapterOrder - b.chapterOrder)
     setEvents(updated)
     setEventSummary('')
+    setEventSourceExcerpt('')
+    setEventSequenceRole('unknown')
+  }
+
+  const handleOpenChronologySource = async (event: ChapterChronologyEvent) => {
+    const evidence = event.provenance?.evidence?.[0]
+    if (!activeWriting || !evidence?.excerpt) {
+      setChronologyNavigationMessage('当前未连接可跳转的编辑器。')
+      return
+    }
+
+    const result = await activeWriting.navigateToSource({
+      documentId: evidence.documentId ?? event.provenance?.sourceDocumentId ?? event.chapterId,
+      sourceRevision: event.provenance?.sourceRevision,
+      excerpt: evidence.excerpt,
+      semanticFrom: evidence.semanticFrom,
+      semanticTo: evidence.semanticTo,
+    })
+    setChronologyNavigationMessage(
+      result.status === 'opened'
+        ? result.highlighted
+          ? `已定位到《${event.chapterTitle}》的原文。`
+          : `已打开《${event.chapterTitle}》，但未能定位原文。`
+        : result.status === 'save-blocked'
+          ? '当前稿件未能保存，已取消原文跳转。'
+          : result.status === 'not-found'
+            ? `《${event.chapterTitle}》中的原文已变化或无法唯一匹配。`
+            : '当前编辑器不可用，无法跳转原文。',
+    )
   }
 
   const handleRemoveEvent = (chapterId: string) => {
@@ -211,14 +306,25 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             </span>
           )}
           {hostContext?.aiAssistant?.isAvailable && (
-            <button
-              disabled={aiTask.isRunning}
-              onClick={handleAiChronologyScan}
-              className="px-3 py-1.5 text-xs font-semibold bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <Bot className="w-3.5 h-3.5 text-indigo-500" />
-              <span>AI 章节时空逆向排查</span>
-            </button>
+            <div className="flex max-w-72 flex-col items-start gap-1">
+              <button
+                disabled={!chronologyScan.sampledChapterCount || aiTask.isRunning}
+                onClick={handleAiChronologyScan}
+                aria-describedby="multi-calendar-ai-scope"
+                className="px-3 py-1.5 text-xs font-semibold bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <Bot className="w-3.5 h-3.5 text-indigo-500" />
+                <span>AI 章节时空逆向排查</span>
+              </button>
+              <p
+                id="multi-calendar-ai-scope"
+                data-testid="multi-calendar-ai-scope"
+                role="note"
+                className="text-[10px] text-[var(--ink-text-faint)]"
+              >
+                {chronologyScan.scopeLabel}
+              </p>
+            </div>
           )}
           <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
@@ -312,33 +418,83 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         </button>
       </div>
 
-      {/* 倒流悖论预警条 */}
+      <p className="text-xs">
+        换算按固定月长与固定年长计算，年号为连续整数（含 0 年）；闰日和闰月规则尚不支持。
+      </p>
+      {calendarError && <p role="alert">{calendarError}</p>}
+      {/* 只对作者标记为主线推进的事件检查故事时间顺序。 */}
       {events.length === 0 ? (
         <div className="p-3.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
           <Clock className="w-4 h-4 shrink-0" />
-          尚未登记任何章节时间点，因此既没有悖论，也没有「时间线正常」这个结论。
+          尚未登记章节时间点，无法判断时间线是否一致。
         </div>
       ) : (
         <div
           className={`p-3.5 rounded-xl border text-xs flex items-center justify-between transition ${
-            chronologyAudit.hasParadox
+            chronologyAudit.status === 'conflict'
               ? 'bg-rose-50/60 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-200'
-              : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
+              : chronologyAudit.status === 'consistent'
+                ? 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-900 text-emerald-800 dark:text-emerald-200'
+                : 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-900 text-amber-800 dark:text-amber-200'
           }`}
         >
           <div className="flex items-center gap-2">
-            {chronologyAudit.hasParadox ? (
+            {chronologyAudit.status === 'conflict' ? (
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" />
-            ) : (
+            ) : chronologyAudit.status === 'consistent' ? (
               <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+            ) : (
+              <Clock className="w-5 h-5 text-amber-500 shrink-0" />
             )}
             <span className="font-bold">{chronologyAudit.diagnostic}</span>
           </div>
-          {chronologyAudit.hasParadox && (
+          {chronologyAudit.status === 'conflict' && (
             <span className="font-semibold px-2 py-0.5 rounded bg-rose-500 text-white text-[11px]">
-              {chronologyAudit.paradoxCount} 处悖论待修复
+              {chronologyAudit.conflictCount} 处待核对
             </span>
           )}
+        </div>
+      )}
+
+      {chronologyAudit.status === 'conflict' && (
+        <div className="space-y-2" aria-label="待核对的时间顺序冲突">
+          {chronologyAudit.conflictPairs.map((pair) => {
+            const earlierEvent = events.find((event) => event.chapterId === pair.earlierChapterId)
+            const laterEvent = events.find((event) => event.chapterId === pair.laterChapterId)
+
+            return (
+              <div
+                key={`${pair.earlierChapterId}:${pair.laterChapterId}`}
+                className="rounded-lg border border-rose-200 dark:border-rose-900 bg-white dark:bg-slate-900 p-3 text-xs space-y-2"
+              >
+                <p>{pair.description}</p>
+                <div className="flex flex-wrap gap-2">
+                  {[earlierEvent, laterEvent].filter(Boolean).map((event) => {
+                    const sourceExcerpt = event?.provenance?.evidence?.[0]?.excerpt
+                    return sourceExcerpt ? (
+                      <button
+                        key={event!.chapterId}
+                        type="button"
+                        disabled={!activeWriting}
+                        onClick={() => void handleOpenChronologySource(event!)}
+                        className="rounded border border-rose-300 dark:border-rose-800 px-2 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        打开第 {event!.chapterOrder} 章原文证据
+                      </button>
+                    ) : (
+                      <span
+                        key={event!.chapterId}
+                        className="rounded bg-slate-100 dark:bg-slate-800 px-2 py-1 text-slate-500"
+                      >
+                        第 {event!.chapterOrder} 章未登记可定位原文
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+          {chronologyNavigationMessage && <p role="status">{chronologyNavigationMessage}</p>}
         </div>
       )}
 
@@ -352,7 +508,12 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs items-end">
           <div>
             <label className="block mb-1 text-slate-500">来源历法系统：</label>
-            <Select value={sourceCalId} onValueChange={(v) => setSourceCalId(v)} className="w-full">
+            <Select
+              aria-label="来源历法系统"
+              value={sourceCalId}
+              onValueChange={(v) => setSourceCalId(v)}
+              className="w-full"
+            >
               {calendars.length === 0 && <option value="">（尚未定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -398,7 +559,12 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
           <div>
             <label className="block mb-1 text-slate-500">换算目标历法：</label>
-            <Select value={targetCalId} onValueChange={(v) => setTargetCalId(v)} className="w-full">
+            <Select
+              aria-label="换算目标历法"
+              value={targetCalId}
+              onValueChange={(v) => setTargetCalId(v)}
+              className="w-full"
+            >
               {calendars.length === 0 && <option value="">（尚未定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -409,15 +575,17 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           </div>
 
           {/* 换算结果卡片 */}
-          {conversionResult ? (
+          {conversionResult.error && <p role="alert">{conversionResult.error}</p>}
+          {conversionResult.result ? (
             <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 text-indigo-800 dark:text-indigo-300">
               <div className="text-[10px] text-indigo-500">折合标量天数与对应日期：</div>
               <div className="font-bold text-xs mt-0.5">
-                {conversionResult.targetDate.year} 年 {conversionResult.targetDate.month} 月{' '}
-                {conversionResult.targetDate.day} 日
+                {conversionResult.result.targetDate.year} 年{' '}
+                {conversionResult.result.targetDate.month} 月{' '}
+                {conversionResult.result.targetDate.day} 日
               </div>
               <div className="text-[10px] opacity-75">
-                绝对第 {conversionResult.absoluteDayIndex} 天
+                绝对第 {conversionResult.result.absoluteDayIndex} 天
               </div>
             </div>
           ) : (
@@ -438,10 +606,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           登记章节故事时间锚点 (In-Story Timeline)
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 items-end">
           <div>
             <label className="block mb-1 text-slate-500">关联章节：</label>
             <Select
+              aria-label="关联章节"
               value={eventChapterId}
               onValueChange={(v) => setEventChapterId(v)}
               className="w-full"
@@ -456,13 +625,32 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
           <div>
             <label className="block mb-1 text-slate-500">采用历法：</label>
-            <Select value={eventCalId} onValueChange={(v) => setEventCalId(v)} className="w-full">
+            <Select
+              aria-label="采用历法"
+              value={eventCalId}
+              onValueChange={(v) => setEventCalId(v)}
+              className="w-full"
+            >
               {calendars.length === 0 && <option value="">（先在上方定义历法）</option>}
               {calendars.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
+            </Select>
+          </div>
+
+          <div>
+            <label className="block mb-1 text-slate-500">叙述顺序：</label>
+            <Select
+              aria-label="叙述顺序"
+              value={eventSequenceRole}
+              onValueChange={(value) => setEventSequenceRole(value as ChronologySequenceRole)}
+              className="w-full"
+            >
+              <option value="unknown">未确认（不参与自检）</option>
+              <option value="mainline">主线推进（参与自检）</option>
+              <option value="nonlinear">插叙 / 回忆（不参与自检）</option>
             </Select>
           </div>
 
@@ -510,6 +698,45 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             </button>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block mb-1 text-slate-500" htmlFor="chronology-event-summary">
+              事件简介：
+            </label>
+            <input
+              id="chronology-event-summary"
+              aria-label="事件简介"
+              type="text"
+              value={eventSummary}
+              onChange={(e) => setEventSummary(e.target.value)}
+              placeholder="例如：抵达王都"
+              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-slate-500" htmlFor="chronology-source-excerpt">
+              原文时间证据（选填）：
+            </label>
+            <textarea
+              id="chronology-source-excerpt"
+              aria-label="原文时间证据（选填）"
+              rows={2}
+              value={eventSourceExcerpt}
+              onChange={(e) => {
+                setEventSourceExcerpt(e.target.value)
+                setEventSourceError(null)
+              }}
+              placeholder="粘贴关联章节保存版本中的原句；唯一匹配后可从冲突提示跳回。"
+              className="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+            />
+            {eventSourceError && (
+              <p role="alert" className="mt-1 text-rose-600 dark:text-rose-400">
+                {eventSourceError}
+              </p>
+            )}
+          </div>
+        </div>
       </form>
 
       {/* 故事时间线节点瀑布流 */}
@@ -533,6 +760,13 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                 </span>
                 <span className="font-semibold text-slate-900 dark:text-white">
                   {ev.chapterTitle}
+                </span>
+                <span className="text-slate-500">
+                  {ev.sequenceRole === 'mainline'
+                    ? '主线推进'
+                    : ev.sequenceRole === 'nonlinear'
+                      ? '插叙 / 回忆'
+                      : '顺序未确认'}
                 </span>
                 <span className="text-slate-400">
                   【{calendars.find((c) => c.id === ev.timePoint.calendarId)?.name}】

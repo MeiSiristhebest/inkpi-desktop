@@ -7,243 +7,125 @@ import type {
   HunkResolution,
 } from '../types'
 
-/**
- * DiffReviewerEngine
- *
- * 核心算法：Myers 最短编辑脚本 (Shortest Edit Script, SES) + 行内字词级细化 (Word/Char-level Diff)
- * 职责：
- * 1. 计算原文本与 AI 提案文本之间的结构化 Hunk 差异
- * 2. 支持独立 Hunk 的 apply / reject 决策
- * 3. 动态合成应用部分 Hunk 后的完整合稿文本
- */
+function rawLines(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? []
+}
+function lineOffset(lines: string[], index: number): number {
+  return lines.slice(0, index).reduce((sum, line) => sum + line.length, 0)
+}
+
 export class DiffReviewerEngine {
-  /**
-   * 对两段文本进行分块 Diff 分析并拆解为可独立审校的 Hunk
-   */
-  public static computeDiff(oldText: string, newText: string): DiffComputeResult {
+  static computeDiff(oldText: string, newText: string): DiffComputeResult {
     const patch = Diff.structuredPatch('original.txt', 'proposed.txt', oldText, newText, '', '', {
       context: 2,
     })
-
-    let additions = 0
-    let deletions = 0
-    let unmodified = 0
-
-    const hunks: ReviewHunkView[] = patch.hunks.map((rawHunk, hIdx) => {
+    const oldLines = rawLines(oldText)
+    const newLines = rawLines(newText)
+    const parts = Diff.diffLines(oldText, newText)
+    const stats = { additions: 0, deletions: 0, unmodified: 0 }
+    for (const part of parts) {
+      const count = rawLines(part.value).length
+      if (part.added) stats.additions += count
+      else if (part.removed) stats.deletions += count
+      else stats.unmodified += count
+    }
+    const hunks: ReviewHunkView[] = patch.hunks.map((raw, index) => {
+      let oldCur = raw.oldStart
+      let newCur = raw.newStart
       const lineChanges: DiffLineChange[] = []
-      let oldCur = rawHunk.oldStart
-      let newCur = rawHunk.newStart
-
-      // 提取本 Hunk 的各行变更
-      for (const line of rawHunk.lines) {
+      for (const line of raw.lines) {
         const marker = line[0]
-        const content = line.slice(1)
-
-        if (marker === '+') {
-          additions++
-          lineChanges.push({
-            type: 'added',
-            newLineNumber: newCur++,
-            content,
-          })
-        } else if (marker === '-') {
-          deletions++
-          lineChanges.push({
-            type: 'removed',
-            oldLineNumber: oldCur++,
-            content,
-          })
-        } else {
-          unmodified++
+        if (marker === '\\') continue
+        if (marker === '+')
+          lineChanges.push({ type: 'added', newLineNumber: newCur++, content: line.slice(1) })
+        else if (marker === '-')
+          lineChanges.push({ type: 'removed', oldLineNumber: oldCur++, content: line.slice(1) })
+        else if (marker === ' ')
           lineChanges.push({
             type: 'unchanged',
             oldLineNumber: oldCur++,
             newLineNumber: newCur++,
-            content,
+            content: line.slice(1),
           })
-        }
       }
-
-      // 计算行内字词级 Diff (Intra-line word tokens)
       this.enrichWordTokens(lineChanges)
-
+      const oldIndex = raw.oldLines === 0 ? raw.oldStart : Math.max(0, raw.oldStart - 1)
+      const newIndex = raw.newLines === 0 ? raw.newStart : Math.max(0, raw.newStart - 1)
+      const sourceStart = lineOffset(oldLines, oldIndex)
+      const sourceEnd = lineOffset(oldLines, oldIndex + raw.oldLines)
       return {
-        id: `hunk-${hIdx}-${rawHunk.oldStart}-${rawHunk.newStart}`,
-        oldStartLine: rawHunk.oldStart,
-        oldLineCount: rawHunk.oldLines,
-        newStartLine: rawHunk.newStart,
-        newLineCount: rawHunk.newLines,
-        lines: rawHunk.lines,
-        resolution: 'pending' as HunkResolution,
+        id: 'hunk-' + index + '-' + raw.oldStart + '-' + raw.newStart,
+        oldStartLine: raw.oldStart,
+        oldLineCount: raw.oldLines,
+        newStartLine: raw.newStart,
+        newLineCount: raw.newLines,
+        lines: raw.lines,
+        resolution: 'pending',
         lineChanges,
+        sourceSnapshot: oldText,
+        sourceStart,
+        sourceEnd,
+        sourceQuote: oldText.slice(sourceStart, sourceEnd),
+        replacementText: newLines.slice(newIndex, newIndex + raw.newLines).join(''),
       }
     })
-
-    return {
-      hunks,
-      stats: { additions, deletions, unmodified },
-    }
+    return { hunks, stats }
   }
 
-  /**
-   * 行内字词级对齐对比
-   */
-  private static enrichWordTokens(lineChanges: DiffLineChange[]): void {
-    // 提取所有的 removed 行与 added 行进行就近配对
-    const removedIndices: number[] = []
-    const addedIndices: number[] = []
-
-    lineChanges.forEach((lc, idx) => {
-      if (lc.type === 'removed') removedIndices.push(idx)
-      else if (lc.type === 'added') addedIndices.push(idx)
-    })
-
-    const pairCount = Math.min(removedIndices.length, addedIndices.length)
-    for (let p = 0; p < pairCount; p++) {
-      const remChange = lineChanges[removedIndices[p]]
-      const addChange = lineChanges[addedIndices[p]]
-
-      const wordDiff = Diff.diffWordsWithSpace(remChange.content, addChange.content)
+  private static enrichWordTokens(changes: DiffLineChange[]): void {
+    const removed = changes.filter((line) => line.type === 'removed')
+    const added = changes.filter((line) => line.type === 'added')
+    for (let i = 0; i < Math.min(removed.length, added.length); i++) {
       const oldTokens: DiffWordToken[] = []
       const newTokens: DiffWordToken[] = []
-
-      wordDiff.forEach((part) => {
-        if (part.added) {
-          newTokens.push({ type: 'added', value: part.value })
-        } else if (part.removed) {
-          oldTokens.push({ type: 'removed', value: part.value })
-        } else {
+      for (const part of Diff.diffWordsWithSpace(removed[i].content, added[i].content)) {
+        if (part.added) newTokens.push({ type: 'added', value: part.value })
+        else if (part.removed) oldTokens.push({ type: 'removed', value: part.value })
+        else {
           oldTokens.push({ type: 'unchanged', value: part.value })
           newTokens.push({ type: 'unchanged', value: part.value })
         }
-      })
-
-      remChange.wordTokens = oldTokens
-      addChange.wordTokens = newTokens
+      }
+      removed[i].wordTokens = oldTokens
+      added[i].wordTokens = newTokens
     }
   }
 
-  /**
-   * 根据各个 Hunk 的裁决状态 (applied / rejected / pending)，重构合并后的终稿文本
-   * - applied: 采纳 proposed (新版)
-   * - rejected 或 pending: 保留 original (旧版)
-   */
-  /**
-   * 根据各个 Hunk 的裁决状态 (applied / rejected / pending)，重构合并后的终稿文本
-   * - applied: 采纳 proposed (新版)
-   * - rejected 或 pending: 保留 original (旧版)
-   */
-  public static applyHunks(
+  static applyHunks(
     oldText: string,
-    hunks: Array<{ lines: string[]; resolution: HunkResolution; oldStartLine?: number }>,
+    hunks: Array<{
+      lines: string[]
+      resolution: HunkResolution
+      oldStartLine?: number
+      sourceSnapshot?: string
+      sourceStart?: number
+      sourceEnd?: number
+      sourceQuote?: string
+      replacementText?: string
+    }>,
   ): string {
-    // 筛选出所有状态为 applied 的 hunks 并组装 unified patch 进行精准应用
-    const appliedHunks = hunks.filter((h) => h.resolution === 'applied')
-    if (appliedHunks.length === 0) {
-      return oldText
+    const selected = hunks
+      .filter((h) => h.resolution === 'applied')
+      .sort((a, b) => (a.sourceStart ?? -1) - (b.sourceStart ?? -1))
+    let result = ''
+    let cursor = 0
+    for (const hunk of selected) {
+      const { sourceStart: start, sourceEnd: end } = hunk
+      if (
+        hunk.sourceSnapshot !== oldText ||
+        !Number.isInteger(start) ||
+        !Number.isInteger(end) ||
+        start! < cursor ||
+        end! < start! ||
+        end! > oldText.length ||
+        oldText.slice(start, end) !== hunk.sourceQuote ||
+        typeof hunk.replacementText !== 'string'
+      ) {
+        throw new Error('修订来源已变化或缺少精确位置，请重新计算差异。')
+      }
+      result += oldText.slice(cursor, start) + hunk.replacementText
+      cursor = end!
     }
-
-    // 动态嗅探原始换行符（CRLF vs LF），确保 Windows 桌面端合稿保真
-    const isCrlf = oldText.includes('\r\n')
-    const eol = isCrlf ? '\r\n' : '\n'
-
-    // 简单高效且确定的重组策略：将 oldText 按行切分，依 hunk 行范围做状态机替换
-    const oldLines = oldText.split(/\r?\n/)
-    const resultLines: string[] = []
-    let cursor = 0 // oldLines 的行指针
-
-    for (const hunk of hunks) {
-      // 提取 hunk 内的上下文匹配与变更
-      const hunkOldLines: string[] = []
-      const hunkNewLines: string[] = []
-
-      for (const line of hunk.lines) {
-        const marker = line[0]
-        const content = line.slice(1)
-        if (marker === ' ') {
-          hunkOldLines.push(content)
-          hunkNewLines.push(content)
-        } else if (marker === '-') {
-          hunkOldLines.push(content)
-        } else if (marker === '+') {
-          hunkNewLines.push(content)
-        }
-      }
-
-      // 在 oldLines 中定位 hunkOldLines 的起始索引
-      if (hunkOldLines.length === 0) continue
-      let matchIdx = -1
-
-      const checkMatchAt = (idx: number): boolean => {
-        if (idx < cursor || idx > oldLines.length - hunkOldLines.length) return false
-        for (let k = 0; k < hunkOldLines.length; k++) {
-          if (oldLines[idx + k] !== hunkOldLines[k]) {
-            return false
-          }
-        }
-        return true
-      }
-
-      // 阶段 1：行号锚定优先 (Line-number anchored matching)
-      if (typeof hunk.oldStartLine === 'number' && hunk.oldStartLine > 0) {
-        const expectedZeroIdx = hunk.oldStartLine - 1
-        const windowSize = 5
-        if (checkMatchAt(expectedZeroIdx)) {
-          matchIdx = expectedZeroIdx
-        } else {
-          for (let d = 1; d <= windowSize; d++) {
-            if (checkMatchAt(expectedZeroIdx - d)) {
-              matchIdx = expectedZeroIdx - d
-              break
-            }
-            if (checkMatchAt(expectedZeroIdx + d)) {
-              matchIdx = expectedZeroIdx + d
-              break
-            }
-          }
-        }
-      }
-
-      // 阶段 2：若锚定未命中，回退到 cursor 之后的顺序滑动扫描 (Fallback)
-      if (matchIdx === -1) {
-        const targetFirstLine = hunkOldLines[0]
-        for (let i = cursor; i <= oldLines.length - hunkOldLines.length; i++) {
-          if (oldLines[i] === targetFirstLine) {
-            if (checkMatchAt(i)) {
-              matchIdx = i
-              break
-            }
-          }
-        }
-      }
-
-      if (matchIdx !== -1) {
-        // 先复制 cursor 到 matchIdx 之间的原文本
-        for (let j = cursor; j < matchIdx; j++) {
-          resultLines.push(oldLines[j])
-        }
-
-        // 根据 resolution 决定写入 hunkNewLines 还是 hunkOldLines
-        if (hunk.resolution === 'applied') {
-          resultLines.push(...hunkNewLines)
-        } else {
-          resultLines.push(...hunkOldLines)
-        }
-
-        cursor = matchIdx + hunkOldLines.length
-      } else {
-        // Hunk 匹配失败时发出控制台警告以追踪，避免静默失败
-        console.warn(
-          `[DiffReviewerEngine] Hunk at line ${hunk.oldStartLine} failed to match oldText anchor.`,
-        )
-      }
-    }
-
-    // 将剩余的尾部原文本全部推入
-    for (let j = cursor; j < oldLines.length; j++) {
-      resultLines.push(oldLines[j])
-    }
-
-    return resultLines.join(eol)
+    return result + oldText.slice(cursor)
   }
 }

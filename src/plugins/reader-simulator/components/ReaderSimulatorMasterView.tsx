@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ReaderSimulatorEngine } from '../engine/ReaderSimulatorEngine'
 import type { ChapterSimulationResult } from '../types'
+import type { ReaderSimulationRecord } from '../../../ports/readerSimulationRepository'
 import { indexedDbReaderSimulationRepository } from '../../../adapters/indexedDbReaderSimulationRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
@@ -10,28 +11,25 @@ import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
-import {
-  Users,
-  AlertTriangle,
-  MessageSquare,
-  ShieldAlert,
-  BookmarkCheck,
-  RefreshCw,
-  Bot,
-} from 'lucide-react'
+import { Users, AlertTriangle, MessageSquare, BookmarkCheck, RefreshCw, Bot } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Select } from '../../../ui/primitives'
 
-export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ReaderSimulatorWorkspaceView key={props.projectId} {...props} />
+)
+const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('reader-simulator')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
+  const [savedRecords, setSavedRecords] = useState<ReaderSimulationRecord[]>([])
 
   const loadChapters = async () => {
     setLoading(true)
+    setError(null)
     try {
       const all = await indexedDbProjectRepository.getChaptersByProject(projectId)
       all.sort((a, b) => a.order - b.order)
@@ -39,6 +37,8 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       if (all.length > 0 && !selectedChapterId) {
         setSelectedChapterId(all[0].id)
       }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setLoading(false)
     }
@@ -48,7 +48,28 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
     loadChapters()
   }, [projectId])
 
+  useEffect(() => {
+    let disposed = false
+    void indexedDbReaderSimulationRepository
+      .getAll(projectId)
+      .then((records) => {
+        if (!disposed) setSavedRecords(records.sort((a, b) => b.updatedAt - a.updatedAt))
+      })
+      .catch((cause) => {
+        if (!disposed) setError(cause instanceof Error ? cause.message : String(cause))
+      })
+
+    return () => {
+      disposed = true
+    }
+  }, [projectId])
+
   const currentChapter = chapters.find((c) => c.id === selectedChapterId)
+  const aiTask = usePluginAiTask('reader-simulator', [
+    currentChapter?.id,
+    currentChapter?.revision,
+    currentChapter?.content,
+  ])
 
   const simulation: ChapterSimulationResult | null = useMemo(() => {
     if (!currentChapter) return null
@@ -56,6 +77,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
       chapterOrder: currentChapter.order,
+      sourceRevision: currentChapter.revision,
       content:
         semanticTextFromContent(
           currentChapter.id,
@@ -65,7 +87,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
     })
   }, [currentChapter])
 
-  // 真实 AI 读者多视点本章追读段评推演
+  // Generate hypothetical reader profiles from the supplied chapter text.
   const handleAiReaderSimulate = async () => {
     if (!currentChapter) return
     const chapterText = semanticTextFromContent(
@@ -74,38 +96,40 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
       currentChapter.revision,
     )
     if (!chapterText) return
-    const analysisInput = {
-      chapter: { id: currentChapter.id, order: currentChapter.order, title: currentChapter.title },
-      text: chapterText.slice(0, 3000),
-      readerProfiles: [
-        'dropout-prone veteran',
-        'logic-focused reader',
-        'relationship-focused reader',
-        'pacing-focused reader',
-      ],
-    }
+    const analysisInput = ReaderSimulatorEngine.buildAnalysisInput({
+      chapterId: currentChapter.id,
+      chapterTitle: currentChapter.title,
+      chapterOrder: currentChapter.order,
+      sourceRevision: currentChapter.revision,
+      content: chapterText,
+    })
 
     await aiTask.run(analysisInput)
   }
 
   const handleSaveSimulation = async () => {
-    if (!simulation) return
-    await indexedDbReaderSimulationRepository.save({
-      id: idGenerator.generate('rsim'),
-      projectId,
-      chapterId: simulation.chapterId,
-      chapterTitle: simulation.chapterTitle,
-      chapterOrder: simulation.chapterOrder,
-      toxicityScore: simulation.toxicityScore,
-      logicScore: simulation.logicScore,
-      pleasureScore: simulation.pleasureScore,
-      comments: simulation.comments,
-      toxicAlerts: simulation.toxicAlerts,
-      suggestions: simulation.suggestions,
-      updatedAt: clock.now(),
-    })
-    setSavedSuccessMsg('已保存当前章读者镜像沙盘评估')
-    setTimeout(() => setSavedSuccessMsg(null), 2500)
+    if (!simulation?.comments.length) return
+    setError(null)
+    try {
+      const record: ReaderSimulationRecord = {
+        id: idGenerator.generate('rsim'),
+        projectId,
+        chapterId: simulation.chapterId,
+        chapterTitle: simulation.chapterTitle,
+        chapterOrder: simulation.chapterOrder,
+        sourceRevision: simulation.sourceRevision,
+        comments: simulation.comments,
+        toxicAlerts: simulation.toxicAlerts,
+        suggestions: simulation.suggestions,
+        updatedAt: clock.now(),
+      }
+      await indexedDbReaderSimulationRepository.save(record)
+      setSavedRecords((current) => [record, ...current.filter((item) => item.id !== record.id)])
+      setSavedSuccessMsg('已保存当前章复核问题快照')
+      setTimeout(() => setSavedSuccessMsg(null), 2500)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
   }
 
   return (
@@ -115,12 +139,13 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
             <Users className="w-6 h-6 text-emerald-600" />
-            读者认知镜像与段评预演沙盒 (Reader Simulator)
+            读者视角复核 (Reader Simulator)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            根据弃书词表和文本特征列出可能的关注点。结果是规则提示，不代表真实评论或发布表现。
+            规则结果是文本提示；AI
+            输出是基于设定画像的模拟，不代表真实读者反馈、留存、转化、订阅或销售数据。
           </p>
-          <ScoreProvenanceBadge source="rule" detail="按读者弃书词表匹配，不含真实读者行为数据" />
+          <ScoreProvenanceBadge source="rule" detail="词项只定位复核问题；不能推断受众反应" />
         </div>
         <div className="flex items-center gap-2">
           {savedSuccessMsg && (
@@ -135,16 +160,17 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
               <Bot className="w-3.5 h-3.5" />
-              AI 读者多视点段评模拟
+              AI 假设读者段评模拟
             </button>
           )}
           <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleSaveSimulation}
+            disabled={!simulation?.comments.length}
             className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"
           >
             <BookmarkCheck className="w-3.5 h-3.5" />
-            保存评估
+            保存复核问题
           </button>
           <button
             onClick={loadChapters}
@@ -156,8 +182,9 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
         </div>
       </div>
 
+      {error && <p role="alert">{error}</p>}
       {loading ? (
-        <div className="text-center py-12 text-slate-400">正在生成读者心智镜像...</div>
+        <div className="text-center py-12 text-slate-400">正在读取章节...</div>
       ) : chapters.length === 0 ? (
         <div className="text-center py-12 text-slate-400">项目中暂无章节。</div>
       ) : (
@@ -169,6 +196,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 选择待预演章节：
               </label>
               <Select
+                aria-label="预演章节"
                 value={selectedChapterId}
                 onValueChange={(v) => setSelectedChapterId(v)}
                 className="w-full"
@@ -184,59 +212,15 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
 
             {simulation && (
               <>
-                <div className="space-y-3 pt-2">
-                  <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-1.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="flex items-center gap-1 text-rose-500 font-semibold">
-                        <ShieldAlert className="w-3.5 h-3.5" /> 毒点风险指数 (TRI)
-                      </span>
-                      <span
-                        className={`font-bold ${simulation.toxicityScore > 30 ? 'text-rose-500' : 'text-emerald-500'}`}
-                      >
-                        {simulation.toxicityScore} / 100
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${simulation.toxicityScore > 30 ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                        style={{ width: `${simulation.toxicityScore}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-1.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-blue-500">考据逻辑严密度</span>
-                      <span className="font-bold text-blue-500">{simulation.logicScore} / 100</span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-blue-500 h-full rounded-full transition-all"
-                        style={{ width: `${simulation.logicScore}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-1.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-amber-500">爽点满足感</span>
-                      <span className="font-bold text-amber-500">
-                        {simulation.pleasureScore} / 100
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-amber-500 h-full rounded-full transition-all"
-                        style={{ width: `${simulation.pleasureScore}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
+                <p className="text-xs text-slate-500">
+                  本地定位到 {simulation.comments.length} 类词项复核问题。每类仅展示首个命中的语境。
+                  未命中不表示没有问题；读者解读需要结合全文与画像，不能由词项计算分数。
+                </p>
 
                 {simulation.toxicAlerts.length > 0 && (
                   <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-lg text-xs text-rose-700 dark:text-rose-300 space-y-1">
                     <div className="font-semibold flex items-center gap-1 text-rose-600">
-                      <AlertTriangle className="w-3.5 h-3.5" /> 读者毒发弃书高危警示：
+                      <AlertTriangle className="w-3.5 h-3.5" /> 文本规则提示：可能影响阅读体验的线索
                     </div>
                     {simulation.toxicAlerts.map((alt, idx) => (
                       <p key={idx}>{alt}</p>
@@ -247,7 +231,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 {simulation.suggestions.length > 0 && (
                   <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
                     <div className="font-semibold text-slate-800 dark:text-slate-200">
-                      防杠优化建议：
+                      待复核建议：
                     </div>
                     {simulation.suggestions.map((sug, idx) => (
                       <div
@@ -268,9 +252,9 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
             <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-700">
               <span className="font-bold text-sm flex items-center gap-1.5 text-slate-800 dark:text-slate-100">
                 <MessageSquare className="w-4 h-4 text-emerald-500" />
-                虚拟段评弹幕流预演 ({simulation?.comments.length || 0} 条)
+                原文与复核问题 ({simulation?.comments.length || 0} 条)
               </span>
-              <span className="text-xs text-slate-400">由词表和文本特征生成的模拟读者反应</span>
+              <span className="text-xs text-slate-400">原文定位不代表已完成语义分析</span>
             </div>
 
             <div className="space-y-2.5 overflow-y-auto flex-1 max-h-[560px]">
@@ -302,7 +286,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
                               : 'CP党'}
                       </span>
                     </div>
-                    <span className="text-[10px] text-slate-400">👍 {cmt.upvotes}</span>
+                    <span className="text-[10px] text-slate-400">复核问题</span>
                   </div>
 
                   <p className="text-slate-700 dark:text-slate-200 font-medium">
@@ -317,6 +301,38 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = ({ projectI
             </div>
           </div>
         </div>
+      )}
+      {savedRecords.length > 0 && (
+        <section
+          aria-label="已保存的复核快照"
+          className="border rounded-xl p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 space-y-3"
+        >
+          <h3 className="text-sm font-semibold">已保存的复核快照</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {savedRecords.slice(0, 10).map((record) => (
+              <article
+                key={record.id}
+                className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-1.5 text-xs"
+              >
+                <h4 className="font-medium">
+                  第 {record.chapterOrder} 章：{record.chapterTitle}
+                </h4>
+                <p className="text-slate-500">
+                  {record.sourceRevision === undefined
+                    ? '来源修订未知'
+                    : `来源保存修订 ${record.sourceRevision}`}
+                  {' · '}
+                  {record.comments.length} 条复核问题
+                </p>
+                {record.comments.slice(0, 3).map((comment) => (
+                  <p key={comment.id} className="text-slate-600 dark:text-slate-300">
+                    原文：{comment.targetSnippet}
+                  </p>
+                ))}
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )

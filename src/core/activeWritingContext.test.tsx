@@ -150,6 +150,27 @@ describe('ActiveWritingContextProvider', () => {
     expect(result.current.dirty).toBe(true)
   })
 
+  it('routes source navigation through the registered editor and releases the handler', async () => {
+    latestRevision.mockResolvedValue(1)
+    const { result } = renderAWC('ws-a')
+    const navigator = vi.fn().mockResolvedValue({ status: 'opened', highlighted: true })
+    let unregister: (() => void) | undefined
+
+    act(() => {
+      unregister = result.current.registerSourceNavigator(navigator)
+    })
+
+    await expect(
+      result.current.navigateToSource({ documentId: 'ch-1', excerpt: '正文' }),
+    ).resolves.toEqual({ status: 'opened', highlighted: true })
+    expect(navigator).toHaveBeenCalledWith({ documentId: 'ch-1', excerpt: '正文' })
+
+    act(() => unregister?.())
+    await expect(result.current.navigateToSource({ documentId: 'ch-1' })).resolves.toEqual({
+      status: 'editor-unavailable',
+    })
+  })
+
   it('resets selection and dirty when the workspace switches', async () => {
     latestRevision.mockResolvedValue(1)
     // The provider is keyed by a closure variable so rerender() re-renders the tree with a new

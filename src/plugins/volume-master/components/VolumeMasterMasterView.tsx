@@ -1,454 +1,311 @@
-import { useState, useEffect, useCallback, useRef, type FC } from 'react'
+import { useEffect, useMemo, useRef, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import type { VolumeArcRecord, VolumeStat, TotalBookMetrics, ActStage } from '../types'
+import type { VolumeArcRecord, ActStage } from '../types'
+import type { ChapterRecord, VolumeRecord } from '../../../types'
 import { volumeMasterEngine } from '../engine/VolumeMasterEngine'
-import { indexedDbVolumeArcRepository } from '../../../adapters/indexedDbVolumeArcRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import { indexedDbVolumeArcRepository } from '../../../adapters/indexedDbVolumeArcRepository'
+import { indexedDbEmotionAuditRepository } from '../../../adapters/indexedDbEmotionAuditRepository'
+import type { EmotionAuditRecord } from '../../../ports/emotionAuditRepository'
+import { semanticTextFromContent } from '../../../domain/content'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
-import { semanticTextFromContent } from '../../../domain/content'
-import { Save, CheckCircle2, Layers, BookOpen, Target, Bot } from 'lucide-react'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-
-export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('volume-master')
-  const [volumes, setVolumes] = useState<Array<{ id: string; title: string; order: number }>>([])
-  const [chapters, setChapters] = useState<Array<{ volumeId?: string; wordCount?: number }>>([])
+import { Select } from '../../../ui/primitives'
+export const VolumeMasterMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <VolumeWorkspace key={props.projectId} {...props} />
+)
+function VolumeWorkspace({ projectId }: DesktopPluginViewProps) {
+  const host = useOptionalPluginHostContext()
+  const [volumes, setVolumes] = useState<VolumeRecord[]>([])
+  const [chapters, setChapters] = useState<ChapterRecord[]>([])
   const [arcs, setArcs] = useState<VolumeArcRecord[]>([])
-  const [selectedVolId, setSelectedVolId] = useState<string>('')
-  const selectedVolIdRef = useRef('')
-  const [reloadVersion, setReloadVersion] = useState(0)
-  const [savedSuccess, setSavedSuccess] = useState(false)
-
-  // 当前选中卷的编辑草稿
-  const [editTargetWords, setEditTargetWords] = useState(200000)
-  const [editActStage, setEditActStage] = useState<ActStage>('act1_intro')
-  const [editConflict, setEditConflict] = useState('')
-  const [editClimax, setEditClimax] = useState('')
-  const [editReward, setEditReward] = useState('')
-  const [editCliffhanger, setEditCliffhanger] = useState('')
-
-  const syncFormWithArc = useCallback(
-    (
-      volId: string,
-      _volList: Array<{ id: string; title: string; order: number }>,
-      arcList: VolumeArcRecord[],
-    ) => {
-      const existing = arcList.find((a) => a.volumeId === volId)
-      if (existing) {
-        setEditTargetWords(existing.targetWordCount || 200000)
-        setEditActStage(existing.actStage || 'act1_intro')
-        setEditConflict(existing.coreConflict || '')
-        setEditClimax(existing.climaxNode || '')
-        setEditReward(existing.rewardOutcome || '')
-        setEditCliffhanger(existing.crossVolumeCliffhanger || '')
-      } else {
-        setEditTargetWords(200000)
-        setEditActStage('act1_intro')
-        setEditConflict('')
-        setEditClimax('')
-        setEditReward('')
-        setEditCliffhanger('')
-      }
-    },
-    [],
-  )
-
+  const [emotionRecords, setEmotionRecords] = useState<EmotionAuditRecord[]>([])
+  const [selected, setSelected] = useState('')
+  const [draft, setDraft] = useState<Partial<VolumeArcRecord>>({})
+  const [target, setTarget] = useState('')
+  const [reload, setReload] = useState(0)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const fill = (id: string, records: VolumeArcRecord[]) => {
+    const previous = records.find((a) => a.volumeId === id)
+    setSelected(id)
+    setDraft(previous ? { ...previous } : {})
+    setTarget(previous?.targetWordCount === undefined ? '' : String(previous.targetWordCount))
+  }
   useEffect(() => {
-    let cancelled = false
-
-    const loadAll = async () => {
-      try {
-        const [allVols, allChaps, allArcs] = await Promise.all([
-          indexedDbProjectRepository.getVolumesByProject(projectId),
-          indexedDbProjectRepository.getChaptersByProject(projectId),
-          indexedDbVolumeArcRepository.getAll(projectId),
-        ])
-
-        if (cancelled) return
-
-        const sortedVols = (allVols || []).sort((a, b) => a.order - b.order)
-        const selectedVolume =
-          sortedVols.find((volume) => volume.id === selectedVolIdRef.current) ?? sortedVols[0]
-        const nextSelectedVolId = selectedVolume?.id ?? ''
-
-        setVolumes(sortedVols)
-        setChapters(allChaps || [])
-        setArcs(allArcs || [])
-        selectedVolIdRef.current = nextSelectedVolId
-        setSelectedVolId(nextSelectedVolId)
-        syncFormWithArc(nextSelectedVolId, sortedVols, allArcs || [])
-      } catch (e) {
-        if (!cancelled) console.error('Failed to load volume master data:', e)
-      }
-    }
-
-    void loadAll()
+    let disposed = false
+    Promise.all([
+      indexedDbProjectRepository.getVolumesByProject(projectId),
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbVolumeArcRepository.getAll(projectId),
+      indexedDbEmotionAuditRepository.getAll(projectId),
+    ])
+      .then(([allVolumes, allChapters, allArcs, emotions]) => {
+        if (disposed) return
+        const own = allVolumes
+          .filter((v) => v.projectId === projectId)
+          .sort((a, b) => a.order - b.order)
+        const ownArcs = allArcs.filter((a) => a.projectId === projectId)
+        setVolumes(own)
+        setChapters(allChapters.filter((c) => c.projectId === projectId))
+        setArcs(ownArcs)
+        setEmotionRecords(emotions.filter((e) => e.projectId === projectId))
+        fill(own.some((v) => v.id === selected) ? selected : (own[0]?.id ?? ''), ownArcs)
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
     return () => {
-      cancelled = true
+      disposed = true
     }
-  }, [projectId, reloadVersion, syncFormWithArc])
-
-  // 真实 AI 辅助分卷弧线与卷末大悬念推演
-  const handleAiVolumeArcRecommend = async () => {
-    const curVol = volumes.find((v) => v.id === selectedVolId)
-    const volChapters = chapters.filter((c) => c.volumeId === selectedVolId)
-    const analysisInput = {
-      volume: {
-        id: curVol?.id,
-        order: curVol?.order,
-        title: curVol?.title
-          ? semanticTextFromContent(`volume-master-title-${curVol.id}`, curVol.title)
-          : curVol?.title,
-      },
-      chapterCount: volChapters.length,
-      targetWords: editTargetWords,
-      conflict: semanticTextFromContent('volume-master-conflict', editConflict),
-      climax: semanticTextFromContent('volume-master-climax', editClimax),
+  }, [projectId, reload])
+  const measured = useMemo(
+    () =>
+      chapters.map((c) => {
+        const text = semanticTextFromContent(c.id, c.content, c.revision)
+        const marked = emotionRecords
+          .filter(
+            (e) =>
+              e.chapterId === c.id &&
+              e.sourceText === text &&
+              (e.sourceRevision === undefined || e.sourceRevision === c.revision) &&
+              e.annotation,
+          )
+          .sort((a, b) => b.updatedAt - a.updatedAt)[0]
+        return {
+          id: c.id,
+          volumeId: c.volumeId,
+          order: c.order,
+          wordCount: Array.from(text.replace(/\s/g, '')).length,
+          tension: marked?.annotation?.values.tension,
+          text,
+          revision: c.revision,
+        }
+      }),
+    [chapters, emotionRecords],
+  )
+  let metrics: ReturnType<typeof volumeMasterEngine.aggregateBookMetrics> | null = null,
+    stats: ReturnType<typeof volumeMasterEngine.calculateVolumeStat>[] = [],
+    calculationError = ''
+  try {
+    metrics = volumeMasterEngine.aggregateBookMetrics(volumes, measured, arcs)
+    stats = volumes.map((v) =>
+      volumeMasterEngine.calculateVolumeStat(
+        v,
+        measured,
+        arcs.find((a) => a.volumeId === v.id),
+      ),
+    )
+  } catch (cause) {
+    calculationError = String(cause)
+  }
+  const volume = volumes.find((v) => v.id === selected)
+  const semanticPlan = {
+    ...draft,
+    coreConflict: semanticTextFromContent(`${selected}-conflict`, draft.coreConflict ?? ''),
+    climaxNode: semanticTextFromContent(`${selected}-climax`, draft.climaxNode ?? ''),
+    rewardOutcome: semanticTextFromContent(`${selected}-outcome`, draft.rewardOutcome ?? ''),
+    crossVolumeCliffhanger: semanticTextFromContent(
+      `${selected}-cliffhanger`,
+      draft.crossVolumeCliffhanger ?? '',
+    ),
+    constraints:
+      draft.constraints === undefined
+        ? undefined
+        : semanticTextFromContent(`${selected}-constraints`, draft.constraints),
+  }
+  const ai = usePluginAiTask('volume-master', [projectId, volume, draft, target, measured])
+  const editingScope = JSON.stringify([selected, draft, target])
+  const editingScopeRef = useRef(editingScope)
+  editingScopeRef.current = editingScope
+  const save = async () => {
+    const submittedScope = editingScope
+    if (!volume) return
+    setError('')
+    setMessage('')
+    setBusy(true)
+    try {
+      if (target !== '' && (!Number.isSafeInteger(Number(target)) || Number(target) <= 0))
+        throw new Error('分卷预算须为正整数；没有计划时留空。')
+      const previous = arcs.find((a) => a.volumeId === volume.id)
+      const record: VolumeArcRecord = {
+        id: previous?.id ?? idGenerator.generate('arc'),
+        projectId,
+        volumeId: volume.id,
+        volumeTitle: volume.title,
+        volumeOrder: volume.order,
+        targetWordCount: target === '' ? undefined : Number(target),
+        actStage: draft.actStage,
+        isCompleted: draft.isCompleted ?? false,
+        coreConflict: draft.coreConflict ?? '',
+        climaxNode: draft.climaxNode ?? '',
+        rewardOutcome: draft.rewardOutcome ?? '',
+        crossVolumeCliffhanger: draft.crossVolumeCliffhanger ?? '',
+        constraints: draft.constraints ?? '',
+        updatedAt: clock.now(),
+      }
+      await indexedDbVolumeArcRepository.save(record)
+      setArcs((current) => [...current.filter((a) => a.id !== record.id), record])
+      if (editingScopeRef.current === submittedScope) setDraft(record)
+      setMessage(
+        editingScopeRef.current === submittedScope
+          ? '规划已保存。'
+          : '已保存先前规划快照；后续编辑仍未保存。',
+      )
+    } catch (cause) {
+      setError(String(cause))
+    } finally {
+      setBusy(false)
     }
-
-    await aiTask.run(analysisInput)
   }
-
-  const handleSelectVolume = (volId: string) => {
-    selectedVolIdRef.current = volId
-    setSelectedVolId(volId)
-    syncFormWithArc(volId, volumes, arcs)
-  }
-
-  const handleSaveArc = async () => {
-    if (!selectedVolId) return
-    const vol = volumes.find((v) => v.id === selectedVolId)
-    const existing = arcs.find((a) => a.volumeId === selectedVolId)
-
-    const now = clock.now()
-    const record: VolumeArcRecord = {
-      id: existing ? existing.id : idGenerator.generate('arc'),
-      projectId,
-      volumeId: selectedVolId,
-      volumeTitle: vol?.title || '未命名卷',
-      volumeOrder: vol?.order || 0,
-      targetWordCount: Number(editTargetWords),
-      actStage: editActStage,
-      coreConflict: editConflict.trim(),
-      climaxNode: editClimax.trim(),
-      rewardOutcome: editReward.trim(),
-      crossVolumeCliffhanger: editCliffhanger.trim(),
-      updatedAt: now,
-    }
-
-    await indexedDbVolumeArcRepository.save(record)
-    setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 1500)
-    setReloadVersion((version) => version + 1)
-  }
-
-  const metrics: TotalBookMetrics = volumeMasterEngine.aggregateBookMetrics(volumes, chapters, arcs)
-
-  const activeVol = volumes.find((v) => v.id === selectedVolId)
-  const activeArc = arcs.find((a) => a.volumeId === selectedVolId)
-  const activeStat: VolumeStat | null = activeVol
-    ? volumeMasterEngine.calculateVolumeStat(activeVol, chapters, activeArc)
-    : null
-
-  const actInfo = volumeMasterEngine.getActStageInfo(editActStage)
-
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
-      {/* 顶栏 */}
-      <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold tracking-tight">百万字分卷弧光罗盘</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-medium">
-              分形分卷四幕式 · 字数燃烧率 WBR
-            </span>
-          </div>
-          <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            按分卷安排剧情阶段和高潮节点，辅助检查章节节奏与设定变化。
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>分卷目标与实际篇幅</h2>
+      <p>
+        统计保存正文的非空白 Unicode
+        字符；预算、阶段和完成状态由作者登记。拟合只描述有原文依据的作者紧张标注，不是剧情质量评分。
+      </p>
+      <p>来源：作者登记预算与张力标注的本地统计和 OLS 拟合。</p>
+      {error && <p role="alert">{error}</p>}
+      {calculationError && <p role="alert">{calculationError}</p>}
+      {message && <p role="status">{message}</p>}
+      <button onClick={() => setReload((n) => n + 1)}>刷新保存稿与规划</button>
+      {metrics && (
+        <p>
+          保存稿 {metrics.totalWordCount ?? '计数未知'} 字符，{metrics.totalVolumes} 卷、
+          {metrics.totalChapters} 个章节；作者计划总量{' '}
+          {metrics.projectedTotalWords ?? '尚未全部填写'}。
+        </p>
+      )}
+      {stats.map((stat) => (
+        <article key={stat.volumeId} className="border rounded p-3">
+          <h3>{stat.title}</h3>
+          <p>
+            实际 {stat.actualWordCount ?? '未知'} / 作者预算 {stat.targetWordCount ?? '未登记'}
+            ；阶段{' '}
+            {stat.currentAct ? volumeMasterEngine.getActStageInfo(stat.currentAct).label : '未登记'}
+            。
           </p>
-          <ScoreProvenanceBadge source="rule" detail="对各章字数做线性拟合后打分" />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {hostContext?.aiAssistant?.isAvailable && (
-            <button
-              onClick={handleAiVolumeArcRecommend}
-              disabled={!selectedVolId || aiTask.isRunning}
-              className="px-3 py-1.5 rounded-lg bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-            >
-              <Bot className="w-3.5 h-3.5 text-purple-400" />
-              <span>AI 分卷弧线与跨卷悬念推演</span>
-            </button>
-          )}
-          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
-          <button
-            onClick={handleSaveArc}
-            disabled={!selectedVolId}
-            className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-semibold hover:opacity-90 flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
-          >
-            {savedSuccess ? (
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            <span>{savedSuccess ? '规划已保存' : '保存分卷规划'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 宏观数据概览条 */}
-      <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-        <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
-          <span className="text-[11px] text-[var(--ink-text-muted)] block">规划分卷总数</span>
-          <span className="text-lg font-bold text-[var(--ink-text)] mt-0.5 block">
-            {metrics.totalVolumes} 卷 ({metrics.totalChapters} 章)
-          </span>
-        </div>
-        <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
-          <span className="text-[11px] text-[var(--ink-text-muted)] block">全书累计已写正文</span>
-          <span className="text-lg font-bold text-indigo-400 mt-0.5 block">
-            {metrics.totalWordCount.toLocaleString()} 字
-          </span>
-        </div>
-        <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
-          <span className="text-[11px] text-[var(--ink-text-muted)] block">全书预计总字数规模</span>
-          <span className="text-lg font-bold text-emerald-500 mt-0.5 block">
-            {metrics.projectedTotalWords.toLocaleString()} 字
-          </span>
-        </div>
-        <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
-          <span className="text-[11px] text-[var(--ink-text-muted)] block">宏观节奏健康度</span>
-          <span
-            className={`text-lg font-bold mt-0.5 block ${
-              metrics.overallPacingRating === 'smooth'
-                ? 'text-emerald-500'
-                : metrics.overallPacingRating === 'needs_tightening'
-                  ? 'text-amber-500'
-                  : 'text-rose-500'
-            }`}
-          >
-            {metrics.overallPacingRating === 'smooth'
-              ? '平稳健康'
-              : metrics.overallPacingRating === 'needs_tightening'
-                ? '需紧凑收束'
-                : '注水告警'}
-          </span>
-        </div>
-      </div>
-
-      {/* 主体：分卷列表选择 (左 4 列) + 卷弧光详细编辑 (右 8 列) */}
-      <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* 左栏：分卷导航列表 */}
-        <div className="lg:col-span-4 space-y-3">
-          <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-purple-400" />
-            全书分卷进度列表
-          </span>
-
-          {volumes.length === 0 ? (
-            <div className="p-6 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-xs text-[var(--ink-text-muted)] text-center">
-              请在主编辑器目录树中建立分卷（Volume）。
-            </div>
+          <p>{stat.advice}</p>
+          {stat.arcRegression ? (
+            <p>
+              作者标注样本 {stat.arcRegression.sampleCount} 个；二次拟合 R²{' '}
+              {stat.arcRegression.r2 === null
+                ? '常量序列，不定义'
+                : stat.arcRegression.r2.toFixed(3)}
+              ；样本范围内极大值位置{' '}
+              {stat.arcRegression.apexRatio === null
+                ? '不存在'
+                : stat.arcRegression.apexRatio.toFixed(3)}
+              。
+            </p>
           ) : (
-            <div className="space-y-2">
-              {volumes.map((vol) => {
-                const arc = arcs.find((a) => a.volumeId === vol.id)
-                const stat = volumeMasterEngine.calculateVolumeStat(vol, chapters, arc)
-                const isSelected = vol.id === selectedVolId
-
-                return (
-                  <div
-                    key={vol.id}
-                    onClick={() => handleSelectVolume(vol.id)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer text-xs space-y-2 ${
-                      isSelected
-                        ? 'border-purple-500 bg-purple-500/10 shadow-sm'
-                        : 'border-[var(--ink-border)] bg-[var(--ink-bg-panel)] hover:border-[var(--ink-border-hover)]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[var(--ink-text)] truncate">
-                        {vol.title}
-                      </span>
-                      <span className="text-[10px] text-[var(--ink-text-muted)] shrink-0">
-                        第 {vol.order + 1} 卷
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-[var(--ink-text-muted)]">
-                      <span>
-                        {stat.actualWordCount.toLocaleString()} /{' '}
-                        {stat.targetWordCount.toLocaleString()} 字
-                      </span>
-                      <span className="font-medium text-purple-400">{stat.burnRate}%</span>
-                    </div>
-
-                    {/* 进度条 */}
-                    <div className="w-full h-1.5 rounded-full bg-[var(--ink-bg-canvas)] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          stat.status === 'lagging_water'
-                            ? 'bg-rose-500'
-                            : stat.burnRate >= 100
-                              ? 'bg-emerald-500'
-                              : 'bg-purple-500'
-                        }`}
-                        style={{ width: `${Math.min(100, stat.burnRate)}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <p>没有足够的有效作者标注，未拟合曲线。</p>
           )}
-        </div>
-
-        {/* 右栏：所选分卷的戏剧弧与大高潮规划 */}
-        <div className="lg:col-span-8 space-y-4">
-          {activeStat && activeVol ? (
-            <div className="p-5 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-4 text-xs">
-              <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-3">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-purple-400" />
-                  <span className="font-semibold text-sm">{activeVol.title} 戏剧弧规划</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--ink-text-muted)]">目标字数:</span>
-                  <input
-                    type="number"
-                    step="10000"
-                    min="50000"
-                    value={editTargetWords}
-                    onChange={(e) => setEditTargetWords(Number(e.target.value))}
-                    className="w-24 px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-                  />
-                  <span>字</span>
-                </div>
-              </div>
-
-              {/* 四幕阶段选择器 */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[var(--ink-text)]">分形分卷四幕阶段：</span>
-                  <span className="text-[11px] text-purple-400 font-medium">
-                    {actInfo.progressRange}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {(['act1_intro', 'act2_rising', 'act3_climax', 'act4_fallout'] as const).map(
-                    (st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setEditActStage(st)}
-                        className={`p-2.5 rounded-lg border text-left transition-all ${
-                          editActStage === st
-                            ? 'border-purple-500 bg-purple-500/15 text-purple-400 font-semibold'
-                            : 'border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]'
-                        }`}
-                      >
-                        <span className="block font-medium text-xs">
-                          {st === 'act1_intro'
-                            ? '第一幕 破局'
-                            : st === 'act2_rising'
-                              ? '第二幕 危机'
-                              : st === 'act3_climax'
-                                ? '第三幕 卷巅峰'
-                                : '第四幕 余波'}
-                        </span>
-                      </button>
-                    ),
-                  )}
-                </div>
-                <p className="text-[11px] text-[var(--ink-text-muted)] italic bg-[var(--ink-bg-canvas)] p-2 rounded border border-[var(--ink-border)]/50">
-                  {actInfo.desc}
-                </p>
-              </div>
-
-              {/* 核心戏剧目标表单 */}
-              <div className="space-y-3 pt-2 border-t border-[var(--ink-border)]">
-                <div>
-                  <label className="text-[11px] font-medium text-[var(--ink-text-muted)] block mb-1">
-                    ① 本卷核心戏剧矛盾与反派阻力：
-                  </label>
-                  <input
-                    type="text"
-                    value={editConflict}
-                    onChange={(e) => setEditConflict(e.target.value)}
-                    placeholder="如：外门大比夺魁与大长老一系的暗杀打压..."
-                    className="w-full px-3 py-1.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-medium text-[var(--ink-text-muted)] block mb-1">
-                    ② 卷末大高潮爆发点（Climax Node）：
-                  </label>
-                  <input
-                    type="text"
-                    value={editClimax}
-                    onChange={(e) => setEditClimax(e.target.value)}
-                    placeholder="如：决战血煞峰顶，主角引下九天玄雷绝杀黑袍老祖..."
-                    className="w-full px-3 py-1.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-medium text-[var(--ink-text-muted)] block mb-1">
-                    ③ 卷终主角战利品与境界收获：
-                  </label>
-                  <input
-                    type="text"
-                    value={editReward}
-                    onChange={(e) => setEditReward(e.target.value)}
-                    placeholder="如：突破金丹期、夺得天阶法宝紫青双剑、升任玄天宗首徒..."
-                    className="w-full px-3 py-1.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-medium text-[var(--ink-text-muted)] block mb-1">
-                    ④ 跨卷大钩子与下一卷新征程引子（Cliffhanger）：
-                  </label>
-                  <input
-                    type="text"
-                    value={editCliffhanger}
-                    onChange={(e) => setEditCliffhanger(e.target.value)}
-                    placeholder="如：庆功宴上，天机阁突然送来血色绝密玉简：未婚妻所在的皇朝一夜被灭..."
-                    className="w-full px-3 py-1.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* 实时诊断反馈 */}
-              <div className="p-3 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] text-[11px] space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[var(--ink-text)] flex items-center gap-1">
-                    <Target className="w-3.5 h-3.5 text-purple-400" />
-                    分卷节奏与叙事弧拟合诊断：
-                  </span>
-                  {activeStat.arcRegression && (
-                    <span className="text-[10px] text-purple-400 font-mono">
-                      二阶 OLS 拟合度 R²: {activeStat.arcRegression.r2} · 顶点位置:{' '}
-                      {Math.round(activeStat.arcRegression.apexRatio * 100)}%
-                    </span>
-                  )}
-                </div>
-                <p className="text-[var(--ink-text-muted)] leading-relaxed">{activeStat.advice}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="p-12 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-center text-xs text-[var(--ink-text-muted)]">
-              请在左侧选择分卷以查看或编辑其宏观弧光。
-            </div>
-          )}
-        </div>
-      </div>
+        </article>
+      ))}
+      <Select
+        aria-label="规划分卷"
+        value={selected}
+        onValueChange={(id) => {
+          fill(id, arcs)
+          setMessage('')
+        }}
+      >
+        {volumes.map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.title}
+          </option>
+        ))}
+      </Select>
+      <label>
+        作者字符预算
+        <input
+          aria-label="分卷字符预算"
+          type="number"
+          min="1"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+        />
+      </label>
+      <Select
+        aria-label="作者剧情阶段"
+        value={draft.actStage ?? ''}
+        onValueChange={(value) =>
+          setDraft((previous) => ({
+            ...previous,
+            actStage: value ? (value as ActStage) : undefined,
+          }))
+        }
+      >
+        <option value="">尚未登记</option>
+        {(['act1_intro', 'act2_rising', 'act3_climax', 'act4_fallout'] as ActStage[]).map(
+          (stage) => (
+            <option key={stage} value={stage}>
+              {volumeMasterEngine.getActStageInfo(stage).label}
+            </option>
+          ),
+        )}
+      </Select>
+      {(
+        [
+          ['coreConflict', '分卷目标与冲突'],
+          ['climaxNode', '关键选择节点'],
+          ['rewardOutcome', '后果与状态变化'],
+          ['crossVolumeCliffhanger', '跨卷承接'],
+          ['constraints', '作者约束'],
+        ] as const
+      ).map(([field, label]) => (
+        <textarea
+          key={field}
+          aria-label={label}
+          value={draft[field] ?? ''}
+          onChange={(e) => setDraft((previous) => ({ ...previous, [field]: e.target.value }))}
+          placeholder={label}
+          className="w-full border rounded p-2"
+        />
+      ))}
+      <label>
+        作者确认本卷完成
+        <input
+          type="checkbox"
+          checked={draft.isCompleted ?? false}
+          onChange={(e) => setDraft((previous) => ({ ...previous, isCompleted: e.target.checked }))}
+        />
+      </label>
+      <button disabled={busy || !volume} onClick={save}>
+        保存分卷规划
+      </button>
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={ai.isRunning || !volume}
+          onClick={() =>
+            ai.run({
+              volume,
+              authorPlan: {
+                ...semanticPlan,
+                targetWordCount: target === '' ? null : Number(target),
+              },
+              chapterSources: measured
+                .filter((c) => c.volumeId === selected)
+                .map((c) => ({
+                  id: c.id,
+                  volumeChapterOrder: c.order,
+                  revision: c.revision,
+                  text: c.text,
+                  authorTension: c.tension ?? null,
+                })),
+            })
+          }
+        >
+          AI 分卷目标与承接复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
     </div>
   )
 }

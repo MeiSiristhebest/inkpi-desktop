@@ -6,6 +6,7 @@ export interface LinterRuleConfig {
   enabled: boolean
   severity: LinterSeverity
   customThreshold?: number
+  options?: Record<string, unknown>
   description: string
 }
 

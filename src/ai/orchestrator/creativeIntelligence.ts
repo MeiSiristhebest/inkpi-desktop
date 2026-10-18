@@ -255,7 +255,9 @@ export class CreativeIntelligence {
     input: ContinuityAuditTaskInput,
     options: RunTaskOptions = {},
   ): Promise<ContinuityFinding[]> {
-    return parseContinuityFindings(await this.run(createContinuityAuditTask(input), options))
+    return parseContinuityFindings(await this.run(createContinuityAuditTask(input), options), [
+      input.document,
+    ])
   }
 
   async runDeepReasoning(
@@ -269,7 +271,10 @@ export class CreativeIntelligence {
     input: DistillationTaskInput,
     options: RunTaskOptions = {},
   ): Promise<DistilledStoryFacts> {
-    return parseDistilledFacts(await this.run(createDistillationTask(input), options))
+    return parseDistilledFacts(await this.run(createDistillationTask(input), options), [
+      input.document,
+      ...(input.neighboringDocuments ?? []),
+    ])
   }
 
   async steer(taskId: string, input: unknown): Promise<boolean> {

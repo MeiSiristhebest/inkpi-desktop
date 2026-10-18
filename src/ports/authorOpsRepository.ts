@@ -1,5 +1,8 @@
 export interface MetricLogEntry {
   date: string
+  period?: string
+  cohort?: string
+  metricDefinition?: string
   chasingReadCount: number
   averageSubscription: number
   retentionRate: number
@@ -24,6 +27,7 @@ export interface AuthorOpsProfileRecord {
     customUrl?: string
   }
   metricLogs: MetricLogEntry[]
+  reminderThreshold?: number
   updatedAt: number
 }
 

@@ -9,6 +9,7 @@ import type { SemanticDocument } from '../../domain/content'
 import type { StoryState } from '../../domain/story'
 import { compileCreativeContext, type CreativeContext } from '../context/contextCompiler'
 import { buildJitQuery } from '../context/jitQueryBuilder'
+import { getCoreInstructionDefinition } from '../instructions/coreInstructions'
 import { createTaskScope } from '../../types/taskScope'
 
 export const CREATIVE_TASK_KINDS = {
@@ -29,7 +30,7 @@ export interface CreativeTaskBaseInput {
   /** 当前 workspace 的领域修订号（INV-06）；默认 1，生产应从 ActiveWritingContext.workspaceRevision 读取 */
   workspaceRevision?: number
   document: SemanticDocument
-  selection?: { from: number; to: number }
+  selection?: { from: number; to: number; sourceHash?: string }
   neighboringDocuments?: SemanticDocument[]
   storyState?: StoryState
   instruction?: string
@@ -200,23 +201,36 @@ function createCreativeTask(
     extra: Record<string, unknown>
   },
 ): AiTask {
-  const context = compileCreativeContext({
+  const instruction = getCoreInstructionDefinition(kind)
+  const totalTokenBudget = options.requirements.streaming ? 4000 : 8000
+  const documentContext = compileCreativeContext({
     ...input,
     taskKind: kind,
-    totalTokenBudget: options.requirements.streaming ? 4000 : 8000,
+    storyState: undefined,
+    totalTokenBudget,
   })
-  const selection = toTaskSelection(input.document, input.selection)
 
   // 生产级 JIT Query Builder：结合正文、选区、指令、StoryState 进行实体挖掘与拓扑展开
   const jitQuery = buildJitQuery({
     workspaceId: input.workspaceId,
     currentDocumentId: input.document.documentId,
-    currentDocumentText: context.text,
-    selectionText: context.selectionText,
+    currentDocumentText: documentContext.text,
+    selectionText: documentContext.selectionText,
     userPrompt: options.intent ?? input.instruction,
     storyState: input.storyState,
     activeReferences: options.extra?.activeReferences as string[] | undefined,
   })
+  const activeEntityIds = [
+    ...new Set([...jitQuery.matchedEntityIds, ...jitQuery.expandedEntityIds]),
+  ]
+  const context = compileCreativeContext({
+    ...input,
+    taskKind: kind,
+    totalTokenBudget,
+    activeEntityIds,
+    activePromiseIds: jitQuery.relevantPromiseIds,
+  })
+  const selection = toTaskSelection(input.document, input.selection)
 
   // INV-03 / INV-06: 每个 AI 任务必须携带显式 scope，包含 workspaceId、workspaceRevision、
   // 章节 ID、revision 与选区——让 Runtime JIT、缓存、Artifact 作用域严格隔离
@@ -225,7 +239,13 @@ function createCreativeTask(
     workspaceRevision: input.workspaceRevision ?? 1,
     documentId: input.document.documentId,
     documentRevision: input.document.revision,
-    selection: input.selection ? { from: input.selection.from, to: input.selection.to } : undefined,
+    selection: input.selection
+      ? {
+          from: input.selection.from,
+          to: input.selection.to,
+          ...(input.selection.sourceHash ? { sourceHash: input.selection.sourceHash } : {}),
+        }
+      : undefined,
   })
   return {
     id: input.taskId,
@@ -258,6 +278,8 @@ function createCreativeTask(
       metadata: {
         contextFingerprint: context.fingerprint,
         workspaceId: input.workspaceId,
+        instructionId: instruction.id,
+        instructionVersion: instruction.version,
         activeReferences: jitQuery.activeReferences,
         keywords: jitQuery.keywords,
       },
@@ -269,6 +291,8 @@ function createCreativeTask(
     requirements: { ...options.requirements },
     metadata: {
       ...input.metadata,
+      instructionId: instruction.id,
+      instructionVersion: instruction.version,
       contextFingerprint: context.fingerprint,
       workspaceId: input.workspaceId,
     },

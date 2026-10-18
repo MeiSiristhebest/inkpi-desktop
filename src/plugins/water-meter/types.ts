@@ -9,14 +9,11 @@ export type { WaterAuditSnapshot, WaterBloatItem, WaterAuditRepository }
 export type WaterLevel = 'lean' | 'normal' | 'watery' | 'flooded'
 
 export interface WaterAuditReport {
-  waterScore: number // 0-100
-  waterLevel: WaterLevel
-  entropyScore: number // 0-8
+  entropyScore: number // empirical character-frequency entropy, bits per non-whitespace code point
   actionVerbRatio: number
   clicheRatio: number
   totalWordCount: number
-  estimatedLeanWordCount: number
-  dehydrationRate: number // 百分比, 如 18%
+  matchedCharacters: number
   bloatItems: WaterBloatItem[]
   advice: string[]
 }

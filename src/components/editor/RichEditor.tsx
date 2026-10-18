@@ -37,7 +37,7 @@ import { EditorToolbar } from './organisms/EditorToolbar'
 import { FindReplaceBar } from './organisms/FindReplaceBar'
 import { StatusFooter } from './organisms/StatusFooter'
 import { loadContentIntoEditor, applyContentMutation } from './editorContentBridge'
-import { WRITE_ORIGIN_META, countsAsAuthorTyping, plainLength } from './writeOrigin'
+import { countsAsAuthorTyping, plainLength } from './writeOrigin'
 import { EditorCanvas } from './organisms/EditorCanvas'
 import { GlobalSearchPopup } from './organisms/GlobalSearchPopup'
 import { ChapterContextMenu } from './organisms/ChapterContextMenu'
@@ -47,7 +47,11 @@ import { RenameVolumeDialog } from './organisms/RenameVolumeDialog'
 import { DeleteVolumeDialog } from './organisms/DeleteVolumeDialog'
 import { VolumeContextMenu } from './organisms/VolumeContextMenu'
 import { DrawerDock } from './organisms/DrawerDock'
-import { useOptionalActiveWritingContext } from '../../core/activeWritingContext'
+import {
+  useOptionalActiveWritingContext,
+  type SourceNavigationRequest,
+  type SourceNavigator,
+} from '../../core/activeWritingContext'
 import { commandRegistry, EDITOR_SHORTCUT_COMMAND_IDS } from '../../core/commandRegistry'
 import { hashText } from '../../ai/proposals'
 import {
@@ -59,6 +63,7 @@ import {
   semanticTextFromContent,
   semanticDocumentFromProseMirror,
   semanticDocumentFromText,
+  resolveSourceEvidenceRange,
 } from '../../domain/content'
 import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 
@@ -75,7 +80,12 @@ export interface RichEditorProps {
   isReconnecting?: boolean
   onReconnect?: () => void
   /** 请求 Daemon 行内续写建议（按章节隔离会话） */
-  onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
+  onRequestGhost?: (
+    chapterId: string,
+    text: string,
+    sourceRevision: number,
+    signal?: AbortSignal,
+  ) => Promise<string | null>
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 可选的长任务快照；未提供时，编辑器追踪自身发起的任务直到 Promise 结束。 */
   taskProgress?: TaskStatusSnapshot | null
@@ -122,7 +132,7 @@ export const RichEditor: FC<RichEditorProps> = ({
   isConnected = false,
   isReconnecting = false,
   onReconnect = () => {},
-  onRequestGhost = async () => null,
+  onRequestGhost,
   onAiTask,
   taskProgress,
   onHome,
@@ -136,15 +146,20 @@ export const RichEditor: FC<RichEditorProps> = ({
 }) => {
   const editorRef = useRef<any>(null)
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  const ghostTextRef = useRef('')
   const appliedIdRef = useRef('')
 
-  const model = useChapterEditorModel({ projectId, editorRef, onStats, onRequestGhost })
+  const model = useChapterEditorModel({
+    projectId,
+    editorRef,
+    onStats,
+    onRequestGhost,
+  })
   const {
     activeChapter,
     activeChapterId,
     chapters,
     actions,
+    ghostTextRef,
     showFindReplace,
     wordTarget,
     chapterWords,
@@ -164,6 +179,7 @@ export const RichEditor: FC<RichEditorProps> = ({
     volumeContextMenu,
     defaultTypewriter,
     draftRecovery,
+    historyError,
   } = model
 
   const drainRef = useRef(model.actions.drain)
@@ -187,6 +203,71 @@ export const RichEditor: FC<RichEditorProps> = ({
     }
   }, [activeWritingCtx, activeChapter])
 
+  const registerSourceNavigator = activeWritingCtx?.registerSourceNavigator
+  useEffect(() => {
+    if (!registerSourceNavigator) return
+
+    const navigateToSource: SourceNavigator = async (request: SourceNavigationRequest) => {
+      const chapter = chapters.find((candidate) => candidate.id === request.documentId)
+      if (!chapter) return { status: 'not-found' }
+
+      if (!(await actions.selectChapter(chapter))) return { status: 'save-blocked' }
+
+      const expectedText = semanticTextFromContent(
+        chapter.id,
+        chapter.content || '',
+        chapter.revision ?? 0,
+      )
+      let sourceDocument
+      let sourceEditor = editorRef.current
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+        sourceEditor = editorRef.current
+        if (!sourceEditor || sourceEditor.isDestroyed) return { status: 'editor-unavailable' }
+        sourceDocument = semanticDocumentFromProseMirror(
+          chapter.id,
+          sourceEditor.state.doc.toJSON(),
+          chapter.revision ?? 0,
+        )
+        if (sourceDocument.text === expectedText) break
+      }
+
+      if (!sourceEditor || sourceEditor.isDestroyed || !sourceDocument) {
+        return { status: 'editor-unavailable' }
+      }
+
+      const evidence = {
+        documentId: request.documentId,
+        ...(request.blockId ? { blockId: request.blockId } : {}),
+        ...(request.excerpt ? { excerpt: request.excerpt } : {}),
+        ...(request.semanticFrom !== undefined ? { semanticFrom: request.semanticFrom } : {}),
+        ...(request.semanticTo !== undefined ? { semanticTo: request.semanticTo } : {}),
+      }
+      const range = resolveSourceEvidenceRange(
+        sourceDocument,
+        evidence,
+        request.sourceRevision !== undefined && request.sourceRevision === (chapter.revision ?? 0),
+      )
+      if (!range) return { status: 'opened', highlighted: false }
+
+      const editorRange = sourceDocument.sourceMap.semanticRangeToEditor(range.from, range.to)
+      if (editorRange.to <= editorRange.from) return { status: 'opened', highlighted: false }
+
+      sourceEditor
+        .chain()
+        .setTextSelection({ from: editorRange.from, to: editorRange.to })
+        .scrollIntoView()
+        .run()
+      setTimeout(() => {
+        const currentEditor = editorRef.current
+        if (currentEditor && !currentEditor.isDestroyed) currentEditor.commands.focus()
+      }, 0)
+      return { status: 'opened', highlighted: true }
+    }
+
+    return registerSourceNavigator(navigateToSource)
+  }, [actions.selectChapter, chapters, registerSourceNavigator])
+
   const activeChapterText = activeChapter
     ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
     : ''
@@ -198,7 +279,11 @@ export const RichEditor: FC<RichEditorProps> = ({
   const handleAiTask = useCallback(
     async (task: AiTask): Promise<TaskResult | null> => {
       if (!onAiTask) return null
-      setLocalTaskProgress({ taskId: task.id, kind: task.kind, status: 'running' })
+      setLocalTaskProgress({
+        taskId: task.id,
+        kind: task.kind,
+        status: 'running',
+      })
       try {
         return await onAiTask(task)
       } finally {
@@ -393,17 +478,19 @@ export const RichEditor: FC<RichEditorProps> = ({
         return false
       },
       handleKeyDown: (_view, event) => {
-        // Tab 采纳光标后的内联 Ghost Text 续写
-        if (event.key === 'Tab' && ghostTextRef.current) {
-          const ed = editorRef.current
-          if (!ed || ed.isDestroyed) return false
-          const g = ghostTextRef.current
-          ghostTextRef.current = ''
-          actions.setGhostText('')
-          // 采纳的是 AI 的话，字数就该记在 AI 头上（§P3.10）。
-          ed.chain().insertContent(g).setMeta(WRITE_ORIGIN_META, 'ai').run()
-          return true
-        }
+        if (
+          event.isComposing ||
+          event.keyCode === 229 ||
+          !ghostTextRef.current ||
+          event.shiftKey ||
+          event.metaKey
+        )
+          return false
+        if (event.key === 'Tab' && !event.ctrlKey && !event.altKey) return actions.acceptGhostText()
+        if (event.key === 'ArrowRight' && (event.altKey || event.ctrlKey))
+          return actions.acceptGhostText('word')
+        if (event.key === 'ArrowDown' && event.altKey && !event.ctrlKey)
+          return actions.acceptGhostText('line')
         return false
       },
     },
@@ -424,6 +511,7 @@ export const RichEditor: FC<RichEditorProps> = ({
       }
     },
     onSelectionUpdate: () => {
+      actions.handleGhostSelectionUpdate()
       if (effectiveTypewriter) {
         requestAnimationFrame(recenterTypewriter)
       }
@@ -443,7 +531,10 @@ export const RichEditor: FC<RichEditorProps> = ({
                 ? semanticDocumentFromProseMirror(chId, editorRef.current.state.doc.toJSON(), chRev)
                 : semanticDocumentFromText(chId, editorRef.current.getText?.() || '', chRev)
 
-            const semanticRange = semanticDoc.sourceMap.editorRangeToSemantic({ from, to })
+            const semanticRange = semanticDoc.sourceMap.editorRangeToSemantic({
+              from,
+              to,
+            })
             const text = semanticDoc.text.slice(semanticRange.from, semanticRange.to) || rawText
 
             activeWritingCtx.setSelection({
@@ -512,7 +603,6 @@ export const RichEditor: FC<RichEditorProps> = ({
     try {
       loadContentIntoEditor(ed, ch.content || '')
       hideGhostText(ed)
-      ghostTextRef.current = ''
       actions.setGhostText('')
       // 这里不再动字数基线：setContent 走 preventUpdate，基线统一由 beforeTransaction 维护。
     } catch {
@@ -591,6 +681,7 @@ export const RichEditor: FC<RichEditorProps> = ({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        actions.cancelGhostText()
         actions.setChapterContextMenu(null)
         actions.setRenamingChapter(null)
         actions.setDeletingChapter(null)
@@ -652,6 +743,23 @@ export const RichEditor: FC<RichEditorProps> = ({
               丢弃
             </button>
           </span>
+        </div>
+      )}
+      {historyError && (
+        <div
+          data-testid="history-error-state"
+          role="alert"
+          aria-live="assertive"
+          className="absolute left-3 right-3 top-11 z-30 flex items-center justify-between gap-3 rounded border border-rose-500/50 bg-[var(--ink-bg-panel)]/95 bg-rose-500/10 px-3 py-2 text-[11px] text-[var(--ink-text-muted)] shadow-sm"
+        >
+          <span>{historyError}</span>
+          <button
+            type="button"
+            onClick={actions.dismissHistoryError}
+            className="shrink-0 text-[var(--ink-text-faint)] hover:underline"
+          >
+            关闭
+          </button>
         </div>
       )}
       {visibleTaskProgress && (
@@ -755,7 +863,17 @@ export const RichEditor: FC<RichEditorProps> = ({
             }}
           />
 
-          <DrawerDock projectId={projectId} currentText={activeChapterText} />
+          <DrawerDock
+            projectId={projectId}
+            currentText={activeChapterText}
+            currentChapterNumber={
+              model.currentChapterIndex >= 0 ? model.currentChapterIndex + 1 : null
+            }
+            retryAfterLoadError={{
+              persistDraft: actions.saveCurrentEditor,
+              reload: () => window.location.reload(),
+            }}
+          />
         </div>
 
         {!effectiveZen && model.showStatsBar && (
@@ -802,13 +920,14 @@ export const RichEditor: FC<RichEditorProps> = ({
       {showHistoryModal && activeChapter && (
         <HistoryModal
           chapter={activeChapter}
-          onRestore={(content) => {
-            void applyContentMutation(editorRef.current, content, {
+          onRestore={async (content) => {
+            const restored = await applyContentMutation(editorRef.current, content, {
               workspaceId: projectId,
               chapterId: activeChapter.id,
               expectedRevision: activeChapter.revision,
               origin: 'history-restore',
             })
+            if (!restored) throw new Error('History restore was rejected')
           }}
           onClose={() => actions.setShowHistoryModal(false)}
         />

@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto'
-import { renderHook, waitFor, act } from '@testing-library/react'
+import { render, renderHook, screen, waitFor, act } from '@testing-library/react'
+import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiTask } from '@inkpi/protocol'
 import type { AiAssistant } from '../ports/aiGateway'
 import type { Clock } from '../ports/clock'
+import { AiActivityCenter } from '../components/ai/AiActivityCenter'
+import { IndexedDbArtifactStore, type AiArtifact } from '../ai/artifacts/artifactStore'
+import { loadWorkspaceResults } from '../ai/results/resultCenter'
+import { db } from '../db/indexedDB'
 import { IndexedDbTaskRecoveryStore, type TaskRecoveryRecord } from '../db/taskRecoveryStore'
 import { useAiConversation } from '../hooks/useAiConversation'
 
@@ -36,6 +41,59 @@ beforeEach(() => {
 })
 
 describe('Desktop App restart recovery evidence', () => {
+  it('shows a persisted result after a fresh store and Activity Center mount', async () => {
+    const documentId = 'desktop-restart-result-chapter'
+    const artifact: AiArtifact = {
+      id: 'desktop-restart-result',
+      taskId: 'desktop-restart-result-task',
+      kind: 'narrative.continuity.audit',
+      type: 'creative.audit-report',
+      version: 1,
+      documentId,
+      content: { summary: '重启后仍可查看的检查结果' },
+      provenance: { sourceRevision: 7 },
+      ownership: { owner: 'desktop', authoritative: true, workspaceId: projectId },
+      metadata: { title: '重启后的连续性诊断' },
+      createdAt: 160,
+      updatedAt: 160,
+    }
+
+    await db.delete('aiArtifacts', artifact.id)
+    try {
+      await new IndexedDbArtifactStore().save(artifact)
+
+      const reloadedArtifacts = await new IndexedDbArtifactStore().listByWorkspace(projectId)
+      const results = await loadWorkspaceResults(projectId, reloadedArtifacts)
+      expect(results.map((result) => result.id)).toEqual([artifact.id])
+
+      render(
+        createElement(AiActivityCenter, {
+          recoveryRecords: [],
+          results,
+          focusedResultId: artifact.id,
+          currentDocumentRevisions: new Map([[documentId, 8]]),
+        }),
+      )
+
+      expect(await screen.findByTestId(`activity-result-${artifact.id}`)).toBeInTheDocument()
+      expect(screen.getByTestId(`activity-result-${artifact.id}`)).toHaveAttribute(
+        'aria-current',
+        'true',
+      )
+      expect(screen.getByTestId(`result-summary-${artifact.id}`)).toHaveTextContent(
+        '重启后仍可查看的检查结果',
+      )
+      expect(screen.getByTestId(`result-source-changed-${artifact.id}`)).toHaveTextContent(
+        '来源版本已变化：分析 r7，当前 r8',
+      )
+      expect(await screen.findByTestId(`result-details-${artifact.id}`)).toHaveTextContent(
+        `结果记录: ${artifact.id}`,
+      )
+    } finally {
+      await db.delete('aiArtifacts', artifact.id)
+    }
+  })
+
   it('rehydrates a persisted long-task checkpoint through a fresh store instance', async () => {
     const task = makeTask('desktop-restart-long-task')
     const persisted: TaskRecoveryRecord = {

@@ -83,21 +83,21 @@ export const CAPABILITY_REGISTRY = {
   'promise-ledger': {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'drawer', 'command'],
+    surfaces: ['canvas', 'drawer', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
   },
   'timeline-grid': {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
   },
   'diff-reviewer': {
     category: 'format',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: true,
     mutatesCanonicalState: false,
   },
@@ -111,7 +111,7 @@ export const CAPABILITY_REGISTRY = {
   'memory-palace': {
     category: 'intelligence',
     maturity: 'beta',
-    surfaces: ['navigation', 'canvas', 'drawer', 'command'],
+    surfaces: ['canvas', 'drawer', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
   },
@@ -125,14 +125,14 @@ export const CAPABILITY_REGISTRY = {
   'multiverse-whatif': {
     category: 'experimental',
     maturity: 'demo',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
   },
   'storyboard-gen': {
     category: 'experimental',
     maturity: 'demo',
-    surfaces: ['navigation', 'canvas', 'drawer', 'command'],
+    surfaces: ['canvas', 'drawer', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
   },
@@ -142,7 +142,7 @@ export const CAPABILITY_REGISTRY = {
   positioning: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '开书商业档案：赛道、平台、读者、卖点及差异化定位',
@@ -150,7 +150,7 @@ export const CAPABILITY_REGISTRY = {
   worldbase: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '世界总览、底层法则、社会文明与成长地图顶层档案',
@@ -158,7 +158,7 @@ export const CAPABILITY_REGISTRY = {
   power: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '力量来源、境界阶梯、能力门槛、克制关系与金手指接口',
@@ -168,7 +168,7 @@ export const CAPABILITY_REGISTRY = {
   master: {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '主线内核、反派序列、大结局及各卷境界规划母表',
@@ -176,7 +176,7 @@ export const CAPABILITY_REGISTRY = {
   'volume-outline': {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '百万字各卷起承转合、核心矛盾与高潮规划',
@@ -184,7 +184,7 @@ export const CAPABILITY_REGISTRY = {
   'chapter-outline': {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '单章细纲事件、出场人物、伏笔埋设与节奏卡点',
@@ -192,7 +192,7 @@ export const CAPABILITY_REGISTRY = {
   'chapter-master': {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '全书章节序列、字数状态与发布节奏总览',
@@ -202,7 +202,7 @@ export const CAPABILITY_REGISTRY = {
   'char-main': {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'drawer', 'command'],
+    surfaces: ['canvas', 'drawer', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '主角团、主线对手与关键角色的核心性格、动机与弧光',
@@ -210,7 +210,7 @@ export const CAPABILITY_REGISTRY = {
   'char-secondary': {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'drawer', 'command'],
+    surfaces: ['canvas', 'drawer', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '阶段性对手、导师与重要配角档案',
@@ -218,7 +218,7 @@ export const CAPABILITY_REGISTRY = {
   'char-npc': {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'drawer', 'command'],
+    surfaces: ['canvas', 'drawer', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '功能型与过客角色档案',
@@ -226,7 +226,7 @@ export const CAPABILITY_REGISTRY = {
   relations: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '网状人物好感度、血缘、宗门及利益羁绊网络',
@@ -236,7 +236,7 @@ export const CAPABILITY_REGISTRY = {
   nations: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '诸侯皇朝、宗门圣地与隐世派系设定',
@@ -244,7 +244,7 @@ export const CAPABILITY_REGISTRY = {
   'faction-rels': {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '势力间外交、同盟、世仇与利益博弈格局',
@@ -252,7 +252,7 @@ export const CAPABILITY_REGISTRY = {
   geography: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '洲域、名山大川、城邑秘境与气候风貌',
@@ -260,14 +260,14 @@ export const CAPABILITY_REGISTRY = {
   'geography-map': {
     category: 'worldbuilding',
     maturity: 'beta',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
   },
   races: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '原生神族、妖兽妖灵、荒古异种谱系',
@@ -275,7 +275,7 @@ export const CAPABILITY_REGISTRY = {
   items: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '天材地宝、灵丹妙药、神兵法宝体系',
@@ -283,7 +283,7 @@ export const CAPABILITY_REGISTRY = {
   history: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '纪元兴衰、上古大战与开宗立派重大年表',
@@ -291,7 +291,7 @@ export const CAPABILITY_REGISTRY = {
   terms: {
     category: 'worldbuilding',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '专有名词、功法秘术词汇表与释义',
@@ -301,7 +301,7 @@ export const CAPABILITY_REGISTRY = {
   foreshadow: {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '长线伏笔埋设与回收状态点检',
@@ -309,7 +309,7 @@ export const CAPABILITY_REGISTRY = {
   timeline: {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '故事发展线性时间线与事件节点',
@@ -317,7 +317,7 @@ export const CAPABILITY_REGISTRY = {
   'plot-canvas': {
     category: 'plot',
     maturity: 'beta',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '白板化自由推演高潮情节与剧情支线',
@@ -325,7 +325,7 @@ export const CAPABILITY_REGISTRY = {
   hookpoints: {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '先抑后扬节奏、打脸期待感与释放排布',
@@ -333,7 +333,7 @@ export const CAPABILITY_REGISTRY = {
   progress: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '日更字数、月度进度与存稿余量看板',
@@ -341,7 +341,7 @@ export const CAPABILITY_REGISTRY = {
   subplots: {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '穿插支线、独立副本与合流节点规划',
@@ -349,7 +349,7 @@ export const CAPABILITY_REGISTRY = {
   secrets: {
     category: 'plot',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: true,
     description: '双盲信息差、角色视野与真相揭示时序',
@@ -359,7 +359,7 @@ export const CAPABILITY_REGISTRY = {
   style: {
     category: 'format',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '人称视角、标点格式、文风禁忌与自检准则',
@@ -367,7 +367,7 @@ export const CAPABILITY_REGISTRY = {
   changelog: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '长篇创作设定修订日志与版本差异记录',
@@ -375,7 +375,7 @@ export const CAPABILITY_REGISTRY = {
   ideas: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '随手灵感火花、好词金句与备忘素材箱',
@@ -383,7 +383,7 @@ export const CAPABILITY_REGISTRY = {
   feedback: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '段评章评热度、毒点吐槽与反馈备忘',
@@ -391,7 +391,7 @@ export const CAPABILITY_REGISTRY = {
   about: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '平台粉丝互动、打赏感谢与周边记录',
@@ -401,7 +401,7 @@ export const CAPABILITY_REGISTRY = {
   dashboard: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '全书字数、最近章节与核心数据综合看板',
@@ -409,7 +409,7 @@ export const CAPABILITY_REGISTRY = {
   guide: {
     category: 'core',
     maturity: 'production',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '网文创作方法论与各模块详细使用指南',
@@ -417,7 +417,7 @@ export const CAPABILITY_REGISTRY = {
   'inspire-tools': {
     category: 'core',
     maturity: 'beta',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '卡文破局工具箱与剧情发散生成器',
@@ -425,7 +425,7 @@ export const CAPABILITY_REGISTRY = {
   'check-tools': {
     category: 'core',
     maturity: 'beta',
-    surfaces: ['navigation', 'canvas', 'command'],
+    surfaces: ['canvas', 'command'],
     mutatesDocument: false,
     mutatesCanonicalState: false,
     description: '错别字、敏感词与违规点检工具集',

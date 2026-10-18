@@ -1,8 +1,13 @@
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
+import {
+  projectChapterSequence,
+  latestPositionedChapterNumber,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 import { semanticTextFromContent } from '../../../domain/content'
 import type { ExpectationContract, GoldenThreeDiagnostic } from '../types'
-import { expectationEngine } from '../engine/ExpectationEngine'
+import { ExpectationEngine, expectationEngine } from '../engine/ExpectationEngine'
 import { indexedDbExpectationRepository } from '../../../adapters/indexedDbExpectationRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
@@ -14,11 +19,13 @@ import { Sparkles, Plus, Trash2, Activity, Flame, ChevronDown, ChevronUp, Bot } 
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Select, Tooltip } from '../../../ui/primitives'
 
-export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const ExpectationMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ProjectExpectationView key={props.projectId} {...props} />
+)
+const ProjectExpectationView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('expectation-engine')
   const [contracts, setContracts] = useState<ExpectationContract[]>([])
-  const [, setChapters] = useState<any[]>([])
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
   const [loading, setLoading] = useState(true)
 
   // 黄金三章诊断器弹层/折叠
@@ -27,6 +34,16 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   const [ch2Input, setCh2Input] = useState('')
   const [ch3Input, setCh3Input] = useState('')
   const [diagnosticResult, setDiagnosticResult] = useState<GoldenThreeDiagnostic | null>(null)
+  const [error, setError] = useState('')
+  const [statusNote, setStatusNote] = useState('')
+  const aiTask = usePluginAiTask('expectation-engine', [
+    projectId,
+    contracts,
+    chapters,
+    ch1Input,
+    ch2Input,
+    ch3Input,
+  ])
 
   // 新建契约表单
   const [newTitle, setNewTitle] = useState('')
@@ -37,40 +54,42 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   const loadContracts = async () => {
     try {
       setLoading(true)
-      const [all, allChapters] = await Promise.all([
+      const [all, allChapters, volumes] = await Promise.all([
         indexedDbExpectationRepository.getAll(),
         indexedDbProjectRepository.getChaptersByProject(projectId),
+        indexedDbProjectRepository.getVolumesByProject(projectId),
       ])
       const filtered = all.filter((c) => c.projectId === projectId)
       setContracts(filtered)
 
-      allChapters.sort((a, b) => a.order - b.order)
-      setChapters(allChapters)
-      if (allChapters.length >= 3 && !ch1Input) {
+      const orderedChapters = projectChapterSequence(projectId, allChapters, volumes)
+      setChapters(orderedChapters)
+      const openingChapters = orderedChapters.filter((chapter) => chapter.chapterNumber !== null)
+      if (openingChapters.length >= 3 && !ch1Input) {
         setCh1Input(
           semanticTextFromContent(
-            allChapters[0].id,
-            allChapters[0].content || '',
-            allChapters[0].revision,
+            openingChapters[0].id,
+            openingChapters[0].content || '',
+            openingChapters[0].revision,
           ),
         )
         setCh2Input(
           semanticTextFromContent(
-            allChapters[1].id,
-            allChapters[1].content || '',
-            allChapters[1].revision,
+            openingChapters[1].id,
+            openingChapters[1].content || '',
+            openingChapters[1].revision,
           ),
         )
         setCh3Input(
           semanticTextFromContent(
-            allChapters[2].id,
-            allChapters[2].content || '',
-            allChapters[2].revision,
+            openingChapters[2].id,
+            openingChapters[2].content || '',
+            openingChapters[2].revision,
           ),
         )
       }
     } catch (e) {
-      console.error('Failed to load expectation contracts:', e)
+      setError('期待契约加载失败，请重试。')
     } finally {
       setLoading(false)
     }
@@ -80,9 +99,12 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   const handleAiExpectationAudit = async () => {
     if (contracts.length === 0) return
     const analysisInput = {
-      contracts: contracts.map((contract) => ({
-        ...contract,
-        title: semanticTextFromContent(`expectation-contract-${contract.id}`, contract.title),
+      contracts,
+      chapterSources: chapters.map((chapter) => ({
+        id: chapter.id,
+        chapterNumber: chapter.chapterNumber,
+        revision: chapter.revision,
+        text: semanticTextFromContent(chapter.id, chapter.content, chapter.revision),
       })),
     }
 
@@ -94,11 +116,31 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   }, [projectId])
 
   const audit = useMemo(() => {
-    return expectationEngine.auditContracts(contracts, 15)
-  }, [contracts])
+    return expectationEngine.auditContracts(contracts, latestPositionedChapterNumber(chapters))
+  }, [contracts, chapters])
+
+  const persist = async (operation: () => Promise<void>) => {
+    try {
+      await operation()
+      setError('')
+      await loadContracts()
+    } catch {
+      setError('保存失败，契约尚未更新。请重试。')
+    }
+  }
 
   const handleCreateContract = async () => {
     if (!newTitle.trim()) return
+    if (
+      !Number.isSafeInteger(newPlantedCh) ||
+      newPlantedCh < 1 ||
+      !Number.isSafeInteger(newResolveCh) ||
+      newResolveCh < 0 ||
+      (newResolveCh > 0 && newResolveCh < newPlantedCh)
+    ) {
+      setError('埋设章须为正整数；兑现章留零表示未知，或不得早于埋设章。')
+      return
+    }
     const now = clock.now()
     const item: ExpectationContract = {
       id: idGenerator.generate('contract'),
@@ -111,27 +153,36 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       createdAt: now,
       updatedAt: now,
     }
-    await indexedDbExpectationRepository.save(item)
-    setNewTitle('')
-    await loadContracts()
+    await persist(async () => {
+      await indexedDbExpectationRepository.save(item)
+      setNewTitle('')
+    })
   }
 
   const handleUpdateStatus = async (
     contract: ExpectationContract,
     status: ExpectationContract['status'],
   ) => {
+    const currentChapter = latestPositionedChapterNumber(chapters)
+    if (status === 'fulfilled' && (currentChapter < 1 || !statusNote.trim())) {
+      setError('请登记兑现说明，并确认当前保存章节。')
+      return
+    }
     const updated: ExpectationContract = {
       ...contract,
       status,
+      actualResolvedChapter: status === 'fulfilled' ? currentChapter : undefined,
+      notes:
+        status === 'fulfilled'
+          ? [contract.notes, statusNote.trim()].filter(Boolean).join('\n')
+          : contract.notes,
       updatedAt: clock.now(),
     }
-    await indexedDbExpectationRepository.save(updated)
-    await loadContracts()
+    await persist(() => indexedDbExpectationRepository.save(updated))
   }
 
   const handleDeleteContract = async (id: string) => {
-    await indexedDbExpectationRepository.delete(id)
-    await loadContracts()
+    await persist(() => indexedDbExpectationRepository.delete(id))
   }
 
   const handleRunGoldenThreeAudit = () => {
@@ -192,7 +243,9 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
           </div>
           <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
             <span className="text-[11px] text-[var(--ink-text-muted)] block">兑现闭环率</span>
-            <span className="text-lg font-bold text-emerald-500">{audit.fulfillmentRate}%</span>
+            <span className="text-lg font-bold text-emerald-500">
+              {audit.fulfillmentRate == null ? '无记录' : `${audit.fulfillmentRate}%`}
+            </span>
           </div>
           <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
             <span className="text-[11px] text-[var(--ink-text-muted)] block">蓄势中契约</span>
@@ -213,7 +266,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       {showGoldenThree && (
         <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 space-y-3">
           <div className="text-xs font-semibold text-[var(--ink-text)] flex items-center justify-between">
-            <span>黄金三章自动化节奏体检</span>
+            <span>前三章原文定位与期待审阅</span>
             <button
               onClick={handleRunGoldenThreeAudit}
               className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90"
@@ -225,12 +278,15 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-[11px] text-[var(--ink-text-muted)] block mb-1">
-                第一章：困境与金手指
+                第一章原文
               </label>
               <textarea
                 rows={3}
                 value={ch1Input}
-                onChange={(e) => setCh1Input(e.target.value)}
+                onChange={(e) => {
+                  setCh1Input(e.target.value)
+                  setDiagnosticResult(null)
+                }}
                 placeholder="粘贴第一章文本摘要..."
                 className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs resize-none focus:outline-none"
               />
@@ -242,7 +298,10 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               <textarea
                 rows={3}
                 value={ch2Input}
-                onChange={(e) => setCh2Input(e.target.value)}
+                onChange={(e) => {
+                  setCh2Input(e.target.value)
+                  setDiagnosticResult(null)
+                }}
                 placeholder="粘贴第二章文本摘要..."
                 className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs resize-none focus:outline-none"
               />
@@ -254,7 +313,10 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               <textarea
                 rows={3}
                 value={ch3Input}
-                onChange={(e) => setCh3Input(e.target.value)}
+                onChange={(e) => {
+                  setCh3Input(e.target.value)
+                  setDiagnosticResult(null)
+                }}
                 placeholder="粘贴第三章文本摘要..."
                 className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs resize-none focus:outline-none"
               />
@@ -266,33 +328,71 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5 text-amber-500" />
-                  体检综合评分：{diagnosticResult.overallScore} 分
+                  原文定位：{diagnosticResult.observations.length} 处
                 </span>
                 <span className="text-[11px] text-[var(--ink-text-muted)]">
                   {diagnosticResult.advice}
                 </span>
               </div>
+              <p>缺失章节：{diagnosticResult.missingChapters.join('、') || '无'}</p>
               <div className="grid grid-cols-3 gap-2 text-[11px]">
-                <div
-                  className={`p-2 rounded border ${diagnosticResult.chapter1Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}
-                >
-                  Ch1: {diagnosticResult.chapter1Status.feedback}
-                </div>
-                <div
-                  className={`p-2 rounded border ${diagnosticResult.chapter2Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}
-                >
-                  Ch2: {diagnosticResult.chapter2Status.feedback}
-                </div>
-                <div
-                  className={`p-2 rounded border ${diagnosticResult.chapter3Status.passed ? 'border-emerald-500/30 text-emerald-500' : 'border-rose-500/30 text-rose-500'}`}
-                >
-                  Ch3: {diagnosticResult.chapter3Status.feedback}
-                </div>
+                {diagnosticResult.observations.map((observation, index) => (
+                  <p key={index} className="p-2 border rounded">
+                    第 {observation.chapterIndex} 章 [{observation.startOffset},{' '}
+                    {observation.endOffset})：{observation.quote}
+                  </p>
+                ))}
               </div>
             </div>
           )}
         </div>
       )}
+
+      {error && (
+        <p role="alert" className="p-3">
+          {error}
+        </p>
+      )}
+      <div className="p-3 text-xs space-y-2">
+        <p>
+          逾期依据：
+          {latestPositionedChapterNumber(chapters) > 0
+            ? `最新保存位置第 ${latestPositionedChapterNumber(chapters)} 章`
+            : '尚无保存章节，不能判断逾期'}
+          ；未登记期限 {audit.unknownDeadlines.length} 条；本章到期 {audit.dueContracts.length} 条。
+        </p>
+        <label>
+          作者兑现说明
+          <input
+            aria-label="期待契约兑现说明"
+            value={statusNote}
+            onChange={(e) => setStatusNote(e.target.value)}
+            className="ml-2 p-1 border bg-[var(--ink-bg-canvas)]"
+          />
+        </label>
+        {showGoldenThree && hostContext?.aiAssistant?.isAvailable && (
+          <button
+            disabled={
+              aiTask.isRunning || ![ch1Input, ch2Input, ch3Input].some((text) => text.trim())
+            }
+            onClick={() =>
+              aiTask.run({
+                ...ExpectationEngine.buildAnalysisInput({
+                  chapters: [ch1Input, ch2Input, ch3Input].map((content, index) => ({
+                    order: index + 1,
+                    title: `审阅输入 ${index + 1}`,
+                    content: semanticTextFromContent(`expectation-golden-${index + 1}`, content),
+                  })),
+                }),
+                authorContracts: contracts,
+              })
+            }
+            className="ml-2 p-1 border rounded"
+          >
+            AI 审阅前三章期待
+          </button>
+        )}
+      </div>
 
       {/* 契约录入条 */}
       <div className="p-4 border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] flex items-center gap-3 text-xs shrink-0">
@@ -306,6 +406,7 @@ export const ExpectationMasterView: FC<DesktopPluginViewProps> = ({ projectId })
         <div className="flex items-center gap-1 text-[var(--ink-text-muted)]">
           <span>爽点烈度:</span>
           <Select
+            aria-label="爽点烈度"
             value={newIntensity}
             onValueChange={(v) => setNewIntensity(Number(v) as 1 | 2 | 3 | 4 | 5)}
             size="sm"

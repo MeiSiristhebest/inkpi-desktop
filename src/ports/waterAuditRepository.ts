@@ -2,18 +2,22 @@ export interface WaterBloatItem {
   type: 'recap' | 'phantom' | 'modifier' | 'banter'
   text: string
   reason: string
+  start?: number
+  end?: number
 }
 
 export interface WaterAuditSnapshot {
   id: string
   projectId: string
   chapterId: string
-  waterScore: number
+  /** Retained only on legacy snapshots; not a calibrated literary quality measure. */
+  waterScore?: number
   entropyScore: number
   actionVerbRatio: number
   clicheRatio: number
   totalWordCount: number
-  estimatedLeanWordCount: number
+  estimatedLeanWordCount?: number
+  matchedCharacters?: number
   bloatItems: WaterBloatItem[]
   createdAt: number
 }

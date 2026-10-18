@@ -1,276 +1,228 @@
-import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useEffect, useMemo, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import { PaywallSentryEngine } from '../engine/PaywallSentryEngine'
 import type { PaywallAuditResult } from '../types'
-import { indexedDbPaywallAuditRepository } from '../../../adapters/indexedDbPaywallAuditRepository'
+import { PaywallSentryEngine } from '../engine/PaywallSentryEngine'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
-import { clock } from '../../../adapters/clock'
+import { indexedDbPaywallAuditRepository } from '../../../adapters/indexedDbPaywallAuditRepository'
+import { semanticTextFromContent } from '../../../domain/content'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 import { idGenerator } from '../../../adapters/idGenerator'
+import { clock } from '../../../adapters/clock'
+import { EndingEvidence } from '../../../components/plugins/EndingEvidence'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
-import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import {
-  ShieldCheck,
-  Flame,
-  AlertTriangle,
-  Skull,
-  RefreshCw,
-  BookmarkCheck,
-  Bot,
-} from 'lucide-react'
-
-export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('paywall-sentry')
-  const [chapters, setChapters] = useState<any[]>([])
+import { Select } from '../../../ui/primitives'
+export const PaywallSentryMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <PaywallWorkspace key={props.projectId} {...props} />
+)
+function PaywallWorkspace({ projectId }: DesktopPluginViewProps) {
+  const host = useOptionalPluginHostContext()
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
+  const [reload, setReload] = useState(0)
+  const [selected, setSelected] = useState('')
+  const [reached, setReached] = useState('')
+  const [paid, setPaid] = useState('')
+  const [measurementSource, setMeasurementSource] = useState('')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
-  const [filterRating, setFilterRating] = useState<string>('all')
-  const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
-
-  const refreshChapters = async () => {
-    setLoading(true)
-    try {
-      const allChapters = await indexedDbProjectRepository.getChaptersByProject(projectId)
-      allChapters.sort((a, b) => a.order - b.order)
-      setChapters(allChapters)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const [saving, setSaving] = useState(false)
+  const reports = useMemo(
+    () =>
+      chapters.map((c) =>
+        PaywallSentryEngine.analyzeChapter({
+          chapterId: c.id,
+          chapterTitle: c.title,
+          chapterOrder: c.chapterNumber,
+          content: semanticTextFromContent(c.id, c.content, c.revision),
+        }),
+      ),
+    [chapters],
+  )
+  const ai = usePluginAiTask('paywall-sentry', [
+    projectId,
+    chapters,
+    selected,
+    reached,
+    paid,
+    measurementSource,
+  ])
   useEffect(() => {
-    refreshChapters()
-  }, [projectId])
-
-  // AI 深度测算最佳上架付费卡点
-  const handleAiPaywallRecommend = async () => {
-    if (chapters.length === 0) return
-    const summaries = chapters
-      .slice(0, 30)
-      .map(
-        (c) =>
-          `第 ${c.order} 章《${c.title}》尾段：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(-250)}`,
-      )
-      .join('\n\n')
-
-    const analysisInput = { chapterEndings: summaries }
-
-    await aiTask.run(analysisInput)
-  }
-
-  const auditResults: PaywallAuditResult[] = useMemo(() => {
-    return chapters.map((ch) =>
-      PaywallSentryEngine.analyzeChapter({
-        chapterId: ch.id,
-        chapterTitle: ch.title,
-        chapterOrder: ch.order,
-        content: semanticTextFromContent(ch.id, ch.content || '', ch.revision),
-      }),
-    )
-  }, [chapters])
-
-  const filteredResults = useMemo(() => {
-    if (filterRating === 'all') return auditResults
-    return auditResults.filter((r) => r.recommendation === filterRating)
-  }, [auditResults, filterRating])
-
-  const handleSaveToAuditHistory = async (result: PaywallAuditResult) => {
-    await indexedDbPaywallAuditRepository.save({
-      id: idGenerator.generate('pwa'),
-      projectId,
-      chapterId: result.chapterId,
-      chapterTitle: result.chapterTitle,
-      chapterOrder: result.chapterOrder,
-      wordCount: result.wordCount,
-      ppiScore: result.ppiScore,
-      cliffhangerScore: result.cliffhangerScore,
-      unresolvedDesireScore: result.unresolvedDesireScore,
-      powerClimaxScore: result.powerClimaxScore,
-      fatigueRiskScore: result.fatigueRiskScore,
-      recommendation: result.recommendation,
-      suggestions: result.suggestions,
-      updatedAt: clock.now(),
-    })
-    setSavedSuccessMsg(`已保存第 ${result.chapterOrder} 章付费卡点快照`)
-    setTimeout(() => setSavedSuccessMsg(null), 2500)
-  }
-
-  const getBadge = (rec: PaywallAuditResult['recommendation']) => {
-    switch (rec) {
-      case 'prime_paywall':
-        return (
-          <span className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 flex items-center gap-1">
-            <Flame className="w-3.5 h-3.5" /> 黄金卡点 (强断章信号)
-          </span>
+    let disposed = false
+    setLoading(true)
+    setError('')
+    Promise.all([
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject(projectId),
+    ])
+      .then(([all, volumes]) => {
+        if (disposed) return
+        const ordered = projectChapterSequence(projectId, all, volumes)
+        setChapters(ordered)
+        setSelected((previous) =>
+          ordered.some((c) => c.id === previous) ? previous : (ordered[0]?.id ?? ''),
         )
-      case 'acceptable':
-        return (
-          <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5" /> 合格卡点 (平稳承接)
-          </span>
-        )
-      case 'weak_cut':
-        return (
-          <span className="px-2 py-0.5 text-xs font-medium rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 flex items-center gap-1">
-            <AlertTriangle className="w-3.5 h-3.5" /> 偏弱卡点
-          </span>
-        )
-      case 'toxic_drop':
-        return (
-          <span className="px-2 py-0.5 text-xs font-medium rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 flex items-center gap-1">
-            <Skull className="w-3.5 h-3.5" /> 暴跌流失风险信号
-          </span>
-        )
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+      .finally(() => {
+        if (!disposed) setLoading(false)
+      })
+    return () => {
+      disposed = true
+    }
+  }, [projectId, reload])
+  let measurement: { reached: number; paid: number; rate: number | null } | undefined
+  let measurementError = ''
+  if (reached !== '' || paid !== '') {
+    try {
+      if (reached === '' || paid === '' || !measurementSource.trim())
+        throw new Error('填写同一章、同一观察时期的两个计数及数据来源。')
+      measurement = PaywallSentryEngine.observedConversion({
+        reached: Number(reached),
+        paid: Number(paid),
+      })
+    } catch (cause) {
+      measurementError = String(cause)
     }
   }
-
+  const save = async (report: PaywallAuditResult) => {
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      const c = chapters.find((item) => item.id === report.chapterId)!
+      await indexedDbPaywallAuditRepository.save({
+        id: idGenerator.generate('pwa'),
+        projectId,
+        chapterId: c.id,
+        chapterTitle: c.title,
+        chapterOrder: c.chapterNumber,
+        wordCount: report.wordCount,
+        ending: report.ending,
+        sourceRevision: c.revision,
+        measurement:
+          report.chapterId === selected && measurement
+            ? { ...measurement, source: measurementSource }
+            : undefined,
+        suggestions: [],
+        updatedAt: clock.now(),
+      })
+      setMessage('已保存章尾和观察数据快照。')
+    } catch (cause) {
+      setError(String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
   return (
-    <div className="p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
-      <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-            <Flame className="w-6 h-6 text-amber-500" />
-            付费卡点与断章势能哨兵 (Paywall Sentry)
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            按章尾悬念、欲望期待、战力高潮与疲劳流失四类文本特征，逐章扫描断章位置的潜在风险信号。
-          </p>
-          <div className="mt-1.5">
-            <ScoreProvenanceBadge
-              source="rule"
-              detail="PPI 由本页四类特征加权算出，不含读者真实付费数据"
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {savedSuccessMsg && (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-              {savedSuccessMsg}
-            </span>
-          )}
-          {hostContext?.aiAssistant?.isAvailable && (
-            <button
-              disabled={aiTask.isRunning}
-              onClick={handleAiPaywallRecommend}
-              className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
-            >
-              <Bot className="w-3.5 h-3.5" />
-              AI 黄金卡点深度推演
-            </button>
-          )}
-          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
-          <button
-            onClick={refreshChapters}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1 cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            重新扫描
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 text-xs">
-        <span className="text-slate-500 dark:text-slate-400">筛选评级：</span>
-        {['all', 'prime_paywall', 'acceptable', 'weak_cut', 'toxic_drop'].map((key) => (
-          <button
-            key={key}
-            onClick={() => setFilterRating(key)}
-            className={`px-2.5 py-1 rounded-full transition ${
-              filterRating === key
-                ? 'bg-amber-500 text-white font-medium'
-                : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            {key === 'all'
-              ? '全部章节'
-              : key === 'prime_paywall'
-                ? '黄金卡点'
-                : key === 'acceptable'
-                  ? '合格'
-                  : key === 'weak_cut'
-                    ? '偏弱'
-                    : '风险'}
-          </button>
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>付费过渡章尾复核</h2>
+      <p>章尾观察与实测付费计数分别展示。文本不产生付费潜力评分或转化预测。</p>
+      <p>来源：作者登记的章尾观察和同一观察期的实测付费计数。</p>
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      <button onClick={() => setReload((n) => n + 1)} disabled={loading}>
+        重新扫描
+      </button>
+      <Select
+        aria-label="观察数据所属章节"
+        value={selected}
+        onValueChange={(value) => {
+          setSelected(value)
+          setReached('')
+          setPaid('')
+          setMeasurementSource('')
+        }}
+      >
+        {chapters.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.title}
+          </option>
         ))}
-      </div>
-
+      </Select>
+      <label>
+        观察人数
+        <input
+          aria-label="观察人数"
+          type="number"
+          min="0"
+          value={reached}
+          onChange={(e) => setReached(e.target.value)}
+        />
+      </label>
+      <label>
+        付费人数
+        <input
+          aria-label="付费人数"
+          type="number"
+          min="0"
+          value={paid}
+          onChange={(e) => setPaid(e.target.value)}
+        />
+      </label>
+      <input
+        aria-label="观察时期与数据来源"
+        value={measurementSource}
+        onChange={(e) => setMeasurementSource(e.target.value)}
+        placeholder="平台、时期和统计口径"
+      />
+      {measurementError && <p role="alert">{measurementError}</p>}
+      {measurement && (
+        <p>
+          实测比例：
+          {measurement.rate === null
+            ? '无人观察，比例未知'
+            : (measurement.rate * 100).toFixed(2) + '%'}
+          。这些计数不能证明章尾导致付费。
+        </p>
+      )}
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={ai.isRunning || !chapters.length}
+          onClick={() =>
+            ai.run({
+              chapterSources: chapters.map((c) => ({
+                id: c.id,
+                chapterNumber: c.chapterNumber,
+                revision: c.revision,
+                text: semanticTextFromContent(c.id, c.content, c.revision),
+              })),
+              measuredCounts: measurement
+                ? { chapterId: selected, ...measurement, source: measurementSource }
+                : null,
+            })
+          }
+        >
+          AI 章尾文本复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
       {loading ? (
-        <div className="text-center py-12 text-slate-400">正在分析全书章节付费势能...</div>
-      ) : filteredResults.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">暂无符合条件的章节分析结果。</div>
+        <p role="status">正在读取保存章节…</p>
+      ) : !reports.length ? (
+        <p>尚无保存章节。</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredResults.map((r) => (
-            <div
-              key={r.chapterId}
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col justify-between hover:border-amber-400 dark:hover:border-amber-500 transition"
+        reports.map((report) => (
+          <article key={report.chapterId} className="border rounded p-3 space-y-2">
+            <h3>
+              {report.chapterOrder ? '第 ' + report.chapterOrder + ' 章' : '位置未知'}：
+              {report.chapterTitle}
+            </h3>
+            <EndingEvidence report={report.ending} />
+            <button
+              disabled={saving || (report.chapterId === selected && Boolean(measurementError))}
+              onClick={() => save(report)}
             >
-              <div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="font-semibold text-sm line-clamp-1">
-                    第 {r.chapterOrder} 章：{r.chapterTitle}
-                  </h3>
-                  {getBadge(r.recommendation)}
-                </div>
-
-                <div className="flex items-baseline gap-2 mb-3">
-                  <span className="text-2xl font-black text-amber-500">{r.ppiScore}</span>
-                  <span className="text-xs text-slate-400">PPI 规则评分 / 100</span>
-                  <span className="text-xs text-slate-400 ml-auto">{r.wordCount} 字</span>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 mb-3 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                  <div className="flex justify-between">
-                    <span>章尾悬念 (C)：</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100">
-                      {r.cliffhangerScore}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>欲望期待 (D)：</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100">
-                      {r.unresolvedDesireScore}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>战力高潮 (P)：</span>
-                    <span className="font-medium text-slate-900 dark:text-slate-100">
-                      {r.powerClimaxScore}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>疲劳流失风险 (F)：</span>
-                    <span
-                      className={`font-medium ${r.fatigueRiskScore > 50 ? 'text-rose-500' : 'text-slate-900 dark:text-slate-100'}`}
-                    >
-                      {r.fatigueRiskScore}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 mb-3">
-                  {r.suggestions.map((s, idx) => (
-                    <p key={idx} className="line-clamp-2">
-                      {s}
-                    </p>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-                <button
-                  onClick={() => handleSaveToAuditHistory(r)}
-                  className="px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded flex items-center gap-1 transition"
-                >
-                  <BookmarkCheck className="w-3.5 h-3.5" />
-                  保存卡点快照
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+              保存卡点快照
+            </button>
+          </article>
+        ))
       )}
     </div>
   )

@@ -12,12 +12,15 @@ export interface RhythmRadarReportRecord {
   id: string
   projectId: string
   chapterId: string
-  chapterOrder: number
-  tensionScore: number // 0.0 ~ 1.0
-  pacingStatus: PacingStatus
-  cliffhanger: CliffhangerSuggestion
-  actionDensity: number
-  sentimentValence: number
+  chapterOrder: number | null
+  tensionScore?: number // 0.0 ~ 1.0
+  pacingStatus?: PacingStatus
+  cliffhanger?: CliffhangerSuggestion
+  actionDensity?: number
+  sentimentValence?: number
+  sourceText?: string
+  observations?: import('../domain/endingReview').EndingObservation[]
+  cut?: import('../domain/endingReview').CutAlternative
   generatedAt: number
 }
 

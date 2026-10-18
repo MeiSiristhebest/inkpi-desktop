@@ -4,31 +4,46 @@ import { indexedDbShadowReaderRepository } from '../../../adapters/indexedDbShad
 import { ShadowReaderEngine } from '../engine/ShadowReaderEngine'
 import type { ShadowDanmakuRecord, ShadowSimulationResult } from '../types'
 import { semanticTextFromContent } from '../../../domain/content'
-import {
-  MessageSquare,
-  Flame,
-  ThumbsUp,
-  AlertTriangle,
-  ShieldAlert,
-  Sparkles,
-  Send,
-} from 'lucide-react'
+import { MessageSquare, ShieldAlert, Sparkles, Send } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
-export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ShadowReaderWorkspaceView key={props.projectId} {...props} />
+)
+const ShadowReaderWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
   const activeChapter = host?.activeChapter
   const initialText = activeChapter
     ? semanticTextFromContent(activeChapter.id, activeChapter.content || '', activeChapter.revision)
     : ''
   const [chapterText, setChapterText] = useState(initialText)
+  const sourceMatchesSavedChapter = Boolean(activeChapter && chapterText === initialText)
+  const sourceKind = sourceMatchesSavedChapter ? 'saved-chapter' : 'edited-copy'
+  const sourceRevision = sourceMatchesSavedChapter ? activeChapter?.revision : undefined
+  const semanticChapterText = semanticTextFromContent(
+    activeChapter?.id ?? `shadow-reader-${projectId}`,
+    chapterText,
+    sourceRevision ?? 0,
+  )
+  const aiTask = usePluginAiTask('shadow-reader', [
+    activeChapter?.id,
+    sourceRevision,
+    sourceKind,
+    chapterText,
+  ])
+  const [error, setError] = useState<string | null>(null)
   const [historyDanmakus, setHistoryDanmakus] = useState<ShadowDanmakuRecord[]>([])
 
   useEffect(() => {
-    if (!activeChapter) return
+    if (!activeChapter) {
+      setChapterText('')
+      return
+    }
     setChapterText(
       semanticTextFromContent(
         activeChapter.id,
@@ -49,29 +64,36 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
 
   useEffect(() => {
     onStats?.({
-      title: '规则读者反馈预览',
-      wordCount: chapterText.length,
+      title: '读者知识与误读复核',
+      wordCount: semanticChapterText.length,
       updatedAt: clock.now(),
     })
-  }, [chapterText, onStats])
+  }, [semanticChapterText, onStats])
 
   const simulation: ShadowSimulationResult = ShadowReaderEngine.simulate(
-    chapterText,
+    semanticChapterText,
     activeChapter?.id ?? '',
   )
 
   const handleSaveDanmakus = async () => {
     if (!activeChapter) return
-    for (const d of simulation.danmakus) {
-      const record: ShadowDanmakuRecord = {
-        ...d,
-        id: idGenerator.generate('dmk'),
-        projectId,
-        createdAt: clock.now(),
+    setError(null)
+    try {
+      for (const d of simulation.danmakus) {
+        const record: ShadowDanmakuRecord = {
+          ...d,
+          id: idGenerator.generate('dmk'),
+          projectId,
+          sourceKind,
+          sourceRevision,
+          createdAt: clock.now(),
+        }
+        await indexedDbShadowReaderRepository.save(record)
       }
-      await indexedDbShadowReaderRepository.save(record)
+      await loadHistory()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
     }
-    await loadHistory()
   }
 
   const handleDelete = async (id: string) => {
@@ -85,12 +107,12 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <MessageSquare className="w-6 h-6 text-indigo-500" />
-            <span>规则读者反馈预览 (ShadowReader)</span>
+            <span>读者知识与误读复核 (ShadowReader)</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            按固定词条匹配正文片段并生成模拟弹幕，不代表真实读者反馈。
+            本地定位词项复核问题；AI 按已读顺序区分明确的信息、推测和未知。
           </p>
-          <ScoreProvenanceBadge source="rule" detail="内置词条匹配，非真实读者数据或模型输出" />
+          <ScoreProvenanceBadge source="rule" detail="词项不证明剧情事实或情绪，语义解释需要复核" />
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -100,7 +122,7 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
           <button
             type="button"
             onClick={handleSaveDanmakus}
-            disabled={!activeChapter}
+            disabled={!activeChapter || !simulation.danmakus.length}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-medium shadow-sm transition disabled:opacity-40 disabled:hover:bg-indigo-600"
           >
             <Send className="w-3.5 h-3.5" />
@@ -109,55 +131,34 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl border bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 flex items-center gap-3">
-          <Flame className="w-8 h-8 text-rose-500" />
-          <div>
-            <div className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-              暴怒/弃书毒点
-            </div>
-            <div className="text-xl font-bold text-rose-700 dark:text-rose-300">
-              {simulation.sentimentSummary.rage} 条
-            </div>
-          </div>
-        </div>
+      {error && <p role="alert">{error}</p>}
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          type="button"
+          disabled={aiTask.isRunning || !semanticChapterText.trim()}
+          onClick={() => {
+            void aiTask.run(
+              ShadowReaderEngine.buildAnalysisInput(
+                activeChapter?.title ?? '',
+                semanticChapterText,
+                {
+                  chapterId: activeChapter?.id,
+                  sourceKind,
+                  sourceRevision,
+                },
+              ),
+            )
+          }}
+        >
+          AI 阅读顺序复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
 
-        <div className="p-4 rounded-xl border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 flex items-center gap-3">
-          <ThumbsUp className="w-8 h-8 text-emerald-500" />
-          <div>
-            <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-              高潮喝彩/爽感
-            </div>
-            <div className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
-              {simulation.sentimentSummary.applause} 条
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 flex items-center gap-3">
-          <AlertTriangle className="w-8 h-8 text-amber-500" />
-          <div>
-            <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-              逻辑疑虑/伏笔
-            </div>
-            <div className="text-xl font-bold text-amber-700 dark:text-amber-300">
-              {simulation.sentimentSummary.suspicious} 条
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border bg-purple-50/50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-900/40 flex items-center gap-3">
-          <Sparkles className="w-8 h-8 text-purple-500" />
-          <div>
-            <div className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-              期待/兴奋激动
-            </div>
-            <div className="text-xl font-bold text-purple-700 dark:text-purple-300">
-              {simulation.sentimentSummary.excited} 条
-            </div>
-          </div>
-        </div>
-      </div>
+      <p className="text-xs text-slate-500">
+        定位到 {simulation.danmakus.length}{' '}
+        条原文问题。每段每类仅展示首个词项；未命中不表示语义安全。
+      </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="border rounded-xl p-5 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-3">
@@ -179,7 +180,7 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
           <h3 className="text-sm font-bold flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <span className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-500" />
-              <span>本章实时推演拟真弹幕 ({simulation.danmakus.length})</span>
+              <span>本章原文复核问题 ({simulation.danmakus.length})</span>
             </span>
             {simulation.toxicAlertCount > 0 && (
               <span className="flex items-center gap-1 text-xs text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/50 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-900/50">
@@ -192,7 +193,7 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
           <div className="space-y-3 mt-4 overflow-y-auto max-h-[300px] pr-1">
             {simulation.danmakus.length === 0 ? (
               <div className="text-xs text-slate-400 py-10 text-center">
-                暂未捕捉到高辨识度读者情绪反应，正文叙事平稳。
+                词表没有命中；读者能否理解仍需正文、前文和语境分析。
               </div>
             ) : (
               simulation.danmakus.map((d, idx) => (
@@ -230,7 +231,7 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
       {historyDanmakus.length > 0 && (
         <div className="border rounded-xl p-5 bg-slate-50/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 space-y-3">
           <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-            已归档推演弹幕条目 ({historyDanmakus.length})
+            已归档复核快照 ({historyDanmakus.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {historyDanmakus.map((item) => (
@@ -243,7 +244,19 @@ export const ShadowReaderMasterView: FC<DesktopPluginViewProps> = ({ projectId, 
                     <span>{item.personaName}</span>
                     <span>{item.chapterId}</span>
                   </div>
+                  <p className="text-slate-500">
+                    {item.sourceKind === 'edited-copy'
+                      ? '本地编辑副本，未绑定保存修订'
+                      : item.sourceKind === 'saved-chapter' && item.sourceRevision !== undefined
+                        ? `来源保存修订 ${item.sourceRevision}`
+                        : item.sourceQuote
+                          ? '来源修订未知'
+                          : '旧记录未保存原文来源'}
+                  </p>
                   <p className="text-slate-800 dark:text-slate-200">{item.content}</p>
+                  {!item.sourceQuote && (
+                    <p className="text-slate-500">旧模拟记录，未经语义验证。</p>
+                  )}
                 </div>
                 <div className="pt-2 flex justify-end">
                   <button

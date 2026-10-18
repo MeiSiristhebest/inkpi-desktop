@@ -15,7 +15,7 @@ interface PromiseEntryEditorProps {
 }
 
 const TIERS: { id: PromiseTier; label: string }[] = [
-  { id: 'main_plot', label: '主线核心 (权重大)' },
+  { id: 'main_plot', label: '主线核心' },
   { id: 'power_system', label: '战力/法则' },
   { id: 'romance', label: '情感/CP线' },
   { id: 'side_arc', label: '支线剧情' },
@@ -32,17 +32,36 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
   const [clueName, setClueName] = useState(entry.clueName || '')
   const [tier, setTier] = useState<PromiseTier>(entry.tier || 'main_plot')
   const [plantChapter, setPlantChapter] = useState(entry.plantChapter ?? currentChapter)
-  const [softDeadline, setSoftDeadline] = useState(entry.softDeadline ?? 15)
-  const [dueChapterLimit, setDueChapterLimit] = useState(entry.dueChapterLimit ?? 25)
+  const [softDeadline, setSoftDeadline] = useState(entry.softDeadline ?? 0)
+  const [dueChapterLimit, setDueChapterLimit] = useState(entry.dueChapterLimit ?? 0)
   const [plantNote, setPlantNote] = useState(entry.plantNote || '')
   const [status, setStatus] = useState<PromiseStatus>(entry.status || 'planted')
   const [payoffChapter, setPayoffChapter] = useState<number | undefined>(entry.payoffChapter)
   const [payoffNote, setPayoffNote] = useState(entry.payoffNote || '')
   const titleId = useId()
+  const [error, setError] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!clueName.trim()) return
+    if (
+      ![plantChapter, softDeadline, dueChapterLimit].every(
+        (value) => Number.isSafeInteger(value) && value >= 0,
+      ) ||
+      (dueChapterLimit > 0 && softDeadline > dueChapterLimit)
+    ) {
+      setError('章节和期限须为非负整数，预警期限不能晚于兑现期限。')
+      return
+    }
+    if (
+      status === 'paid_off' &&
+      (!Number.isSafeInteger(payoffChapter ?? currentChapter) ||
+        (payoffChapter ?? currentChapter) < Math.max(1, plantChapter) ||
+        !payoffNote.trim())
+    ) {
+      setError('兑现需要有效章节和作者确认说明。')
+      return
+    }
 
     const now = clock.now()
     const saved: PromiseLedgerEntry = {
@@ -55,7 +74,7 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
       dueChapterLimit: Number(dueChapterLimit),
       plantNote: plantNote.trim(),
       status,
-      memoryDecayLambda: entry.memoryDecayLambda || 0.05,
+      memoryDecayLambda: entry.memoryDecayLambda,
       progressHistory: entry.progressHistory || [],
       payoffChapter: status === 'paid_off' ? Number(payoffChapter ?? currentChapter) : undefined,
       payoffNote: status === 'paid_off' ? payoffNote.trim() : undefined,
@@ -76,6 +95,11 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
       panelClassName="bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[var(--ink-text)]"
     >
       {/* 标题 */}
+      {error && (
+        <p role="alert" className="p-3">
+          {error}
+        </p>
+      )}
       <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--ink-border)] shrink-0">
         <h3 id={titleId} className="font-medium text-sm text-[var(--ink-text)]">
           {entry.id ? '编辑伏笔账本条目' : '新建 3P 伏笔（契诃夫之枪）'}
@@ -109,6 +133,7 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">伏笔重要度分层</label>
             <Select
+              aria-label="伏笔重要度分层"
               value={tier}
               onValueChange={(v) => setTier(v as PromiseTier)}
               className="w-full"
@@ -123,6 +148,7 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">生命周期状态</label>
             <Select
+              aria-label="生命周期状态"
               value={status}
               onValueChange={(v) => setStatus(v as PromiseStatus)}
               className="w-full"
@@ -152,7 +178,7 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
             </Tooltip>
             <input
               type="number"
-              min="1"
+              min="0"
               value={softDeadline}
               onChange={(e) => setSoftDeadline(Number(e.target.value))}
               className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
@@ -164,13 +190,17 @@ export const PromiseEntryEditor: FC<PromiseEntryEditorProps> = ({
             </Tooltip>
             <input
               type="number"
-              min="1"
+              min="0"
               value={dueChapterLimit}
               onChange={(e) => setDueChapterLimit(Number(e.target.value))}
               className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
             />
           </div>
         </div>
+
+        <p className="text-[10px] text-[var(--ink-text-faint)]">
+          章节填 0 表示未指定；跨度填 0 表示未设置该期限。
+        </p>
 
         <div>
           <label className="block text-[var(--ink-text-muted)] mb-1">

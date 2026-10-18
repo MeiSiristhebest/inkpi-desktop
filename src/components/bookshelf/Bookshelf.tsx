@@ -17,16 +17,18 @@ interface BookshelfProps {
   /** 已移出作品库的项目：数据仍在本地，可随时放回（P0.8） */
   archivedProjects?: ProjectRecord[]
   onOpenProject: (id: string) => void
-  onCreateProject: (form: NewProjectForm) => void
-  onImportProject?: (file: File) => void
+  onCreateProject: (form: NewProjectForm) => void | Promise<void>
+  onImportProject?: (file: File) => void | Promise<void>
   /** 一键创建自带种子内容的示范项目，便于首次体验 */
   onCreateDemo?: () => void
   /** 导出项目完整备份（含设定/时间线/插件/AI 数据） */
   onExportProject?: (id: string) => void
+  exportError?: string | null
+  onDismissExportError?: () => void
   /** 导出纯正文，不含任何中间状态 */
   onExportManuscript?: (id: string) => void
   /** 编辑项目信息（name/genre/intro/cover） */
-  onUpdateProject?: (project: ProjectRecord) => void
+  onUpdateProject?: (project: ProjectRecord) => void | Promise<void>
   /** 永久删除：级联清除全部工作区数据，不可撤销 */
   onDeleteProject?: (id: string) => void
   /** 移出作品库：只隐藏条目，数据保留 */
@@ -50,6 +52,8 @@ export const Bookshelf = ({
   onCreateProject,
   onImportProject,
   onExportProject,
+  exportError,
+  onDismissExportError,
   onExportManuscript,
   onUpdateProject,
   onDeleteProject,
@@ -62,6 +66,8 @@ export const Bookshelf = ({
   const [archivingProject, setArchivingProject] = useState<ProjectRecord | null>(null)
   const [stats, setStats] = useState<Record<string, ProjectStats>>({})
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
 
   const importInputRef = useRef<HTMLInputElement>(null)
 
@@ -83,17 +89,27 @@ export const Bookshelf = ({
     return () => window.removeEventListener('click', handleDocClick)
   }, [])
 
-  const handleImport = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file && onImportProject) onImportProject(file)
-    e.target.value = ''
+    const input = e.currentTarget
+    if (!file || !onImportProject) return
+    setIsImporting(true)
+    setImportError(null)
+    try {
+      await onImportProject(file)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error))
+    } finally {
+      input.value = ''
+      setIsImporting(false)
+    }
   }
 
-  const handleSaveEdit = (form: ProjectEditFormValues) => {
+  const handleSaveEdit = async (form: ProjectEditFormValues) => {
     if (!editingId || !form.name.trim() || !onUpdateProject) return
     const original = projects.find((p) => p.id === editingId)
     if (!original) return
-    onUpdateProject({
+    await onUpdateProject({
       ...original,
       name: form.name.trim(),
       genre: form.genre.trim() || undefined,
@@ -121,6 +137,23 @@ export const Bookshelf = ({
           </p>
         </header>
 
+        {exportError && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-700 dark:text-rose-300"
+          >
+            <span>{exportError}</span>
+            <button
+              type="button"
+              onClick={onDismissExportError}
+              className="shrink-0 underline underline-offset-2"
+            >
+              关闭
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4 border-b border-[var(--ink-border)] pb-4">
           <h2 className="text-[14px] font-semibold text-[var(--ink-text)] flex items-center gap-2 flex-wrap">
             <Sparkles size={15} className="text-[var(--ink-accent)]" /> 我的作品 ({projects.length})
@@ -132,19 +165,20 @@ export const Bookshelf = ({
           <div className="flex gap-2 items-stretch shrink-0">
             <motion.button
               type="button"
+              disabled={isImporting}
               onClick={() => importInputRef.current?.click()}
               {...gesture.button}
               transition={spring.snappy}
               className="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-lg text-[12.5px] font-medium bg-[var(--ink-bg-elevated)] text-[var(--ink-text)] border border-[var(--ink-border)] hover:bg-[var(--ink-bg-hover)] transition-colors shadow-2xs cursor-pointer select-none"
             >
-              <FileDown size={13} /> 导入项目
+              <FileDown size={13} /> {isImporting ? '正在导入…' : '导入项目'}
             </motion.button>
             <input
               ref={importInputRef}
               type="file"
               accept="application/json,.json"
               className="hidden"
-              onChange={handleImport}
+              onChange={(event) => void handleImport(event)}
             />
 
             <motion.button
@@ -159,8 +193,27 @@ export const Bookshelf = ({
           </div>
         </div>
 
+        {importError && (
+          <div
+            role="alert"
+            className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300"
+          >
+            <span>导入失败，原文件可重试。{importError}</span>
+            <button
+              type="button"
+              onClick={() => setImportError(null)}
+              className="shrink-0 underline focus-visible:outline focus-visible:outline-2"
+            >
+              关闭
+            </button>
+          </div>
+        )}
+
         {creating && (
-          <CreateProjectPanel onClose={() => setCreating(false)} onCreate={onCreateProject} />
+          <CreateProjectPanel
+            onClose={() => setCreating(false)}
+            onCreate={async (form) => onCreateProject(form)}
+          />
         )}
 
         {projects.length === 0 ? (

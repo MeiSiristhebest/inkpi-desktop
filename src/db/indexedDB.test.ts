@@ -73,6 +73,28 @@ describe('indexedDB entity storage', () => {
     expect(await db.getAll('chapters')).toEqual([])
   })
 
+  it('reads multiple requested tables through the snapshot API', async () => {
+    const project = {
+      id: 'snapshot-p1',
+      name: 'snapshot project',
+      genre: 'test',
+      intro: '',
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    await db.put('projects', project)
+    await db.put('chapters', chapter({ id: 'snapshot-c1', projectId: project.id }))
+
+    const snapshot = await db.getAllSnapshot(['projects', 'chapters'])
+
+    expect(snapshot.projects).toContainEqual(project)
+    expect(snapshot.chapters).toContainEqual(
+      expect.objectContaining({ id: 'snapshot-c1', projectId: project.id }),
+    )
+    await db.delete('projects', project.id)
+    await db.delete('chapters', 'snapshot-c1')
+  })
+
   it('delete removes a record', async () => {
     await db.put('chapters', chapter())
     await db.delete('chapters', 'c1')

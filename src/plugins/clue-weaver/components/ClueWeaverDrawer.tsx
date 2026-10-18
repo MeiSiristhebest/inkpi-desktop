@@ -3,114 +3,107 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { ClueItem, ClueCognitionRecord, GodViewViolation } from '../types'
 import { clueWeaverEngine } from '../engine/ClueWeaverEngine'
 import { indexedDbClueWeaverRepository } from '../../../adapters/indexedDbClueWeaverRepository'
-import { Network, CheckCircle2, Search } from 'lucide-react'
+import { Network, Search } from 'lucide-react'
 
-export const ClueWeaverDrawer: FC<DesktopPluginDrawerProps> = () => {
+export const ClueWeaverDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <ProjectClueDrawer key={props.projectId} {...props} />
+)
+
+const ProjectClueDrawer: FC<DesktopPluginDrawerProps> = ({
+  projectId,
+  currentText,
+  currentChapterNumber,
+}) => {
   const [clues, setClues] = useState<ClueItem[]>([])
   const [cognitions, setCognitions] = useState<ClueCognitionRecord[]>([])
-  const [draftText, setDraftText] = useState('')
-  const [violations, setViolations] = useState<GodViewViolation[]>([])
-  const [hasScanned, setHasScanned] = useState(false)
-
-  const loadData = async () => {
-    try {
-      const allClues = await indexedDbClueWeaverRepository.getAllClues('')
-      const allCogs = await indexedDbClueWeaverRepository.getAllCognitions('')
-      setClues(allClues)
-      setCognitions(allCogs)
-    } catch (e) {
-      console.error('Failed to load clue drawer data:', e)
-    }
-  }
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState('')
+  const [report, setReport] = useState<{ scope: string; violations: GodViewViolation[] } | null>(
+    null,
+  )
+  const scope = JSON.stringify([currentText, currentChapterNumber, clues, cognitions])
+  const violations = report?.scope === scope ? report.violations : null
 
   useEffect(() => {
-    loadData()
-  }, [])
-
-  const handleScanDraft = () => {
-    setHasScanned(true)
-    const found = clueWeaverEngine.scanGodViewLeakage(draftText, clues, cognitions)
-    setViolations(found)
-  }
+    let disposed = false
+    Promise.all([
+      indexedDbClueWeaverRepository.getAllClues(projectId),
+      indexedDbClueWeaverRepository.getAllCognitions(projectId),
+    ])
+      .then(([allClues, allCogs]) => {
+        if (disposed) return
+        setClues(allClues)
+        setCognitions(allCogs)
+        setLoaded(true)
+      })
+      .catch(() => {
+        if (!disposed) setError('线索档案加载失败，请重新打开抽屉重试。')
+      })
+    return () => {
+      disposed = true
+    }
+  }, [projectId])
 
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
-      <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-3">
-        <div className="flex items-center gap-1.5 font-semibold">
-          <Network className="w-4 h-4 text-blue-500" />
-          <span>信息差与全知哨兵</span>
-        </div>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">登记线索: {clues.length}</span>
+    <div className="h-full overflow-y-auto p-4 space-y-4 text-xs text-[var(--ink-text)]">
+      <div className="flex items-center gap-2 border-b border-[var(--ink-border)] pb-3">
+        <Network className="w-4 h-4" />
+        <span>信息差与全知哨兵</span>
       </div>
-
-      <div className="space-y-2">
-        <label className="text-[11px] text-[var(--ink-text-muted)] block">
-          粘贴本章对白进行全知泄露快速巡检：
-        </label>
-        <textarea
-          rows={3}
-          value={draftText}
-          onChange={(e) => setDraftText(e.target.value)}
-          placeholder="粘贴对白片段（如：林夕冷笑道：“...”）..."
-          className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
-        />
-        <button
-          onClick={handleScanDraft}
-          className="w-full py-1.5 rounded-lg bg-[var(--ink-accent)] text-white font-medium hover:opacity-90 flex items-center justify-center gap-1.5"
-        >
-          <Search className="w-3.5 h-3.5" />
-          巡检天降全知
-        </button>
-      </div>
-
-      {hasScanned && (
-        <div className="space-y-2 pt-2">
+      {error && <p role="alert">{error}</p>}
+      <p>
+        当前正文；
+        {currentChapterNumber == null
+          ? '章节序号未提供，不能检查获知时间。'
+          : `第 ${currentChapterNumber} 章。`}
+      </p>
+      <p className="whitespace-pre-wrap max-h-32 overflow-y-auto">
+        {currentText || '当前正文为空。'}
+      </p>
+      <button
+        disabled={!loaded || !currentText.trim()}
+        onClick={() =>
+          setReport({
+            scope,
+            violations: clueWeaverEngine.scanGodViewLeakage(
+              currentText,
+              clues,
+              cognitions,
+              currentChapterNumber ?? undefined,
+            ),
+          })
+        }
+        className="w-full p-2 rounded border border-[var(--ink-border)] disabled:opacity-50 flex items-center justify-center gap-2"
+      >
+        <Search className="w-3.5 h-3.5" />
+        检查当前正文
+      </button>
+      {violations && (
+        <div className="space-y-2">
           {violations.length === 0 ? (
-            <div className="p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[11px] flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              <span>所言符合各自认知集，无全知泄露。</span>
-            </div>
+            <p>未找到匹配候选。未登记知识、未识别的说话人和语义越权仍需作者检查。</p>
           ) : (
-            <div className="space-y-2">
-              <span className="text-[11px] font-semibold text-rose-500 block">
-                发现 {violations.length} 处视角泄露硬伤：
-              </span>
-              {violations.map((v, i) => (
-                <div
-                  key={i}
-                  className="p-2 rounded bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-400 space-y-0.5"
-                >
-                  <p className="font-semibold">{v.characterName} 涉密泄漏！</p>
-                  <p className="text-[10px] text-[var(--ink-text)]">{v.reason}</p>
-                </div>
-              ))}
-            </div>
+            violations.map((violation, index) => (
+              <div key={index} className="p-2 border border-[var(--ink-border)] rounded space-y-1">
+                <p>
+                  待复核：{violation.characterName} 提及 {violation.clueTitle}
+                </p>
+                <p>
+                  原文 [{violation.startOffset}, {violation.endOffset})：{violation.snippet}
+                </p>
+                <p>{violation.reason}</p>
+              </div>
+            ))
           )}
         </div>
       )}
-
-      {/* 线索清单概览 */}
-      <div className="space-y-2 pt-2 border-t border-[var(--ink-border)]">
-        <span className="text-[11px] font-semibold text-[var(--ink-text-muted)] block">
-          核心线索库 ({clues.length})
-        </span>
-        {clues.length === 0 ? (
-          <p className="text-[11px] text-[var(--ink-text-muted)]">主视口中尚未登记线索。</p>
-        ) : (
-          <div className="space-y-1">
-            {clues.slice(0, 5).map((c) => (
-              <div
-                key={c.id}
-                className="p-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 flex items-center justify-between text-[11px]"
-              >
-                <span className="truncate">{c.title}</span>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/10 text-blue-400">
-                  {c.category}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+      <p>
+        登记线索：{clues.length}；角色知识记录：{cognitions.length}。
+      </p>
+      <div className="space-y-1">
+        {clues.map((clue) => (
+          <p key={clue.id}>{clue.title}</p>
+        ))}
       </div>
     </div>
   )

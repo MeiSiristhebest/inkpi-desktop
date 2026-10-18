@@ -1,24 +1,26 @@
 export type EmotionType =
   'tension' | 'catharsis' | 'frustration' | 'anticipation' | 'sorrow' | 'joy'
-
 export interface EmotionVector {
-  tension: number // 紧张度 0 - 100
-  catharsis: number // 释放/爽感 0 - 100
-  frustration: number // 压抑/受挫 0 - 100
-  anticipation: number // 期待/悬念 0 - 100
-  sorrow: number // 悲伤/遗憾 0 - 100
-  joy: number // 喜悦/昂扬 0 - 100
+  tension: number
+  catharsis: number
+  frustration: number
+  anticipation: number
+  sorrow: number
+  joy: number
 }
-
+export interface AuthorEmotionAnnotation {
+  values: Partial<EmotionVector>
+  note: string
+  quote: string
+  start: number
+  end: number
+}
 export interface ChapterEmotionEvaluation {
   chapterId: string
   chapterTitle: string
-  chapterOrder: number
+  chapterOrder: number | null
   wordCount: number
-  vector: EmotionVector
-  netPolarity: number // -100 到 +100
-  dominantEmotion: EmotionType
-  resonanceScore: number // 0 - 100
-  warnings: string[]
-  suggestions: string[]
+  inputStatus: 'empty' | 'provided'
+  matches: Array<{ type: EmotionType; quote: string; start: number; end: number }>
+  annotation?: AuthorEmotionAnnotation
 }

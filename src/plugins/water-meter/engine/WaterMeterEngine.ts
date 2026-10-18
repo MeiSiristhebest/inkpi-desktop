@@ -1,4 +1,4 @@
-import type { WaterAuditReport, WaterBloatItem, WaterLevel } from '../types'
+import type { WaterAuditReport, WaterBloatItem } from '../types'
 import {
   UNIFIED_NARRATIVE_LEXICON,
   CORE_ACTION_VERBS,
@@ -36,181 +36,86 @@ const MODIFIER_BLOATS = [
 const ACTION_VERBS = CORE_ACTION_VERBS
 
 export class WaterMeterEngine {
-  /**
-   * 测算香农信息熵 H(X) = -sum P(x) log2 P(x)
-   */
+  /** Empirical character-frequency entropy, not semantic information or literary quality. */
   computeShannonEntropy(text: string): number {
-    if (!text || text.length === 0) return 0
-    const freqs: Record<string, number> = {}
-    const clean = text.replace(/[\s\r\n\t]/g, '')
-    if (clean.length === 0) return 0
-
-    for (const char of clean) {
-      freqs[char] = (freqs[char] || 0) + 1
-    }
-
+    const characters = [...text].filter((char) => !/\s/u.test(char))
+    if (!characters.length) return 0
+    const frequencies = new Map<string, number>()
+    for (const char of characters) frequencies.set(char, (frequencies.get(char) ?? 0) + 1)
     let entropy = 0
-    const total = clean.length
-    for (const count of Object.values(freqs)) {
-      const p = count / total
-      entropy -= p * Math.log2(p)
+    for (const count of frequencies.values()) {
+      const probability = count / characters.length
+      entropy -= probability * Math.log2(probability)
     }
-
     return Math.round(entropy * 100) / 100
   }
 
-  /**
-   * 全文水分审计
-   */
   auditText(text: string, context?: { projectId?: string; chapterId?: string }): WaterAuditReport {
-    const rawText = (text || '').trim()
-    const totalWordCount = rawText.replace(/\s+/g, '').length
-
-    if (totalWordCount < 20) {
-      return {
-        waterScore: 0,
-        waterLevel: 'lean',
-        entropyScore: 0,
-        actionVerbRatio: 0,
-        clicheRatio: 0,
-        totalWordCount,
-        estimatedLeanWordCount: totalWordCount,
-        dehydrationRate: 0,
-        bloatItems: [],
-        advice: ['文本字数较少，请在正文展开后再进行水分与信息熵深度审计。'],
-      }
-    }
-
+    const rawText = text || ''
     const bloatItems: WaterBloatItem[] = []
-
-    // 1. 假动作与陈词滥调检测
-    let clicheCharCount = 0
-    for (const phrase of PHANTOM_CLICHES) {
-      let idx = 0
-      while ((idx = rawText.indexOf(phrase, idx)) !== -1) {
-        bloatItems.push({
-          type: 'phantom',
-          text: phrase,
-          reason: `假动作套话：情绪反应公式化，未能提供实质推进。`,
-        })
-        clicheCharCount += phrase.length
-        idx += phrase.length
+    const covered = new Set<number>()
+    const seen = new Set<string>()
+    const groups: Array<[WaterBloatItem['type'], string[]]> = [
+      ['phantom', PHANTOM_CLICHES],
+      ['recap', RECAP_BLOATS],
+      ['modifier', MODIFIER_BLOATS],
+    ]
+    for (const [type, terms] of groups) {
+      for (const phrase of new Set(terms)) {
+        if (!phrase) continue
+        let start = rawText.indexOf(phrase)
+        while (start >= 0) {
+          const key = start + ':' + phrase
+          if (!seen.has(key)) {
+            seen.add(key)
+            const end = start + phrase.length
+            bloatItems.push({
+              type,
+              text: rawText.slice(start, end),
+              start,
+              end,
+              reason: '词表命中；请结合动作、语气和信息作用决定是否修改，命中本身不证明冗余。',
+            })
+            for (let position = start; position < end; position++) covered.add(position)
+          }
+          start = rawText.indexOf(phrase, start + 1)
+        }
       }
     }
-
-    // 2. 解释性重读与设定水文
-    for (const phrase of RECAP_BLOATS) {
-      let idx = 0
-      while ((idx = rawText.indexOf(phrase, idx)) !== -1) {
-        bloatItems.push({
-          type: 'recap',
-          text: phrase,
-          reason: `设定重述水词：读者已知设定无需反复口播交代。`,
-        })
-        clicheCharCount += phrase.length
-        idx += phrase.length
-      }
-    }
-
-    // 3. 修饰语重复堆砌
-    for (const phrase of MODIFIER_BLOATS) {
-      let idx = 0
-      while ((idx = rawText.indexOf(phrase, idx)) !== -1) {
-        bloatItems.push({
-          type: 'modifier',
-          text: phrase,
-          reason: `修饰语过度堆叠：削弱了文字本身的力量感。`,
-        })
-        clicheCharCount += phrase.length
-        idx += phrase.length
-      }
-    }
-
-    // 4. 动作动词密度
+    bloatItems.sort((a, b) => a.start! - b.start! || b.text.length - a.text.length)
+    let totalWordCount = 0
+    let matchedCharacters = 0
     let actionVerbCount = 0
+    let offset = 0
     for (const char of rawText) {
-      if (ACTION_VERBS.includes(char)) {
-        actionVerbCount++
+      if (!/\s/u.test(char)) {
+        ++totalWordCount
+        if (covered.has(offset)) ++matchedCharacters
+        if (ACTION_VERBS.includes(char)) ++actionVerbCount
       }
+      offset += char.length
     }
-
-    const actionVerbRatio =
-      Math.round((actionVerbCount / Math.max(1, totalWordCount)) * 1000) / 1000
-    const clicheRatio = Math.round((clicheCharCount / Math.max(1, totalWordCount)) * 1000) / 1000
-    const entropyScore = this.computeShannonEntropy(rawText)
-
-    // 水分评分 (0-100)：以动词密度与套话水词为主，信息熵做篇幅渐进校准
-    let score = 0
-    if (actionVerbRatio < 0.06) {
-      score += Math.round((0.06 - actionVerbRatio) * 600)
-    }
-    score += Math.round(Math.min(45, clicheRatio * 500))
-
-    // 篇幅归一化熵补偿：针对中文文本真实信息熵分布（通常在 3.8 ~ 4.4 区间，而非英文的 4.6+）
-    // 采用更契合中文实测分布的基准 3.9，仅在信息熵显著低于基准时触发惩罚，避免正常紧凑中文被误罚
-    const expectedEntropy = 3.9 + 0.2 * Math.log10(Math.max(50, totalWordCount))
-    if (entropyScore < expectedEntropy - 0.45 && totalWordCount > 80) {
-      score += Math.round((expectedEntropy - entropyScore) * 6)
-    }
-
-    score = Math.max(0, Math.min(100, score))
-
-    let waterLevel: WaterLevel = 'lean'
-    if (score >= 65) waterLevel = 'flooded'
-    else if (score >= 45) waterLevel = 'watery'
-    else if (score >= 25) waterLevel = 'normal'
-    else waterLevel = 'lean'
-
-    // 脱水率与预估精简字数
-    const dehydrationRate = Math.min(
-      40,
-      Math.max(2, Math.round(score * 0.35 + (clicheCharCount / totalWordCount) * 100)),
-    )
-    const estimatedLeanWordCount = Math.max(
-      10,
-      Math.round(totalWordCount * (1 - dehydrationRate / 100)),
-    )
-
-    const advice: string[] = []
-    if (bloatItems.some((b) => b.type === 'phantom')) {
-      advice.push('删除“倒吸凉气/暗暗心惊/深吸一口气”等假动作，直接展现动作后果或角色下一步决定。')
-    }
-    if (bloatItems.some((b) => b.type === 'recap')) {
-      advice.push('砍掉“众所周知/修仙界大家都知道”等前情提要口播，融入事件冲突中自然交代。')
-    }
-    if (actionVerbRatio < 0.04) {
-      advice.push('动作动词密度偏低（剧情推进迟缓），建议增加具象肢体交锋、环境破坏或空间位移。')
-    }
-    if (advice.length === 0) {
-      advice.push('文字精炼度极佳，无明显冗余水词，保持当前的叙事密度！')
-    }
-
-    // 广播章节正文审计完成事件 (CHAPTER_CONTENT_AUDITED)
-    if (context?.projectId && context?.chapterId) {
-      try {
-        pluginEventBus.emit('CHAPTER_CONTENT_AUDITED', {
-          projectId: context.projectId,
-          chapterId: context.chapterId,
-          wordCount: totalWordCount,
-          waterScore: score,
-        })
-      } catch (err) {
-        console.warn('[WaterMeterEngine] Failed to emit CHAPTER_CONTENT_AUDITED:', err)
-      }
-    }
-
-    return {
-      waterScore: score,
-      waterLevel,
-      entropyScore,
-      actionVerbRatio,
-      clicheRatio,
+    const report: WaterAuditReport = {
+      entropyScore: this.computeShannonEntropy(rawText),
+      actionVerbRatio: totalWordCount ? actionVerbCount / totalWordCount : 0,
+      clicheRatio: totalWordCount ? matchedCharacters / totalWordCount : 0,
       totalWordCount,
-      estimatedLeanWordCount,
-      dehydrationRate,
+      matchedCharacters,
       bloatItems,
-      advice,
+      advice: !rawText.trim()
+        ? ['尚无正文，无法检查其叙事作用。']
+        : bloatItems.length
+          ? ['逐处查看词项在句中的作用；修改前复核是否会丢失动作、语气、强调或必要信息。']
+          : ['词表没有命中。字符统计不能判断文本质量或叙事作用。'],
     }
+    if (context?.projectId && context.chapterId) {
+      pluginEventBus.emit('CHAPTER_CONTENT_AUDITED', {
+        projectId: context.projectId,
+        chapterId: context.chapterId,
+        wordCount: totalWordCount,
+      })
+    }
+    return report
   }
 }
 

@@ -1,129 +1,78 @@
-import { useState, useEffect, type FC } from 'react'
+import { useEffect, useState, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
-import type { VolumeArcRecord, VolumeStat } from '../types'
-import { volumeMasterEngine } from '../engine/VolumeMasterEngine'
-import { indexedDbVolumeArcRepository } from '../../../adapters/indexedDbVolumeArcRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
-import { Compass } from 'lucide-react'
-
-export const VolumeMasterDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
-  const [activeVolume, setActiveVolume] = useState<{
-    id: string
-    title: string
-    order: number
-  } | null>(null)
-  const [arc, setArc] = useState<VolumeArcRecord | null>(null)
-  const [stat, setStat] = useState<VolumeStat | null>(null)
-
+import { indexedDbVolumeArcRepository } from '../../../adapters/indexedDbVolumeArcRepository'
+import { volumeMasterEngine } from '../engine/VolumeMasterEngine'
+import type { VolumeStat } from '../types'
+import { semanticTextFromContent } from '../../../domain/content'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+export const VolumeMasterDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <VolumeDrawerBody key={props.projectId} {...props} />
+)
+function VolumeDrawerBody({ projectId }: DesktopPluginDrawerProps) {
+  const host = useOptionalPluginHostContext()
+  const activeId = host?.projectId === projectId ? host.activeChapter?.id : undefined
+  const [state, setState] = useState<{ activeId: string | undefined; stat: VolumeStat } | null>(
+    null,
+  )
+  const stat = state && state.activeId === activeId ? state.stat : null
+  const [error, setError] = useState('')
   useEffect(() => {
-    let cancelled = false
-
-    const loadData = async () => {
-      try {
-        const [vols, chaps, arcs] = await Promise.all([
-          indexedDbProjectRepository.getVolumesByProject(projectId),
-          indexedDbProjectRepository.getChaptersByProject(projectId),
-          indexedDbVolumeArcRepository.getAll(projectId),
-        ])
-
-        if (cancelled) return
-
-        if (vols && vols.length > 0) {
-          const firstVol = vols[0]
-          setActiveVolume(firstVol)
-          const matchingArc = (arcs || []).find((a) => a.volumeId === firstVol.id) || null
-          setArc(matchingArc)
-          setStat(
-            volumeMasterEngine.calculateVolumeStat(firstVol, chaps || [], matchingArc || undefined),
-          )
-        } else {
-          setActiveVolume(null)
-          setArc(null)
-          setStat(null)
-        }
-      } catch (e) {
-        if (!cancelled) console.error('Failed to load volume drawer data:', e)
-      }
-    }
-
-    void loadData()
+    let disposed = false
+    setState(null)
+    Promise.all([
+      indexedDbProjectRepository.getVolumesByProject(projectId),
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbVolumeArcRepository.getAll(projectId),
+    ])
+      .then(([volumes, chapters, arcs]) => {
+        if (disposed) return
+        const chapter = chapters.find((c) => c.id === activeId && c.projectId === projectId)
+        const volume = volumes.find((v) => v.id === chapter?.volumeId && v.projectId === projectId)
+        if (!volume) return
+        setState({
+          activeId,
+          stat: volumeMasterEngine.calculateVolumeStat(
+            volume,
+            chapters
+              .filter((c) => c.projectId === projectId)
+              .map((c) => ({
+                volumeId: c.volumeId,
+                order: c.order,
+                wordCount: Array.from(
+                  semanticTextFromContent(c.id, c.content, c.revision).replace(/\s/g, ''),
+                ).length,
+              })),
+            arcs.find((a) => a.volumeId === volume.id && a.projectId === projectId),
+          ),
+        })
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
     return () => {
-      cancelled = true
+      disposed = true
     }
-  }, [projectId])
-
-  if (!activeVolume || !stat) {
-    return (
-      <div className="p-4 text-xs text-[var(--ink-text-muted)] text-center">
-        未检测到已建立分卷。
-      </div>
-    )
-  }
-
-  const actInfo = volumeMasterEngine.getActStageInfo(stat.currentAct)
-
+  }, [projectId, activeId])
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
-      <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-3">
-        <div className="flex items-center gap-1.5 font-semibold">
-          <Compass className="w-4 h-4 text-purple-400" />
-          <span>分卷宏观罗盘</span>
-        </div>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">{activeVolume.title}</span>
-      </div>
-
-      {/* 字数燃烧率仪表 */}
-      <div className="p-3 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-[var(--ink-text-muted)]">分卷字数预算</span>
-          <span className="font-bold text-purple-400">{stat.burnRate}%</span>
-        </div>
-        <div className="w-full h-1.5 rounded-full bg-[var(--ink-bg-elevated)] overflow-hidden">
-          <div
-            className={`h-full rounded-full ${
-              stat.status === 'lagging_water' ? 'bg-rose-500' : 'bg-purple-500'
-            }`}
-            style={{ width: `${Math.min(100, stat.burnRate)}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between text-[10px] text-[var(--ink-text-muted)]">
-          <span>已写 {stat.actualWordCount.toLocaleString()} 字</span>
-          <span>目标 {stat.targetWordCount.toLocaleString()} 字</span>
-        </div>
-      </div>
-
-      {/* 当前戏剧阶段 */}
-      <div className="p-3 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-1.5">
-        <div className="flex items-center justify-between font-semibold">
-          <span className="text-purple-400">{actInfo.label}</span>
-          <span className="text-[10px] text-[var(--ink-text-muted)]">{actInfo.progressRange}</span>
-        </div>
-        <p className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">{actInfo.desc}</p>
-      </div>
-
-      {/* 核心冲突与卷高潮锚点 */}
-      {arc && (
-        <div className="space-y-2 pt-2 border-t border-[var(--ink-border)]">
-          {arc.coreConflict && (
-            <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 space-y-0.5">
-              <span className="text-[10px] text-[var(--ink-text-muted)] block">本卷核心矛盾</span>
-              <p className="text-[11px] text-[var(--ink-text)]">{arc.coreConflict}</p>
-            </div>
-          )}
-          {arc.climaxNode && (
-            <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 space-y-0.5">
-              <span className="text-[10px] text-[var(--ink-text-muted)] block">卷巅峰大高潮</span>
-              <p className="text-[11px] text-amber-500">{arc.climaxNode}</p>
-            </div>
-          )}
-          {stat.arcRegression && (
-            <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 flex items-center justify-between text-[10px] text-[var(--ink-text-muted)]">
-              <span>叙事弧回归度</span>
-              <span className="text-purple-400 font-mono">R² = {stat.arcRegression.r2}</span>
-            </div>
-          )}
-        </div>
+    <aside className="p-4 space-y-3 text-xs">
+      <h3>当前卷作者规划</h3>
+      {error && <p role="alert">{error}</p>}
+      {!stat ? (
+        <p>当前章节未绑定已保存分卷，规划未知。</p>
+      ) : (
+        <>
+          <h4>{stat.title}</h4>
+          <p>
+            保存稿 {stat.actualWordCount ?? '未知'} / 作者预算 {stat.targetWordCount ?? '未登记'}。
+          </p>
+          <p>
+            作者阶段：
+            {stat.currentAct ? volumeMasterEngine.getActStageInfo(stat.currentAct).label : '未登记'}
+          </p>
+          <p>{stat.advice}</p>
+        </>
       )}
-    </div>
+    </aside>
   )
 }

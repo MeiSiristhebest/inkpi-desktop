@@ -17,8 +17,8 @@ export interface SceneBeatItem {
   title: string
   goalOrConflict: string
   budgetWordRatio: number // 字数预算占比 (如 0.20, 0.35, 0.30, 0.15)
-  emotionalIn: number // -1.0 ~ +1.0
-  emotionalOut: number // -1.0 ~ +1.0
+  emotionalIn?: number // -1.0 ~ +1.0
+  emotionalOut?: number // -1.0 ~ +1.0
   isCompleted: boolean
   notes?: string
 }
@@ -49,7 +49,12 @@ export interface BeatProgressReport {
 }
 
 export interface DramaticArcAnalysis {
-  totalVoltageDelta: number
-  isStagnant: boolean // 是否死水微澜 (ΔV < 0.3)
-  curve: number[]
+  totalAnnotationChange: number | null
+  curve: Array<number | null>
+  discontinuities: Array<{
+    beforeBeatId: string
+    afterBeatId: string
+    previousOut: number
+    nextIn: number
+  }>
 }

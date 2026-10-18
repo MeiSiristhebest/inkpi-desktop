@@ -8,197 +8,147 @@ export interface ILinterRule {
   check(text: string, options?: Record<string, unknown>): LintIssue[]
 }
 
-/**
- * 规则 1: 弱化副词堆叠检查 (Overused Adverbs)
- * 检查大量连续的"-地"修饰，倡导以动作和细节展现而非修饰词堆叠
- */
+function linesWithOffsets(text: string) {
+  const lines: { text: string; offset: number; number: number }[] = []
+  for (const match of text.matchAll(/([^\r\n]*)(\r\n|\r|\n|$)/g)) {
+    if (match[0].length === 0) break
+    lines.push({ text: match[1], offset: match.index, number: lines.length + 1 })
+  }
+  return lines
+}
+
+function threshold(value: unknown, fallback: number): number {
+  if (value === undefined) return fallback
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)
+    throw new Error('阈值须为正整数。')
+  return value
+}
+
 export class AdverbStackRule implements ILinterRule {
   readonly id = 'LINT_ADVERB_STACK'
-  readonly name = '弱化副词过度修饰'
-  readonly description = '检测连续或过度密集的副词（如xx地），建议用生动的动词或细节替代'
+  readonly name = '同一行「地」字修饰词定位'
+  readonly description = '定位同一行的字面词形；是否精简由作者决定'
   readonly defaultSeverity = 'warning'
-
-  check(text: string): LintIssue[] {
+  check(text: string, options?: Record<string, unknown>): LintIssue[] {
+    const minimum = threshold(options?.minimumOccurrences, 3)
     const issues: LintIssue[] = []
-    const lines = text.split(/\r?\n/)
-    let currentOffset = 0
-
-    lines.forEach((line, lineIdx) => {
-      // 匹配连续双副词或密集副词，如 "狠狠地愤怒地" 或单句内出现 3 个以上的 "xx地"
-      const matches = [...line.matchAll(/([\u4e00-\u9fa5]{2}地)/g)]
-      if (matches.length >= 3) {
-        matches.forEach((m) => {
-          const start = currentOffset + (m.index ?? 0)
-          issues.push({
-            id: `adv-${lineIdx}-${m.index}`,
-            ruleId: this.id,
-            ruleName: this.name,
-            severity: this.defaultSeverity,
-            lineNumber: lineIdx + 1,
-            startOffset: start,
-            endOffset: start + m[0].length,
-            matchedSnippet: m[0],
-            message: `单句中副词修饰（${m[0]}）过于密集（本行累计 ${matches.length} 处），削弱了叙述张力。`,
-            quickFix: {
-              title: `精简并删除「${m[0]}」`,
-              replacementText: '',
-              range: [start, start + m[0].length],
-            },
-          })
-        })
-      }
-      currentOffset += line.length + 1
-    })
-
-    return issues
-  }
-}
-
-/**
- * 规则 2: 超长句窒息感/标点失衡检查 (Run-On Sentences)
- * 单个无逗号/句号切割的连续文本超过 65 字
- */
-export class RunOnSentenceRule implements ILinterRule {
-  readonly id = 'LINT_RUN_ON_SENTENCE'
-  readonly name = '超长从句/无间歇长句'
-  readonly description = '单句无标点连续字数超过阈值，造成阅读窒息感'
-  readonly defaultSeverity = 'warning'
-
-  check(text: string, options?: { maxClauseLength?: number }): LintIssue[] {
-    const maxLen = options?.maxClauseLength ?? 55
-    const issues: LintIssue[] = []
-    const lines = text.split(/\r?\n/)
-    let currentOffset = 0
-
-    lines.forEach((line, lineIdx) => {
-      const clauses = line.split(/[，。！？；、“”’（）]/)
-      let clauseOffset = 0
-      for (const clause of clauses) {
-        const trimmed = clause.trim()
-        if (trimmed.length > maxLen) {
-          const start = currentOffset + line.indexOf(trimmed, clauseOffset)
-          issues.push({
-            id: `runon-${lineIdx}-${clauseOffset}`,
-            ruleId: this.id,
-            ruleName: this.name,
-            severity: this.defaultSeverity,
-            lineNumber: lineIdx + 1,
-            startOffset: start,
-            endOffset: start + trimmed.length,
-            matchedSnippet: trimmed.slice(0, 30) + '...',
-            message: `该分句连续长度达 ${trimmed.length} 字（阈值 ${maxLen} 字）未见停顿标点，严重破坏网文快节奏吸入感。`,
-          })
-        }
-        clauseOffset += clause.length + 1
-      }
-      currentOffset += line.length + 1
-    })
-
-    return issues
-  }
-}
-
-/**
- * 规则 3: 对话说教/百科式倒垃圾 (Dialogue Infodump)
- * 对话引号内包含过长的设定说明词汇或连续单次台词超过 120 字
- */
-export class DialogueInfodumpRule implements ILinterRule {
-  readonly id = 'LINT_DIALOGUE_INFODUMP'
-  readonly name = '对话违和倾倒世界观设定'
-  readonly description = '角色台词长篇大论背书，将读者当做受众灌输百科设定'
-  readonly defaultSeverity = 'error'
-
-  check(text: string): LintIssue[] {
-    const issues: LintIssue[] = []
-    const dialogueRegex = /“([^”]+)”/g
-    let match: RegExpExecArray | null
-
-    while ((match = dialogueRegex.exec(text)) !== null) {
-      const dialogueContent = match[1]
-      const start = match.index
-      const isInfodump =
-        dialogueContent.length > 100 ||
-        (dialogueContent.length > 50 &&
-          (dialogueContent.includes('正如你所知') ||
-            dialogueContent.includes('顾名思义') ||
-            dialogueContent.includes('根据帝国第') ||
-            dialogueContent.includes('换言之，这个世界的法则')))
-
-      if (isInfodump) {
+    for (const line of linesWithOffsets(text)) {
+      const matches = [...line.text.matchAll(/[\u4e00-\u9fff]{2}地/g)]
+      if (matches.length < minimum) continue
+      for (const match of matches) {
+        const start = line.offset + match.index
         issues.push({
-          id: `infodump-${start}`,
+          id: `adv-${start}`,
           ruleId: this.id,
           ruleName: this.name,
           severity: this.defaultSeverity,
-          lineNumber: text.slice(0, start).split(/\r?\n/).length,
+          lineNumber: line.number,
           startOffset: start,
           endOffset: start + match[0].length,
-          matchedSnippet: match[0].slice(0, 40) + '...',
-          message: `对话长达 ${dialogueContent.length} 字且带有生硬的说教/背景设定倒灌痕迹，角色声音失真。`,
-          suggestedFix: '将说明性文字转移至环境烘托、动作交互或剧情冲突中自然流露',
-        } as LintIssue)
+          matchedSnippet: match[0],
+          message: `本行有 ${matches.length} 处符合此词形；不据此判断叙述质量。`,
+          quickFix: {
+            title: `在预览中删除「${match[0]}」`,
+            replacementText: '',
+            range: [start, start + match[0].length],
+          },
+        })
       }
     }
-
     return issues
   }
 }
 
-/**
- * 规则 4: 禁忌词/现代网梗突兀出戏 (Anachronism & Banned Words)
- * 古风玄幻中突兀出现现代词汇（例如："降维打击"、"性价比"、"大数据"）
- */
+export class RunOnSentenceRule implements ILinterRule {
+  readonly id = 'LINT_RUN_ON_SENTENCE'
+  readonly name = '无停顿标点分句长度'
+  readonly description = '列出超过作者阈值的连续分句'
+  readonly defaultSeverity = 'warning'
+  check(text: string, options?: Record<string, unknown>): LintIssue[] {
+    const maxLength = threshold(options?.maxClauseLength, 55)
+    const issues: LintIssue[] = []
+    for (const line of linesWithOffsets(text)) {
+      for (const match of line.text.matchAll(/[^，。！？；、“”‘’（）,.!?;:]+/g)) {
+        const clause = match[0].trim()
+        const length = Array.from(clause).length
+        if (length <= maxLength) continue
+        const start = line.offset + match.index + match[0].indexOf(clause)
+        issues.push({
+          id: `runon-${start}`,
+          ruleId: this.id,
+          ruleName: this.name,
+          severity: this.defaultSeverity,
+          lineNumber: line.number,
+          startOffset: start,
+          endOffset: start + clause.length,
+          matchedSnippet: clause,
+          message: `此分句含 ${length} 个 Unicode 字符，超过设置的 ${maxLength}；长度不证明节奏问题。`,
+        })
+      }
+    }
+    return issues
+  }
+}
+
+export class DialogueInfodumpRule implements ILinterRule {
+  readonly id = 'LINT_DIALOGUE_INFODUMP'
+  readonly name = '长对白定位'
+  readonly description = '统计成对引号内的长度，供作者审阅对白用途'
+  readonly defaultSeverity = 'info'
+  check(text: string, options?: Record<string, unknown>): LintIssue[] {
+    const maxLength = threshold(options?.maxDialogueLength, 100)
+    return [...text.matchAll(/“([^”]+)”/g)].flatMap((match): LintIssue[] => {
+      const length = Array.from(match[1]).length
+      if (length <= maxLength) return []
+      const start = match.index
+      return [
+        {
+          id: `dialogue-${start}`,
+          ruleId: this.id,
+          ruleName: this.name,
+          severity: this.defaultSeverity,
+          lineNumber: text.slice(0, start).split(/\r\n|\r|\n/).length,
+          startOffset: start,
+          endOffset: start + match[0].length,
+          matchedSnippet: match[0],
+          message: `引号内含 ${length} 个 Unicode 字符，超过设置的 ${maxLength}。用途和人物声音尚未判断。`,
+        },
+      ]
+    })
+  }
+}
+
 export class AnachronismRule implements ILinterRule {
   readonly id = 'LINT_ANACHRONISM'
-  readonly name = '现代工业/网络热梗出戏词'
-  readonly description = '在严肃古典/修真语境中误用现代专有名词导致读者出戏'
-  readonly defaultSeverity = 'error'
-
-  private static readonly ANACHRONISTIC_WORDS = [
-    '性价比',
-    '大数据',
-    '云计算',
-    '打工人',
-    '内卷',
-    '降维打击',
-    'KPI',
-    '割韭菜',
-  ]
-
-  check(text: string): LintIssue[] {
+  readonly name = '作者指定词表'
+  readonly description = '仅定位作者启用的词项；时代和语境需另外判断'
+  readonly defaultSeverity = 'info'
+  check(text: string, options?: Record<string, unknown>): LintIssue[] {
+    const words = options?.words
+    if (!Array.isArray(words) || words.some((word) => typeof word !== 'string' || !word.trim()))
+      throw new Error('词表须包含非空词项。')
     const issues: LintIssue[] = []
-    const lines = text.split(/\r?\n/)
-    let currentOffset = 0
-
-    lines.forEach((line, lineIdx) => {
-      for (const word of AnachronismRule.ANACHRONISTIC_WORDS) {
-        let idx = line.indexOf(word)
-        while (idx !== -1) {
-          const start = currentOffset + idx
-          issues.push({
-            id: `anach-${lineIdx}-${idx}`,
-            ruleId: this.id,
-            ruleName: this.name,
-            severity: this.defaultSeverity,
-            lineNumber: lineIdx + 1,
-            startOffset: start,
-            endOffset: start + word.length,
-            matchedSnippet: word,
-            message: `检测到突兀的现代工业/网络梗词汇「${word}」，容易引发读者破防出戏。`,
-          })
-          idx = line.indexOf(word, idx + 1)
-        }
+    for (const word of new Set(words as string[])) {
+      let start = text.indexOf(word)
+      while (start !== -1) {
+        issues.push({
+          id: `word-${word}-${start}`,
+          ruleId: this.id,
+          ruleName: this.name,
+          severity: this.defaultSeverity,
+          lineNumber: text.slice(0, start).split(/\r\n|\r|\n/).length,
+          startOffset: start,
+          endOffset: start + word.length,
+          matchedSnippet: word,
+          message: `命中作者启用的词项「${word}」。时代错误或读者反应尚未判断。`,
+        })
+        start = text.indexOf(word, start + word.length)
       }
-      currentOffset += line.length + 1
-    })
-
+    }
     return issues
   }
 }
 
-/**
- * NarrativeLinterEngine: 统合规则管线与快速修补 (Pipeline + QuickFix)
- */
 export class NarrativeLinterEngine {
   private rules: ILinterRule[] = [
     new AdverbStackRule(),
@@ -206,94 +156,97 @@ export class NarrativeLinterEngine {
     new DialogueInfodumpRule(),
     new AnachronismRule(),
   ]
-
   public static getDefaultRules(): LinterRuleConfig[] {
     return [
       {
         ruleId: 'LINT_ADVERB_STACK',
-        name: '弱化副词过度修饰',
+        name: '同一行修饰词定位',
         enabled: true,
         severity: 'warning',
-        description: '检测连续或过度密集的副词，倡导动词白描',
+        description: '词形计数；不证明冗余',
+        options: { minimumOccurrences: 3 },
       },
       {
         ruleId: 'LINT_RUN_ON_SENTENCE',
-        name: '超长从句/无间歇长句',
+        name: '分句长度定位',
         enabled: true,
         severity: 'warning',
-        description: '单句无标点连续字数超过阈值造成阅读窒息',
+        description: '超过作者阈值的连续分句',
+        options: { maxClauseLength: 55 },
       },
       {
         ruleId: 'LINT_DIALOGUE_INFODUMP',
-        name: '对话违和倾倒世界观设定',
+        name: '长对白定位',
         enabled: true,
-        severity: 'error',
-        description: '角色台词长篇大论背书',
+        severity: 'info',
+        description: '对白用途需结合语境判断',
+        options: { maxDialogueLength: 100 },
       },
       {
         ruleId: 'LINT_ANACHRONISM',
-        name: '现代工业/网络热梗出戏词',
-        enabled: true,
-        severity: 'error',
-        description: '在古典玄幻中误用现代专有名词',
+        name: '作者指定词表',
+        enabled: false,
+        severity: 'info',
+        description: '可选示例词表；须作者启用',
+        options: {
+          words: ['性价比', '大数据', '云计算', '打工人', '内卷', '降维打击', 'KPI', '割韭菜'],
+        },
       },
     ]
   }
-
-  /**
-   * 运行 Linter 检查
-   */
-  public lint(text: string, activeConfigs?: LinterRuleConfig[]): LintSummary {
-    const activeMap = new Map<string, LinterRuleConfig>()
-    if (activeConfigs) {
-      activeConfigs.forEach((c) => activeMap.set(c.ruleId, c))
-    }
-
-    let allIssues: LintIssue[] = []
-
-    for (const rule of this.rules) {
-      const config = activeMap.get(rule.id)
-      // 若有配置且被禁用，跳过
-      if (config && !config.enabled) continue
-
-      const issues = rule.check(text)
-      if (config?.severity) {
-        issues.forEach((i) => (i.severity = config.severity))
+  public lint(text: string, configs = NarrativeLinterEngine.getDefaultRules()): LintSummary {
+    const issues: LintIssue[] = []
+    const configErrors: string[] = []
+    for (const config of configs) {
+      if (!config.enabled) continue
+      const rule = this.rules.find((item) => item.id === config.ruleId)
+      if (!rule) {
+        configErrors.push(`未知规则：${config.ruleId}`)
+        continue
       }
-      allIssues = allIssues.concat(issues)
+      const options = { ...config.options }
+      if (config.customThreshold !== undefined) {
+        const key =
+          rule.id === 'LINT_RUN_ON_SENTENCE'
+            ? 'maxClauseLength'
+            : rule.id === 'LINT_DIALOGUE_INFODUMP'
+              ? 'maxDialogueLength'
+              : 'minimumOccurrences'
+        options[key] = config.customThreshold
+      }
+      try {
+        issues.push(
+          ...rule
+            .check(text, options)
+            .map((issue) => ({ ...issue, severity: config.severity, sourceText: text })),
+        )
+      } catch (error) {
+        configErrors.push(`${config.name}：${error instanceof Error ? error.message : '配置无效'}`)
+      }
     }
-
-    // 统计
-    let errorCount = 0
-    let warningCount = 0
-    let infoCount = 0
-
-    allIssues.forEach((issue) => {
-      if (issue.severity === 'error') errorCount++
-      else if (issue.severity === 'warning') warningCount++
-      else infoCount++
-    })
-
-    // 清洁度评分：100 扣除 (error*15 + warning*5 + info*1)
-    const penalty = errorCount * 15 + warningCount * 5 + infoCount * 1
-    const cleanScore = Math.max(0, Math.min(100, 100 - penalty))
-
     return {
-      totalIssues: allIssues.length,
-      errorCount,
-      warningCount,
-      infoCount,
-      issues: allIssues,
-      cleanScore,
+      totalIssues: issues.length,
+      errorCount: issues.filter((issue) => issue.severity === 'error').length,
+      warningCount: issues.filter((issue) => issue.severity === 'warning').length,
+      infoCount: issues.filter((issue) => issue.severity === 'info').length,
+      issues,
+      configErrors,
     }
   }
-
-  /**
-   * 应用快速修复 (QuickFix)
-   */
   public static applyQuickFix(text: string, issue: LintIssue): string {
-    if (!issue.quickFix) return text
+    if (!issue.quickFix || issue.sourceText !== text) return text
     const [start, end] = issue.quickFix.range
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 0 ||
+      end <= start ||
+      end > text.length ||
+      start !== issue.startOffset ||
+      end !== issue.endOffset ||
+      text.slice(start, end) !== issue.matchedSnippet
+    )
+      return text
     return text.slice(0, start) + issue.quickFix.replacementText + text.slice(end)
   }
 }

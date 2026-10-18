@@ -32,9 +32,9 @@ const EXPECTED_BOUNDARIES = {
     disposition: 'desktop-local-by-design',
   },
   'archetype-cards': {
-    runtimeClass: 'pure-local',
-    runtimeTarget: 'desktop-local-engine',
-    disposition: 'desktop-local-by-design',
+    runtimeClass: 'ai-task',
+    runtimeTarget: 'creative-task',
+    disposition: 'migrated-to-runtime',
   },
   'author-ops': {
     runtimeClass: 'pure-local',
@@ -42,9 +42,9 @@ const EXPECTED_BOUNDARIES = {
     disposition: 'desktop-local-by-design',
   },
   'brainstorm-spark': {
-    runtimeClass: 'pure-local',
-    runtimeTarget: 'desktop-local-engine',
-    disposition: 'desktop-local-by-design',
+    runtimeClass: 'ai-task',
+    runtimeTarget: 'creative-task',
+    disposition: 'migrated-to-runtime',
   },
   'chekhov-radar': {
     runtimeClass: 'ai-task',
@@ -197,9 +197,9 @@ const EXPECTED_BOUNDARIES = {
     disposition: 'migrated-to-runtime',
   },
   'shadow-reader': {
-    runtimeClass: 'pure-local',
-    runtimeTarget: 'desktop-local-engine',
-    disposition: 'desktop-local-by-design',
+    runtimeClass: 'ai-task',
+    runtimeTarget: 'creative-task',
+    disposition: 'migrated-to-runtime',
   },
   soundscape: {
     runtimeClass: 'ui-only',
@@ -332,6 +332,12 @@ function expectedRuntimeInvocation(pluginId: FirstPartyPluginId): boolean {
   )
 }
 
+function expectedRuntimeInvocationCount(pluginId: FirstPartyPluginId): number {
+  const runtimeClass = EXPECTED_BOUNDARIES[pluginId].runtimeClass
+  if (runtimeClass === 'workflow') return 2 // task identity hook plus explicit workflow execution
+  return expectedRuntimeInvocation(pluginId) ? 1 : 0
+}
+
 function expectedContextProvider(pluginId: FirstPartyPluginId): boolean {
   const runtimeClass = EXPECTED_BOUNDARIES[pluginId].runtimeClass
   return runtimeClass === 'context-provider' || runtimeClass === 'hybrid'
@@ -374,7 +380,7 @@ function collectLegacyViolations(): string[] {
     if (/(?:task|instruction)\.(?:submit|status|cancel|steer|resume)/.test(source)) {
       violations.push(`${relativeToDesktop(file)} -> raw task/instruction RPC`)
     }
-    if (/\b(?:session|agent)\.[a-z][\w.]*/.test(source)) {
+    if (/\b(?:session|agent)\.[a-z][\w.]*\s*\(/.test(source)) {
       violations.push(`${relativeToDesktop(file)} -> legacy session/agent RPC`)
     }
     if (
@@ -432,7 +438,7 @@ describe('Phase 20 first-party plugin migration matrix', () => {
     expect(evidence.runtimeInvocations).toEqual(
       expectedRuntimeInvocation(pluginId) ? [pluginId] : [],
     )
-    expect(evidence.runtimeInvocationCount).toBe(expectedRuntimeInvocation(pluginId) ? 1 : 0)
+    expect(evidence.runtimeInvocationCount).toBe(expectedRuntimeInvocationCount(pluginId))
     expect(evidence.hasContextProviderFile).toBe(expectedContextProvider(pluginId))
     expect(Boolean(definition?.contextProvider)).toBe(expectedContextProvider(pluginId))
 

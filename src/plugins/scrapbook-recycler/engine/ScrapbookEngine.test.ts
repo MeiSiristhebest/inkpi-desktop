@@ -3,7 +3,7 @@ import { ScrapbookEngine } from './ScrapbookEngine'
 import type { ScrapbookFragmentRecord } from '../types'
 
 describe('ScrapbookEngine (废稿灵感碎纸机回收站)', () => {
-  it('自动从文本修改中萃取被删除的大于等于15字的废稿切片', () => {
+  it('自动从文本修改中萃取被删除的有正文内容的全部废稿切片', () => {
     const oldText = '林凡手持残破铁剑，在暴雨中冷冷前行，浑身浴血杀意凛然。他一步踏入山门。'
     const newText = '林凡缓步走入山门。'
 
@@ -13,17 +13,17 @@ describe('ScrapbookEngine (废稿灵感碎纸机回收站)', () => {
       'ch1',
       '第一章 杀戮',
     )
-    expect(extracted.length).toBe(1)
+    expect(extracted.length).toBe(2)
     expect(extracted[0].wordCount).toBeGreaterThanOrEqual(15)
     expect(extracted[0].snippet).toContain('手持残破铁剑')
     expect(extracted[0].sourceChapterId).toBe('ch1')
   })
 
-  it('当删除字符数少于15字时，判定为微小编辑，不污染废稿池', () => {
+  it('短删除片段仍保留作者原文', () => {
     const oldText = '林凡微微一笑道。'
     const newText = '林凡冷笑道。'
     const extracted = ScrapbookEngine.extractDeletedFragments(oldText, newText)
-    expect(extracted.length).toBe(0)
+    expect(extracted.map((f) => f.snippet)).toEqual(['微微一'])
   })
 
   it('基于余弦相似度推荐与当前章节情境最相关的历史废稿', () => {

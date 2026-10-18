@@ -86,12 +86,6 @@ function Tooltip({
     <TooltipPrimitive.Root
       {...props}
       onOpenChange={(next, details) => {
-        // 提示气泡不是模态层。useDismiss 的默认值是 escapeKey=true、bubbles=false，
-        // 于是它关闭时会 stopPropagation —— 而浮层初始聚焦会顺手把焦点提示打开，
-        // Esc 就被气泡吃掉、再也交不到对话框的 useOverlayFocus。这里放行传播，
-        // 让「气泡自己关掉」和「外层浮层也收到同一个 Esc」同时成立。
-        // 'escape-key' 即 internals/reason-parts 里的 REASONS.escapeKey。
-        if (!next && details.reason === 'escape-key') details.allowPropagation()
         setOpen(next)
         onOpenChange?.(next, details)
       }}

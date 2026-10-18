@@ -12,4 +12,5 @@ export interface ClimaxStoryboardExtraction {
   coreConflict: string
   frames: ShotFrame[]
   suggestedCharacters: CharacterVisualCard[]
+  coverage?: { totalPassages: number; suppliedPassages: number; complete: boolean }
 }

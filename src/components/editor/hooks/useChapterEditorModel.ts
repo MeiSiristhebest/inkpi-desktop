@@ -13,7 +13,12 @@ import {
 } from '../../../adapters/indexedDbChapterHistoryStore'
 import { localStorageKeyValueStore } from '../../../adapters/localStorageKeyValueStore'
 import type { KeyValueStore } from '../../../ports/keyValueStore'
-import { setGhostText as showGhostText } from '../../../extensions/ghost-text'
+import {
+  clearGhostText as clearGhostDecoration,
+  setGhostText as showGhostText,
+  ghostTextPrefix,
+  type GhostTextAcceptance,
+} from '../../../extensions/ghost-text'
 import {
   countWords,
   formatChineseParagraphs,
@@ -39,6 +44,10 @@ import { applyContentMutation, loadContentIntoEditor } from '../editorContentBri
 import { draftJournal } from '../../../services/draftJournal'
 import { chapterMutationService } from '../../../services/defaultChapterMutationService'
 import type { ChapterMutation } from '../../../services/chapterMutationService'
+import {
+  updateChapterHistorySnapshots,
+  type ChapterHistorySnapshot,
+} from '../../../services/chapterHistorySnapshots'
 import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 import { collectGlobalSearchHits, type GlobalSearchHit } from '../globalSearch'
 import { WRITE_ORIGIN_META } from '../writeOrigin'
@@ -49,6 +58,35 @@ export interface DraftRecoveryState {
   baseRevision: number
   updatedAt: number
   content?: string
+}
+
+function getDraftRecoveryState(
+  workspaceId: string,
+  chapter: ChapterRecord | null,
+): DraftRecoveryState | null {
+  if (!chapter) return null
+  const draft = draftJournal.get(workspaceId, chapter.id)
+  if (!draft) return null
+  if (draft.editorContent === chapter.content) {
+    draftJournal.clearIfContentMatches(workspaceId, chapter.id, chapter.content || '')
+    return null
+  }
+
+  const currentRevision = chapter.revision ?? 1
+  const status =
+    draft.baseRevision === currentRevision
+      ? 'available'
+      : draft.baseRevision < currentRevision
+        ? 'stale'
+        : 'conflict'
+
+  return {
+    status,
+    chapterId: chapter.id,
+    baseRevision: draft.baseRevision,
+    updatedAt: draft.updatedAt,
+    ...(status === 'available' ? { content: draft.editorContent } : {}),
+  }
 }
 
 interface ChapterContextMenu {
@@ -77,6 +115,7 @@ export interface EditorModelState {
   saveInFlight: boolean
   /** 最近一次持久化失败的摘要；null 表示没有等待用户处理的失败。 */
   saveError: string | null
+  historyError: string | null
   treeQuery: string
   sessionWordDelta: number
   ghostText: string
@@ -140,6 +179,7 @@ function createInitialState(projectId: string): EditorModelState {
     isSaved: true,
     saveInFlight: false,
     saveError: null,
+    historyError: null,
     treeQuery: '',
     sessionWordDelta: 0,
     ghostText: '',
@@ -189,7 +229,12 @@ export interface UseChapterEditorModelArgs {
   projectId: string
   editorRef: MutableRefObject<any>
   onStats?: (stats: { title?: string; wordCount: number; updatedAt?: number }) => void
-  onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
+  onRequestGhost?: (
+    chapterId: string,
+    text: string,
+    sourceRevision: number,
+    signal?: AbortSignal,
+  ) => Promise<string | null>
   /** Lightweight KV port for editor preferences and workspace pointers.
    *  测试时注入内存实现；生产默认使用 localStorageKeyValueStore。
    */
@@ -208,6 +253,7 @@ export interface ChapterEditorModel {
   isSaved: boolean
   saveInFlight: boolean
   saveError: string | null
+  historyError: string | null
   treeQuery: string
   sessionWordDelta: number
   ghostText: string
@@ -266,7 +312,7 @@ export interface ChapterEditorModel {
 }
 
 export interface ChapterEditorActions {
-  selectChapter: (ch: ChapterRecord) => void
+  selectChapter: (ch: ChapterRecord) => Promise<boolean>
   prevChapter: () => void
   nextChapter: () => void
   toggleVolume: (id: string) => void
@@ -288,7 +334,9 @@ export interface ChapterEditorActions {
   formatWithPreset: (preset: TypographyPreset) => void
   punctuationFix: () => void
   executeReplace: () => void
-  acceptGhostText: () => void
+  acceptGhostText: (mode?: GhostTextAcceptance) => boolean
+  handleGhostSelectionUpdate: () => void
+  cancelGhostText: () => void
   runGlobalSearch: (query: string) => Promise<void>
   jumpToChapterFromSearch: (r: GlobalSearchHit) => void
   updateActiveTitle: (title: string) => Promise<void>
@@ -298,6 +346,7 @@ export interface ChapterEditorActions {
   hasPending: () => boolean
   handleEditorUpdate: () => void
   save: () => void
+  saveCurrentEditor: () => Promise<boolean>
   /** 失败后由状态栏「保存失败 · 重试」触发：重放防抖队列里最新的那份草稿。 */
   retrySave: () => void
   setGhostText: (v: string) => void
@@ -306,6 +355,7 @@ export interface ChapterEditorActions {
   setShowSensitiveModal: (v: boolean) => void
   setShowLockModal: (v: boolean) => void
   setShowHistoryModal: (v: boolean) => void
+  dismissHistoryError: () => void
   setShowOveruseModal: (v: boolean) => void
   setShowSplitView: (v: boolean) => void
   setShowScratchpad: (v: boolean) => void
@@ -372,10 +422,19 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const activeChapterRef = useRef<ChapterRecord | null>(null)
   const mountedRef = useRef(false)
   const onRequestGhostRef = useRef(onRequestGhost)
+  const ghostRequestHandlerIdentityRef = useRef(onRequestGhost)
   onRequestGhostRef.current = onRequestGhost
   const ghostTextRef = useRef('')
   const ghostTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ghostGeneration = useRef(0)
+  const ghostRequestController = useRef<AbortController | null>(null)
+  const ghostAnchorRef = useRef<{ chapterId: string; position: number } | null>(null)
+  const acceptingGhostRef = useRef(false)
+  const draftJournalFailureRef = useRef<{
+    chapterId: string
+    content: string
+    error: Error
+  } | null>(null)
   const globalSearchGeneration = useRef(0)
   const canonicalMutationQueue = useRef<Promise<void>>(Promise.resolve())
   const canonicalMutationError = useRef<unknown | null>(null)
@@ -388,33 +447,33 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   const historyStoreRef = useRef(historyStore)
   historyStoreRef.current = historyStore
 
-  const saveSnapshot = (ch: ChapterRecord) => {
-    const key = chapterHistoryStorageKey(projectId, ch.id)
-    void historyStoreRef.current.get(key).then((raw) => {
-      try {
-        const existing: Array<{
-          kind?: 'auto' | 'milestone'
-          timestamp: number
-          wordCount: number
-          content: string
-        }> = JSON.parse(raw || '[]')
-        const snapshot = {
-          kind: 'auto' as const,
-          timestamp: clock.now(),
-          wordCount: ch.wordCount,
-          content: ch.content,
-        }
-        // Preserve all milestones; evict oldest auto entries beyond 20-slot cap
-        const milestones = existing.filter((s) => s.kind === 'milestone')
-        const autos = existing.filter((s) => s.kind !== 'milestone')
-        const trimmedAutos = autos.slice(0, 19) // keep at most 19 prior autos + 1 new = 20
-        const updated = [snapshot, ...trimmedAutos, ...milestones]
-        void historyStoreRef.current.set(key, JSON.stringify(updated))
-      } catch {
-        /* ignore */
+  const saveSnapshot = useCallback(
+    (ch: ChapterRecord) => {
+      const key = chapterHistoryStorageKey(projectId, ch.id)
+      const snapshot: ChapterHistorySnapshot = {
+        kind: 'auto',
+        timestamp: clock.now(),
+        wordCount: ch.wordCount,
+        content: ch.content,
       }
-    })
-  }
+      void updateChapterHistorySnapshots<ChapterHistorySnapshot>(
+        historyStoreRef.current,
+        key,
+        (existing) => {
+          // Preserve all milestones; evict oldest auto entries beyond 20-slot cap.
+          const milestones = existing.filter((item) => item.kind === 'milestone')
+          const autos = existing.filter((item) => item.kind !== 'milestone')
+          return [snapshot, ...autos.slice(0, 19), ...milestones]
+        },
+      )
+        .then(() => patch({ historyError: null }))
+        .catch((error: unknown) => {
+          console.warn('[InkPi Desktop] Automatic history snapshot failed:', error)
+          patch({ historyError: '自动历史检查点保存失败；正文已保存。' })
+        })
+    },
+    [patch, projectId],
+  )
 
   const reportSaveError = useCallback(
     (error: unknown) => {
@@ -459,6 +518,13 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         patch({ saveError: null })
 
         const updated = result.chapter
+        const draftJournalFailure = draftJournalFailureRef.current
+        if (
+          draftJournalFailure?.chapterId === updated.id &&
+          draftJournalFailure.content === (updated.content || '')
+        ) {
+          draftJournalFailureRef.current = null
+        }
         saveSnapshot(updated)
         if (activeChapterRef.current?.id === updated.id) {
           activeChapterRef.current = updated
@@ -482,7 +548,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         if (inFlightSaves.current === 0) patch({ saveInFlight: false })
       }
     },
-    [onStats, patch, projectId],
+    [onStats, patch, projectId, saveSnapshot],
   )
 
   const runPersistence = useCallback(
@@ -498,7 +564,57 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     [reportSaveError],
   )
 
+  const saveCurrentEditor = useCallback(async (): Promise<boolean> => {
+    const chapter = activeChapterRef.current
+    const editor = editorRef.current
+    if (!chapter || !editor || editor.isDestroyed) return false
+
+    return runPersistence(() => flushSave({ ...chapter, content: editor.getHTML() }))
+  }, [editorRef, flushSave, runPersistence])
+
   const autosave = useChapterAutosave(flushSave, reportSaveError)
+
+  const hasPending = useCallback(() => {
+    const chapterId = activeChapterRef.current?.id
+    const journalFailure = draftJournalFailureRef.current
+    return (
+      autosave.hasPending() ||
+      canonicalMutationPending.current > 0 ||
+      !stateRef.current.isSaved ||
+      (chapterId !== undefined && journalFailure?.chapterId === chapterId)
+    )
+  }, [autosave])
+
+  const drain = useCallback(async () => {
+    await autosave.drain()
+    await canonicalMutationQueue.current
+    const mutationError = canonicalMutationError.current
+    canonicalMutationError.current = null
+    if (mutationError) throw mutationError
+
+    const current = activeChapterRef.current
+    const journalFailure = draftJournalFailureRef.current
+    if (!current || (stateRef.current.isSaved && journalFailure?.chapterId !== current.id)) {
+      return
+    }
+
+    const draft = draftJournal.get(projectId, current.id)
+    if (draft?.editorContent === current.content) return
+
+    const chapters = await indexedDbProjectRepository.getChaptersByProject(projectId)
+    const persisted = chapters.find((chapter) => chapter.id === current.id)
+    if (persisted?.content === current.content) {
+      if (journalFailure?.chapterId === current.id) draftJournalFailureRef.current = null
+      return
+    }
+
+    const failure =
+      journalFailure?.chapterId === current.id
+        ? journalFailure.error
+        : new Error('无法确认当前正文已保存或可恢复。请重试保存后再离开。')
+    reportSaveError(failure)
+    throw failure
+  }, [autosave, projectId, reportSaveError])
 
   const retrySave = useCallback(() => {
     patch({ saveError: null })
@@ -511,7 +627,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     (
       chapterId: string,
       mutation: ChapterMutation,
-      origin: 'title-edit' | 'draft-recovery',
+      origin: 'title-edit' | 'draft-recovery' | 'chapter-metadata',
     ): Promise<ChapterRecord | null> => {
       const operation = canonicalMutationQueue.current.then(async () => {
         // Title changes share the same drain barrier as body changes so a title
@@ -534,7 +650,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
           mutation,
           origin,
         })
-        if (!result.success) throw new Error(result.error || 'Chapter title mutation failed')
+        if (!result.success) throw new Error(result.error || 'Chapter mutation failed')
 
         const updated = result.chapter
         canonicalMutationError.current = null
@@ -635,26 +751,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       if (found) initialChapter = found
     }
 
-    let draftRecovery: DraftRecoveryState | null = null
-    if (initialChapter) {
-      const draft = draftJournal.get(projectId, initialChapter.id)
-      const currentRev = initialChapter.revision ?? 1
-      if (draft) {
-        const status =
-          draft.baseRevision === currentRev && draft.updatedAt > (initialChapter.updatedAt || 0)
-            ? 'available'
-            : draft.baseRevision < currentRev
-              ? 'stale'
-              : 'conflict'
-        draftRecovery = {
-          status,
-          chapterId: initialChapter.id,
-          baseRevision: draft.baseRevision,
-          updatedAt: draft.updatedAt,
-          ...(status === 'available' ? { content: draft.editorContent } : {}),
-        }
-      }
-    }
+    const draftRecovery = getDraftRecoveryState(projectId, initialChapter)
 
     patch({
       volumes: projVols,
@@ -672,8 +769,8 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
     const handleBeforeUnload = () => {
       // 窗口关闭或刷新时执行强制落盘，杜绝丢稿 (INV-01)
-      if (autosave.hasPending()) {
-        void autosave.drain().catch(() => {})
+      if (hasPending()) {
+        void drain().catch(() => {})
       }
     }
 
@@ -686,10 +783,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         .then(({ getCurrentWindow }) => {
           const appWindow = getCurrentWindow()
           return appWindow.onCloseRequested(async (event) => {
-            if (autosave.hasPending()) {
+            if (hasPending()) {
               event.preventDefault()
               try {
-                await autosave.drain()
+                await drain()
                 await appWindow.destroy()
               } catch (err) {
                 reportSaveError(err)
@@ -711,7 +808,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }
       // 组件卸载时必须先完成原子 flush，再取消队列；不能在 in-flight
       // 写入尚未结束时立即清空 autosave 状态，否则下一次挂载可能与旧写入竞态。
-      if (autosave.hasPending()) {
+      if (hasPending()) {
         void autosave
           .flush()
           .catch((error) => reportSaveError(error))
@@ -721,6 +818,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }
       ghostGeneration.current += 1
       if (ghostTimer.current) clearTimeout(ghostTimer.current)
+      ghostRequestController.current?.abort()
+      ghostRequestController.current = null
+      ghostAnchorRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
@@ -730,10 +830,27 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       nextChapter: ChapterRecord | null,
       options?: { skipDrain?: boolean },
     ): Promise<boolean> => {
+      const hadGhostState =
+        Boolean(ghostTextRef.current) ||
+        Boolean(ghostTimer.current) ||
+        Boolean(ghostRequestController.current) ||
+        Boolean(ghostAnchorRef.current)
+      ghostGeneration.current += 1
+      if (ghostTimer.current) {
+        clearTimeout(ghostTimer.current)
+        ghostTimer.current = null
+      }
+      ghostRequestController.current?.abort()
+      ghostRequestController.current = null
+      ghostAnchorRef.current = null
+      ghostTextRef.current = ''
+      if (hadGhostState) patch({ ghostText: '' })
+      const editor = editorRef.current
+      if (editor && !editor.isDestroyed) clearGhostDecoration(editor)
       // 切换章节前强制等待当前正在防抖/暂存的草稿全部 durable 落盘，杜绝切章竞态丢稿 (INV-01)
-      if (!options?.skipDrain && autosave.hasPending()) {
+      if (!options?.skipDrain && hasPending()) {
         try {
-          await autosave.drain()
+          await drain()
         } catch (err) {
           reportSaveError(err)
           return false
@@ -748,22 +865,20 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         void kvStoreRef.current.set(`inkpi_last_active_chapter:${projectId}`, nextChapter.id)
       }
       activeChapterRef.current = nextChapter
+      draftJournalFailureRef.current = null
       patch({
         activeChapterId: nextChapter?.id ?? '',
         activeChapter: nextChapter,
         isSaved: true,
+        draftRecovery: getDraftRecoveryState(projectId, nextChapter),
+        ghostText: '',
       })
       return true
     },
-    [patch, autosave, reportSaveError, projectId],
+    [patch, hasPending, drain, reportSaveError, projectId, editorRef],
   )
 
-  const selectChapter = useCallback(
-    (ch: ChapterRecord) => {
-      void activateChapter(ch)
-    },
-    [activateChapter],
-  )
+  const selectChapter = useCallback((ch: ChapterRecord) => activateChapter(ch), [activateChapter])
 
   const toggleVolume = useCallback(
     (id: string) => {
@@ -871,7 +986,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       const nextList = stateRef.current.chapters.filter((c) => c.id !== chapter.id)
       patch({ chapters: nextList, deletingChapter: null })
       if (isCurrent) {
-        await activateChapter(nextList.length > 0 ? nextList[0] : null, { skipDrain: true })
+        await activateChapter(nextList.length > 0 ? nextList[0] : null, {
+          skipDrain: true,
+        })
       }
     },
     [patch, runPersistence, activateChapter, autosave, projectId],
@@ -968,19 +1085,22 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     async (chapter: ChapterRecord, targetVolumeId: string) => {
       if (chapter.volumeId === targetVolumeId) return
       const order = stateRef.current.chapters.filter((c) => c.volumeId === targetVolumeId).length
-      const updated = { ...chapter, volumeId: targetVolumeId, order, updatedAt: clock.now() }
-      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) return
-      const chapters = stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c))
-      const next: Partial<EditorModelState> = {
-        chapters,
-        expanded: { ...stateRef.current.expanded, [targetVolumeId]: true },
+      try {
+        const updated = await applyCanonicalChapterMutation(
+          chapter.id,
+          { type: 'move-to-volume', volumeId: targetVolumeId, order },
+          'chapter-metadata',
+        )
+        if (updated) {
+          patch({
+            expanded: { ...stateRef.current.expanded, [targetVolumeId]: true },
+          })
+        }
+      } catch (error) {
+        reportSaveError(error)
       }
-      if (stateRef.current.activeChapterId === updated.id) {
-        next.activeChapter = updated
-      }
-      patch(next)
     },
-    [patch, runPersistence],
+    [applyCanonicalChapterMutation, patch, reportSaveError],
   )
 
   const duplicateChapter = useCallback(
@@ -1035,17 +1155,17 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     async (status: ChapterStatus) => {
       const cur = stateRef.current.activeChapter
       if (!cur) return
-      const updated = { ...cur, status, updatedAt: clock.now() }
-      if (!(await runPersistence(() => indexedDbProjectRepository.saveChapter(updated)))) return
-      const chapters = stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c))
-      patch({ chapters, activeChapter: updated })
-      onStats?.({
-        title: updated.title,
-        wordCount: updated.wordCount,
-        updatedAt: updated.updatedAt,
-      })
+      try {
+        await applyCanonicalChapterMutation(
+          cur.id,
+          { type: 'update-status', status },
+          'chapter-metadata',
+        )
+      } catch (error) {
+        reportSaveError(error)
+      }
     },
-    [onStats, patch, runPersistence],
+    [applyCanonicalChapterMutation, reportSaveError],
   )
 
   const setCanvasWidth = useCallback(
@@ -1174,14 +1294,101 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     [patch],
   )
 
-  const acceptGhostText = useCallback(() => {
-    const ed = editorRef.current
-    if (ed && !ed.isDestroyed && stateRef.current.ghostText) {
-      // 采纳的是 AI 的话，字数就该记在 AI 头上（§P3.10）。
-      ed.chain().insertContent(stateRef.current.ghostText).setMeta(WRITE_ORIGIN_META, 'ai').run()
+  const cancelGhostText = useCallback(() => {
+    const hadGhostState =
+      Boolean(ghostTextRef.current) ||
+      Boolean(ghostTimer.current) ||
+      Boolean(ghostRequestController.current) ||
+      Boolean(ghostAnchorRef.current)
+    ghostGeneration.current += 1
+    if (ghostTimer.current) {
+      clearTimeout(ghostTimer.current)
+      ghostTimer.current = null
+    }
+    ghostRequestController.current?.abort()
+    ghostRequestController.current = null
+    ghostAnchorRef.current = null
+    if (hadGhostState) {
       setGhostText('')
+      const editor = editorRef.current
+      if (editor && !editor.isDestroyed) clearGhostDecoration(editor)
     }
   }, [editorRef, setGhostText])
+
+  useEffect(() => {
+    if (ghostRequestHandlerIdentityRef.current === onRequestGhost) return
+    ghostRequestHandlerIdentityRef.current = onRequestGhost
+    cancelGhostText()
+  }, [cancelGhostText, onRequestGhost])
+
+  const handleGhostSelectionUpdate = useCallback(() => {
+    if (acceptingGhostRef.current) return
+    const anchor = ghostAnchorRef.current
+    if (!anchor) return
+    const editor = editorRef.current
+    const selection = editor?.state?.selection
+    if (
+      !editor ||
+      editor.isDestroyed ||
+      activeChapterRef.current?.id !== anchor.chapterId ||
+      selection?.from !== anchor.position ||
+      selection?.to !== anchor.position
+    ) {
+      cancelGhostText()
+    }
+  }, [cancelGhostText, editorRef])
+
+  const acceptGhostText = useCallback(
+    (mode: GhostTextAcceptance = 'all') => {
+      const ed = editorRef.current
+      const anchor = ghostAnchorRef.current
+      const selection = ed?.state?.selection
+      if (
+        ed &&
+        !ed.isDestroyed &&
+        ghostTextRef.current &&
+        anchor &&
+        activeChapterRef.current?.id === anchor.chapterId &&
+        selection?.from === anchor.position &&
+        selection?.to === anchor.position
+      ) {
+        const accepted = ghostTextPrefix(ghostTextRef.current, mode)
+        const remaining = ghostTextRef.current.slice(accepted.length)
+        ghostGeneration.current += 1
+        ghostRequestController.current?.abort()
+        ghostRequestController.current = null
+        acceptingGhostRef.current = true
+        try {
+          // 更新回调仍记录正文和草稿；采纳过程不取消剩余建议或请求新建议。
+          if (
+            !ed
+              .chain()
+              .focus(undefined, { scrollIntoView: false })
+              .insertContentAt({ from: anchor.position, to: anchor.position }, accepted)
+              .setMeta(WRITE_ORIGIN_META, 'ai')
+              .run()
+          )
+            return false
+        } finally {
+          acceptingGhostRef.current = false
+        }
+        setGhostText(remaining)
+        if (remaining) {
+          const position = ed.state.selection.to
+          ghostAnchorRef.current = { chapterId: anchor.chapterId, position }
+          showGhostText(ed, remaining, position)
+        } else {
+          ghostAnchorRef.current = null
+          clearGhostDecoration(ed)
+        }
+        return true
+      } else if (ghostTextRef.current || anchor) {
+        cancelGhostText()
+      }
+      return false
+    },
+    [cancelGhostText, editorRef, setGhostText],
+  )
 
   const findMatchesInDoc = useCallback(
     (query: string): { from: number; to: number }[] => {
@@ -1239,7 +1446,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       }
       // 只有正文命中才值得把词填进本章查找：标题/时间线命中的词不在正文里，填了就是「0 处」。
       if (r.kind === 'chapter-content') {
-        patch({ findText: stateRef.current.globalQuery.trim(), showFindReplace: true })
+        patch({
+          findText: stateRef.current.globalQuery.trim(),
+          showFindReplace: true,
+        })
       }
       patch({ showGlobalSearch: false })
       void activateChapter(ch)
@@ -1289,67 +1499,96 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     activeChapterRef.current = updated
     patch({
       activeChapter: updated,
-      chapters: stateRef.current.chapters.map((c) => (c.id === updated.id ? updated : c)),
+      // Keep the chapter list as the durable snapshot. The active chapter may
+      // contain unsaved editor content, which must remain in the draft journal
+      // and must not be mistaken for persisted content when switching back.
+      chapters: stateRef.current.chapters.map((c) =>
+        c.id === updated.id ? { ...c, wordCount: wc } : c,
+      ),
       isSaved: false,
       sessionWordDelta: stateRef.current.sessionWordDelta + (diff > 0 ? diff : 0),
     })
 
-    // 行内 Ghost Text 续写：防抖请求。每次正文变化、切章或卸载都会推进 generation，
-    // 返回值还必须匹配章节、持久化 revision 与请求时的尾部文本，避免旧请求回写新文档。
-    const requestGeneration = ++ghostGeneration.current
-    if (ghostTimer.current) clearTimeout(ghostTimer.current)
-    setGhostText('')
-    if (onRequestGhostRef.current && text.length > 5) {
-      const tail = text.slice(-200)
+    // 行内 Ghost Text 只续写当前光标之前的内容，并锚定请求时的光标位置。
+    if (!acceptingGhostRef.current) cancelGhostText()
+    const selection = ed.state?.selection
+    const position =
+      selection && selection.from === selection.to && Number.isInteger(selection.from)
+        ? selection.from
+        : null
+    const context =
+      position !== null && ed.state?.doc
+        ? ed.state.doc.textBetween(0, position, '\n').slice(-200)
+        : ''
+    const requestGhost = onRequestGhostRef.current
+    if (!acceptingGhostRef.current && requestGhost && context.length > 5 && position !== null) {
+      const requestGeneration = ghostGeneration.current
       const chId = cur.id
       const requestRevision = cur.revision ?? 1
+      const requestController = new AbortController()
+      ghostRequestController.current = requestController
+      ghostAnchorRef.current = { chapterId: chId, position }
       ghostTimer.current = setTimeout(() => {
-        onRequestGhostRef.current!(chId, tail)
+        ghostTimer.current = null
+        void requestGhost(chId, context, requestRevision, requestController.signal)
           .then((suggestion) => {
             const current = activeChapterRef.current
-            const currentTail = ed.getText().slice(-tail.length)
+            const currentSelection = ed.state?.selection
             if (
               !suggestion ||
+              onRequestGhostRef.current !== requestGhost ||
               requestGeneration !== ghostGeneration.current ||
               current?.id !== chId ||
               (current.revision ?? 1) !== requestRevision ||
-              currentTail !== tail
+              currentSelection?.from !== position ||
+              currentSelection?.to !== position
             ) {
               return
             }
             setGhostText(suggestion)
-            showGhostText(ed, suggestion)
+            showGhostText(ed, suggestion, position)
           })
           .catch(() => {})
+          .finally(() => {
+            if (ghostRequestController.current === requestController) {
+              ghostRequestController.current = null
+            }
+          })
       }, 600)
     }
 
     // P0.3: 用户打字时写入轻量本地草稿日记 (Draft WAL)，防范系统闪退 (INV-01)
-    draftJournal.record({
+    const draftEntry = {
       workspaceId: projectId,
       chapterId: cur.id,
       baseRevision: cur.revision ?? 1,
       editorContent: html,
       updatedAt: clock.now(),
-    })
+    }
+    if (draftJournal.record(draftEntry)) {
+      if (draftJournalFailureRef.current?.chapterId === cur.id) {
+        draftJournalFailureRef.current = null
+      }
+    } else {
+      const previousFailure = draftJournalFailureRef.current
+      const error = new Error('本地恢复草稿写入失败。请先保存正文后再离开此章节。')
+      draftJournalFailureRef.current = {
+        chapterId: cur.id,
+        content: html,
+        error,
+      }
+      if (previousFailure?.chapterId !== cur.id) reportSaveError(error)
+    }
 
     // 防抖自动存盘到 IndexedDB（受「自动保存」设置控制）
     if (settingsRef.current.autoSave) {
       autosave.schedule(updated, settingsRef.current.autoSaveDelay)
     }
-  }, [editorRef, patch, setGhostText, autosave, projectId])
+  }, [editorRef, patch, setGhostText, cancelGhostText, autosave, projectId, reportSaveError])
 
   const save = useCallback(() => {
     void flushSave().catch(reportSaveError)
   }, [flushSave, reportSaveError])
-
-  const drain = useCallback(async () => {
-    await autosave.drain()
-    await canonicalMutationQueue.current
-    const error = canonicalMutationError.current
-    canonicalMutationError.current = null
-    if (error) throw error
-  }, [autosave])
 
   const recoverDraft = useCallback(async () => {
     const recovery = stateRef.current.draftRecovery
@@ -1544,15 +1783,18 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     punctuationFix,
     executeReplace,
     acceptGhostText,
+    handleGhostSelectionUpdate,
+    cancelGhostText,
     runGlobalSearch,
     jumpToChapterFromSearch,
     updateActiveTitle,
     recoverDraft,
     discardDraft,
     drain,
-    hasPending: () => autosave.hasPending() || canonicalMutationPending.current > 0,
+    hasPending,
     handleEditorUpdate,
     save,
+    saveCurrentEditor,
     retrySave,
     setGhostText,
     setSidebar: (v: boolean) => patch({ isSidebarOpen: v }),
@@ -1560,6 +1802,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     setShowSensitiveModal: (v: boolean) => patch({ showSensitiveModal: v }),
     setShowLockModal: (v: boolean) => patch({ showLockModal: v }),
     setShowHistoryModal: (v: boolean) => patch({ showHistoryModal: v }),
+    dismissHistoryError: () => patch({ historyError: null }),
     setShowOveruseModal: (v: boolean) => patch({ showOveruseModal: v }),
     setShowSplitView: (v: boolean) => patch({ showSplitView: v }),
     setShowScratchpad: (v: boolean) => patch({ showScratchpad: v }),

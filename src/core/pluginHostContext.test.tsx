@@ -1,14 +1,94 @@
 import { render, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { useEffect } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import type { PluginWorkflowOutcome } from '../types/pluginHost'
+import type { CodexEntity } from '../plugins/living-codex/types'
+import { indexedDbCodexEntityRepository } from '../adapters/indexedDbCodexEntityRepository'
+import { codexApplicationService } from '../services/domainApplicationServices'
+import type { ChapterRecord } from '../types'
 import { DesktopPluginHostProvider, usePluginHostContext } from './pluginHostContext'
+
+const codexEntity: CodexEntity = {
+  id: 'entity-1',
+  projectId: 'project-1',
+  name: '主角',
+  aliases: [],
+  category: 'character',
+  attributes: {},
+  relations: [],
+  summary: '当前项目实体',
+  createdAt: 1,
+  updatedAt: 1,
+}
+
+function CodexMutationProbe({
+  entityId,
+  patch,
+  onResult,
+}: {
+  entityId: string
+  patch: Partial<CodexEntity>
+  onResult: (value: unknown) => void
+}) {
+  const { mutateCodexEntity } = usePluginHostContext()
+
+  useEffect(() => {
+    void mutateCodexEntity(entityId, () => patch).then(
+      () => onResult({ status: 'saved' }),
+      (error: unknown) =>
+        onResult({
+          status: 'failed',
+          message: error instanceof Error ? error.message : String(error),
+        }),
+    )
+  }, [entityId, mutateCodexEntity, onResult, patch])
+
+  return null
+}
+
+function CodexMutationAfterProjectSwitchProbe({
+  projectId,
+  onResult,
+}: {
+  projectId: string
+  onResult: (value: unknown) => void
+}) {
+  const { mutateCodexEntity } = usePluginHostContext()
+
+  useEffect(() => {
+    if (projectId !== 'project-2') return
+
+    void mutateCodexEntity('entity-2', () => ({ summary: 'updated in project 2' })).then(
+      () => onResult({ status: 'saved' }),
+      (error: unknown) =>
+        onResult({
+          status: 'failed',
+          message: error instanceof Error ? error.message : String(error),
+        }),
+    )
+  }, [mutateCodexEntity, onResult, projectId])
+
+  return null
+}
+
+afterEach(() => vi.restoreAllMocks())
 
 function Probe({ onOutcome }: { onOutcome: (value: unknown) => void }) {
   const host = usePluginHostContext()
   void host.aiAssistant
     ?.runPluginOutcome?.('demo-plugin', '正文', { apiKey: 'secret' })
     .then(onOutcome)
+  return null
+}
+
+function AnalysisProbe({ onOutcome }: { onOutcome: (value: unknown) => void }) {
+  const { aiAssistant } = usePluginHostContext()
+
+  useEffect(() => {
+    void aiAssistant?.runPluginOutcome?.('demo-plugin', '正文').then(onOutcome)
+  }, [aiAssistant, onOutcome])
+
   return null
 }
 
@@ -81,6 +161,58 @@ describe('Desktop plugin workflow outcomes', () => {
     })
     expect(JSON.stringify(outcome.mock.calls[0][0])).not.toContain('secret')
     expect(JSON.stringify(outcome.mock.calls[0][0])).not.toContain('output-secret')
+  })
+
+  it('uses the latest active chapter revision for plugin analysis tasks', async () => {
+    const activeChapter: ChapterRecord = {
+      id: 'chapter-1',
+      projectId: 'workspace-1',
+      volumeId: 'volume-1',
+      title: '第一章',
+      content: '正文',
+      wordCount: 2,
+      order: 1,
+      revision: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const onAiTask = vi.fn(async (task: AiTask) => ({
+      taskId: task.id,
+      kind: task.kind,
+      status: 'completed' as const,
+      output: { format: 'text' as const, text: '分析结果' },
+    }))
+    const outcome = vi.fn()
+    const view = render(
+      <DesktopPluginHostProvider
+        projectId="workspace-1"
+        activeChapter={activeChapter}
+        isAiConnected
+        onAiTask={onAiTask}
+      >
+        <AnalysisProbe onOutcome={outcome} />
+      </DesktopPluginHostProvider>,
+    )
+
+    view.rerender(
+      <DesktopPluginHostProvider
+        projectId="workspace-1"
+        activeChapter={{ ...activeChapter, revision: 5 }}
+        isAiConnected
+        onAiTask={onAiTask}
+      >
+        <AnalysisProbe onOutcome={outcome} />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(onAiTask).toHaveBeenCalledTimes(2))
+    expect(onAiTask.mock.calls[1]?.[0]).toMatchObject({
+      scope: { document: { id: 'chapter-1', revision: 5 } },
+    })
+    await waitFor(() => expect(outcome).toHaveBeenCalledTimes(2))
+    expect(outcome.mock.calls[1]?.[0]).toMatchObject({
+      provenance: { documentId: 'chapter-1', documentRevision: 5 },
+    })
   })
 
   it('redacts raw task input and output at the host boundary', async () => {
@@ -203,5 +335,105 @@ describe('Desktop plugin workflow outcomes', () => {
     )
     await waitFor(() => expect(outcome).toHaveBeenCalled())
     expect(outcome.mock.calls[0][0]).toMatchObject({ status })
+  })
+
+  it('rejects entity IDs outside the active project before saving', async () => {
+    const getByProject = vi
+      .spyOn(indexedDbCodexEntityRepository, 'getByProject')
+      .mockResolvedValue([])
+    const saveEntity = vi.spyOn(codexApplicationService, 'saveEntity').mockResolvedValue()
+    const result = vi.fn()
+
+    render(
+      <DesktopPluginHostProvider projectId="project-1" activeChapter={null}>
+        <CodexMutationProbe
+          entityId="entity-from-project-2"
+          patch={{ summary: 'changed' }}
+          onResult={result}
+        />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() =>
+      expect(result).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' })),
+    )
+    expect(getByProject).toHaveBeenCalledWith('project-1')
+    expect(result.mock.calls[0][0].message).toContain('not found in project project-1')
+    expect(saveEntity).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['projectId', { projectId: 'project-2', summary: 'changed' }],
+    ['id', { id: 'entity-from-project-2', summary: 'changed' }],
+  ] as const)('rejects an entity mutation that changes %s', async (_field, patch) => {
+    const saveEntity = vi.spyOn(codexApplicationService, 'saveEntity').mockResolvedValue()
+    vi.spyOn(indexedDbCodexEntityRepository, 'getByProject').mockResolvedValue([codexEntity])
+    const result = vi.fn()
+
+    render(
+      <DesktopPluginHostProvider projectId="project-1" activeChapter={null}>
+        <CodexMutationProbe entityId="entity-1" patch={patch} onResult={result} />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() =>
+      expect(result).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' })),
+    )
+    expect(saveEntity).not.toHaveBeenCalled()
+  })
+
+  it('saves a mutation for an entity in the active project', async () => {
+    const saveEntity = vi.spyOn(codexApplicationService, 'saveEntity').mockResolvedValue()
+    vi.spyOn(indexedDbCodexEntityRepository, 'getByProject').mockResolvedValue([codexEntity])
+    const result = vi.fn()
+
+    render(
+      <DesktopPluginHostProvider projectId="project-1" activeChapter={null}>
+        <CodexMutationProbe entityId="entity-1" patch={{ summary: 'updated' }} onResult={result} />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(result).toHaveBeenCalledWith({ status: 'saved' }))
+    expect(saveEntity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'entity-1',
+        projectId: 'project-1',
+        summary: 'updated',
+      }),
+      'author-confirmed',
+    )
+  })
+
+  it('uses the new project scope after switching projects', async () => {
+    const projectTwoEntity: CodexEntity = {
+      ...codexEntity,
+      id: 'entity-2',
+      projectId: 'project-2',
+    }
+    const getByProject = vi
+      .spyOn(indexedDbCodexEntityRepository, 'getByProject')
+      .mockImplementation(async (projectId) =>
+        projectId === 'project-2' ? [projectTwoEntity] : [],
+      )
+    const saveEntity = vi.spyOn(codexApplicationService, 'saveEntity').mockResolvedValue()
+    const result = vi.fn()
+    const view = render(
+      <DesktopPluginHostProvider projectId="project-1" activeChapter={null}>
+        <CodexMutationAfterProjectSwitchProbe projectId="project-1" onResult={result} />
+      </DesktopPluginHostProvider>,
+    )
+
+    view.rerender(
+      <DesktopPluginHostProvider projectId="project-2" activeChapter={null}>
+        <CodexMutationAfterProjectSwitchProbe projectId="project-2" onResult={result} />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(result).toHaveBeenCalledWith({ status: 'saved' }))
+    expect(getByProject).toHaveBeenCalledWith('project-2')
+    expect(saveEntity).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'entity-2', projectId: 'project-2' }),
+      'author-confirmed',
+    )
   })
 })

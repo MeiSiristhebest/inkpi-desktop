@@ -2,7 +2,7 @@ import { useState, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { ReaderSimulatorEngine } from '../engine/ReaderSimulatorEngine'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
-import { Users, AlertTriangle, ShieldCheck, Copy, Check, MessageSquare } from 'lucide-react'
+import { Users, Copy, Check, MessageSquare } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Tooltip } from '../../../ui/primitives'
 
@@ -29,7 +29,7 @@ export const ReaderSimulatorDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
     <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
       <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-2">
         <span className="font-semibold text-sm flex items-center gap-1.5 text-rose-500">
-          <Users className="w-4 h-4" /> 读者心智段评随动
+          <Users className="w-4 h-4" /> 读者视角复核
         </span>
         <span className="text-[10px] text-[var(--ink-text-muted)]">
           {currentText ? '写作内容感知' : '待输入正文'}
@@ -42,58 +42,22 @@ export const ReaderSimulatorDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
         </div>
       ) : (
         <>
-          <ScoreProvenanceBadge source="rule" detail="按弃书词表与句长特征打分" />
-
-          {/* 核心指标微表盘 */}
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]">
-              <div className="text-[10px] text-[var(--ink-text-muted)]">毒点指数</div>
-              <div
-                className={`font-bold text-sm ${
-                  simulation.toxicityScore > 30 ? 'text-red-500' : 'text-emerald-500'
-                }`}
-              >
-                {simulation.toxicityScore}
-              </div>
-            </div>
-            <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]">
-              <div className="text-[10px] text-[var(--ink-text-muted)]">逻辑推演</div>
-              <div className="font-bold text-sm text-blue-500">{simulation.logicScore}</div>
-            </div>
-            <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]">
-              <div className="text-[10px] text-[var(--ink-text-muted)]">爽感留存</div>
-              <div className="font-bold text-sm text-amber-500">{simulation.pleasureScore}</div>
-            </div>
-          </div>
-
-          {/* 毒点警告提示 */}
-          {simulation.toxicAlerts.length > 0 ? (
-            <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 space-y-1">
-              <div className="font-semibold flex items-center gap-1 text-[11px]">
-                <AlertTriangle className="w-3.5 h-3.5" /> 发现敏感毒点
-              </div>
-              {simulation.toxicAlerts.map((alert, idx) => (
-                <div key={idx} className="text-[10px] opacity-90">
-                  {alert}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 p-2 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px]">
-              <ShieldCheck className="w-3.5 h-3.5" /> 暂未检测到明显毒点与退订风险
-            </div>
-          )}
+          <ScoreProvenanceBadge source="rule" detail="词项只定位问题；否定、转述与假设需要复核" />
+          <p className="text-[var(--ink-text-muted)]">
+            找到 {simulation.comments.length}{' '}
+            类词项，每类展示首个命中的语境。未命中不能判断读者体验。
+          </p>
 
           {/* 拟真段评预演 */}
           <ScoreProvenanceBadge
             source="inference"
-            detail="段评是按词表生成的假想读者反应，不是真实留言"
+            detail="原文定位与复核问题，不生成情绪或点赞数"
           />
           <div className="space-y-2">
             <div className="text-[11px] font-semibold text-[var(--ink-text-muted)] flex items-center justify-between">
               <span className="flex items-center gap-1">
                 <MessageSquare className="w-3 h-3 text-rose-500" />
-                段评/本章说弹幕预演 ({simulation.comments.length})
+                原文复核问题 ({simulation.comments.length})
               </span>
             </div>
 
@@ -117,10 +81,10 @@ export const ReaderSimulatorDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
                       }`}
                     >
                       {c.sentiment === 'toxic_alert'
-                        ? '毒点弃书'
+                        ? '待复核'
                         : c.sentiment === 'criticism'
                           ? '逻辑质疑'
-                          : '爽快催更'}
+                          : '待复核'}
                     </span>
                   </div>
                   <p className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">
@@ -128,7 +92,7 @@ export const ReaderSimulatorDrawer: FC<DesktopPluginDrawerProps> = ({ currentTex
                   </p>
                   <div className="pt-1 flex items-center justify-between border-t border-[var(--ink-border)]/50">
                     <span className="text-[9px] text-[var(--ink-text-muted)]">
-                      点赞: {c.upvotes}
+                      原文 [{c.sourceStart}, {c.sourceEnd})
                     </span>
                     <Tooltip content="复制本章说">
                       <button

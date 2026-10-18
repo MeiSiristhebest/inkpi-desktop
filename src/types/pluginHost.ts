@@ -29,6 +29,8 @@ export interface PluginWorkflowProvenance {
   workspaceId: string
   taskId: string
   timestamp: number
+  documentId?: string
+  documentRevision?: number
   artifactId?: string
   routeId?: string
   runtimeTarget?: string

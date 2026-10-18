@@ -5,7 +5,7 @@ export type { ArchetypeCategory, NarrativeArchetypeRecord }
 export interface ChemistryResult {
   archetypeA: NarrativeArchetypeRecord
   archetypeB: NarrativeArchetypeRecord
-  tensionScore: number // 0.0 ~ 1.0
+  tensionScore?: number // 0.0 ~ 1.0
   coreEthicalConflict: string
   dramaticPrompt: string
 }

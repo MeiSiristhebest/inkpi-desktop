@@ -22,7 +22,7 @@ describe('plugin instruction definitions', () => {
 
     expect(task.metadata).toMatchObject({
       instructionId: 'plugin.reader-hook.analysis',
-      instructionVersion: '1',
+      instructionVersion: '2',
       pluginId: 'reader-hook',
     })
     expect(task.input.payload).toMatchObject({
@@ -57,5 +57,43 @@ describe('plugin instruction definitions', () => {
       version: '1',
       systemInstruction: expect.stringContaining('structured plugin input'),
     })
+  })
+
+  it('keeps commercial and reader analysis separate from measured outcomes', () => {
+    expect(getPluginInstruction('gold-chapters-eval').systemInstruction).toContain(
+      'Do not predict publisher decisions, signing, subscriptions, readership, or sales.',
+    )
+    expect(getPluginInstruction('paywall-sentry').systemInstruction).toContain(
+      'Do not predict retention, paid conversion, subscriptions, or revenue without supplied platform data.',
+    )
+    expect(getPluginInstruction('reader-simulator').systemInstruction).toContain(
+      'not real reader feedback or measured retention, conversion, subscriptions, or sales.',
+    )
+  })
+
+  it('tells Multi-Calendar to treat evenly sampled chapter gaps as unreviewed', () => {
+    const instruction = getPluginInstruction('multi-calendar')
+
+    expect(instruction.systemInstruction).toContain('When chapterSampling is evenly-spaced')
+    expect(instruction.systemInstruction).toContain(
+      'treat gaps between supplied chapters as unreviewed',
+    )
+  })
+
+  it('versions the grounded opening contract and requires quotes, uncertainty, and genre flexibility', () => {
+    const instruction = getPluginInstruction('gold-chapters-eval')
+    expect(instruction.version).toBe('2')
+    for (const requirement of [
+      'Return JSON matching responseContract',
+      'UTF-16',
+      'negation',
+      'missing context',
+      'different genres',
+      'Never generate quality scores',
+    ]) {
+      expect(instruction.systemInstruction).toContain(requirement)
+    }
+    const task = createPluginAnalysisTask({ pluginId: 'gold-chapters-eval', input: {} })
+    expect(task.metadata?.instructionVersion).toBe('2')
   })
 })

@@ -1,7 +1,5 @@
 import type { PressFormatOptions, TypesetResult } from '../types'
 
-import redWords from '../../safe-gate/data/seed-words-red.json'
-
 export class PressForgeEngine {
   /**
    * 预置多平台规范
@@ -12,26 +10,26 @@ export class PressForgeEngine {
   > = {
     'qidian-standard': {
       name: '起点 / 创世标准',
-      description: '段首全角双空格缩进，标准双引号，段间空行，严格清理非法不可见字符。',
+      description: '段首全角双空格缩进，标准双引号，段间空行，保留 Unicode 字符。',
       defaultOptions: {
         presetId: 'qidian-standard',
         indentSpaces: 2,
         paragraphSpacing: 1,
         dialogueStyle: 'standard-quotes',
-        fixPunctuation: true,
-        checkSensitiveWords: true,
+        fixPunctuation: false,
+        checkSensitiveWords: false,
       },
     },
     'jinjiang-clean': {
       name: '晋江文学城高洁版',
-      description: '极度严格的涉政与敏感词扫描，紧凑排版，全角直角双引号支持。',
+      description: '缩进与空行的文本预设，实际投稿规则由作者核对。',
       defaultOptions: {
         presetId: 'jinjiang-clean',
         indentSpaces: 2,
         paragraphSpacing: 1,
         dialogueStyle: 'standard-quotes',
-        fixPunctuation: true,
-        checkSensitiveWords: true,
+        fixPunctuation: false,
+        checkSensitiveWords: false,
       },
     },
     'fanqie-compact': {
@@ -42,8 +40,8 @@ export class PressForgeEngine {
         indentSpaces: 0,
         paragraphSpacing: 1,
         dialogueStyle: 'standard-quotes',
-        fixPunctuation: true,
-        checkSensitiveWords: true,
+        fixPunctuation: false,
+        checkSensitiveWords: false,
       },
     },
     'print-typeset': {
@@ -54,93 +52,70 @@ export class PressForgeEngine {
         indentSpaces: 2,
         paragraphSpacing: 0,
         dialogueStyle: 'standard-quotes',
-        fixPunctuation: true,
+        fixPunctuation: false,
         checkSensitiveWords: false,
       },
     },
   }
 
-  /**
-   * 共享 safe-gate 红色高危词库与基础敏感词库
-   */
-  static readonly SENSITIVE_WORDS: string[] = Array.from(
-    new Set([
-      '中南海',
-      '领导人',
-      '暴动',
-      '分裂',
-      '毒品',
-      '邪教',
-      '违禁药品',
-      ...(Array.isArray(redWords)
-        ? redWords.map((item: any) => (typeof item === 'string' ? item : item.word)).filter(Boolean)
-        : []),
-    ]),
-  )
+  static readonly SENSITIVE_WORDS: string[] = []
 
-  /**
-   * 核心 AST / 正则排版压制器
-   */
   static formatText(rawContent: string, options: PressFormatOptions): TypesetResult {
-    let text = rawContent || ''
+    if (
+      !Number.isInteger(options.indentSpaces) ||
+      options.indentSpaces < 0 ||
+      options.indentSpaces > 4 ||
+      !Number.isInteger(options.paragraphSpacing) ||
+      options.paragraphSpacing < 0 ||
+      options.paragraphSpacing > 3
+    )
+      throw new Error('缩进必须为 0–4 的整数，段间空行必须为 0–3 的整数。')
+    if (!['standard-quotes', 'bracket', 'dash'].includes(options.dialogueStyle))
+      throw new Error('未知引号格式。')
+    let text = rawContent.replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '')
     let fixedPunctuationCount = 0
-    const warnings: string[] = []
-
-    // 1. 规范化换行并清理行尾空格与不可见 BOM/零宽字符
-    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-    text = text.replace(/[\u200B-\u200D\uFEFF]/g, '') // 移除非法零宽字符
-
-    // 2. 标点正规化（若启用）
     if (options.fixPunctuation) {
-      // 修复英文半角逗号句号
-      const initial = text
-      text = text
-        .replace(/,/g, '，')
-        .replace(/\?/g, '？')
-        .replace(/!/g, '！')
-        .replace(/:/g, '：')
-        .replace(/;/g, '；')
-        .replace(/\.{3,}/g, '……') // 修复多个点构成的伪省略号
-        .replace(/-{2,}/g, '——') // 修复两个及以上短横构成的破折号
-      if (text !== initial) {
-        fixedPunctuationCount += 1
+      const protectedParts = text.split(
+        /(https?:\/\/[^\s]+|[\u0060][^\u0060]*[\u0060]|[A-Za-z]:[\\/][^\s]+|\d[\d.,:\-]*\d)/gu,
+      )
+      const replacements: Record<string, string> = {
+        ',': '，',
+        '?': '？',
+        '!': '！',
+        ':': '：',
+        ';': '；',
       }
+      text = protectedParts
+        .map((part, index) =>
+          index % 2
+            ? part
+            : part.replace(/[,?!:;]|\.{3,}|-{2,}/g, (match) => {
+                fixedPunctuationCount++
+                return replacements[match] ?? (match[0] === '.' ? '……' : '——')
+              }),
+        )
+        .join('')
     }
-
-    // 3. 对话引号风格转换
-    if (options.dialogueStyle === 'bracket') {
-      text = text.replace(/“/g, '「').replace(/”/g, '」')
-    }
-
-    // 4. 段落拆分与缩进处理
-    const rawParagraphs = text
+    if (options.dialogueStyle === 'bracket') text = text.replace(/“/g, '「').replace(/”/g, '」')
+    let paragraphs = text
       .split('\n')
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0)
-    const indentStr = '　'.repeat(options.indentSpaces)
-
-    const formattedParagraphs = rawParagraphs.map((p) => `${indentStr}${p}`)
-
-    // 5. 段间空行合并
-    const joinSeparator = '\n'.repeat(options.paragraphSpacing + 1)
-    const formattedText = formattedParagraphs.join(joinSeparator)
-
-    // 6. 敏感词预警检测
-    if (options.checkSensitiveWords) {
-      for (const sw of this.SENSITIVE_WORDS) {
-        if (formattedText.includes(sw)) {
-          warnings.push(`⚠️ 触发平台敏感词警报：「${sw}」，可能导致章节被直接屏蔽或限流。`)
-        }
-      }
-    }
-
-    const lineCount = formattedParagraphs.length
-    const characterCount = formattedText.replace(/\s+/g, '').length
-
+      .map((line) => line.trim())
+      .filter(Boolean)
+    if (options.dialogueStyle === 'dash')
+      paragraphs = paragraphs.map((line) => line.replace(/^[“"「](.*)[”"」]$/u, '——$1'))
+    const formattedText = paragraphs
+      .map((line) => '　'.repeat(options.indentSpaces) + line)
+      .join('\n'.repeat(options.paragraphSpacing + 1))
+    const words = options.checkSensitiveWords
+      ? [...new Set(options.literalWords?.filter((word) => word.trim()) ?? [])]
+      : []
+    const warnings = words
+      .filter((word) => rawContent.includes(word))
+      .map((word) => '关键词命中「' + word + '」，请结合原文核对；不代表平台判定。')
     return {
       formattedText,
-      lineCount,
-      characterCount,
+      lineCount: paragraphs.length,
+      characterCount: Array.from(formattedText.replace(/\s/gu, '')).length,
       warnings,
       fixedPunctuationCount,
     }

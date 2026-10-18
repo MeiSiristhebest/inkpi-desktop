@@ -34,16 +34,18 @@ describe('ConsistencyEngine — 战力阶梯与设定巡检哨兵引擎', () => 
     expect(violations[0].opponentName).toBe('赵元老')
   })
 
-  it('tolerates power tier inversion when valid modifier is present in context', () => {
+  it('does not treat a modifier word as proof that a battle is explained', () => {
     const entities = [
       { name: '楚凌霄', realm: '练气' },
       { name: '赵元老', realm: '元婴' },
     ]
     // 上下文含有“偷袭”和“剧毒”底牌
-    const text = '楚凌霄趁夜色突施剧毒偷袭，终于重创了赵元老！'
+    const text = '楚凌霄使用剧毒偷袭重创了赵元老！'
     const violations = engine.scanTextForInversions(text, entities, system)
 
-    expect(violations.length).toBe(0) // 不报错，因为合理解释了越阶
+    expect(violations).toHaveLength(1)
+    expect(violations[0].status).toBe('candidate')
+    expect(violations[0].explanation).toContain('仍需复核')
   })
 
   it('detects deceased characters appearing as active subjects', () => {

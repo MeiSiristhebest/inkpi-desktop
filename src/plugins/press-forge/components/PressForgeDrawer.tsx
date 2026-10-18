@@ -4,8 +4,12 @@ import { PressForgeEngine } from '../engine/PressForgeEngine'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { Printer, Check, Copy } from 'lucide-react'
 
-export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
+export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <PressDrawerSession key={props.projectId} {...props} />
+)
+const PressDrawerSession: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
   const [inputText, setInputText] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
   const textToFormat = inputText || currentText || ''
@@ -16,9 +20,14 @@ export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
   )
 
   const handleCopy = async () => {
-    await clipboardWriter.writeText(result.formattedText)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await clipboardWriter.writeText(result.formattedText)
+      setCopied(true)
+      setError(null)
+    } catch (cause) {
+      setCopied(false)
+      setError(String(cause))
+    }
   }
 
   return (
@@ -40,7 +49,7 @@ export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
           rows={3}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="粘贴待排版正文，自动全角缩进与清洗不可见字符..."
+          placeholder="粘贴待排版正文，自动全角缩进与保留 Unicode 字符..."
           className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
         />
       </div>
@@ -68,6 +77,7 @@ export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
         </div>
       )}
 
+      {error && <p role="alert">复制失败：{error}</p>}
       <button
         onClick={handleCopy}
         className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
@@ -78,7 +88,7 @@ export const PressForgeDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) 
 
       <div className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">
         默认套用「起点/标准」预设（段首双全角缩进 +
-        标点规范化）。如需定制换行空行或各平台规范，请在顶栏开启「排版压制工坊」主视图。
+        保留标点）。如需定制换行空行或各平台规范，请在顶栏开启「排版压制工坊」主视图。
       </div>
     </div>
   )

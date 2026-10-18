@@ -5,7 +5,79 @@ import { useEffect, useRef, type RefObject } from 'react'
  * 否则「初始焦点落在第 1 项」和「Tab 循环的边界」会各自漂移。
  */
 export const OVERLAY_FOCUSABLE_SELECTOR =
-  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  'a[href]:not([tabindex="-1"]), area[href]:not([tabindex="-1"]), button:not(:disabled):not([tabindex="-1"]), input:not(:disabled):not([type="hidden"]):not([tabindex="-1"]), select:not(:disabled):not([tabindex="-1"]), textarea:not(:disabled):not([tabindex="-1"]), summary:not([tabindex="-1"]), [contenteditable="true"]:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
+
+interface DismissLayer {
+  id: symbol
+}
+
+const dismissLayers: DismissLayer[] = []
+const focusLayers: DismissLayer[] = []
+
+function registerDismissLayer(layer: DismissLayer): () => void {
+  dismissLayers.push(layer)
+  return () => {
+    const index = dismissLayers.lastIndexOf(layer)
+    if (index >= 0) dismissLayers.splice(index, 1)
+  }
+}
+
+function isTopDismissLayer(layer: DismissLayer): boolean {
+  return dismissLayers.at(-1) === layer
+}
+
+function registerFocusLayer(layer: DismissLayer): () => void {
+  focusLayers.push(layer)
+  return () => {
+    const index = focusLayers.lastIndexOf(layer)
+    if (index >= 0) focusLayers.splice(index, 1)
+  }
+}
+
+function isTopFocusLayer(layer: DismissLayer): boolean {
+  return focusLayers.at(-1) === layer
+}
+
+function isComposing(event: KeyboardEvent): boolean {
+  return event.isComposing || event.keyCode === 229
+}
+
+interface OverlayDismissOptions {
+  active: boolean
+  onClose: () => void
+}
+
+/** Register a non-modal menu as the top Escape target without trapping Tab. */
+export function useOverlayDismiss({ active, onClose }: OverlayDismissOptions): void {
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    if (!active) return
+    const layer = { id: Symbol('overlay-dismiss-layer') }
+    const unregister = registerDismissLayer(layer)
+    const handleEsc = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        isComposing(event) ||
+        !isTopDismissLayer(layer)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      onCloseRef.current()
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => {
+      window.removeEventListener('keydown', handleEsc)
+      unregister()
+    }
+  }, [active])
+}
 
 interface OverlayFocusOptions {
   /** 打开中的面板容器；容器不存在时不建立契约。 */
@@ -40,7 +112,13 @@ export function useOverlayFocus({ containerRef, active, onClose }: OverlayFocusO
 
     const returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const focusables = () =>
-      Array.from(el.querySelectorAll<HTMLElement>(OVERLAY_FOCUSABLE_SELECTOR))
+      Array.from(el.querySelectorAll<HTMLElement>(OVERLAY_FOCUSABLE_SELECTOR)).filter(
+        (item) =>
+          !item.hidden &&
+          item.getAttribute('aria-hidden') !== 'true' &&
+          item.getAttribute('aria-disabled') !== 'true' &&
+          !item.closest('[hidden], [inert], [aria-hidden="true"]'),
+      )
 
     const first = focusables()[0]
     if (first) {
@@ -50,11 +128,70 @@ export function useOverlayFocus({ containerRef, active, onClose }: OverlayFocusO
       el.focus()
     }
 
-    const trapFocus = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab') return
+    const layer = { id: Symbol('overlay-focus-layer') }
+    const unregister = registerDismissLayer(layer)
+    const unregisterFocus = registerFocusLayer(layer)
+
+    const moveOutOfControlledPortal = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Tab' ||
+        event.defaultPrevented ||
+        isComposing(event) ||
+        !isTopFocusLayer(layer) ||
+        !(event.target instanceof HTMLElement)
+      ) {
+        return
+      }
       const inside = focusables()
-      if (inside.length === 0) return
-      const currentIndex = inside.indexOf(document.activeElement as HTMLElement)
+      const currentIndex = inside.findIndex((item) =>
+        item
+          .getAttribute('aria-controls')
+          ?.split(/\s+/)
+          .some((id) => document.getElementById(id)?.contains(event.target as HTMLElement)),
+      )
+      if (currentIndex < 0 || inside.length === 0) return
+
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? inside.length - 1
+          : currentIndex - 1
+        : currentIndex === inside.length - 1
+          ? 0
+          : currentIndex + 1
+      event.preventDefault()
+      event.stopPropagation()
+      inside[nextIndex]?.focus()
+    }
+
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || isComposing(event) || !isTopFocusLayer(layer)) {
+        return
+      }
+      const inside = focusables()
+      const controlledPortalOwner = (target: HTMLElement | null) =>
+        target
+          ? inside.findIndex((item) =>
+              item
+                .getAttribute('aria-controls')
+                ?.split(/\s+/)
+                .some((id) => document.getElementById(id)?.contains(target)),
+            )
+          : -1
+      const activeElement = document.activeElement as HTMLElement
+      const portalOwnerIndex =
+        controlledPortalOwner(activeElement) >= 0
+          ? controlledPortalOwner(activeElement)
+          : controlledPortalOwner(event.target instanceof HTMLElement ? event.target : null)
+      if (event.defaultPrevented && portalOwnerIndex < 0) return
+      if (inside.length === 0) {
+        event.preventDefault()
+        el.focus()
+        return
+      }
+      let currentIndex = inside.indexOf(activeElement)
+      // Composite controls can render their active option in a portal. Treat focus
+      // inside an aria-controls target as focus on the owning control in this layer.
+      if (currentIndex < 0) currentIndex = portalOwnerIndex
       const nextIndex = event.shiftKey
         ? currentIndex <= 0
           ? inside.length - 1
@@ -67,16 +204,28 @@ export function useOverlayFocus({ containerRef, active, onClose }: OverlayFocusO
     }
 
     const handleEsc = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        isComposing(event) ||
+        !isTopDismissLayer(layer)
+      ) {
+        return
+      }
       event.preventDefault()
+      event.stopPropagation()
       onCloseRef.current()
     }
 
+    window.addEventListener('keydown', moveOutOfControlledPortal, true)
     window.addEventListener('keydown', trapFocus)
     window.addEventListener('keydown', handleEsc)
     return () => {
+      window.removeEventListener('keydown', moveOutOfControlledPortal, true)
       window.removeEventListener('keydown', trapFocus)
       window.removeEventListener('keydown', handleEsc)
+      unregister()
+      unregisterFocus()
       returnTo?.focus()
     }
     // 契约只在打开/关闭时建立与销毁；onClose 走 ref，见上方注释

@@ -1,116 +1,115 @@
 import type {
   MultiverseBranchRecord,
-  MultiverseNode,
   MultiverseSimulationResult,
   ButterflyEffectLog,
 } from '../types'
+import type { MultiverseNode } from '../../../ports/multiverseRepository'
+export interface CanonChapter {
+  index: number
+  title: string
+  summary: string
+  entities: string[]
+  chapterId?: string
+  chapterRevision?: number
+  stateFacts?: string[]
+}
+export interface BranchEvent {
+  chapterIndex: number
+  eventSummary: string
+  assumptions?: string[]
+  consequences?: string[]
+  affectedCharacters?: string[]
+  stateFacts?: string[]
+  premiseLink?: string
+}
 
-/**
- * MultiverseEngine (平行宇宙因果沙盒推演器引擎)
- *
- * 理论基础：时空分支树与因果状态转移 Jaccard 偏离度计算
- * - 偏离度 D(t) = 1 - (|S_canon ∩ S_whatif| / |S_canon ∪ S_whatif|)
- * - 蝴蝶效应级联扩散传播 (Butterfly Effect Cascade)
- */
 export class MultiverseEngine {
-  /**
-   * 推演分支时间线
-   * @param canonChapters 原著主宇宙章节事件列表
-   * @param forkChapterIndex 分支奇点章节 (如 15)
-   * @param divergencePremise 假设前提 (如 "主角在第15章没有救下女配")
-   */
-  public static simulateFork(
-    canonChapters: Array<{ index: number; title: string; summary: string; entities: string[] }>,
+  static simulateFork(
+    canonChapters: CanonChapter[],
     forkChapterIndex: number,
     divergencePremise: string,
+    branchEvents: BranchEvent[] = [],
   ): MultiverseSimulationResult {
+    if (!Number.isInteger(forkChapterIndex) || forkChapterIndex < 1 || !divergencePremise.trim())
+      throw new Error('请选择实际分歧章节并填写假设。')
+    if (
+      canonChapters.some((c) => !Number.isInteger(c.index) || c.index < 1) ||
+      new Set(canonChapters.map((c) => c.index)).size !== canonChapters.length
+    )
+      throw new Error('主线章序必须为唯一的正整数。')
+    if (!canonChapters.some((c) => c.index === forkChapterIndex))
+      throw new Error('分歧点不在提供的主线中。')
+    if (
+      new Set(branchEvents.map((e) => e.chapterIndex)).size !== branchEvents.length ||
+      branchEvents.some(
+        (e) =>
+          e.chapterIndex < forkChapterIndex ||
+          !canonChapters.some((c) => c.index === e.chapterIndex),
+      )
+    )
+      throw new Error('分支事件章序重复、位于分歧点之前或不在主线范围中。')
+    const chapters = [...canonChapters].sort((a, b) => a.index - b.index)
     const nodes: MultiverseNode[] = []
     const butterflyEffects: ButterflyEffectLog[] = []
-    const divergenceCurve: Array<{ chapter: number; divergencePercent: number }> = []
-
-    // 1. 分支奇点之前的章节：偏离度 0% (完全继承 Canon 历史)
-    canonChapters.forEach((ch) => {
-      if (ch.index < forkChapterIndex) {
-        nodes.push({
-          chapterIndex: ch.index,
-          chapterTitle: ch.title,
-          eventSummary: ch.summary,
-          divergenceLevel: 0,
-          butterflyEffects: [],
-        })
-        divergenceCurve.push({ chapter: ch.index, divergencePercent: 0 })
-      } else if (ch.index === forkChapterIndex) {
-        // 2. 分歧奇点：注入前提变更
-        const effects = [`【奇点爆发】${divergencePremise}`]
-        nodes.push({
-          chapterIndex: ch.index,
-          chapterTitle: `${ch.title} (分支分歧点)`,
-          eventSummary: `[What-If 分支] 因果发生质变：${divergencePremise}。`,
-          divergenceLevel: 0.35,
-          butterflyEffects: effects,
-        })
-        divergenceCurve.push({ chapter: ch.index, divergencePercent: 35 })
-        butterflyEffects.push({
-          chapterIndex: ch.index,
-          rippleFactor: 0.35,
-          description: divergencePremise,
-          affectedCharacters: ch.entities.slice(0, 2),
-        })
-      } else {
-        // 3. 分歧之后的章节：非线性因果涟漪扩散
-        const delta = ch.index - forkChapterIndex
-        // 偏离度增长模型：D(t) = min(1.0, 0.35 + 0.15 * ln(1 + delta))
-        const divergence = Math.min(
-          1.0,
-          Math.round((0.35 + 0.18 * Math.log(1 + delta)) * 100) / 100,
-        )
-
-        let branchSummary = `因第 ${forkChapterIndex} 章分歧演化：`
-        const chapterEffects: string[] = []
-
-        if (divergence >= 0.7) {
-          branchSummary += `原著盟友反目成仇，宗门覆灭轨迹彻底改写，主角被迫踏上全新独行杀戮线。`
-          chapterEffects.push('【世界线重组】原著关键盟友阵亡或黑化')
-        } else if (divergence >= 0.5) {
-          branchSummary += `主线情报断裂，敌对势力提前十年发动围剿，原定大比决战取消。`
-          chapterEffects.push('【蝴蝶效应】危机提前爆发，因果链断裂')
-        } else {
-          branchSummary += `剧情微偏：配角势力未加入战场，主角孤身破阵，受暗伤隐患。`
-          chapterEffects.push('【局部异化】战局代价加剧')
-        }
-
-        nodes.push({
-          chapterIndex: ch.index,
-          chapterTitle: `${ch.title} (平行分支)`,
-          eventSummary: branchSummary,
-          divergenceLevel: divergence,
-          butterflyEffects: chapterEffects,
-        })
-        divergenceCurve.push({ chapter: ch.index, divergencePercent: Math.round(divergence * 100) })
-
-        butterflyEffects.push({
-          chapterIndex: ch.index,
-          rippleFactor: divergence,
-          description: chapterEffects[0] || '剧情渐进偏离',
-          affectedCharacters: ch.entities,
-        })
+    for (const chapter of chapters) {
+      const inherited = chapter.index < forkChapterIndex
+      const event = branchEvents.find((e) => e.chapterIndex === chapter.index)
+      let difference: number | null = inherited ? 0 : null
+      if (event?.stateFacts && chapter.stateFacts) {
+        const canonical = new Set(chapter.stateFacts)
+        const proposed = new Set(event.stateFacts)
+        const union = new Set([...canonical, ...proposed]).size
+        const intersection = [...canonical].filter((fact) => proposed.has(fact)).length
+        difference = union ? 1 - intersection / union : null
       }
-    })
-
+      const consequences = event?.consequences?.filter(Boolean) ?? []
+      nodes.push({
+        chapterIndex: chapter.index,
+        chapterTitle: chapter.title,
+        sourceChapterId: chapter.chapterId,
+        sourceRevision: chapter.chapterRevision,
+        canonSummary: chapter.summary,
+        eventSummary: inherited
+          ? chapter.summary
+          : event?.eventSummary.trim() ||
+            (chapter.index === forkChapterIndex
+              ? '假设变更：' + divergencePremise
+              : '分支事件尚未提供。'),
+        divergenceLevel: difference,
+        butterflyEffects: consequences,
+        status: inherited
+          ? 'inherited'
+          : event?.eventSummary.trim() || chapter.index === forkChapterIndex
+            ? 'hypothesis'
+            : 'unplanned',
+        assumptions: event?.assumptions ?? [],
+        premiseLink: event?.premiseLink ?? '',
+        stateDifferenceMethod:
+          difference === null ? undefined : inherited ? 'inherited' : 'author-fact-set-jaccard',
+      })
+      if (consequences.length)
+        butterflyEffects.push({
+          chapterIndex: chapter.index,
+          rippleFactor: null,
+          description: consequences.join('；'),
+          affectedCharacters: event?.affectedCharacters ?? [],
+        })
+    }
     return {
-      branchId: `branch_${forkChapterIndex}`,
-      branchName: `平行分支：${divergencePremise.slice(0, 15)}...`,
+      branchId: 'branch_' + forkChapterIndex,
+      branchName: '分支假设：' + divergencePremise.slice(0, 30),
+      divergencePremise,
       forkChapterIndex,
-      divergenceCurve,
       nodes,
       butterflyEffects,
+      divergenceCurve: nodes.map((n) => ({
+        chapter: n.chapterIndex,
+        divergencePercent: n.divergenceLevel === null ? null : n.divergenceLevel * 100,
+      })),
+      suppliedChapterCount: chapters.length,
     }
   }
-
-  /**
-   * 将分支模拟结果打包为持久化记录
-   */
-  public static createBranchRecord(
+  static createBranchRecord(
     id: string,
     projectId: string,
     sim: MultiverseSimulationResult,
@@ -121,9 +120,10 @@ export class MultiverseEngine {
       projectId,
       name: sim.branchName,
       forkChapterIndex: sim.forkChapterIndex,
-      divergencePremise: sim.butterflyEffects[0]?.description || '未知假设',
-      nodes: sim.nodes,
+      divergencePremise: sim.divergencePremise,
+      nodes: structuredClone(sim.nodes),
       createdAt,
+      schemaVersion: 2,
     }
   }
 }

@@ -11,13 +11,14 @@
 > [!TIP]
 > 💡 **If this architecture, engineering implementation, or toolchain helps your learning or workflow, please drop a ⭐ Star!**
 > 📚 Explore the technical blueprint: [ARCHITECTURE.md](./ARCHITECTURE.md)
+> Current implementation gaps and acceptance plan: [writing product optimization](./docs/plans/writing-product-optimization-2026-10-12.md).
 
 <p align="center">
   <b>AI-Powered Creative Writing Workstation built with Tauri 2 and React · Windows</b>
 </p>
 
 <p align="center">
-  <b>Platform status: Windows production (NSIS installer). macOS / Linux planned — neither buildable nor released today.</b>
+  <b>Platform status: Windows NSIS builds are available; current GUI and real-provider acceptance are incomplete. macOS / Linux are planned and are not currently buildable or released.</b>
 </p>
 
 <p align="center">
@@ -203,7 +204,7 @@ Installer outputs are generated into `src-tauri/target/x86_64-pc-windows-gnu/rel
 
 1. **Zero Client Runtime Prerequisites**: The standalone executable packages everything required; end users need zero developer tooling.
 2. **Offline-First Storage Integrity**: All drafts, entities, and settings persist into IndexedDB with transactional consistency.
-3. **Automated aggregate quality gate ($\ge 80\%$ Lines, $\ge 70\%$ Branches, $\ge 75\%$ Statements/Functions)**: `npm run test:coverage` enforces the thresholds in `vitest.config.ts`. The latest run passed 213 test files (925 passed, 2 skipped) with 87.07% lines, 76.82% branches, 84.52% statements, and 76.47% functions.
+3. **Automated aggregate quality gate ($\ge 80\%$ Lines, $\ge 70\%$ Branches, $\ge 75\%$ Statements/Functions)**: `npm run test:coverage` enforces the thresholds in `vitest.config.ts`. Version-specific results and remaining GUI, provider, and artifact checks are recorded in the [acceptance plan](./docs/plans/writing-product-optimization-2026-10-12.md).
 4. **Clean Process Decoupling**: Tauri Rust container communicates exclusively over typed JSON-RPC 2.0 WebSocket frames.
 5. **Reproducible dependency resolution**: `package-lock.json` and `pnpm-lock.yaml` are committed install sources for the dependency ranges declared in `package.json`.
 

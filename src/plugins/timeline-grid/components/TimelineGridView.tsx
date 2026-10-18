@@ -16,6 +16,10 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { Plus, GitBranch, X, Check, Trash2, Bot, Sparkles } from 'lucide-react'
 import { Tooltip, Select } from '../../../ui/primitives'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 
 export const DEFAULT_THREADS: Omit<NarrativeThread, 'projectId'>[] = [
   { id: 'thread-main', name: '主线 / 逆天修仙', color: '#3b82f6', characterIds: [], order: 0 },
@@ -75,12 +79,16 @@ export const DEMO_NODES: Omit<TimelineNode, 'projectId' | 'createdAt' | 'updated
   },
 ]
 
-export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const TimelineGridView: FC<DesktopPluginViewProps> = (props) => (
+  <ProjectTimelineView key={props.projectId} {...props} />
+)
+const ProjectTimelineView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('timeline-grid')
   const [threads, setThreads] = useState<NarrativeThread[]>([])
   const [nodes, setNodes] = useState<TimelineNode[]>([])
-  const [chaptersList, setChaptersList] = useState<any[]>([])
+  const [chaptersList, setChaptersList] = useState<PositionedChapter[]>([])
+  const aiTask = usePluginAiTask('timeline-grid', [projectId, threads, nodes, chaptersList])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [showConflicts, setShowConflicts] = useState(true)
   const [editingNode, setEditingNode] = useState<Partial<TimelineNode> | null>(null)
@@ -89,10 +97,11 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [allThreads, allNodes, allChapters] = await Promise.all([
+      const [allThreads, allNodes, allChapters, volumes] = await Promise.all([
         indexedDbTimelineRepository.getAllThreads(),
         indexedDbTimelineRepository.getAllNodes(),
         indexedDbProjectRepository.getChaptersByProject(projectId),
+        indexedDbProjectRepository.getVolumesByProject(projectId),
       ])
 
       const projThreads = allThreads
@@ -103,12 +112,12 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
       setThreads(projThreads)
       setNodes(projNodes)
-      setChaptersList(allChapters)
+      setChaptersList(projectChapterSequence(projectId, allChapters, volumes))
 
       const highestCh = Math.max(6, allChapters.length, ...projNodes.map((n) => n.chapterOrder + 2))
       setMaxChapter(highestCh)
     } catch (e) {
-      console.error('Failed to load timeline grid data:', e)
+      setError('时间线或卷章档案加载失败，请重试。')
     } finally {
       setLoading(false)
     }
@@ -121,15 +130,17 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   // 核心：基于作品真实章节正文，让 AI 逆向提炼多线大纲
   const handleAiExtractTimeline = async () => {
     if (chaptersList.length === 0) return
-    const chaptersSummary = chaptersList
-      .slice(0, 15)
-      .map(
-        (c) =>
-          `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 300)}...`,
-      )
-      .join('\n\n')
-
-    const analysisInput = { chapterSamples: chaptersSummary }
+    const analysisInput = {
+      authorThreads: threads,
+      authorNodes: nodes,
+      chapterSources: chaptersList.map((chapter) => ({
+        id: chapter.id,
+        chapterNumber: chapter.chapterNumber,
+        revision: chapter.revision,
+        title: chapter.title,
+        text: semanticTextFromContent(chapter.id, chapter.content, chapter.revision),
+      })),
+    }
 
     await aiTask.run(analysisInput)
   }
@@ -154,8 +165,22 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     await loadData()
   }
 
+  const handleCreateThread = async () => {
+    const thread: NarrativeThread = {
+      id: idGenerator.generate('thread'),
+      projectId,
+      name: '主线',
+      color: DEFAULT_THREADS[0].color,
+      characterIds: [],
+      order: 0,
+    }
+    await timelineApplicationService.saveThread(thread, 'author-confirmed')
+    setThreads((current) => [...current, thread])
+    return thread.id
+  }
+
   const handleSaveNode = async (node: TimelineNode) => {
-    await timelineApplicationService.saveNode(node, 'author-confirmed')
+    await timelineApplicationService.saveNode({ ...node, projectId }, 'author-confirmed')
     setEditingNode(null)
     await loadData()
   }
@@ -168,8 +193,8 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
   // 冲突检测
   const conflicts: NarrativeConflict[] = useMemo(() => {
-    return causalEngine.auditAllConflicts(nodes)
-  }, [nodes])
+    return causalEngine.auditAllConflicts(nodes, new Set(threads.map((thread) => thread.id)))
+  }, [nodes, threads])
 
   const conflictNodeIds = useMemo(() => {
     const set = new Set<string>()
@@ -179,20 +204,24 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
   // 章节列列表 (1 .. maxChapter)
   const chapters = useMemo(() => Array.from({ length: maxChapter }, (_, i) => i + 1), [maxChapter])
+  const unplacedNodes = nodes.filter(
+    (node) => node.chapterOrder < 1 || !threads.some((thread) => thread.id === node.threadId),
+  )
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
+      {error && <p role="alert">{error}</p>}
       {/* 顶栏 */}
       <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold tracking-tight">时空因果大纲网格</h2>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--ink-accent)]/15 text-[var(--ink-accent)] font-medium">
-              DAG 环路检测与防因果倒置
+              依赖循环与章节位置检查
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            X 轴（时间/章节）× Y 轴（多线动线）双维坐标系，前置依赖实时校验
+            按章节查看各叙事线，检查依赖循环并提示需要核对的章节位置。
           </p>
         </div>
 
@@ -241,6 +270,27 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
         </div>
       </div>
 
+      {!loading && unplacedNodes.length > 0 && (
+        <div className="shrink-0 border-b border-[var(--ink-border)] p-3 space-y-2">
+          <p className="text-xs text-[var(--ink-text-muted)]">
+            待定位事件：指定章节和叙事线后显示在网格中。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {unplacedNodes.map((node) => (
+              <button
+                key={node.id}
+                type="button"
+                aria-label={`定位事件：${node.eventTitle}`}
+                onClick={() => setEditingNode(node)}
+                className="rounded border border-[var(--ink-border)] px-3 py-1.5 text-xs hover:bg-[var(--ink-bg-hover)]"
+              >
+                {node.eventTitle}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 主体区 */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {loading ? (
@@ -256,7 +306,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                 尚无时空大纲网格
               </h3>
               <p className="text-xs text-[var(--ink-text-muted)] mb-5 leading-relaxed">
-                为主线、支线和暗线建立因果关系，并检查循环依赖和时间顺序冲突。
+                为主线、支线和暗线建立依赖关系，并检查循环依赖和章节位置。
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
                 {hostContext?.aiAssistant?.isAvailable && (
@@ -371,6 +421,7 @@ export const TimelineGridView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           threads={threads}
           allNodes={nodes}
           onSave={handleSaveNode}
+          onCreateThread={handleCreateThread}
           onDelete={handleDeleteNode}
           onCancel={() => setEditingNode(null)}
         />
@@ -383,7 +434,8 @@ interface NodeEditorModalProps {
   node: Partial<TimelineNode>
   threads: NarrativeThread[]
   allNodes: TimelineNode[]
-  onSave: (node: TimelineNode) => void
+  onSave: (node: TimelineNode) => Promise<void>
+  onCreateThread: () => Promise<string>
   onDelete: (id: string) => void
   onCancel: () => void
 }
@@ -393,12 +445,18 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
   threads,
   allNodes,
   onSave,
+  onCreateThread,
   onDelete,
   onCancel,
 }) => {
   const [eventTitle, setEventTitle] = useState(node.eventTitle || '')
   const titleId = useId()
-  const [threadId, setThreadId] = useState(node.threadId || threads[0]?.id || '')
+  const [threadId, setThreadId] = useState(
+    threads.some((thread) => thread.id === node.threadId) ? node.threadId! : threads[0]?.id || '',
+  )
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const chapterInputId = useId()
   const [chapterOrder, setChapterOrder] = useState(node.chapterOrder ?? 1)
   const [summary, setSummary] = useState(node.summary || '')
   const [causalOutcome, setCausalOutcome] = useState(node.causalOutcome || '')
@@ -407,9 +465,22 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
 
   const availablePreNodes = allNodes.filter((n) => n.id !== node.id)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCreateThread = async () => {
+    if (saving) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      setThreadId(await onCreateThread())
+    } catch {
+      setSaveError('主线未能建立，请重试。')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!eventTitle.trim()) return
+    if (!eventTitle.trim() || !threadId || saving) return
 
     const now = clock.now()
     const saved: TimelineNode = {
@@ -428,7 +499,15 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
       updatedAt: now,
     }
 
-    onSave(saved)
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave(saved)
+    } catch {
+      setSaveError('事件未能保存，请重试。')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -469,23 +548,45 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-[var(--ink-text-muted)] mb-1">所属叙事线</label>
-            <Select value={threadId} onValueChange={(v) => setThreadId(v)} className="w-full">
+            <Select
+              aria-label="所属叙事线"
+              value={threadId}
+              onValueChange={(v) => setThreadId(v)}
+              className="w-full"
+            >
+              {threads.length === 0 && <option value="">尚未建立叙事线</option>}
               {threads.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
             </Select>
+            {threads.length === 0 && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleCreateThread}
+                className="mt-2 text-[var(--ink-accent)] hover:underline disabled:opacity-50"
+              >
+                建立主线
+              </button>
+            )}
           </div>
           <div>
-            <label className="block text-[var(--ink-text-muted)] mb-1">发生章节 (X轴)</label>
+            <label htmlFor={chapterInputId} className="block text-[var(--ink-text-muted)] mb-1">
+              所在章节
+            </label>
             <input
+              id={chapterInputId}
               type="number"
-              min="1"
+              min="0"
               value={chapterOrder}
               onChange={(e) => setChapterOrder(Number(e.target.value))}
               className="w-full px-3 py-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
             />
+            <p className="mt-1 text-[10px] text-[var(--ink-text-faint)]">
+              0 表示未指定；章号不能确定故事发生时间。
+            </p>
           </div>
         </div>
 
@@ -556,7 +657,8 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
                       }}
                     />
                     <span className="truncate">
-                      第 {pn.chapterOrder} 章：{pn.eventTitle}
+                      {pn.chapterOrder >= 1 ? `第 ${pn.chapterOrder} 章` : '未指定章节'}：
+                      {pn.eventTitle}
                     </span>
                   </label>
                 )
@@ -565,11 +667,17 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
           </div>
         </div>
 
+        {saveError && (
+          <p role="alert" className="text-rose-500">
+            {saveError}
+          </p>
+        )}
         <div className="flex items-center justify-between pt-3 border-t border-[var(--ink-border)]">
           {node.id ? (
             <button
               type="button"
               onClick={() => onDelete(node.id!)}
+              disabled={saving}
               className="px-3 py-1.5 rounded text-rose-400 hover:bg-rose-500/10 flex items-center gap-1"
             >
               <Trash2 className="w-3.5 h-3.5" /> 删除
@@ -582,12 +690,14 @@ const NodeEditorModal: FC<NodeEditorModalProps> = ({
             <button
               type="button"
               onClick={onCancel}
+              disabled={saving}
               className="px-3 py-1.5 rounded text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)]"
             >
               取消
             </button>
             <button
               type="submit"
+              disabled={saving || !threadId}
               className="px-4 py-1.5 rounded bg-[var(--ink-accent)] text-white hover:opacity-90 flex items-center gap-1"
             >
               <Check className="w-3.5 h-3.5" /> 保存事件

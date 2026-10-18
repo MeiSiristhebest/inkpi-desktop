@@ -41,6 +41,35 @@ describe('AI artifact runtime', () => {
     expect(await new IndexedDbArtifactStore().list(task.id)).toHaveLength(1)
   })
 
+  it('uses the scoped document revision as the artifact source revision', async () => {
+    const task: AiTask = {
+      id: 'task-scoped-revision',
+      kind: 'plugin.reader-hook.analysis',
+      scope: {
+        workspaceId: 'workspace-scoped-revision',
+        workspaceRevision: 3,
+        document: { id: 'chapter-scoped-revision', revision: 7 },
+      },
+      input: { documentId: 'chapter-scoped-revision' },
+      outputContract: { format: 'text', persistence: 'artifact' },
+    }
+    const result: TaskResult = {
+      taskId: task.id,
+      kind: task.kind,
+      status: 'completed',
+      output: { format: 'text', text: '结果基于第七版正文' },
+    }
+    const runtime = new ArtifactRuntime(new IndexedDbArtifactStore(), () => 15)
+
+    const artifact = await runtime.persistTaskResult(task, result, 'artifact-scoped-revision')
+
+    expect(artifact).toMatchObject({
+      documentId: 'chapter-scoped-revision',
+      provenance: { sourceRevision: 7 },
+      lineage: { sourceRevision: 7 },
+    })
+  })
+
   it('preserves lineage and persists waiting-user results only for artifact policy', async () => {
     const task: AiTask = {
       id: 'task-lineage',

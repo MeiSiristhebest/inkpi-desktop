@@ -16,13 +16,7 @@ import {
   computeOlsQuadraticOracle,
   computePosetOracle,
   computeTfIdfCosine,
-  PINYIN_TONE_DICTIONARY,
 } from '../harness/mathOracles'
-
-const roundTo = (value: number, digits: number): number => {
-  const factor = 10 ** digits
-  return Math.round(value * factor) / factor
-}
 
 function makeCodexEntity(
   id: string,
@@ -44,11 +38,7 @@ function makeCodexEntity(
   }
 }
 
-function makeFragment(
-  id: string,
-  snippet: string,
-  isReused = false,
-): ScrapbookFragmentRecord {
+function makeFragment(id: string, snippet: string, isReused = false): ScrapbookFragmentRecord {
   return {
     id,
     projectId: 'project-math-engines',
@@ -194,15 +184,25 @@ describe('Tier 1: F11-F15 - Real Mathematical and Analysis Engines', () => {
       const noCapacity = store.resolveContextSlice('源头', 20)
 
       expect(expanded.matchedEntities.map((entity) => entity.id)).toEqual(['source', 'related'])
-      expect(expanded.xmlContext).toContain('关联->关联设定')
+      expect(expanded.xmlContext).toContain('关联-&gt;关联设定')
       expect(expanded.totalEstimatedTokens).toBeGreaterThan(20)
-      expect(noMatch).toEqual({ matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 })
-      expect(noCapacity).toEqual({ matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 })
+      expect(noMatch).toEqual({
+        matchedEntities: [],
+        xmlContext: '',
+        totalEstimatedTokens: 0,
+        budgetKind: 'estimated',
+      })
+      expect(noCapacity).toEqual({
+        matchedEntities: [],
+        xmlContext: '',
+        totalEstimatedTokens: 0,
+        budgetKind: 'estimated',
+      })
     })
   })
 
   describe('F13 - ScrapbookEngine deletion threshold and similarity', () => {
-    it('TC-MATH-13-01: extracts exactly-threshold deletions and rejects shorter edits', () => {
+    it('TC-MATH-13-01: preserves deleted spans without an arbitrary minimum length', () => {
       const exactDeletion = '123456789012345'
       const extracted = ScrapbookEngine.extractDeletedFragments(
         `keep<${exactDeletion}>tail`,
@@ -224,7 +224,13 @@ describe('Tier 1: F11-F15 - Real Mathematical and Analysis Engines', () => {
         isReused: false,
       })
       expect(extracted[0].tags).toEqual(['123456789012345', '12', '23', '34'])
-      expect(belowThreshold).toEqual([])
+      expect(belowThreshold).toHaveLength(1)
+      expect(belowThreshold[0]).toMatchObject({
+        snippet: '12345678901234',
+        wordCount: 14,
+        sourceOffset: 5,
+        isReused: false,
+      })
     })
 
     it('TC-MATH-13-02: matches the corpus TF-IDF oracle where the corpus IDF is uniform', () => {
@@ -249,7 +255,7 @@ describe('Tier 1: F11-F15 - Real Mathematical and Analysis Engines', () => {
       expect(expectedScore).toBeCloseTo(2 / Math.sqrt(6), 10)
       expect(recommendations).toHaveLength(1)
       expect(recommendations[0].fragment.id).toBe('scrap-target')
-      expect(recommendations[0].similarityScore).toBe(roundTo(expectedScore, 2))
+      expect(recommendations[0].similarityScore).toBeCloseTo(expectedScore, 12)
       expect(recommendations[0].matchedKeywords).toEqual(['夜雨', '古刹'])
     })
 
@@ -264,41 +270,43 @@ describe('Tier 1: F11-F15 - Real Mathematical and Analysis Engines', () => {
   })
 
   describe('F14 - PhoneticsEvaluator and NameForge integration', () => {
-    it('TC-MATH-14-01: maps dictionary tones and computes a real compound-name pattern', () => {
-      const dictionarySamples = ['锋', '尊', '岳', '天', '云', '剑', '影', '海']
-      for (const char of dictionarySamples) {
-        expect(PhoneticsEvaluator.getTone(char)).toBe(PINYIN_TONE_DICTIONARY[char])
-      }
+    it('TC-MATH-14-01: groups only caller-supplied tone readings', () => {
+      const name = '甲乙丙'
+      const readings = [3, 2, 1]
+      const analysis = PhoneticsEvaluator.analyzeToneFluctuation(name, readings)
+      const result = PhoneticsEvaluator.evaluatePhonetics(name, readings)
 
-      const name = '楚凌霄'
-      const analysis = PhoneticsEvaluator.analyzeToneFluctuation(name)
-      const harmony = PhoneticsEvaluator.evaluatePhonetics(name)
-
-      expect(PhoneticsEvaluator.getTonePattern(name)).toBe('仄平平')
+      expect(PhoneticsEvaluator.getTonePattern(name, readings)).toBe('仄平平')
       expect(analysis).toMatchObject({
         pattern: '仄平平',
-        isAlternating: true,
-        hasAdjacentIdentical: false,
-        cadence: 'ping',
-      })
-      expect(analysis.pingRatio).toBeCloseTo(2 / 3, 10)
-      expect(harmony).toMatchObject({ score: 95, pattern: '仄平平' })
-      expect(harmony.toneVibe).toContain('平声收韵')
-    })
-
-    it('TC-MATH-14-02: handles empty phonetics input and carries the real score into generated names', () => {
-      expect(PhoneticsEvaluator.analyzeToneFluctuation('')).toEqual({
-        pattern: '',
         isAlternating: false,
         hasAdjacentIdentical: false,
-        cadence: 'empty',
-        pingRatio: 0,
+        cadence: 'ping',
+        pingRatio: 2 / 3,
+        knownToneCount: 3,
+        totalCharacters: 3,
       })
-      expect(PhoneticsEvaluator.evaluatePhonetics('')).toEqual({
-        score: 70,
+      expect(result).toMatchObject({ pattern: '仄平平', readingsSource: 'author_provided' })
+      expect(result).not.toHaveProperty('score')
+    })
+
+    it('TC-MATH-14-02: leaves phonetics unknown when readings are absent', () => {
+      expect(PhoneticsEvaluator.analyzeToneFluctuation('')).toEqual({
         pattern: '',
-        toneVibe: '音韵平正',
+        isAlternating: null,
+        hasAdjacentIdentical: false,
+        cadence: 'empty',
+        pingRatio: null,
+        knownToneCount: 0,
+        totalCharacters: 0,
       })
+      expect(PhoneticsEvaluator.evaluatePhonetics('')).toMatchObject({
+        pattern: '',
+        readingsSource: 'unknown',
+        knownToneCount: 0,
+        totalCharacters: 0,
+      })
+      expect(PhoneticsEvaluator.evaluatePhonetics('')).not.toHaveProperty('score')
 
       const deterministicRandom: RandomSource = { next: () => 0.1 }
       const generated = new NameForgeEngine(deterministicRandom).generateNames({
@@ -309,12 +317,9 @@ describe('Tier 1: F11-F15 - Real Mathematical and Analysis Engines', () => {
         fixedKern: '凌',
       })
       const item = generated[0]
-      const recomputed = PhoneticsEvaluator.evaluatePhonetics(item.name)
-
       expect(generated).toHaveLength(1)
       expect(item.name.startsWith('楚')).toBe(true)
-      expect(item.phoneticsScore).toBe(recomputed.score)
-      expect(item.meaningOrVibe).toContain(`【${recomputed.pattern}】`)
+      expect(item).not.toHaveProperty('phoneticsScore')
     })
   })
 
@@ -340,32 +345,35 @@ describe('Tier 1: F11-F15 - Real Mathematical and Analysis Engines', () => {
       expect(actual.apexRatio).toBeCloseTo(oracle.apexRatio, 8)
     })
 
-    it('TC-MATH-15-02: returns the defined fallback for underdetermined and flat curves', () => {
+    it('TC-MATH-15-02: abstains when a quadratic fit is underdetermined or has no variance', () => {
       const engine = new VolumeMasterEngine()
-      const underdetermined = [{ x: 0, y: 1 }, { x: 1, y: 2 }]
-      const underdeterminedOracle = computeOlsQuadraticOracle(underdetermined)
+      const underdetermined = [
+        { x: 0, y: 1 },
+        { x: 1, y: 2 },
+      ]
       const underdeterminedActual = engine.computeOlsQuadratic(underdetermined)
       const flatPoints = [
         { x: 0, y: 5 },
         { x: 0.5, y: 5 },
         { x: 1, y: 5 },
       ]
-      const flatOracle = computeOlsQuadraticOracle(flatPoints)
       const flatActual = engine.computeOlsQuadratic(flatPoints)
 
-      expect(underdeterminedActual).toEqual(underdeterminedOracle)
-      expect(flatActual.beta0).toBeCloseTo(flatOracle.beta0, 8)
-      expect(flatActual.beta1).toBeCloseTo(flatOracle.beta1, 8)
-      expect(flatActual.beta2).toBeCloseTo(flatOracle.beta2, 8)
-      expect(flatActual.r2).toBe(1)
-      expect(flatActual.apexRatio).toBe(-1)
+      expect(underdeterminedActual).toBeNull()
+      expect(flatActual?.beta0).toBeCloseTo(5, 8)
+      expect(flatActual?.beta1).toBeCloseTo(0, 8)
+      expect(flatActual?.beta2).toBeCloseTo(0, 8)
+      expect(flatActual?.r2).toBeNull()
+      expect(flatActual?.apexRatio).toBeNull()
+      expect(flatActual?.sampleCount).toBe(3)
       expect(engine.fitNarrativeArcR2([5, 5, 5])).toEqual({
-        r2: 1,
-        apexPositionRatio: 0,
+        r2: null,
+        apexPositionRatio: null,
+        sampleCount: 3,
       })
     })
 
-    it('TC-MATH-15-03: exposes oracle-derived rounded regression metrics through volume statistics', () => {
+    it('TC-MATH-15-03: exposes oracle-derived regression metrics and sample counts', () => {
       const engine = new VolumeMasterEngine()
       const tensions = [0.2, 0.8, 1, 0.8, 0.2]
       const points = tensions.map((y, index) => ({
@@ -376,20 +384,23 @@ describe('Tier 1: F11-F15 - Real Mathematical and Analysis Engines', () => {
       const arc = engine.fitNarrativeArcR2(tensions)
       const stat = engine.calculateVolumeStat(
         { id: 'volume-1', title: '测试卷', order: 1 },
-        tensions.map((tension) => ({ volumeId: 'volume-1', wordCount: 100, tension })),
+        tensions.map((tension, order) => ({
+          volumeId: 'volume-1',
+          wordCount: 100,
+          tension,
+          order,
+        })),
       )
 
-      expect(arc).toEqual({
-        r2: roundTo(oracle.r2, 3),
-        apexPositionRatio: roundTo(Math.max(0, Math.min(1, oracle.apexRatio)), 3),
-      })
-      expect(stat.arcRegression).toEqual({
-        beta0: roundTo(oracle.beta0, 3),
-        beta1: roundTo(oracle.beta1, 3),
-        beta2: roundTo(oracle.beta2, 3),
-        r2: roundTo(oracle.r2, 3),
-        apexRatio: roundTo(Math.max(0, Math.min(1, oracle.apexRatio)), 3),
-      })
+      expect(arc.r2).toBeCloseTo(oracle.r2, 10)
+      expect(arc.apexPositionRatio).toBeCloseTo(oracle.apexRatio, 10)
+      expect(arc.sampleCount).toBe(tensions.length)
+      expect(stat.arcRegression?.beta0).toBeCloseTo(oracle.beta0, 8)
+      expect(stat.arcRegression?.beta1).toBeCloseTo(oracle.beta1, 8)
+      expect(stat.arcRegression?.beta2).toBeCloseTo(oracle.beta2, 8)
+      expect(stat.arcRegression?.r2).toBeCloseTo(oracle.r2, 10)
+      expect(stat.arcRegression?.apexRatio).toBeCloseTo(oracle.apexRatio, 10)
+      expect(stat.arcRegression?.sampleCount).toBe(tensions.length)
       expect(stat.actualWordCount).toBe(500)
       expect(stat.chapterCount).toBe(5)
     })

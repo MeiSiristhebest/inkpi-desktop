@@ -8,7 +8,6 @@ import { indexedDbDiffReviewRepository } from '../../../src/adapters/indexedDbDi
 import { indexedDbCombatSandboxRepository } from '../../../src/adapters/indexedDbCombatSandboxRepository'
 import { indexedDbTimelineRepository } from '../../../src/adapters/indexedDbTimelineRepository'
 import { indexedDbMultiCalendarRepository } from '../../../src/adapters/indexedDbMultiCalendarRepository'
-import { indexedDbEmotionAuditRepository } from '../../../src/adapters/indexedDbEmotionAuditRepository'
 import { waterMeterEngine } from '../../../src/plugins/water-meter/engine/WaterMeterEngine'
 import { DiffReviewerEngine } from '../../../src/plugins/diff-reviewer/engine/DiffReviewerEngine'
 import { CombatSandboxEngine } from '../../../src/plugins/combat-sandbox/engine/CombatSandboxEngine'
@@ -27,7 +26,6 @@ import type {
   ChapterChronologyEvent,
   MultiCalendarProjectRecord,
 } from '../../../src/ports/multiCalendarRepository'
-import type { EmotionAuditRecord } from '../../../src/ports/emotionAuditRepository'
 
 type TestRecord = {
   id?: unknown
@@ -244,11 +242,7 @@ describe('Tier 3: Cross-Feature Workflows', () => {
 
     const merged = DiffReviewerEngine.applyHunks(
       oldText,
-      diff.hunks.map((hunk) => ({
-        lines: hunk.lines,
-        oldStartLine: hunk.oldStartLine,
-        resolution: 'applied' as const,
-      })),
+      diff.hunks.map((hunk) => ({ ...hunk, resolution: 'applied' as const })),
     )
     const mutation = await harness.mutateActiveChapter({
       chapterId: chapter.id,
@@ -269,7 +263,7 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     expect((await indexedDbProjectRepository.getChaptersByProject(projectId))[0].revision).toBe(2)
   })
 
-  it('TC-CROSS-03: Routes a combat breach event into a persisted Living Codex update and CAS note', async () => {
+  it('TC-CROSS-03: Keeps an unreviewed rank gap out of codex and chapter state', async () => {
     const chapter = makeChapter(projectId, '楚凌霄在城门前迎战高阶敌手。')
     const entity = makeEntity(projectId)
     const harness = new TestHostHarness(projectId)
@@ -278,28 +272,13 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     await indexedDbProjectRepository.saveChapter(chapter)
     await indexedDbCodexEntityRepository.save(entity)
 
-    const powerEvents: Array<{ tierDiff: number; riskLevel: string }> = []
+    const powerEvents: Array<Record<string, unknown>> = []
     const codexEvents: string[] = []
-    const finished = new Promise<void>((resolve, reject) => {
-      harness.scopedBus.on('POWER_BREACH_DETECTED', (payload) => {
-        powerEvents.push(payload)
-        void (async () => {
-          await harness.mutateCodexEntity(entity.id, (previous) => ({
-            attributes: {
-              ...previous.attributes,
-              powerRisk: payload.riskLevel,
-              lastTierDiff: payload.tierDiff,
-            },
-          }))
-          const updated = harness.getCodexEntity(entity.id)
-          if (!updated) throw new Error('combat subscriber lost the entity')
-          await indexedDbCodexEntityRepository.save(updated)
-          resolve()
-        })().catch(reject)
-      })
-      harness.scopedBus.on('CODEX_ENTITY_TOUCHED', (payload) => {
-        codexEvents.push(payload.entityId)
-      })
+    const stopPowerEvents = harness.scopedBus.on('POWER_BREACH_DETECTED', (payload) => {
+      powerEvents.push(payload)
+    })
+    const stopCodexEvents = harness.scopedBus.on('CODEX_ENTITY_TOUCHED', (payload) => {
+      codexEvents.push(payload.entityId)
     })
 
     const alert = CombatSandboxEngine.auditPowerBreach({
@@ -326,38 +305,29 @@ describe('Tier 3: Cross-Feature Workflows', () => {
       updatedAt: Date.now(),
     }
     await indexedDbCombatSandboxRepository.save(duel)
-    // 对决落库是这个事实的权威写入点，越级事件由它发布（§P2.12）
+    // A rank gap has no author-reviewed constraint, so publishing it must remain a no-op.
     CombatSandboxEngine.publishBreachAlert({
+      recordId: duel.id,
       projectId,
       protagonistName: entity.name,
       enemyName: '黑煞魔尊',
       alert,
     })
-    await finished
-
-    const mutation = await harness.mutateActiveChapter({
-      chapterId: chapter.id,
-      expectedRevision: 1,
-      type: 'full_replace',
-      content: `${chapter.content}\n战力审计：${alert.riskLevel}。`,
-    })
-    const persistedChapter = await persistActiveChapter(harness)
+    stopPowerEvents()
+    stopCodexEvents()
     const storedDuel = await indexedDbCombatSandboxRepository.get(duel.id)
     const storedEntity = (await indexedDbCodexEntityRepository.getAll()).find(
       (item) => item.id === entity.id,
     )
+    const storedChapter = (await indexedDbProjectRepository.getChaptersByProject(projectId))[0]
 
-    expect(alert.isBreached).toBe(true)
-    expect(powerEvents).toEqual([
-      expect.objectContaining({ projectId, tierDiff: 30, riskLevel: 'CRITICAL_COLLAPSE' }),
-    ])
-    expect(codexEvents).toEqual([entity.id])
-    expect(storedDuel?.breachAudit.riskLevel).toBe(alert.riskLevel)
-    expect(storedEntity?.attributes.powerRisk).toBe('CRITICAL_COLLAPSE')
-    expect(storedEntity?.attributes.lastTierDiff).toBe(30)
-    expect(mutation.success).toBe(true)
-    expect(persistedChapter.content).toContain('战力审计：CRITICAL_COLLAPSE')
-    expect(persistedChapter.revision).toBe(2)
+    expect(alert).toMatchObject({ isBreached: false, status: 'needs-review', riskLevel: 'WARNING' })
+    expect(powerEvents).toEqual([])
+    expect(codexEvents).toEqual([])
+    expect(storedDuel?.breachAudit).toMatchObject({ status: 'needs-review', riskLevel: 'WARNING' })
+    expect(storedEntity?.attributes).toEqual(entity.attributes)
+    expect(storedChapter?.content).toBe(chapter.content)
+    expect(storedChapter?.revision).toBe(1)
   })
 
   it('TC-CROSS-04: Synchronizes calendar conversion, causal order, event delivery, and codex state', async () => {
@@ -381,6 +351,7 @@ describe('Tier 3: Cross-Feature Workflows', () => {
         chapterId: `${projectId}::chapter-0`,
         chapterOrder: 1,
         chapterTitle: '纪元交接',
+        sequenceRole: 'mainline',
         timePoint: {
           calendarId: ancient.id,
           ...sourceDate,
@@ -392,6 +363,7 @@ describe('Tier 3: Cross-Feature Workflows', () => {
         chapterId: chapter.id,
         chapterOrder: 2,
         chapterTitle: chapter.title,
+        sequenceRole: 'mainline',
         timePoint: {
           calendarId: dynasty.id,
           ...conversion.targetDate,
@@ -495,7 +467,8 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     )
 
     expect(conversion.targetDate).toEqual({ year: 1, month: 1, day: 1 })
-    expect(chronologyAudit.hasParadox).toBe(false)
+    expect(chronologyAudit.status).toBe('consistent')
+    expect(chronologyAudit.hasConflict).toBe(false)
     expect(causalAudit).toHaveLength(0)
     // 下面那次真实改稿也会在同一条审计通道上 emit，所以这里断言「送达」而不是「恰好一次」。
     expect(auditedChapters).toContain(chapter.id)
@@ -510,7 +483,7 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     expect(persistedChapter.revision).toBe(2)
   })
 
-  it('TC-CROSS-05: Persists unified chapter evaluation and applies its event-driven codex update', async () => {
+  it('TC-CROSS-05: Emits source observations without inventing quality or codex facts', async () => {
     const chapter = makeChapter(
       projectId,
       '初稿中楚凌霄被围攻，陷入绝境。雷声轰鸣，敌人冷笑逼近，门后的真相竟是另一场危机。',
@@ -522,47 +495,9 @@ describe('Tier 3: Cross-Feature Workflows', () => {
     await indexedDbProjectRepository.saveChapter(chapter)
     await indexedDbCodexEntityRepository.save(entity)
 
-    const events: Array<{ chapterId: string; compositeScore: number; pacingRating: string }> = []
-    const finished = new Promise<void>((resolve, reject) => {
-      harness.scopedBus.on('UNIFIED_CHAPTER_EVALUATED', (payload) => {
-        events.push(payload)
-        void (async () => {
-          const audit: EmotionAuditRecord = {
-            id: `${projectId}::emotion-1`,
-            projectId,
-            chapterId: payload.chapterId,
-            chapterTitle: chapter.title,
-            chapterOrder: chapter.order,
-            wordCount: chapter.wordCount,
-            vector: {
-              tension: payload.compositeScore,
-              catharsis: payload.cliffhangerScore,
-              frustration: Math.max(0, 100 - payload.compositeScore),
-              anticipation: payload.cliffhangerScore,
-              sorrow: 0,
-              joy: payload.compositeScore,
-            },
-            netPolarity: payload.compositeScore - 50,
-            dominantEmotion: 'tension',
-            resonanceScore: payload.compositeScore,
-            warnings: [],
-            suggestions: [],
-            updatedAt: Date.now(),
-          }
-          await indexedDbEmotionAuditRepository.save(audit)
-          await harness.mutateCodexEntity(entity.id, (previous) => ({
-            attributes: {
-              ...previous.attributes,
-              lastCompositeScore: payload.compositeScore,
-              pacingRating: payload.pacingRating,
-            },
-          }))
-          const updated = harness.getCodexEntity(entity.id)
-          if (!updated) throw new Error('quality subscriber lost the entity')
-          await indexedDbCodexEntityRepository.save(updated)
-          resolve()
-        })().catch(reject)
-      })
+    const events: Array<Record<string, unknown>> = []
+    const stopEvents = harness.scopedBus.on('UNIFIED_CHAPTER_EVALUATED', (payload) => {
+      events.push(payload)
     })
 
     const result = ChapterQualityEvaluator.evaluateChapter({
@@ -572,7 +507,7 @@ describe('Tier 3: Cross-Feature Workflows', () => {
       chapterOrder: chapter.order,
       content: chapter.content,
     })
-    await finished
+    stopEvents()
     const mutation = await harness.mutateActiveChapter({
       chapterId: chapter.id,
       expectedRevision: 1,
@@ -581,18 +516,26 @@ describe('Tier 3: Cross-Feature Workflows', () => {
       replacement: '定稿',
     })
     const persistedChapter = await persistActiveChapter(harness)
-    const storedAudit = await indexedDbEmotionAuditRepository.getByChapterId(chapter.id)
     const storedEntity = (await indexedDbCodexEntityRepository.getAll()).find(
       (item) => item.id === entity.id,
     )
 
+    expect(result.qualityStatus).toBe('not_assessed')
+    expect(result).not.toHaveProperty('compositeScore')
+    expect(result).not.toHaveProperty('pacingRating')
     expect(events).toEqual([
-      expect.objectContaining({ chapterId: chapter.id, compositeScore: result.compositeScore }),
+      expect.objectContaining({
+        projectId,
+        chapterId: chapter.id,
+        schemaVersion: 2,
+        characterCount: result.ending.characters,
+        observationCount: result.ending.observations.length,
+        qualityStatus: 'not_assessed',
+      }),
     ])
-    expect(storedAudit?.vector.tension).toBe(result.compositeScore)
-    expect(storedAudit?.chapterId).toBe(chapter.id)
-    expect(storedEntity?.attributes.lastCompositeScore).toBe(result.compositeScore)
-    expect(storedEntity?.attributes.pacingRating).toBe(result.pacingRating)
+    expect(events[0]).not.toHaveProperty('compositeScore')
+    expect(events[0]).not.toHaveProperty('pacingRating')
+    expect(storedEntity?.attributes).toEqual(entity.attributes)
     expect(mutation.success).toBe(true)
     expect(persistedChapter.content).toContain('定稿')
     expect(persistedChapter.revision).toBe(2)

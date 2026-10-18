@@ -156,6 +156,17 @@ describe('EditorToolbar 插件抽屉选择器（P2.8）', () => {
     expect(screen.getByText('口癖、重复句式与节奏问题清单')).toBeInTheDocument()
   })
 
+  it('工具栏收起文字标签时仍为菜单和查找按钮提供稳定名称', () => {
+    mockHost(null)
+    renderToolbar()
+
+    expect(screen.getByRole('button', { name: '排版与标点' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '审校与内容体检' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '创作辅助与专注工具' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '查找与替换' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导出与分享' })).toBeInTheDocument()
+  })
+
   it('没有归入三类能力的抽屉不进候选', () => {
     // 注册表要求抽屉与能力类别成对声明，所以这不是在猜它属于哪一类，
     // 而是不给一个没有归类的抽屉编出分组标题（INV-09：展示出去的话必须真成立）。

@@ -37,9 +37,9 @@ export const ConflictPanel: FC<ConflictPanelProps> = ({ conflicts }) => {
         {conflicts.length === 0 ? (
           <div className="text-center py-12 text-[var(--ink-text-muted)]">
             <CheckCircle2 className="w-7 h-7 mx-auto text-emerald-500 mb-2 opacity-80" />
-            <p className="font-medium text-emerald-500">时空因果完全自洽</p>
+            <p className="font-medium text-emerald-500">当前检查未发现冲突</p>
             <p className="text-[10px] text-[var(--ink-text-faint)] mt-1">
-              无因果死循环、无时间倒置、无单线同章碰撞
+              章节位置不能单独验证故事内的时间顺序
             </p>
           </div>
         ) : (
@@ -62,13 +62,46 @@ export const ConflictPanel: FC<ConflictPanelProps> = ({ conflicts }) => {
                   {c.type === 'causal_cycle'
                     ? '因果死锁循环'
                     : c.type === 'temporal_paradox'
-                      ? '时间因果倒置'
-                      : '同线章节碰撞'}
+                      ? '因果顺序需核对'
+                      : c.type === 'missing_prerequisite'
+                        ? '前置事件缺失'
+                        : c.type === 'invalid_definition'
+                          ? '事件定义无效'
+                          : '同线章节需复核'}
                 </span>
               </div>
               <p className="text-[11px] text-[var(--ink-text-muted)] leading-relaxed">
                 {c.description}
               </p>
+              {c.sources?.map((source) => (
+                <div
+                  key={`${source.eventTitle}:${source.sourceDocumentId ?? ''}:${source.sourceBlockId ?? ''}`}
+                  className="mt-2 rounded bg-[var(--ink-bg-panel)]/60 p-2 text-[10px] text-[var(--ink-text-muted)]"
+                >
+                  <p className="font-medium">{source.eventTitle}</p>
+                  {(source.sourceDocumentId || source.evidence?.[0]?.documentId) && (
+                    <p>
+                      来源：文档 {source.sourceDocumentId ?? source.evidence?.[0]?.documentId}
+                      {source.sourceBlockId || source.evidence?.[0]?.blockId
+                        ? ` · 段落 ${source.sourceBlockId ?? source.evidence?.[0]?.blockId}`
+                        : ''}
+                      {source.sourceRevision !== undefined
+                        ? ` · 修订 ${source.sourceRevision}`
+                        : ''}
+                    </p>
+                  )}
+                  {source.evidence?.map((item) =>
+                    item.excerpt ? (
+                      <blockquote
+                        key={`${item.documentId ?? ''}:${item.semanticFrom ?? ''}`}
+                        className="mt-1 border-l border-current pl-2"
+                      >
+                        {item.excerpt}
+                      </blockquote>
+                    ) : null,
+                  )}
+                </div>
+              ))}
             </div>
           ))
         )}

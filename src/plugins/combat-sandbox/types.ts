@@ -4,6 +4,8 @@ import type {
   PowerBreachAlert,
   CombatPhase,
   CombatSandboxRepository,
+  CombatConstraint,
+  CombatResourceBudget,
 } from '../../ports/combatSandboxRepository'
 
 export type {
@@ -12,6 +14,8 @@ export type {
   PowerBreachAlert,
   CombatPhase,
   CombatSandboxRepository,
+  CombatConstraint,
+  CombatResourceBudget,
 }
 
 export interface PowerTierDefinition {

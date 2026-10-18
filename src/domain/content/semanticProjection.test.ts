@@ -2,12 +2,42 @@ import { describe, expect, it } from 'vitest'
 import {
   projectContent,
   projectEditorContent,
+  projectSemanticTextFields,
   semanticDocumentFromHtml,
   semanticDocumentFromProseMirror,
   semanticDocumentFromText,
 } from './index'
 
 describe('Canonical Semantic Content Representation', () => {
+  it('projects nested prose fields and preserves identifiers without mutating input', () => {
+    const input = Object.freeze({
+      id: 'entity-<b>stable</b>',
+      name: '<p>镇魔钟</p>',
+      aliases: Object.freeze(['<strong>古钟</strong>']),
+      provenance: Object.freeze({
+        evidence: Object.freeze([
+          Object.freeze({
+            documentId: 'chapter-<b>1</b>',
+            excerpt: '<blockquote><p>他收起镇魔钟。</p></blockquote>',
+          }),
+        ]),
+      }),
+    })
+
+    expect(projectSemanticTextFields(input)).toEqual({
+      id: 'entity-<b>stable</b>',
+      name: '镇魔钟',
+      aliases: ['古钟'],
+      provenance: {
+        evidence: [{ documentId: 'chapter-<b>1</b>', excerpt: '他收起镇魔钟。' }],
+      },
+    })
+    expect(input.name).toBe('<p>镇魔钟</p>')
+    expect(input.provenance.evidence[0].excerpt).toBe(
+      '<blockquote><p>他收起镇魔钟。</p></blockquote>',
+    )
+  })
+
   it('projects ProseMirror JSON without losing marks, blocks, or empty paragraphs', () => {
     const document = semanticDocumentFromProseMirror('doc-1', {
       type: 'doc',

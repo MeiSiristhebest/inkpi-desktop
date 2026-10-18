@@ -17,6 +17,7 @@ export interface AppendIndexedDbDomainChangeInput {
   aggregateRevision?: number
   /** Optional authoritative aggregate mutation committed with the log entry. */
   aggregate?: IndexedDbAggregateWrite
+  relatedWrites?: readonly IndexedDbAggregateWrite[]
 }
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
@@ -49,7 +50,8 @@ export async function appendIndexedDbDomainChange(
       ],
       createdAt: input.occurredAt,
     })
-    if (input.aggregate) await domainChangeStore.appendWithAggregate(changeSet, input.aggregate)
+    if (input.aggregate)
+      await domainChangeStore.appendWithAggregate(changeSet, input.aggregate, input.relatedWrites)
     else await domainChangeStore.append(changeSet)
     domainChangeEvents.publish(input.workspaceId, changeSet.baseRevision + 1)
     return changeSet
@@ -58,6 +60,9 @@ export async function appendIndexedDbDomainChange(
 }
 
 function assertInput(input: AppendIndexedDbDomainChangeInput): void {
+  if (input.relatedWrites?.length && !input.aggregate) {
+    throw new Error('Related domain writes require an aggregate write')
+  }
   if (
     !input.aggregateType.trim() ||
     !input.aggregateId.trim() ||

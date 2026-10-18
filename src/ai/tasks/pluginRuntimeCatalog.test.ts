@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import React from 'react'
 import { describe, expect, it } from 'vitest'
 import { PluginProvider, usePluginRegistry } from '../../core/pluginRegistry'
@@ -41,12 +41,14 @@ describe('plugin runtime catalog', () => {
   it('maps every registered plugin instruction to a task-runtime boundary', () => {
     const definitions = listPluginInstructionDefinitions()
     const taskEntries = new Map(
-      Object.values(PLUGIN_RUNTIME_CATALOG)
-        .filter((entry) => entry.taskKind)
-        .map((entry) => [entry.taskKind, entry]),
+      Object.values(PLUGIN_RUNTIME_CATALOG).flatMap((entry) =>
+        [entry.taskKind, entry.analysisTaskKind]
+          .filter(Boolean)
+          .map((kind) => [kind!, entry] as const),
+      ),
     )
 
-    expect(definitions).toHaveLength(22)
+    expect(definitions).toHaveLength(27)
     for (const definition of definitions) {
       expect(taskEntries.has(definition.taskKind ?? definition.id)).toBe(true)
     }
@@ -60,7 +62,7 @@ describe('plugin runtime catalog', () => {
       pluginId: 'narrative-linter',
       pluginCatalog: 'first-party-v1',
       instructionId: 'plugin.narrative-linter.analysis',
-      instructionVersion: '1',
+      instructionVersion: '2',
     })
     expect(firstParty.metadata).not.toHaveProperty('instruction')
     expect(extension.metadata).toMatchObject({
@@ -77,15 +79,16 @@ describe('plugin runtime catalog', () => {
     )
   })
 
-  it('does not duplicate a plugin when activation is repeated', () => {
+  it('does not duplicate a plugin when activation is repeated', async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) =>
       React.createElement(PluginProvider, null, children)
     const { result } = renderHook(() => usePluginRegistry(), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
 
-    act(() => {
-      result.current.disablePlugin('living-codex')
-      result.current.enablePlugin('living-codex')
-      result.current.enablePlugin('living-codex')
+    await act(async () => {
+      await result.current.disablePlugin('living-codex')
+      await result.current.enablePlugin('living-codex')
+      await result.current.enablePlugin('living-codex')
     })
 
     expect(

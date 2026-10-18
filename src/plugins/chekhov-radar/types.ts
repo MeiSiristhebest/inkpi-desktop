@@ -8,8 +8,9 @@ export interface ChekhovRadarStats {
   dormantCount: number
   incubatingCount: number
   rustingCount: number
-  closureRate: number // 闭环率 0 - 100%
-  healthGrade: 'EXCELLENT' | 'GOOD' | 'WARNING' | 'DANGER'
+  closureRate: number | null
+  abandonedCount: number
+  unpositionedCount: number
 }
 
 export interface PlantGunSuggestion {
@@ -17,4 +18,6 @@ export interface PlantGunSuggestion {
   category: 'item' | 'secret' | 'character' | 'promise' | 'technique'
   snippet: string
   reason: string
+  startOffset: number
+  endOffset: number
 }

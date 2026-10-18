@@ -17,6 +17,8 @@ type OutcomeFn = (
 ) => Promise<PluginWorkflowOutcome<string> | null>
 
 interface HostFixture {
+  projectId?: string
+  activeChapter?: { id: string; revision: number; content: string }
   aiAssistant: { isAvailable: boolean; runPluginOutcome?: OutcomeFn }
 }
 
@@ -84,6 +86,8 @@ describe('usePluginAiTask', () => {
       kind: 'result',
       text: 'AI：第三处伏笔未回收',
       taskId: 't1',
+      artifactId: undefined,
+      provenance,
     })
   })
 
@@ -109,7 +113,7 @@ describe('usePluginAiTask', () => {
     expect(view.taskId).toBe('t9')
   })
 
-  it('取消也按失败呈现', async () => {
+  it('取消显示为取消状态', async () => {
     setHost(
       makeHost(async () => ({
         status: 'cancelled',
@@ -126,9 +130,10 @@ describe('usePluginAiTask', () => {
     })
 
     expect(result.current.view).toEqual({
-      kind: 'failed',
+      kind: 'cancelled',
       message: '用户取消了任务',
       taskId: 't1',
+      provenance,
     })
   })
 
@@ -152,6 +157,7 @@ describe('usePluginAiTask', () => {
       kind: 'failed',
       message: '任务完成，但没有返回文本结果',
       taskId: 't1',
+      provenance,
     })
   })
 
@@ -221,13 +227,25 @@ describe('usePluginAiTask', () => {
     await act(async () => {
       await second
     })
-    expect(result.current.view).toEqual({ kind: 'result', text: '第二版结果', taskId: 't1' })
+    expect(result.current.view).toEqual({
+      kind: 'result',
+      text: '第二版结果',
+      taskId: 't1',
+      artifactId: undefined,
+      provenance,
+    })
 
     resolvers[0]?.(completed('第一版结果'))
     await act(async () => {
       await first
     })
-    expect(result.current.view).toEqual({ kind: 'result', text: '第二版结果', taskId: 't1' })
+    expect(result.current.view).toEqual({
+      kind: 'result',
+      text: '第二版结果',
+      taskId: 't1',
+      artifactId: undefined,
+      provenance,
+    })
   })
 
   it('把插件 id 和输入原样交给带类型的出口', async () => {
@@ -238,7 +256,66 @@ describe('usePluginAiTask', () => {
     })
 
     expect(outcomeSpy()).toHaveBeenCalledWith('demo', { text: '正文' }, undefined)
-    expect(result.current.view).toEqual({ kind: 'result', text: 'AI 结论', taskId: 't1' })
+    expect(result.current.view).toEqual({
+      kind: 'result',
+      text: 'AI 结论',
+      taskId: 't1',
+      artifactId: undefined,
+      provenance,
+    })
+  })
+
+  it('projects markup in saved author records while preserving structural IDs', async () => {
+    const input = Object.freeze({
+      authorRecords: Object.freeze([
+        Object.freeze({
+          id: 'gun-<b>stable</b>',
+          projectId: 'p1',
+          status: 'active',
+          gunName: '<p>断刃 <strong>未认主</strong></p>',
+          notes: '<p>作者决定在后续章节回收。</p>',
+          plantSnippet: '<blockquote><p>他收起断刃。</p></blockquote>',
+          provenance: Object.freeze({
+            sourceType: 'author',
+            evidence: Object.freeze([
+              Object.freeze({ documentId: 'chapter-1', excerpt: '<p>他收起断刃。</p>' }),
+            ]),
+          }),
+        }),
+      ]),
+    })
+    const { result } = renderHook(() => usePluginAiTask('chekhov-radar'))
+
+    await act(async () => {
+      await result.current.run(input)
+    })
+
+    const sent = outcomeSpy().mock.calls[0][1] as {
+      input: {
+        authorRecords: Array<{
+          id: string
+          gunName: string
+          notes: string
+          plantSnippet: string
+          provenance: { evidence: Array<{ documentId: string; excerpt: string }> }
+        }>
+      }
+      sources: Array<{ text: string }>
+    }
+    expect(sent.input.authorRecords[0]).toEqual({
+      id: 'gun-<b>stable</b>',
+      projectId: 'p1',
+      status: 'active',
+      gunName: '断刃 未认主',
+      notes: '作者决定在后续章节回收。',
+      plantSnippet: '他收起断刃。',
+      provenance: {
+        sourceType: 'author',
+        evidence: [{ documentId: 'chapter-1', excerpt: '他收起断刃。' }],
+      },
+    })
+    expect(JSON.stringify(sent.sources)).not.toContain('<p>')
+    expect(input.authorRecords[0].gunName).toBe('<p>断刃 <strong>未认主</strong></p>')
   })
 
   it('重试沿用同一份输入', async () => {
@@ -265,5 +342,66 @@ describe('usePluginAiTask', () => {
 
     expect(outcomeSpy()).not.toHaveBeenCalled()
     expect(result.current.view.kind).toBe('idle')
+  })
+
+  it('drops an in-flight result and retry after switching projects', async () => {
+    let resolve!: (value: PluginWorkflowOutcome<string>) => void
+    const host = {
+      ...makeHost(
+        () =>
+          new Promise<PluginWorkflowOutcome<string>>((r) => {
+            resolve = r
+          }),
+      ),
+      projectId: 'p1',
+    }
+    setHost(host)
+    const { result, rerender } = renderHook(() => usePluginAiTask('demo'))
+    let pending!: Promise<void>
+    act(() => {
+      pending = result.current.run({ text: '第一本书' })
+    })
+    setHost({ ...host, projectId: 'p2' })
+    rerender()
+    resolve(completed('第一本书的结果'))
+    await act(async () => {
+      await pending
+      await result.current.retry()
+    })
+    expect(result.current.view.kind).toBe('idle')
+    expect(host.aiAssistant.runPluginOutcome).toHaveBeenCalledTimes(1)
+  })
+
+  it('invalidates a displayed result when the selected chapter or local input changes', async () => {
+    const { result, rerender } = renderHook(({ text }) => usePluginAiTask('demo', text), {
+      initialProps: { text: '旧正文' },
+    })
+    await act(async () => {
+      await result.current.run({ text: '旧正文' })
+    })
+    expect(result.current.view.kind).toBe('result')
+    rerender({ text: '新正文' })
+    expect(result.current.view.kind).toBe('idle')
+    await act(async () => {
+      await result.current.retry()
+    })
+    expect(outcomeSpy()).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not accept unstructured or fabricated reviews from a registered analysis plugin', async () => {
+    const { result } = renderHook(() => usePluginAiTask('reader-simulator'))
+    await act(async () => {
+      await result.current.run({ text: '她没有跪下。' })
+    })
+    expect(result.current.view.kind).toBe('failed')
+    const sent = outcomeSpy().mock.calls[0][1]
+    expect(sent).toMatchObject({
+      schemaVersion: 'plugin-review-v2',
+      sources: [{ id: 'text:0', text: '她没有跪下。' }],
+    })
+    await act(async () => {
+      await result.current.retry()
+    })
+    expect(outcomeSpy().mock.calls[1][1]).toEqual(sent)
   })
 })

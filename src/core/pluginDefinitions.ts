@@ -119,10 +119,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'safe-gate',
     name: '安全门禁',
-    description: '三级网规敏感词雷达与文学风味智能平替系统',
+    description: '本地词表与正则定位、原文核对和替换预览',
     version: '1.0.0',
     category: 'review',
-    tags: ['合规', '敏感词', '文学平替', 'AC自动机'],
+    tags: ['词表', '正则', '替换预览', '原文定位'],
     enabledByDefault: false,
     icon: ShieldCheck,
     loadMainView: () => import('../plugins/safe-gate').then((m) => ({ default: m.SafeGateView })),
@@ -199,7 +199,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'consistency-sentinel',
     name: '一致性哨兵',
-    description: '严格境界体系偏序传递闭包与角色生死状态冲突审计',
+    description: '作者等级关系校验、战斗与已故角色的原文候选核对',
     version: '1.0.0',
     category: 'review',
     tags: ['境界体系', '一致性', '偏序闭包', '战力崩坏'],
@@ -523,7 +523,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'narrative-linter',
     name: '叙事质检仪',
-    description: '被动语态滥用、说教口播、无主句与机械翻译腔规则审查',
+    description: '作者词表、分句长度和长对白定位及有出处的语境审阅',
     version: '1.0.0',
     category: 'review',
     tags: ['语病', 'Linter', '修辞瑕疵', '质检'],
@@ -556,11 +556,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   },
   {
     id: 'iron-chamber',
-    name: '铁牢逻辑自洽',
-    description: '世界观公理设定不可侵犯性与降智光环逻辑闭环测试',
+    name: '章节专注目标',
+    description: '真实章节的字符净增与经过时间目标，可自愿结束并保存会话',
     version: '1.0.0',
-    category: 'review',
-    tags: ['公理', '降智排查', '逻辑自洽', '反噬'],
+    category: 'flow',
+    tags: ['章节目标', '字符计数', '专注会话', '进度'],
     enabledByDefault: false,
     icon: Lock,
     loadMainView: () =>
@@ -757,11 +757,11 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   },
   {
     id: 'gold-chapters-eval',
-    name: '黄金三章与签约过稿诊断器',
-    description: '从动机、筹码、冲突和期待感评估开篇',
+    name: '黄金三章开篇文本诊断',
+    description: '按文本线索检查动机、筹码、冲突和结尾特征，不预测签约或读者表现',
     version: '1.0.0',
     category: 'review',
-    tags: ['黄金三章', '签约诊断', '开篇'],
+    tags: ['黄金三章', '文本规则', '开篇'],
     enabledByDefault: false,
     icon: Award,
     loadMainView: () =>
@@ -813,7 +813,9 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
  */
 export function materializeLazyPlugin(def: PluginStaticDefinition): DesktopPlugin {
   const LazyMainView = lazy(def.loadMainView)
-  const LazyDrawer = def.drawer ? lazy(def.drawer.load) : undefined
+  const drawerDefinition = def.drawer
+  const createLazyDrawer = drawerDefinition ? () => lazy(drawerDefinition.load) : undefined
+  const LazyDrawer = createLazyDrawer?.()
 
   return {
     id: def.id,
@@ -827,6 +829,7 @@ export function materializeLazyPlugin(def: PluginStaticDefinition): DesktopPlugi
     enabledByDefault: def.enabledByDefault,
     mainView: LazyMainView,
     drawerSnippetView: LazyDrawer,
+    createDrawerSnippetView: createLazyDrawer,
     drawerCapability: def.drawer?.kind,
     contextProvider: def.contextProvider,
   }

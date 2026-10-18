@@ -1,415 +1,372 @@
-import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useEffect, useRef, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import type { ChapterBeatPlan, SceneBeatItem } from '../types'
+import type { ChapterBeatPlan, SceneBeatItem, BeatType } from '../types'
 import { sceneBeatsEngine } from '../engine/SceneBeatsEngine'
 import { indexedDbSceneBeatRepository } from '../../../adapters/indexedDbSceneBeatRepository'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
+import { semanticTextFromContent } from '../../../domain/content'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import {
-  ListChecks,
-  Plus,
-  Sparkles,
-  Zap,
-  AlertCircle,
-  CheckCircle2,
-  Trash2,
-  TrendingUp,
-  Bot,
-} from 'lucide-react'
-import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Tooltip } from '../../../ui/primitives'
-
-export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('scene-beats')
+import { Select } from '../../../ui/primitives'
+export const SceneBeatsMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <SceneWorkspace key={props.projectId} {...props} />
+)
+function SceneWorkspace({ projectId }: DesktopPluginViewProps) {
+  const host = useOptionalPluginHostContext()
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
   const [plans, setPlans] = useState<ChapterBeatPlan[]>([])
-  const [chapters, setChapters] = useState<any[]>([])
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  const loadPlans = async () => {
-    try {
-      setLoading(true)
-      const [all, allChapters] = await Promise.all([
-        indexedDbSceneBeatRepository.getAll(),
-        indexedDbProjectRepository.getChaptersByProject(projectId),
-      ])
-      const projectPlans = all.filter((p) => p.projectId === projectId)
-      setPlans(projectPlans)
-      allChapters.sort((a, b) => a.order - b.order)
-      setChapters(allChapters)
-      if (projectPlans.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(projectPlans[0].id)
-      }
-    } catch (e) {
-      console.error('Failed to load scene beat plans:', e)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const [draft, setDraft] = useState<ChapterBeatPlan | null>(null)
+  const [target, setTarget] = useState('')
+  const [chapterId, setChapterId] = useState('')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
   useEffect(() => {
-    loadPlans()
-  }, [projectId])
-
-  const currentPlan = useMemo(
-    () => plans.find((p) => p.id === selectedPlanId) || plans[0],
-    [plans, selectedPlanId],
-  )
-
-  // AI 智能拆解并生成单章 4 幕电影级节拍表
-  const handleAiGenerateBeats = async () => {
-    const curChap = chapters.find((c) => c.id === currentPlan?.chapterId)
-    const analysisInput = {
-      chapter: curChap ? { id: curChap.id, order: curChap.order, title: curChap.title } : undefined,
-      targetWordCount: currentPlan?.targetWordCount ?? 3000,
-      synopsis: curChap
-        ? semanticTextFromContent(curChap.id, curChap.content || '', curChap.revision).slice(0, 300)
-        : '',
+    let disposed = false
+    Promise.all([
+      indexedDbSceneBeatRepository.getAll(),
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject(projectId),
+    ])
+      .then(([all, chapters, volumes]) => {
+        if (disposed) return
+        const actual = projectChapterSequence(projectId, chapters, volumes)
+        const own = all.filter((p) => p.projectId === projectId)
+        setChapters(actual)
+        setPlans(own)
+        setChapterId(actual[0]?.id ?? '')
+        if (own[0]) {
+          setDraft(structuredClone(own[0]))
+          setChapterId(own[0].chapterId)
+          setTarget(String(own[0].targetWordCount))
+        }
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
     }
-
-    await aiTask.run(analysisInput)
-  }
-
-  const handleCreatePlanFromTemplate = async (
-    templateId: 'climax_burst' | 'investigation' | 'transition',
-    chapterId: string = `ch-${plans.length + 1}`,
-  ) => {
-    const now = clock.now()
-    const beats = sceneBeatsEngine.generatePresetPlan(templateId, chapterId)
-    const newPlan: ChapterBeatPlan = {
-      id: idGenerator.generate('plan'),
+  }, [projectId])
+  const plan = draft ? { ...draft, targetWordCount: Number(target) } : null
+  const chapter = chapters.find((c) => c.id === plan?.chapterId)
+  const text = chapter ? semanticTextFromContent(chapter.id, chapter.content, chapter.revision) : ''
+  const semanticPlan = plan
+    ? {
+        ...plan,
+        beats: plan.beats.map((beat) => ({
+          ...beat,
+          title: semanticTextFromContent(`${beat.id}-title`, beat.title),
+          goalOrConflict: semanticTextFromContent(`${beat.id}-goal`, beat.goalOrConflict),
+          notes:
+            beat.notes === undefined
+              ? undefined
+              : semanticTextFromContent(`${beat.id}-notes`, beat.notes),
+        })),
+      }
+    : null
+  const errors = plan ? sceneBeatsEngine.validatePlan(plan) : []
+  const arc = plan ? sceneBeatsEngine.evaluateDramaticArc(plan.beats) : null
+  const progress =
+    plan && chapter && !errors.length
+      ? sceneBeatsEngine.calculatePacingStatus(plan, Array.from(text.replace(/\s/g, '')).length)
+      : null
+  const ai = usePluginAiTask('scene-beats', [projectId, plan, chapters])
+  const newDraft = (template: 'climax_burst' | 'investigation' | 'transition') => {
+    const id = idGenerator.generate('plan'),
+      now = clock.now()
+    const actualChapter = chapters.some((c) => c.id === chapterId) ? chapterId : 'manual:' + id
+    setDraft({
+      id,
       projectId,
-      chapterId,
-      targetWordCount: 3000,
-      beats,
+      chapterId: actualChapter,
+      targetWordCount: 0,
+      beats: sceneBeatsEngine.generatePresetPlan(template, actualChapter),
       createdAt: now,
       updatedAt: now,
+    })
+    setTarget('')
+    setMessage('新模板仅是草稿；填写目标、冲突与预算后保存。')
+    setError('')
+  }
+  const changeBeat = (id: string, changes: Partial<SceneBeatItem>) =>
+    setDraft((previous) =>
+      previous
+        ? {
+            ...previous,
+            beats: previous.beats.map((b) => (b.id === id ? { ...b, ...changes } : b)),
+          }
+        : previous,
+    )
+  const editingScope = JSON.stringify([plan, target, chapterId])
+  const editingScopeRef = useRef(editingScope)
+  editingScopeRef.current = editingScope
+  const save = async () => {
+    const submittedScope = editingScope
+    if (!plan) return
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      if (errors.length) throw new Error(errors.join(' '))
+      const record = { ...plan, updatedAt: clock.now() }
+      await indexedDbSceneBeatRepository.save(record)
+      setPlans((previous) => [...previous.filter((p) => p.id !== record.id), record])
+      if (editingScopeRef.current === submittedScope) setDraft(record)
+      setMessage(
+        editingScopeRef.current === submittedScope
+          ? '已保存作者细纲与预算。'
+          : '已保存先前细纲快照；后续编辑仍未保存。',
+      )
+    } catch (cause) {
+      setError(String(cause))
+    } finally {
+      setSaving(false)
     }
-    await indexedDbSceneBeatRepository.save(newPlan)
-    await loadPlans()
-    setSelectedPlanId(newPlan.id)
   }
-
-  const handleUpdateBeats = async (updatedBeats: SceneBeatItem[]) => {
-    if (!currentPlan) return
-    const updated: ChapterBeatPlan = {
-      ...currentPlan,
-      beats: updatedBeats,
-      updatedAt: clock.now(),
-    }
-    await indexedDbSceneBeatRepository.save(updated)
-    await loadPlans()
-  }
-
-  const handleAddBeat = async () => {
-    if (!currentPlan) return
-    const newBeat: SceneBeatItem = {
-      id: idGenerator.generate('beat'),
-      chapterId: currentPlan.chapterId,
-      order: currentPlan.beats.length,
-      beatType: 'conflict',
-      title: '新节拍场景',
-      goalOrConflict: '双方发生剧烈冲突',
-      budgetWordRatio: 0.25,
-      emotionalIn: 0,
-      emotionalOut: -0.5,
-      isCompleted: false,
-    }
-    await handleUpdateBeats([...currentPlan.beats, newBeat])
-  }
-
-  const handleDeleteBeat = async (beatId: string) => {
-    if (!currentPlan) return
-    const nextBeats = currentPlan.beats
-      .filter((b) => b.id !== beatId)
-      .map((b, idx) => ({ ...b, order: idx }))
-    await handleUpdateBeats(nextBeats)
-  }
-
-  const handleDeletePlan = async (planId: string) => {
-    await indexedDbSceneBeatRepository.delete(planId)
-    setSelectedPlanId(null)
-    await loadPlans()
-  }
-
-  // 戏剧张力势能评估
-  const arcAnalysis = useMemo(() => {
-    if (!currentPlan || !currentPlan.beats)
-      return { totalVoltageDelta: 0, isStagnant: true, curve: [] }
-    return sceneBeatsEngine.evaluateDramaticArc(currentPlan.beats)
-  }, [currentPlan])
-
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
-      {/* 顶栏 */}
-      <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold tracking-tight">细纲节拍导演器</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--ink-accent)]/15 text-[var(--ink-accent)] font-medium">
-              Save the Cat · 戏剧电容
-            </span>
-          </div>
-          <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            微观单章 3~5 场戏戏剧弧，目标/冲突/高潮四段式与字数预算动态映射
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>场景目标与节拍预算</h2>
+      <p>模板是可选规划结构。篇幅仅用于预算区间比较；剧情完成由作者标记，情绪值仅是作者注记。</p>
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      <Select
+        aria-label="绑定保存章节"
+        value={chapterId}
+        onValueChange={(id) => {
+          setChapterId(id)
+          setDraft((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  chapterId: id || 'manual:' + previous.id,
+                  beats: previous.beats.map((b) => ({
+                    ...b,
+                    chapterId: id || 'manual:' + previous.id,
+                  })),
+                }
+              : previous,
+          )
+        }}
+      >
+        <option value="">独立细纲，章节位置未知</option>
+        {chapters.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.chapterNumber ? '第 ' + c.chapterNumber + ' 章' : '位置未知'} · {c.title}
+          </option>
+        ))}
+      </Select>
+      <button onClick={() => newDraft('climax_burst')}>新建目标与选择模板</button>
+      <button onClick={() => newDraft('investigation')}>新建调查模板</button>
+      <button onClick={() => newDraft('transition')}>新建过渡模板</button>
+      <Select
+        aria-label="已保存细纲"
+        value={draft && plans.some((p) => p.id === draft.id) ? draft.id : ''}
+        onValueChange={(id) => {
+          const p = plans.find((p) => p.id === id)
+          if (p) {
+            setDraft(structuredClone(p))
+            setChapterId(p.chapterId)
+            setTarget(String(p.targetWordCount))
+            setMessage('')
+          }
+        }}
+      >
+        <option value="">未保存草稿</option>
+        {plans.map((p) => (
+          <option key={p.id} value={p.id}>
+            {chapters.find((c) => c.id === p.chapterId)?.title ?? '未挂章细纲'} · {p.id}
+          </option>
+        ))}
+      </Select>
+      {!draft ? (
+        <p>选择实际章节或独立细纲，创建一份作者计划。</p>
+      ) : (
+        <>
+          <label>
+            非空白字符预算
+            <input
+              aria-label="细纲总字符预算"
+              type="number"
+              min="1"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+            />
+          </label>
+          {errors.map((e) => (
+            <p key={e}>{e}</p>
+          ))}
+          {progress ? (
+            <p>
+              保存正文 {progress.currentWords} 字符 / 作者预算 {progress.targetTotalWords}；预算比{' '}
+              {progress.progressPct.toFixed(1)}%。剧情完成状态不由字符数推断。
+            </p>
+          ) : (
+            <p>章节或预算未确定，正文进度未知。</p>
+          )}
+          {draft.beats.map((beat) => (
+            <section key={beat.id} className="border rounded p-3 space-y-2">
+              <input
+                aria-label={'节拍标题 ' + beat.order}
+                value={beat.title}
+                onChange={(e) => changeBeat(beat.id, { title: e.target.value })}
+              />
+              <Select
+                aria-label={'节拍类型 ' + beat.order}
+                value={beat.beatType}
+                onValueChange={(value) => changeBeat(beat.id, { beatType: value as BeatType })}
+              >
+                <option value="goal">目标</option>
+                <option value="conflict">阻碍</option>
+                <option value="turning_point">变化</option>
+                <option value="climax">关键选择</option>
+                <option value="cliffhanger">承接</option>
+              </Select>
+              <textarea
+                aria-label={'节拍目标或冲突 ' + beat.order}
+                value={beat.goalOrConflict}
+                onChange={(e) => changeBeat(beat.id, { goalOrConflict: e.target.value })}
+                placeholder="填写实际人物目标、阻碍或后果"
+              />
+              <label>
+                预算占比
+                <input
+                  aria-label={'节拍预算占比 ' + beat.order}
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="any"
+                  value={beat.budgetWordRatio}
+                  onChange={(e) => changeBeat(beat.id, { budgetWordRatio: Number(e.target.value) })}
+                />
+              </label>
+              <label>
+                作者情绪起点
+                <input
+                  aria-label={'节拍情绪起点 ' + beat.order}
+                  type="number"
+                  min="-1"
+                  max="1"
+                  step="any"
+                  value={beat.emotionalIn ?? ''}
+                  onChange={(e) =>
+                    changeBeat(beat.id, {
+                      emotionalIn: e.target.value === '' ? undefined : Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                作者情绪终点
+                <input
+                  aria-label={'节拍情绪终点 ' + beat.order}
+                  type="number"
+                  min="-1"
+                  max="1"
+                  step="any"
+                  value={beat.emotionalOut ?? ''}
+                  onChange={(e) =>
+                    changeBeat(beat.id, {
+                      emotionalOut: e.target.value === '' ? undefined : Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                作者确认此节拍完成
+                <input
+                  type="checkbox"
+                  checked={beat.isCompleted}
+                  onChange={(e) => changeBeat(beat.id, { isCompleted: e.target.checked })}
+                />
+              </label>
+              <button
+                onClick={() =>
+                  setDraft((previous) =>
+                    previous
+                      ? {
+                          ...previous,
+                          beats: previous.beats
+                            .filter((b) => b.id !== beat.id)
+                            .map((b, order) => ({ ...b, order })),
+                        }
+                      : previous,
+                  )
+                }
+              >
+                删除此节拍
+              </button>
+            </section>
+          ))}
+          <p>
+            作者已填写的情绪变化量：{arc?.totalAnnotationChange ?? '标注不完整'}
+            。此数值不判断张力或质量。
           </p>
-          <ScoreProvenanceBadge source="rule" detail="按对话/叙述占比与句长特征判定" />
-        </div>
-
-        {/* 预置模板快速新建 */}
-        <div className="flex items-center gap-2">
-          {hostContext?.aiAssistant?.isAvailable && (
+          {arc?.discontinuities.map((g) => (
+            <p key={g.afterBeatId}>
+              相邻作者标注不连续：{g.previousOut} → {g.nextIn}；请核对是否有意安排。
+            </p>
+          ))}
+          <button
+            onClick={() =>
+              setDraft((previous) =>
+                previous
+                  ? {
+                      ...previous,
+                      beats: [
+                        ...previous.beats,
+                        {
+                          id: idGenerator.generate('beat'),
+                          chapterId: previous.chapterId,
+                          order: previous.beats.length,
+                          beatType: 'goal',
+                          title: '',
+                          goalOrConflict: '',
+                          budgetWordRatio: 0,
+                          isCompleted: false,
+                        },
+                      ],
+                    }
+                  : previous,
+              )
+            }
+          >
+            添加空节拍
+          </button>
+          <button disabled={saving} onClick={save}>
+            保存作者细纲
+          </button>
+          {host?.aiAssistant?.isAvailable && (
             <button
-              disabled={aiTask.isRunning}
-              onClick={handleAiGenerateBeats}
-              className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:border-[var(--ink-accent)] text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+              disabled={ai.isRunning}
+              onClick={() =>
+                ai.run({
+                  authorPlan: semanticPlan,
+                  chapterSource: chapter
+                    ? {
+                        id: chapter.id,
+                        chapterNumber: chapter.chapterNumber,
+                        revision: chapter.revision,
+                        text,
+                      }
+                    : null,
+                  missingContext: chapter ? '' : '独立细纲尚未绑定章节，不得假定已有剧情',
+                })
+              }
             >
-              <Bot className="w-3.5 h-3.5 text-amber-500" />
-              <span>AI 场景四幕节拍推演</span>
+              AI 场景目标与后果复核
             </button>
           )}
-          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
-          <button
-            onClick={() => handleCreatePlanFromTemplate('climax_burst')}
-            className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-500" /> 决战高潮模板
-          </button>
-          <button
-            onClick={() => handleCreatePlanFromTemplate('investigation')}
-            className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-blue-400" /> 悬疑探秘模板
-          </button>
-          <button
-            onClick={() => handleCreatePlanFromTemplate('transition')}
-            className="px-3 py-1.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] hover:bg-[var(--ink-bg-hover)] text-xs flex items-center gap-1.5"
-          >
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> 沉淀过渡模板
-          </button>
-        </div>
-      </div>
-
-      {/* 主体区 */}
-      <div className="flex-1 flex min-h-0 overflow-hidden divide-x divide-[var(--ink-border)]">
-        {/* 左侧：章节计划列表 */}
-        <div className="w-64 flex flex-col bg-[var(--ink-bg-panel)] overflow-hidden shrink-0">
-          <div className="p-3 border-b border-[var(--ink-border)] text-xs font-semibold flex items-center justify-between text-[var(--ink-text-muted)]">
-            <span>章节细纲列表 ({plans.length})</span>
-            <Tooltip content="新建细纲计划">
-              <button
-                onClick={() => handleCreatePlanFromTemplate('climax_burst')}
-                className="hover:text-[var(--ink-accent)]"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {plans.map((p, idx) => {
-              const isSelected = p.id === (currentPlan?.id ?? '')
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => setSelectedPlanId(p.id)}
-                  className={`group p-2.5 rounded-lg text-xs cursor-pointer flex items-center justify-between transition-colors ${
-                    isSelected
-                      ? 'bg-[var(--ink-accent)]/10 text-[var(--ink-accent)] border border-[var(--ink-accent)]/30 font-semibold'
-                      : 'hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text)]'
-                  }`}
-                >
-                  <div className="truncate">
-                    <span className="opacity-60 mr-1">#{idx + 1}</span>
-                    <span>{p.chapterId || `第 ${idx + 1} 章细纲`}</span>
-                    <span className="text-[10px] text-[var(--ink-text-faint)] ml-2 block">
-                      {p.beats?.length || 0} 个节拍 · 目标 {p.targetWordCount} 字
-                    </span>
-                  </div>
-                  <Tooltip content="删除">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeletePlan(p.id)
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </Tooltip>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* 右侧：当前章节细纲详情与节拍编辑器 */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[var(--ink-bg-canvas)] overflow-hidden">
-          {loading ? (
-            <div className="flex-1 flex items-center justify-center text-xs text-[var(--ink-text-muted)]">
-              加载细纲节拍中...
-            </div>
-          ) : !currentPlan ? (
-            <div className="flex-1 flex items-center justify-center p-8 text-center">
-              <div className="max-w-md p-8 border border-dashed border-[var(--ink-border)] rounded-2xl bg-[var(--ink-bg-panel)]">
-                <ListChecks className="w-8 h-8 mx-auto text-[var(--ink-accent)] mb-3 opacity-80" />
-                <h3 className="font-medium text-sm text-[var(--ink-text)] mb-1">
-                  尚无章节细纲计划
-                </h3>
-                <p className="text-xs text-[var(--ink-text-muted)] mb-4">
-                  点击顶栏模板按钮，快速为新章节生成一套起承转合的微观戏剧节拍！
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* 细纲指标分析条 */}
-              <div className="flex items-center justify-between p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <span className="text-[11px] text-[var(--ink-text-muted)] block">
-                      戏剧势能跨度 (ΔV)
-                    </span>
-                    <span className="text-lg font-bold text-[var(--ink-accent)]">
-                      {arcAnalysis.totalVoltageDelta}
-                    </span>
-                  </div>
-                  <div className="h-8 w-px bg-[var(--ink-border)]" />
-                  <div>
-                    <span className="text-[11px] text-[var(--ink-text-muted)] block">张力评估</span>
-                    {arcAnalysis.isStagnant ? (
-                      <span className="text-xs text-amber-500 font-semibold flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5" /> 存在流水账风险
-                      </span>
-                    ) : (
-                      <span className="text-xs text-emerald-500 font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> 戏剧弧饱满
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleAddBeat}
-                  className="px-3 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" /> 追加微节拍
-                </button>
-              </div>
-
-              {/* 节拍卡片列表 */}
-              <div className="space-y-3">
-                {currentPlan.beats.map((beat, idx) => {
-                  const estWords = Math.round(
-                    currentPlan.targetWordCount * (beat.budgetWordRatio || 0.25),
-                  )
-                  return (
-                    <div
-                      key={beat.id}
-                      className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3 hover:border-[var(--ink-accent)]/40 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] flex items-center justify-center font-bold text-xs text-[var(--ink-text-muted)]">
-                            {idx + 1}
-                          </span>
-                          <input
-                            type="text"
-                            value={beat.title}
-                            onChange={(e) => {
-                              const next = [...currentPlan.beats]
-                              next[idx].title = e.target.value
-                              handleUpdateBeats(next)
-                            }}
-                            className="font-semibold text-xs text-[var(--ink-text)] bg-transparent border-b border-transparent focus:border-[var(--ink-accent)] focus:outline-none"
-                            placeholder="节拍标题"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-3 text-xs">
-                          <span className="text-[11px] text-[var(--ink-text-muted)]">
-                            建议字数：~{estWords} 字 ({Math.round(beat.budgetWordRatio * 100)}%)
-                          </span>
-                          <Tooltip content="删除此节拍">
-                            <button
-                              onClick={() => handleDeleteBeat(beat.id)}
-                              className="text-[var(--ink-text-muted)] hover:text-rose-400 p-1"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </Tooltip>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] text-[var(--ink-text-muted)] mb-1">
-                          核心矛盾 / 危机转折细节
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={beat.goalOrConflict}
-                          onChange={(e) => {
-                            const next = [...currentPlan.beats]
-                            next[idx].goalOrConflict = e.target.value
-                            handleUpdateBeats(next)
-                          }}
-                          placeholder="描述这场戏的核心人物动机、遭遇的阻力以及结局转折..."
-                          className="w-full px-3 py-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] focus:outline-none resize-none"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <label className="block text-[10px] text-[var(--ink-text-muted)] mb-1">
-                            入场情绪 (-1.0 绝望 ~ +1.0 狂喜)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="-1"
-                            max="1"
-                            value={beat.emotionalIn}
-                            onChange={(e) => {
-                              const next = [...currentPlan.beats]
-                              next[idx].emotionalIn = Number(e.target.value)
-                              handleUpdateBeats(next)
-                            }}
-                            className="w-full px-2.5 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-[var(--ink-text-muted)] mb-1">
-                            离场情绪 (-1.0 绝望 ~ +1.0 狂喜)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="-1"
-                            max="1"
-                            value={beat.emotionalOut}
-                            onChange={(e) => {
-                              const next = [...currentPlan.beats]
-                              next[idx].emotionalOut = Number(e.target.value)
-                              handleUpdateBeats(next)
-                            }}
-                            className="w-full px-2.5 py-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+          <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
+        </>
+      )}
     </div>
   )
 }

@@ -16,6 +16,24 @@ export class CodexGraphStore {
     this.scanner.build(entities)
   }
 
+  private resolveRelationTarget(
+    entity: CodexEntity,
+    targetId: string,
+    targetName?: string,
+  ): CodexEntity | undefined {
+    const direct = this.entities.get(targetId)
+    if (direct?.projectId === entity.projectId) return direct
+    const normalize = (name: string) => name.trim().toLowerCase().replace(/\s+/g, '-')
+    const key = normalize(targetName || targetId)
+    if (!key) return undefined
+    const candidates = [...this.entities.values()].filter(
+      (candidate) =>
+        candidate.projectId === entity.projectId &&
+        [candidate.name, ...(candidate.aliases ?? [])].some((name) => normalize(name) === key),
+    )
+    return candidates.length === 1 ? candidates[0] : undefined
+  }
+
   public getEntity(id: string): CodexEntity | undefined {
     return this.entities.get(id)
   }
@@ -30,9 +48,16 @@ export class CodexGraphStore {
    * @param tokenBudget 大模型上下文 Token 预算上限（默认 800 Tokens）
    */
   public resolveContextSlice(text: string, tokenBudget: number = 800): CodexSliceResult {
+    if (!Number.isSafeInteger(tokenBudget) || tokenBudget < 0)
+      throw new RangeError('上下文预估预算必须为非负安全整数。')
     const hits = this.scanner.scan(text)
     if (hits.length === 0) {
-      return { matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 }
+      return {
+        matchedEntities: [],
+        xmlContext: '',
+        totalEstimatedTokens: 0,
+        budgetKind: 'estimated',
+      }
     }
 
     // 1. 计算直接命中的词频能量 (Direct Hit Base Energy)
@@ -51,10 +76,11 @@ export class CodexGraphStore {
       const entity = this.entities.get(entityId)
       if (entity && entity.relations) {
         for (const rel of entity.relations) {
-          if (this.entities.has(rel.targetId)) {
-            const current = activatedEnergy.get(rel.targetId) || 0
+          const target = this.resolveRelationTarget(entity, rel.targetId, rel.targetName)
+          if (target) {
+            const current = activatedEnergy.get(target.id) || 0
             // 扩散系数 lambda = 0.5
-            activatedEnergy.set(rel.targetId, current + baseEnergy * 0.5)
+            activatedEnergy.set(target.id, current + baseEnergy * 0.5)
           }
         }
       }
@@ -80,7 +106,12 @@ export class CodexGraphStore {
     const availableBudget = tokenBudget - baseTagTokens
 
     if (availableBudget <= 0 || candidateItems.length === 0) {
-      return { matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 }
+      return {
+        matchedEntities: [],
+        xmlContext: '',
+        totalEstimatedTokens: 0,
+        budgetKind: 'estimated',
+      }
     }
 
     // 4. 标准 0-1 背包动态规划算法 (0-1 Knapsack DP)
@@ -123,7 +154,12 @@ export class CodexGraphStore {
     selected.sort((a, b) => b.value - a.value)
 
     if (selected.length === 0) {
-      return { matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 }
+      return {
+        matchedEntities: [],
+        xmlContext: '',
+        totalEstimatedTokens: 0,
+        budgetKind: 'estimated',
+      }
     }
 
     const xmlLines: string[] = ['<living_codex_context>']
@@ -141,6 +177,7 @@ export class CodexGraphStore {
       matchedEntities: selectedEntities,
       xmlContext: xmlLines.join('\n'),
       totalEstimatedTokens: totalTokens,
+      budgetKind: 'estimated',
     }
   }
 
@@ -157,6 +194,6 @@ export class CodexGraphStore {
       const relStr = e.relations.map((r) => `${r.relationType}->${r.targetName}`).join(', ')
       line += ` | 关系:[${relStr}]`
     }
-    return line
+    return line.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
   }
 }

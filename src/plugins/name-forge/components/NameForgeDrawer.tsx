@@ -3,124 +3,80 @@ import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { NameCategory, GeneratedNameItem } from '../types'
 import { nameForgeEngine } from '../engine/NameForgeEngine'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
-import { Sparkles, Dices, Copy, Check } from 'lucide-react'
-import { Tooltip } from '../../../ui/primitives'
-
-const CATEGORY_OPTIONS: { id: NameCategory; label: string }[] = [
-  { id: 'character_cn', label: '东方人名' },
-  { id: 'character_western', label: '西幻人名' },
-  { id: 'sect_faction', label: '宗门势力' },
-  { id: 'technique_spell', label: '功法神通' },
-  { id: 'item_artifact', label: '法宝神兵' },
-  { id: 'location_realm', label: '秘境地理' },
-]
-
-export const NameForgeDrawer: FC<DesktopPluginDrawerProps> = () => {
+import { Select } from '../../../ui/primitives'
+export const NameForgeDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <NamingDrawerBody key={props.projectId} />
+)
+function NamingDrawerBody() {
   const [category, setCategory] = useState<NameCategory>('character_cn')
-  const [names, setNames] = useState<GeneratedNameItem[]>(() =>
-    nameForgeEngine.generateNames({ category: 'character_cn', count: 5 }),
+  const [prefix, setPrefix] = useState('')
+  const [core, setCore] = useState('')
+  const [generated, setGenerated] = useState<{ scope: string; items: GeneratedNameItem[] } | null>(
+    null,
   )
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-
-  const handleReroll = () => {
-    setNames(nameForgeEngine.generateNames({ category, count: 5 }))
-  }
-
-  const handleCategoryChange = (newCat: NameCategory) => {
-    setCategory(newCat)
-    setNames(nameForgeEngine.generateNames({ category: newCat, count: 5 }))
-  }
-
-  const handleCopy = async (item: GeneratedNameItem) => {
-    try {
-      await clipboardWriter.writeText(item.name)
-      setCopiedId(item.id)
-      setTimeout(() => setCopiedId(null), 1500)
-    } catch (e) {
-      console.error('Failed to copy name:', e)
-    }
-  }
-
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const scope = JSON.stringify([category, prefix, core])
   return (
-    <aside
-      className="w-72 h-full flex flex-col bg-[var(--ink-bg-panel)] border-l border-[var(--ink-border)] text-[var(--ink-text)] text-xs"
-      data-testid="name-forge-drawer"
-    >
-      {/* 顶栏 */}
-      <div className="p-3 border-b border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]/40 shrink-0 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-semibold text-[var(--ink-text)]">
-            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-            <span>奇幻起名摇号</span>
-          </div>
-
-          <Tooltip content="重新生成 5 个名字">
+    <aside data-testid="name-forge-drawer" className="p-4 space-y-3 text-xs">
+      <h3>命名候选</h3>
+      <p>词库组合，读音和背景尚未校核。</p>
+      <Select
+        aria-label="侧栏命名类别"
+        value={category}
+        onValueChange={(value) => setCategory(value as NameCategory)}
+      >
+        <option value="character_cn">东方人名</option>
+        <option value="character_western">西式词库</option>
+        <option value="sect_faction">组织势力</option>
+        <option value="technique_spell">能力术式</option>
+        <option value="item_artifact">物品</option>
+        <option value="location_realm">地点</option>
+      </Select>
+      <input aria-label="侧栏固定开头" value={prefix} onChange={(e) => setPrefix(e.target.value)} />
+      <input aria-label="侧栏必需片段" value={core} onChange={(e) => setCore(e.target.value)} />
+      <button
+        onClick={() => {
+          setError('')
+          try {
+            setGenerated({
+              scope,
+              items: nameForgeEngine.generateNames({
+                category,
+                count: 5,
+                fixedPrefix: prefix || undefined,
+                fixedKern: core || undefined,
+              }),
+            })
+          } catch (cause) {
+            setError(String(cause))
+          }
+        }}
+      >
+        生成命名候选
+      </button>
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      {generated?.scope === scope &&
+        generated.items.map((item) => (
+          <p key={item.id}>
+            {item.name}
             <button
-              onClick={handleReroll}
-              className="p-1 hover:bg-[var(--ink-bg-hover)] rounded text-[var(--ink-text-muted)] hover:text-purple-400 flex items-center gap-1 text-[11px]"
+              onClick={async () => {
+                setError('')
+                setMessage('')
+                try {
+                  await clipboardWriter.writeText(item.name)
+                  setMessage('已复制名称。')
+                } catch (cause) {
+                  setError(String(cause))
+                }
+              }}
             >
-              <Dices className="w-3.5 h-3.5" />
-              <span>摇号</span>
+              复制名称
             </button>
-          </Tooltip>
-        </div>
-
-        {/* 类别下拉切换 */}
-        <div className="flex items-center gap-1 overflow-x-auto py-0.5">
-          {CATEGORY_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => handleCategoryChange(opt.id)}
-              className={`px-2 py-1 rounded text-[10px] whitespace-nowrap transition-colors ${
-                category === opt.id
-                  ? 'bg-[var(--ink-accent)] text-white font-medium'
-                  : 'bg-[var(--ink-bg-canvas)] hover:bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 摇号结果紧凑列表 */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {names.map((item) => {
-          const isCopied = copiedId === item.id
-          return (
-            <div
-              key={item.id}
-              className="p-2.5 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] hover:border-[var(--ink-accent)]/40 transition-colors space-y-1.5"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-[var(--ink-text)]">{item.name}</span>
-                <Tooltip content="复制名称">
-                  <button
-                    onClick={() => handleCopy(item)}
-                    className="hover:text-[var(--ink-accent)] flex items-center gap-1 text-[var(--ink-text-muted)] text-[10px]"
-                  >
-                    {isCopied ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-500" />
-                        <span className="text-emerald-500">已复制</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        <span>复制</span>
-                      </>
-                    )}
-                  </button>
-                </Tooltip>
-              </div>
-
-              <p className="text-[10px] text-[var(--ink-text-muted)] line-clamp-1">
-                {item.meaningOrVibe}
-              </p>
-            </div>
-          )
-        })}
-      </div>
+          </p>
+        ))}
     </aside>
   )
 }

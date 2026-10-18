@@ -5,9 +5,13 @@ import type { SubPlotStrand } from '../types'
 import { indexedDbSubPlotRepository } from '../../../adapters/indexedDbSubPlotRepository'
 import { GitMerge } from 'lucide-react'
 
-export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
+export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <ProjectSubPlotDrawer key={props.projectId} {...props} />
+)
+const ProjectSubPlotDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [strands, setStrands] = useState<SubPlotStrand[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -17,6 +21,8 @@ export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
         const all = await indexedDbSubPlotRepository.getAll(projectId)
         if (!isMounted) return
         setStrands(all)
+      } catch {
+        if (isMounted) setError('副线档案加载失败，请重试。')
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -31,6 +37,7 @@ export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
     text: currentText || '',
     strands,
   })
+  const mentions = SubPlotBraidEngine.locateMentions({ text: currentText, strands })
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
@@ -42,6 +49,7 @@ export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
           待推副线: {strands.filter((s) => s.status === 'active').length}
         </span>
       </div>
+      {error && <p role="alert">{error}</p>}
 
       {loading ? (
         <div className="p-4 text-xs text-[var(--ink-text-muted)] text-center py-8">
@@ -50,7 +58,7 @@ export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
       ) : activeDetectedStrands.length > 0 ? (
         <div className="space-y-2">
           <span className="text-[11px] font-semibold text-purple-500 block">
-            本章正推进的副线 ({activeDetectedStrands.length})：
+            本章提及的副线定位词 ({activeDetectedStrands.length})：
           </span>
           {activeDetectedStrands.map((s) => (
             <div
@@ -59,6 +67,14 @@ export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
             >
               <div className="font-bold text-[var(--ink-text)]">{s.title}</div>
               <p className="text-[11px] text-[var(--ink-text-muted)] line-clamp-2">{s.summary}</p>
+              {mentions
+                .filter((mention) => mention.strandId === s.id)
+                .map((mention, index) => (
+                  <p key={index}>
+                    原文 [{mention.startOffset}, {mention.endOffset})：{mention.quote}
+                    。提及不表示推进。
+                  </p>
+                ))}
               {s.involvedCharacterNames.length > 0 && (
                 <div className="text-[10px] text-purple-400">
                   出镜配角: {s.involvedCharacterNames.join('、')}
@@ -76,7 +92,7 @@ export const SubPlotBraidDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, cu
       {/* 待推进副线速览 */}
       <div className="space-y-2 pt-2 border-t border-[var(--ink-border)]">
         <span className="text-[11px] font-semibold text-[var(--ink-text-muted)] block">
-          需防遗忘/活跃中副线：
+          作者登记为活跃的副线：
         </span>
         {strands
           .filter((s) => s.status === 'active')

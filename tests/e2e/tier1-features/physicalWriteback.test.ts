@@ -55,9 +55,8 @@ describe('Tier 1: F7-F10 - Physical Writeback', () => {
   })
 
   it('TC-WRITE-01: applies an AftermathEngine entity patch through the host and persists its decision', async () => {
-    const { harness, projectId, chapterId } = createChapterFixture(
-      '林凡在闭关后气息暴涨，一举迈入金丹初期！',
-    )
+    const { harness, projectId, chapterId } =
+      createChapterFixture('林凡在闭关后气息暴涨，一举迈入金丹初期！')
     const now = Date.now()
     const entity: CodexEntity = {
       id: `${projectId}::character-lin-fan`,
@@ -167,11 +166,7 @@ describe('Tier 1: F7-F10 - Physical Writeback', () => {
     expect(diff.stats.deletions).toBeGreaterThan(0)
     const merged = DiffReviewerEngine.applyHunks(
       original,
-      diff.hunks.map((hunk) => ({
-        lines: hunk.lines,
-        oldStartLine: hunk.oldStartLine,
-        resolution: 'applied' as const,
-      })),
+      diff.hunks.map((hunk) => ({ ...hunk, resolution: 'applied' as const })),
     )
     expect(merged).toBe(proposed)
 
@@ -244,8 +239,7 @@ describe('Tier 1: F7-F10 - Physical Writeback', () => {
   })
 
   it('TC-WRITE-04: writes WaterMeter cleanup output to the active chapter and preserves the audit event', async () => {
-    const initialText =
-      '众所周知，林凡忍不住拔剑，暗暗心惊，随后拔剑斩向黑衣人，剑光撕裂长街。'
+    const initialText = '众所周知，林凡忍不住拔剑，暗暗心惊，随后拔剑斩向黑衣人，剑光撕裂长街。'
     const { harness, projectId, chapterId } = createChapterFixture(initialText)
     const audited: Array<PluginEventPayloads['CHAPTER_CONTENT_AUDITED']> = []
     const unsubscribe = harness.scopedBus.on('CHAPTER_CONTENT_AUDITED', (payload) => {
@@ -262,8 +256,8 @@ describe('Tier 1: F7-F10 - Physical Writeback', () => {
       projectId,
       chapterId,
       wordCount: report.totalWordCount,
-      waterScore: report.waterScore,
     })
+    expect(audited[0]).not.toHaveProperty('waterScore')
 
     const cleanedText = report.bloatItems
       .reduce((text, item) => text.replaceAll(item.text, ''), initialText)
@@ -365,7 +359,7 @@ describe('Tier 1: F7-F10 - Physical Writeback', () => {
     const fixedReport = engine.lint(fixedText)
     expect(fixedText).not.toContain(issue.matchedSnippet)
     expect(fixedReport.warningCount).toBe(0)
-    expect(fixedReport.cleanScore).toBeGreaterThan(initialReport.cleanScore)
+    expect(fixedReport).not.toHaveProperty('cleanScore')
 
     const audited: Array<PluginEventPayloads['CHAPTER_CONTENT_AUDITED']> = []
     const unsubscribe = harness.scopedBus.on('CHAPTER_CONTENT_AUDITED', (payload) => {

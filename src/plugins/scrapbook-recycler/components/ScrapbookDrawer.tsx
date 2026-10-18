@@ -1,72 +1,68 @@
-import { useState, useEffect, type FC } from 'react'
+import { useEffect, useMemo, useState, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
-import { indexedDbScrapbookRepository } from '../../../adapters/indexedDbScrapbookRepository'
+import type { ScrapbookFragmentRecord } from '../types'
 import { ScrapbookEngine } from '../engine/ScrapbookEngine'
-import type { ScrapbookFragmentRecord, ScrapRecommendation } from '../types'
-import { Archive, Sparkles } from 'lucide-react'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { indexedDbScrapbookRepository } from '../../../adapters/indexedDbScrapbookRepository'
+import { clipboardWriter } from '../../../adapters/clipboardWriter'
 
-export const ScrapbookDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
+export const ScrapbookDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <ScrapbookDrawerSession key={props.projectId} {...props} />
+)
+const ScrapbookDrawerSession: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [fragments, setFragments] = useState<ScrapbookFragmentRecord[]>([])
-  const [recs, setRecs] = useState<ScrapRecommendation[]>([])
-
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
+    let stale = false
     indexedDbScrapbookRepository
       .getAll(projectId)
       .then((all) => {
-        setFragments(all)
+        if (!stale) {
+          setFragments(all.filter((f) => f.projectId === projectId))
+          setError(null)
+        }
       })
-      .catch(console.error)
-  }, [projectId])
-
-  useEffect(() => {
-    if (!currentText || fragments.length === 0) {
-      setRecs([])
-      return
+      .catch((cause) => {
+        if (!stale) setError(String(cause))
+      })
+    return () => {
+      stale = true
     }
-    const result = ScrapbookEngine.recommendFragments(currentText, fragments, 3)
-    setRecs(result)
-  }, [currentText, fragments])
-
+  }, [projectId, attempt])
+  const recs = useMemo(
+    () => ScrapbookEngine.recommendFragments(currentText, fragments, 3),
+    [currentText, fragments],
+  )
+  const copy = async (fragment: ScrapbookFragmentRecord) => {
+    try {
+      await clipboardWriter.writeText(fragment.snippet)
+      setCopied(fragment.id)
+      setError(null)
+    } catch (cause) {
+      setError('复制失败：' + String(cause))
+    }
+  }
   return (
     <div className="p-3 space-y-3 text-xs">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-        <span className="font-bold flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-          <Archive className="w-4 h-4" /> 废稿灵感推荐
-        </span>
-        <span className="text-[10px] text-slate-400">池内 {fragments.length} 条</span>
-      </div>
-
-      {recs.length === 0 ? (
-        <div className="p-3 rounded bg-slate-50 dark:bg-slate-800/50 text-slate-400 text-center">
-          未检索到与当前上下文契合的废稿
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <ScoreProvenanceBadge source="rule" detail="按关键词命中匹配素材库条目" />
-          <div className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-500" />
-            <span>智能语义召回灵感:</span>
-          </div>
-
-          {recs.map((r) => (
-            <div
-              key={r.fragment.id}
-              className="p-2.5 rounded-lg border bg-white dark:bg-slate-800 border-indigo-200 dark:border-indigo-900/60 space-y-1"
-            >
-              <div className="flex items-center justify-between text-[10px] text-slate-400">
-                <span className="font-bold text-indigo-600">
-                  契合度: {Math.round(r.similarityScore * 100)}%
-                </span>
-                <span>{r.fragment.wordCount} 字</span>
-              </div>
-              <div className="font-serif text-[11px] text-slate-600 dark:text-slate-300 line-clamp-3">
-                "{r.fragment.snippet}"
-              </div>
-            </div>
-          ))}
-        </div>
+      <h3>废稿灵感推荐</h3>
+      <p>池内 {fragments.length} 条 · 当前全文词项匹配</p>
+      {error && (
+        <p role="alert">
+          {error}
+          <button onClick={() => setAttempt((n) => n + 1)}>重新读取</button>
+        </p>
       )}
+      {!recs.length && <p>未检索到与当前上下文有词项重合的废稿</p>}
+      {recs.map((r) => (
+        <article key={r.fragment.id} className="border rounded p-2">
+          <p>匹配词项：{r.matchedKeywords.join('、')}</p>
+          <blockquote className="whitespace-pre-wrap">{r.fragment.snippet}</blockquote>
+          <button onClick={() => void copy(r.fragment)}>
+            {copied === r.fragment.id ? '已复制' : '复制片段'}
+          </button>
+        </article>
+      ))}
     </div>
   )
 }

@@ -5,6 +5,8 @@ import { PressForgeDrawer } from './PressForgeDrawer'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { indexedDbPressConfigRepository } from '../../../adapters/indexedDbPressConfigRepository'
 import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
+import { PressForgeEngine } from '../engine/PressForgeEngine'
+import type { PressFormatOptions } from '../types'
 
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
@@ -88,7 +90,9 @@ describe('PressForge Components', () => {
   })
 
   it('runs the Runtime tool only on an explicit click, and projects stored HTML at that boundary', async () => {
-    const onPluginTool = vi.fn(async () => aiTypesetResult)
+    const onPluginTool = vi.fn(async (_pluginId: string, input: Record<string, unknown>) =>
+      PressForgeEngine.formatText(String(input.rawContent), input.options as PressFormatOptions),
+    )
     vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
       fakeChapters as any,
     )
@@ -114,12 +118,21 @@ describe('PressForge Components', () => {
         expect.objectContaining({ rawContent: '测试段落一\n测试段落二' }),
       )
     })
-    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('AI 深度排版后的正文'))
+    const request = onPluginTool.mock.calls[0][1]
+    const expected = PressForgeEngine.formatText(
+      String(request.rawContent),
+      request.options as PressFormatOptions,
+    )
+    await waitFor(() =>
+      expect(screen.getByLabelText('排版预览文本')).toHaveValue(expected.formattedText),
+    )
     expect(screen.getByTestId('press-forge-result-origin')).toHaveTextContent('来源：AI 深度排版')
   })
 
   it('drops the AI preview as soon as its own inputs change, instead of showing a stale result', async () => {
-    const onPluginTool = vi.fn(async () => aiTypesetResult)
+    const onPluginTool = vi.fn(async (_pluginId: string, input: Record<string, unknown>) =>
+      PressForgeEngine.formatText(String(input.rawContent), input.options as PressFormatOptions),
+    )
     vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
       fakeChapters as any,
     )
@@ -137,11 +150,22 @@ describe('PressForge Components', () => {
     )
 
     fireEvent.click(await screen.findByTestId('press-forge-ai-run'))
-    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('AI 深度排版后的正文'))
+    await waitFor(() =>
+      expect(screen.getByTestId('press-forge-result-origin')).toHaveTextContent(
+        '来源：AI 深度排版',
+      ),
+    )
+    const previousPreview = (screen.getByLabelText('排版预览文本') as HTMLTextAreaElement).value
 
     fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '0' } })
 
-    expect(screen.getByRole('textbox')).not.toHaveValue('AI 深度排版后的正文')
+    const changedOptions = {
+      ...PressForgeEngine.PRESETS['qidian-standard'].defaultOptions,
+      indentSpaces: 0,
+    }
+    const newLocalPreview = PressForgeEngine.formatText('测试段落一\n测试段落二', changedOptions)
+    expect(screen.getByLabelText('排版预览文本')).not.toHaveValue(previousPreview)
+    expect(screen.getByLabelText('排版预览文本')).toHaveValue(newLocalPreview.formattedText)
     expect(screen.getByTestId('press-forge-result-origin')).toHaveTextContent('来源：本地排版引擎')
     expect(screen.queryByRole('button', { name: /回到本地排版/ })).not.toBeInTheDocument()
     expect(onPluginTool).toHaveBeenCalledTimes(1)
@@ -161,15 +185,9 @@ describe('PressForge Components', () => {
 
     fireEvent.click(await screen.findByTestId('press-forge-ai-run'))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('AI 通道不可用，深度排版没有发出')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Runtime 未连接，当前使用本地排版结果。',
+    )
     expect(screen.getByTestId('press-forge-result-origin')).toHaveTextContent('来源：本地排版引擎')
   })
 })
-
-const aiTypesetResult = {
-  formattedText: 'AI 深度排版后的正文',
-  lineCount: 1,
-  characterCount: 10,
-  fixedPunctuationCount: 0,
-  warnings: [],
-}

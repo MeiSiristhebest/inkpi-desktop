@@ -12,6 +12,10 @@ export interface SparkSolution {
   corePrinciple: string
   concretePlot: string
   twistImpact: 'subtle' | 'dramatic' | 'earthshaking'
+  status?: 'creative_option'
+  requiredSetup?: string[]
+  knownResources?: string[]
+  constraints?: string[]
   pros: string
   cons: string
 }
@@ -25,6 +29,8 @@ export interface BrainstormSpark {
   currentSituation: string
   protagonistGoal: string
   enemyAdvantage: string
+  knownResources?: string[]
+  constraints?: string[]
   selectedSolution?: SparkSolution
   generatedSolutions: SparkSolution[]
   tags: string[]

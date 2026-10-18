@@ -3,6 +3,13 @@ import type {
   CacheInvalidateParams,
   CacheInvalidateResult,
   CacheStatus,
+  OpenAIChatGPTPlanConnection,
+  OpenAIChatGPTPlanDisconnectResult,
+  OpenAIChatGPTPlanModel,
+  OpenAIChatGPTPlanSignInParams,
+  OpenAIChatGPTPlanSignInStart,
+  OpenAIChatGPTPlanSignInStatus,
+  OpenAIChatGPTPlanSignInStatusParams,
   RuntimeModelProviderProbeParams,
   RuntimeModelProviderProbeResult,
   TaskExecutionSnapshot,
@@ -45,10 +52,22 @@ export interface AiGateway {
   connect(url: string): Promise<RpcClient>
 }
 
+/** Account controls for the local Sign in with ChatGPT route. Tokens stay in Runtime. */
+export interface ChatGPTPlanAssistant {
+  getStatus(): Promise<OpenAIChatGPTPlanConnection>
+  startSignIn(params: OpenAIChatGPTPlanSignInParams): Promise<OpenAIChatGPTPlanSignInStart>
+  signInStatus(params: OpenAIChatGPTPlanSignInStatusParams): Promise<OpenAIChatGPTPlanSignInStatus>
+  listModels(): Promise<OpenAIChatGPTPlanModel[]>
+  disconnect(): Promise<OpenAIChatGPTPlanDisconnectResult>
+  openAuthorizationUrl(url: string): Promise<void>
+  openUsageSettings(): Promise<void>
+}
+
 /**
  * 语义化 AI 助手端口。所有创作请求都通过通用 task.submit 进入 Runtime。
  */
 export interface AiAssistant {
+  chatgptPlan?: ChatGPTPlanAssistant
   runTask(
     task: AiTask,
     options?: {

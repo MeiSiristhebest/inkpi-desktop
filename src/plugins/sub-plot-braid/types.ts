@@ -14,6 +14,9 @@ export interface SubPlotStrand {
   targetVolumeTitle?: string
   climaxChapterOrder?: number
   convergenceNote?: string
+  prerequisiteStrandIds?: string[]
+  reminderAfterChapters?: number
+  lastProgressNote?: string
   tags: string[]
   updatedAt: number
 }
@@ -21,8 +24,8 @@ export interface SubPlotStrand {
 export interface ThreadHealthMetric {
   strandId: string
   title: string
-  dormancyDistance: number // 距今未推进章节数
-  isStarved: boolean // 是否饥饿掉线 (>= 15 章)
-  isCriticalAbandoned: boolean // 是否已严重断线 (>= 30 章)
-  convergenceReadiness: 'ready' | 'progressing' | 'cold'
+  dormancyDistance: number | null
+  isStarved: boolean // Author reminder interval reached.
+  convergenceReadiness: 'ready' | 'blocked' | 'unknown'
+  pendingPrerequisites: string[]
 }

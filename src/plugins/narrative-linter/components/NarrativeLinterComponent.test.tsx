@@ -5,12 +5,18 @@ import { NarrativeLinterMasterView } from './NarrativeLinterMasterView'
 import { NarrativeLinterDrawer } from './NarrativeLinterDrawer'
 import { DesktopPluginHostProvider } from '../../../core/pluginHostContext'
 
-const { getChaptersByProject } = vi.hoisted(() => ({
+const { getChaptersByProject, getVolumesByProject, getConfig, saveConfig } = vi.hoisted(() => ({
   getChaptersByProject: vi.fn(),
+  getVolumesByProject: vi.fn(async () => [{ id: 'v1', projectId: 'p1', order: 0 }]),
+  getConfig: vi.fn(async () => undefined),
+  saveConfig: vi.fn(async () => {}),
 }))
 
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
-  indexedDbProjectRepository: { getChaptersByProject },
+  indexedDbProjectRepository: { getChaptersByProject, getVolumesByProject },
+}))
+vi.mock('../../../adapters/indexedDbNarrativeLinterRepository', () => ({
+  indexedDbNarrativeLinterRepository: { getConfig, saveConfig },
 }))
 
 describe('NarrativeLinter UI Components', () => {
@@ -65,7 +71,7 @@ describe('NarrativeLinter UI Components', () => {
     await userEvent.click(selector)
     await userEvent.click(await screen.findByRole('option', { name: '第 2 章 · 第二章' }))
 
-    const textarea = screen.getByRole('textbox')
+    const textarea = screen.getByRole('textbox', { name: '待审章节正文' })
     await waitFor(() => expect(textarea).toHaveValue('第二章\n第二章正文'))
     screen.getByRole('button', { name: 'AI 叙事深度体检' }).click()
 
@@ -73,13 +79,38 @@ describe('NarrativeLinter UI Components', () => {
       expect.objectContaining({
         input: expect.objectContaining({
           payload: expect.objectContaining({
-            analysisInput: {
-              chapter: { id: 'chapter-2', order: 2, title: '第二章' },
-              text: '第二章\n第二章正文',
-            },
+            analysisInput: expect.objectContaining({
+              schemaVersion: 'plugin-review-v2',
+              input: expect.objectContaining({
+                chapter: { id: 'chapter-2', chapterNumber: 2, revision: 4, title: '第二章' },
+                text: '第二章\n第二章正文',
+              }),
+            }),
           }),
         }),
       }),
+    )
+  })
+  it('preserves author thresholds across a failed save and retries the same configuration', async () => {
+    saveConfig.mockRejectedValueOnce(new Error('disk'))
+    render(<NarrativeLinterMasterView projectId="p1" />)
+    await waitFor(() => expect(screen.getByRole('button', { name: '保存规则配置' })).toBeEnabled())
+    const threshold = screen.getByRole('spinbutton', { name: '分句长度定位阈值' })
+    await userEvent.clear(threshold)
+    await userEvent.type(threshold, '12')
+    await userEvent.click(screen.getByRole('button', { name: '保存规则配置' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('规则保存失败')
+    expect(threshold).toHaveValue(12)
+    await userEvent.click(screen.getByRole('button', { name: '保存规则配置' }))
+    await waitFor(() =>
+      expect(saveConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          projectId: 'p1',
+          rules: expect.arrayContaining([
+            expect.objectContaining({ ruleId: 'LINT_RUN_ON_SENTENCE', customThreshold: 12 }),
+          ]),
+        }),
+      ),
     )
   })
 })

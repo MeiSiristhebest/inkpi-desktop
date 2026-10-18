@@ -1,50 +1,37 @@
 import { describe, it, expect } from 'vitest'
-import { EmotionCurveEngine } from './EmotionCurveEngine'
-
+import { EmotionCurveEngine as engine } from './EmotionCurveEngine'
 describe('EmotionCurveEngine', () => {
-  it('handles empty chapter text gracefully', () => {
-    const res = EmotionCurveEngine.evaluateChapter({
-      chapterId: 'c1',
-      chapterTitle: '空章节',
-      chapterOrder: 1,
-      content: '',
-    })
-
-    expect(res.wordCount).toBe(0)
-    expect(res.netPolarity).toBe(0)
-    expect(res.warnings.length).toBeGreaterThan(0)
+  const chapter = (order: number) => ({
+    chapterId: 'c' + order,
+    chapterTitle: '',
+    chapterOrder: order,
+    content: '作者正文。',
   })
-
-  it('detects strong catharsis and high positive polarity', () => {
-    const text = `
-      陆沉凌空而立，手中长剑横扫！暴爽的一剑破万法，直接秒杀全场大敌！
-      神王倒下，群雄震撼跪伏！全场修士狂笑欢呼，名震八荒，登顶天下第一！
-    `.repeat(4)
-
-    const res = EmotionCurveEngine.evaluateChapter({
-      chapterId: 'c2',
-      chapterTitle: '第2章 登顶',
-      chapterOrder: 2,
-      content: text,
+  const annotation = { values: { tension: 80 }, note: '作者标注', quote: '正文', start: 2, end: 4 }
+  it('uses explicit zero as an author value, distinct from missing dimensions', () => {
+    const report = engine.evaluateChapter({
+      ...chapter(1),
+      annotation: { ...annotation, values: { joy: 0 } },
     })
-
-    expect(res.vector.catharsis).toBeGreaterThan(60)
-    expect(res.netPolarity).toBeGreaterThan(30)
-    expect(res.dominantEmotion).toBe('catharsis')
+    expect(report.annotation?.values.joy).toBe(0)
+    expect(report.annotation?.values.tension).toBeUndefined()
   })
-
-  it('detects window fatigue when 3 consecutive chapters are frustrated', () => {
-    const lowChapter = (order: number) => ({
-      chapterId: `c-${order}`,
-      chapterTitle: `第${order}章`,
-      chapterOrder: order,
-      content: '重伤绝望，被辱吐血，背叛囚禁。'.repeat(6),
-    })
-
-    const evals = [1, 2, 3].map(lowChapter).map((c) => EmotionCurveEngine.evaluateChapter(c))
-    const alerts = EmotionCurveEngine.analyzeWindowFatigue(evals)
-
-    expect(alerts.length).toBeGreaterThan(0)
-    expect(alerts[0]).toContain('连载弃书高危')
+  it('reports a consecutive author reminder only with a specified condition', () => {
+    const sequence = [3, 1, 2].map((n) => engine.evaluateChapter({ ...chapter(n), annotation }))
+    expect(engine.analyzeWindowFatigue(sequence)).toEqual([])
+    expect(
+      engine.analyzeWindowFatigue(sequence, { emotion: 'tension', threshold: 70, consecutive: 3 }),
+    ).toEqual(['第 1 至 3 章连续满足作者的 tension 标注提醒条件；读者反应未知。'])
+  })
+  it('rejects invalid or stale evidence and nonfinite values', () => {
+    expect(() =>
+      engine.evaluateChapter({ ...chapter(1), annotation: { ...annotation, quote: '另外的正文' } }),
+    ).toThrow()
+    expect(() =>
+      engine.evaluateChapter({
+        ...chapter(1),
+        annotation: { ...annotation, values: { joy: NaN } },
+      }),
+    ).toThrow()
   })
 })

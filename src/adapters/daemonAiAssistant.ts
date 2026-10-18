@@ -10,6 +10,7 @@ import type {
   TaskSubmitResult,
   ToolResultMessage,
 } from '@inkpi/protocol'
+import { invoke } from '@tauri-apps/api/core'
 import type {
   RuntimeModelRouteHealthResult,
   RuntimeModelRouteHealthState,
@@ -143,6 +144,16 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
   }
 
   return {
+    chatgptPlan: {
+      getStatus: () => client.request('model.chatgpt-plan.status'),
+      startSignIn: (params) => client.request('model.chatgpt-plan.sign-in', params),
+      signInStatus: (params) => client.request('model.chatgpt-plan.sign-in-status', params),
+      listModels: () => client.request('model.chatgpt-plan.models'),
+      disconnect: () => client.request('model.chatgpt-plan.disconnect'),
+      openAuthorizationUrl: (url) =>
+        invoke('open_chatgpt_plan_authorization_url', { url }).then(() => undefined),
+      openUsageSettings: () => invoke('open_chatgpt_plan_usage_settings').then(() => undefined),
+    },
     runTask,
 
     runPluginTool: async (

@@ -31,7 +31,7 @@ describe('AftermathEngine (章后桥段设定回写器)', () => {
   })
 
   it('把缔结关系的线索原样带进提案，而不是统一报成盟友', () => {
-    const text = `林凡提出让苏雨柔拜其为师，二人自此共修丹道。`
+    const text = `林凡与苏雨柔结为师徒，苏雨柔拜其为师。`
     const result = AftermathEngine.analyzeChapter(text, 'ch3', 3, mockEntities)
 
     expect(result.summary.relations).toBe(1)

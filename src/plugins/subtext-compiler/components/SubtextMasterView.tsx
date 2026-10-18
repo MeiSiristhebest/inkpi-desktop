@@ -1,206 +1,237 @@
-import { useState, useEffect, type FC } from 'react'
+import { useEffect, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import { indexedDbSubtextRepository } from '../../../adapters/indexedDbSubtextRepository'
 import { SubtextCompilerEngine } from '../engine/SubtextCompilerEngine'
-import type { SubtextDialogueRecord } from '../types'
-import { MessageSquareQuote, Layers, Send, Bot } from 'lucide-react'
+import type { AuthorEmotion, SubtextDialogueRecord } from '../types'
+import { indexedDbSubtextRepository } from '../../../adapters/indexedDbSubtextRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { semanticTextFromContent } from '../../../domain/content'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { semanticTextFromContent } from '../../../domain/content'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Select } from '../../../ui/primitives'
-
-export const SubtextMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
-  const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('subtext-compiler')
+export const SubtextMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <SubtextWorkspace key={props.projectId} {...props} />
+)
+function SubtextWorkspace({ projectId }: DesktopPluginViewProps) {
+  const host = useOptionalPluginHostContext()
   const [spoken, setSpoken] = useState('')
-  const [speakerName, setSpeakerName] = useState('')
-  const [emotion, setEmotion] = useState<
-    'anger' | 'fear' | 'pride' | 'affection' | 'jealousy' | 'guilt'
-  >('affection')
-
-  const handleAiSubtextCompile = async () => {
-    if (!spoken.trim() || !speakerName.trim()) return
-    const analysisInput = {
-      speaker: semanticTextFromContent('subtext-compiler-speaker', speakerName),
-      emotion,
-      spoken: semanticTextFromContent('subtext-compiler-spoken', spoken),
-    }
-
-    await aiTask.run(analysisInput)
-  }
-
-  const loadList = async () => {
-    await indexedDbSubtextRepository.getAll(projectId)
-  }
-
+  const [speaker, setSpeaker] = useState('')
+  const [emotion, setEmotion] = useState<AuthorEmotion | ''>('')
+  const [goal, setGoal] = useState('')
+  const [meaning, setMeaning] = useState('')
+  const [action, setAction] = useState('')
+  const [relationship, setRelationship] = useState('')
+  const [whyHidden, setWhyHidden] = useState('')
+  const [context, setContext] = useState('')
+  const [saved, setSaved] = useState<SubtextDialogueRecord[]>([])
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const ai = usePluginAiTask('subtext-compiler', [
+    projectId,
+    spoken,
+    speaker,
+    emotion,
+    goal,
+    meaning,
+    action,
+    relationship,
+    whyHidden,
+    context,
+  ])
   useEffect(() => {
-    loadList().catch(console.error)
+    let disposed = false
+    indexedDbSubtextRepository
+      .getAll(projectId)
+      .then((records) => {
+        if (!disposed) setSaved(records.filter((r) => r.projectId === projectId))
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
+    }
   }, [projectId])
-
-  useEffect(() => {
-    onStats?.({
-      title: '潜台词与冰山对白双轨编译器',
-      wordCount: spoken.length,
-      updatedAt: clock.now(),
-    })
-  }, [spoken, onStats])
-
-  const hasInput = Boolean(spoken.trim() && speakerName.trim())
-  const compiled = hasInput ? SubtextCompilerEngine.compile(spoken, speakerName, emotion) : null
-  const renderedParagraph = compiled ? SubtextCompilerEngine.renderNovelParagraph(compiled) : ''
-
-  const handleSave = async () => {
+  const compiled =
+    spoken.trim() && speaker.trim()
+      ? SubtextCompilerEngine.compile(spoken, speaker, emotion || undefined, {
+          goal,
+          intendedMeaning: meaning,
+          action,
+          relationship,
+          whyHidden,
+        })
+      : null
+  const save = async () => {
     if (!compiled) return
-    const record: SubtextDialogueRecord = {
-      id: idGenerator.generate('subtext'),
-      projectId,
-      chapterId: 'manual',
-      speakerName: compiled.speakerName,
-      spoken: compiled.spoken,
-      subtext: compiled.subtext,
-      beatAction: compiled.beatAction,
-      defenseMechanism: compiled.defenseMechanism,
-      tensionLevel: compiled.tensionLevel,
-      updatedAt: clock.now(),
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      const record: SubtextDialogueRecord = {
+        id: idGenerator.generate('subtext'),
+        projectId,
+        chapterId: host?.projectId === projectId ? (host.activeChapter?.id ?? 'manual') : 'manual',
+        speakerName: compiled.speakerName,
+        spoken: compiled.spoken,
+        subtext: compiled.subtext,
+        beatAction: compiled.beatAction,
+        goal: compiled.goal,
+        authorEmotion: compiled.authorEmotion,
+        relationship,
+        whyHidden,
+        surroundingText: context,
+        status: compiled.status,
+        updatedAt: clock.now(),
+      }
+      await indexedDbSubtextRepository.save(record)
+      setSaved((previous) => [...previous, record])
+      setMessage('已保存作者对白草稿。')
+    } catch (cause) {
+      setError(String(cause))
+    } finally {
+      setSaving(false)
     }
-    await indexedDbSubtextRepository.save(record)
-    await loadList()
   }
-
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto text-slate-800 dark:text-slate-100">
-      <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <MessageSquareQuote className="w-6 h-6 text-indigo-500" />
-            <span>潜台词与冰山对白双轨编译器 (SubtextCompiler)</span>
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            遵循海明威“冰山理论”，将白开水对白解耦为“表面台词 + 水下潜台词 + 肢体微反应”三轨立体架构
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>潜台词与对白草稿</h2>
+      <p>
+        分别记录表层台词、说话目标、隐藏含义和作者选择的动作。缺失信息保留未知；情绪选项不推断心理机制。
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      <input
+        aria-label="说话角色名"
+        value={speaker}
+        onChange={(e) => setSpeaker(e.target.value)}
+        placeholder="填写角色名"
+      />
+      <textarea
+        aria-label="表面台词"
+        value={spoken}
+        onChange={(e) => setSpoken(e.target.value)}
+        placeholder="填写需要分析的对白"
+        className="w-full border rounded p-2"
+      />
+      <input
+        aria-label="说话目标"
+        value={goal}
+        onChange={(e) => setGoal(e.target.value)}
+        placeholder="人物希望对方做什么"
+      />
+      <textarea
+        aria-label="作者设定的潜台词"
+        value={meaning}
+        onChange={(e) => setMeaning(e.target.value)}
+        placeholder="作者设定的隐藏含义"
+      />
+      <textarea
+        aria-label="隐藏原因"
+        value={whyHidden}
+        onChange={(e) => setWhyHidden(e.target.value)}
+        placeholder="为何不直接说，能透露到哪一步"
+      />
+      <input
+        aria-label="人物关系"
+        value={relationship}
+        onChange={(e) => setRelationship(e.target.value)}
+        placeholder="对方是谁，人物关系和当前处境"
+      />
+      <Select
+        aria-label="作者设定情绪"
+        value={emotion}
+        onValueChange={(value) => setEmotion(value as AuthorEmotion | '')}
+      >
+        <option value="">尚未设定</option>
+        <option value="anger">愤怒</option>
+        <option value="fear">恐惧</option>
+        <option value="pride">自尊</option>
+        <option value="affection">关心</option>
+        <option value="jealousy">嫉妒</option>
+        <option value="guilt">内疚</option>
+      </Select>
+      <textarea
+        aria-label="作者选择的伴随动作"
+        value={action}
+        onChange={(e) => setAction(e.target.value)}
+        placeholder="可选动作，不填则不添加动作"
+      />
+      <textarea
+        aria-label="对白前后语境"
+        value={context}
+        onChange={(e) => setContext(e.target.value)}
+        placeholder="提供人物当时知道的信息和对白前后正文"
+        className="w-full border rounded p-2"
+      />
+      {host?.activeChapter && (
+        <button
+          onClick={() =>
+            setContext(
+              semanticTextFromContent(
+                host.activeChapter!.id,
+                host.activeChapter!.content,
+                host.activeChapter!.revision,
+              ),
+            )
+          }
+        >
+          载入当前章节作为语境
+        </button>
+      )}
+      {compiled ? (
+        <section className="border rounded p-3 space-y-2">
+          <p>说话目标：{compiled.goal || '尚未填写'}</p>
+          <p>隐藏含义：{compiled.subtext || '尚未填写'}</p>
+          <p>伴随动作：{compiled.beatAction || '作者未添加'}</p>
+          <p>
+            {compiled.status === 'needs_context'
+              ? '目标或隐藏含义缺失，暂不能判断表达关系。'
+              : '作者草稿，尚未验证实际阅读效果。'}
           </p>
-          <ScoreProvenanceBadge source="rule" detail="按固定分级表判定，不是模型推断" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="border rounded-xl p-5 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-            平淡台词输入
-          </h3>
-          <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-              说话角色名:
-            </label>
-            <input
-              className="mt-1 w-full border px-3 py-1.5 rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
-              value={speakerName}
-              placeholder="填写角色名"
-              onChange={(e) => setSpeakerName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-              内在隐藏情绪 / 动机:
-            </label>
-            <Select
-              className="mt-1 w-full"
-              size="sm"
-              value={emotion}
-              onValueChange={(v) => setEmotion(v as any)}
-            >
-              <option value="affection">深情克制 / 默默守护</option>
-              <option value="fear">恐惧惊惶 / 故作镇静</option>
-              <option value="jealousy">嫉恨妒意 / 酸葡萄反语</option>
-              <option value="guilt">内疚悔恨 / 狼狈回避</option>
-              <option value="pride">自尊傲慢 / 居高临下</option>
-              <option value="anger">盛怒克制 / 隐忍杀机</option>
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-              嘴上说的表面台词:
-            </label>
-            <textarea
-              className="mt-1 w-full h-24 p-3 border rounded bg-white dark:bg-slate-800 text-xs border-slate-300 dark:border-slate-700"
-              value={spoken}
-              placeholder="填写需要分析的对白"
-              onChange={(e) => setSpoken(e.target.value)}
-            />
-          </div>
-          {hostContext?.aiAssistant?.isAvailable && (
-            <button
-              onClick={handleAiSubtextCompile}
-              disabled={aiTask.isRunning || !hasInput}
-              className="px-3 py-1.5 bg-[var(--ink-accent)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs mr-2"
-            >
-              <Bot className="w-3.5 h-3.5" />
-              AI 潜台词与微表情深度编译
-            </button>
-          )}
-          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
-          <button
-            onClick={handleSave}
-            disabled={!hasInput}
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded text-xs flex items-center justify-center gap-1.5 transition"
-          >
-            <Send className="w-4 h-4" /> 归档此三轨对白卡片
-          </button>
-        </div>
-
-        <div className="border rounded-xl p-5 bg-slate-900 text-slate-100 border-indigo-900 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-indigo-400 flex items-center gap-1.5">
-              <Layers className="w-4 h-4" /> 海明威冰山三轨重构视图
-            </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950 border border-indigo-800 text-indigo-300">
-              张力指数: {compiled?.tensionLevel ?? '—'} / 5
-            </span>
-          </div>
-
-          {compiled ? (
-            <div className="space-y-3 text-xs">
-              <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">
-                  1. 表面台词 (Spoken - 露出水面 1/8)
-                </div>
-                <div className="font-semibold text-amber-300">"{compiled.spoken}"</div>
-              </div>
-
-              <div className="p-3 rounded bg-slate-800/80 border border-indigo-800/60 space-y-1">
-                <div className="text-[10px] text-indigo-400 font-bold uppercase">
-                  2. 水下潜台词 (Subtext - 掩藏水下 7/8)
-                </div>
-                <div className="font-serif italic text-indigo-200">"{compiled.subtext}"</div>
-                <div className="text-[10px] text-slate-400 pt-1">
-                  防御机制: {compiled.defenseMechanism}
-                </div>
-              </div>
-
-              <div className="p-3 rounded bg-slate-800/80 border border-slate-700 space-y-1">
-                <div className="text-[10px] text-emerald-400 font-bold uppercase">
-                  3. 伴随肢体微反应 (Beat Action)
-                </div>
-                <div className="text-emerald-300">{compiled.beatAction}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 rounded bg-slate-800/80 text-slate-300 text-xs">
-              填写角色名和对白后显示规则推演结果。
-            </div>
-          )}
-
-          <div className="pt-2 space-y-1">
-            <div className="text-[10px] text-slate-400 font-bold uppercase">成稿小说段落试炼:</div>
-            <div className="p-3 rounded bg-slate-950 border border-slate-800 font-serif text-xs text-slate-300 leading-relaxed">
-              {compiled ? renderedParagraph : '填写角色名和对白后显示成稿预览。'}
-            </div>
-          </div>
-        </div>
-      </div>
+          <pre className="whitespace-pre-wrap">
+            {SubtextCompilerEngine.renderNovelParagraph(compiled)}
+          </pre>
+        </section>
+      ) : (
+        <p role="status">填写角色名和实际台词后预览。</p>
+      )}
+      <button disabled={!compiled || saving} onClick={save}>
+        归档此对白草稿
+      </button>
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={ai.isRunning || !compiled}
+          onClick={() =>
+            ai.run({
+              speaker,
+              spoken: semanticTextFromContent('manual-spoken', spoken, 0),
+              authorEmotion: emotion || null,
+              authorGoal: goal,
+              intendedMeaning: meaning,
+              relationship,
+              whyHidden,
+              authorAction: action,
+              surroundingText: semanticTextFromContent('manual-context', context, 0),
+            })
+          }
+        >
+          AI 潜台词方案复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
+      <h3>已保存对白 ({saved.length})</h3>
+      {saved.map((record) => (
+        <article key={record.id} className="border rounded p-3">
+          <p>
+            {record.speakerName}：「{record.spoken}」
+          </p>
+          <p>{record.subtext}</p>
+          {!record.status && <p>旧模板推演，尚未验证隐藏含义或心理解释。</p>}
+        </article>
+      ))}
     </div>
   )
 }

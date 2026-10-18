@@ -7,8 +7,7 @@ import type {
 
 export class GeoMapEngine {
   /**
-   * 地形通行阻尼因子
-   * 平原 1.0, 城市 0.8(官道加成), 水域 1.5(渡船), 山脉 2.5(崇山峻岭), 绝壁天堑 10.0
+   * Optional example factors. These are not measured terrain or speed data.
    */
   static readonly TERRAIN_DAMPING: Record<TerrainType, number> = {
     city: 0.8,
@@ -37,29 +36,129 @@ export class GeoMapEngine {
     scaleKmPerCell: 1 | 10
     speedKmPerDay: number
     dominantTerrain?: TerrainType
+    terrainFactor?: number
   }): TravelTimeCalculation {
     const { start, target, scaleKmPerCell, speedKmPerDay, dominantTerrain = 'land' } = params
 
-    // 使用切比雪夫距离 (Chebyshev Distance) 结合曼哈顿折线系数
+    if (
+      ![start.x, start.y, target.x, target.y, scaleKmPerCell, speedKmPerDay].every(
+        Number.isFinite,
+      ) ||
+      scaleKmPerCell <= 0 ||
+      speedKmPerDay <= 0
+    )
+      throw new RangeError('坐标、比例尺和速度需要有效数值；比例尺和速度必须大于零。')
     const dx = Math.abs(target.x - start.x)
     const dy = Math.abs(target.y - start.y)
     // 八方向移动有效步数
-    const cellDistance = Math.max(dx, dy) + 0.414 * Math.min(dx, dy)
-    const distanceKm = Math.round(cellDistance * scaleKmPerCell)
+    const cellDistance = Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy)
+    const distanceKm = cellDistance * scaleKmPerCell
 
-    const damping = this.TERRAIN_DAMPING[dominantTerrain] || 1.0
+    const damping = params.terrainFactor ?? this.TERRAIN_DAMPING[dominantTerrain]
+    if (!Number.isFinite(damping) || damping <= 0) throw new RangeError('通行耗时系数必须大于零。')
     const effectiveKm = distanceKm * damping
 
-    const speed = Math.max(1, speedKmPerDay)
-    const daysRaw = effectiveKm / speed
-    const estimatedDays = Math.max(0.1, Number(daysRaw.toFixed(1)))
+    const speed = speedKmPerDay
+    const estimatedDays = effectiveKm / speed
 
     return {
-      distanceCells: Math.round(cellDistance),
+      distanceCells: cellDistance,
       distanceKm,
       dampingFactor: damping,
       estimatedDays,
       speedKmPerDay: speed,
+    }
+  }
+
+  /** Shortest-time route on the supplied grid; diagonal moves cannot cross blocked corners. */
+  static planRoute(params: {
+    start: { x: number; y: number }
+    target: { x: number; y: number }
+    scaleKmPerCell: 1 | 10
+    speedKmPerDay: number
+    cells: GeoMapCell[]
+    terrainFactors: Record<TerrainType, number | null>
+  }):
+    | ({ status: 'ok'; route: Array<{ x: number; y: number }> } & TravelTimeCalculation)
+    | { status: 'no-route'; reason: string } {
+    this.calculateTravelTime({ ...params, terrainFactor: 1 })
+    const key = (point: { x: number; y: number }) => `${point.x},${point.y}`
+    const grid = new Map(params.cells.map((cell) => [key(cell), cell]))
+    if (
+      grid.size !== params.cells.length ||
+      params.cells.some((c) => !Number.isSafeInteger(c.x) || !Number.isSafeInteger(c.y))
+    )
+      throw new RangeError('网格坐标需要唯一的安全整数。')
+    if (
+      Object.values(params.terrainFactors).some(
+        (factor) => factor !== null && (!Number.isFinite(factor) || factor <= 0),
+      )
+    )
+      throw new RangeError('通行耗时系数必须大于零，或明确标为不可通行。')
+    const passable = (x: number, y: number) => {
+      const cell = grid.get(`${x},${y}`)
+      return Boolean(cell && params.terrainFactors[cell.terrainType] != null)
+    }
+    if (!passable(params.start.x, params.start.y) || !passable(params.target.x, params.target.y))
+      return { status: 'no-route', reason: '起点或终点不在可通行网格中。' }
+    const startKey = key(params.start),
+      targetKey = key(params.target)
+    const costs = new Map([[startKey, 0]]),
+      parents = new Map<string, string>()
+    const pending = new Set([startKey]),
+      visited = new Set<string>()
+    while (pending.size) {
+      const current = [...pending].reduce((a, b) => (costs.get(a)! <= costs.get(b)! ? a : b))
+      pending.delete(current)
+      if (current === targetKey) break
+      visited.add(current)
+      const cell = grid.get(current)!
+      for (const dx of [-1, 0, 1])
+        for (const dy of [-1, 0, 1]) {
+          if (
+            (!dx && !dy) ||
+            !passable(cell.x + dx, cell.y + dy) ||
+            (dx && dy && (!passable(cell.x + dx, cell.y) || !passable(cell.x, cell.y + dy)))
+          )
+            continue
+          const nextKey = `${cell.x + dx},${cell.y + dy}`
+          if (visited.has(nextKey)) continue
+          const next = grid.get(nextKey)!
+          const factor =
+            (params.terrainFactors[cell.terrainType]! + params.terrainFactors[next.terrainType]!) /
+            2
+          const cost =
+            costs.get(current)! +
+            (Math.hypot(dx, dy) * params.scaleKmPerCell * factor) / params.speedKmPerDay
+          if (cost < (costs.get(nextKey) ?? Infinity)) {
+            costs.set(nextKey, cost)
+            parents.set(nextKey, current)
+            pending.add(nextKey)
+          }
+        }
+    }
+    if (!costs.has(targetKey))
+      return { status: 'no-route', reason: '已绘网格没有连接起终点的可通行路线。' }
+    const route = [{ x: params.target.x, y: params.target.y }]
+    let previous = targetKey
+    while (previous !== startKey) {
+      previous = parents.get(previous)!
+      const cell = grid.get(previous)!
+      route.unshift({ x: cell.x, y: cell.y })
+    }
+    const distanceCells = route
+      .slice(1)
+      .reduce((sum, cell, i) => sum + Math.hypot(cell.x - route[i].x, cell.y - route[i].y), 0)
+    const distanceKm = distanceCells * params.scaleKmPerCell
+    const estimatedDays = costs.get(targetKey)!
+    return {
+      status: 'ok',
+      route,
+      distanceCells,
+      distanceKm,
+      speedKmPerDay: params.speedKmPerDay,
+      estimatedDays,
+      dampingFactor: distanceKm ? (estimatedDays * params.speedKmPerDay) / distanceKm : 1,
     }
   }
 

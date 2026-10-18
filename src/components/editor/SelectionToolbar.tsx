@@ -5,6 +5,7 @@ import { spring, variants, gesture } from '../../motion'
 import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createRewriteTask } from '../../ai'
+import type { SemanticDocument } from '../../domain/content'
 import {
   semanticDocumentFromProseMirror,
   semanticDocumentFromText,
@@ -58,6 +59,15 @@ interface RewriteProposalState {
   error?: string
 }
 
+interface RewriteRequestAnchor {
+  context: { workspaceId: string; chapterId: string; revision: number }
+  document: SemanticDocument
+  selection: { from: number; to: number }
+  sourceHash: string
+}
+
+const DEFAULT_REWRITE_GOAL = '保持事实和原意，改进选中文本'
+
 /**
  * 自绘选区浮动工具条，完全替代 tippy.js 版 BubbleMenu。
  *
@@ -82,10 +92,39 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   const [rewriteProposal, setRewriteProposal] = useState<RewriteProposalState | null>(null)
   const rewriteProposalRef = useRef<RewriteProposalState | null>(null)
   const [rewriteBusy, setRewriteBusy] = useState(false)
+  const [rewriteComposerOpen, setRewriteComposerOpen] = useState(false)
+  const [rewriteInstruction, setRewriteInstruction] = useState('')
+  const [rewriteError, setRewriteError] = useState<string | null>(null)
+  const rewriteRequestGenerationRef = useRef(0)
+  const rewriteComposerAnchorRef = useRef<RewriteRequestAnchor | null>(null)
+  const lastRewriteRequestRef = useRef<{ anchor: RewriteRequestAnchor; goal: string } | null>(null)
   const explicitProposalSyncRemoteRef = useRef(proposalSyncRemote)
   const taskProposalSyncRemoteRef = useRef<ProposalSyncRemote | undefined>(undefined)
   const initialWorkspaceId = normalizeScopeId(workspaceId) ?? normalizeScopeId(host?.projectId)
   const initialProjectId = normalizeScopeId(host?.projectId) ?? initialWorkspaceId
+  const activeContext = {
+    workspaceId: initialProjectId || '',
+    chapterId: activeChapterId || 'selection',
+    revision: activeChapterRevision,
+  }
+  const activeContextRef = useRef(activeContext)
+  const previousContext = activeContextRef.current
+  if (
+    previousContext.workspaceId !== activeContext.workspaceId ||
+    previousContext.chapterId !== activeContext.chapterId ||
+    previousContext.revision !== activeContext.revision
+  ) {
+    rewriteRequestGenerationRef.current += 1
+  }
+  activeContextRef.current = activeContext
+  useEffect(() => {
+    setRewriteBusy(false)
+    setRewriteComposerOpen(false)
+    setRewriteInstruction('')
+    setRewriteError(null)
+    rewriteComposerAnchorRef.current = null
+    lastRewriteRequestRef.current = null
+  }, [activeContext.workspaceId, activeContext.chapterId, activeContext.revision])
   const proposalScope: ProposalEventScope | undefined = initialWorkspaceId
     ? {
         workspaceId: initialWorkspaceId,
@@ -221,7 +260,15 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     }
   }, [proposalLedger])
 
-  if ((!state.show && !rewriteProposal) || !editor) return null
+  const currentDocumentId = activeChapterId || 'selection'
+  const currentRewriteProposal =
+    rewriteProposal?.proposal.documentId === currentDocumentId ? rewriteProposal : null
+  if (
+    (!state.show && !currentRewriteProposal && !rewriteComposerOpen && !rewriteError) ||
+    !editor
+  ) {
+    return null
+  }
 
   const currentSemanticDocument = () =>
     typeof editor.state?.doc?.toJSON === 'function'
@@ -236,62 +283,138 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
           activeChapterRevision,
         )
 
-  const aiPolish = async () => {
-    const { from, to } = editor.state.selection
-    const text = editor.state.doc.textBetween(from, to, ' ')
-    if (!text || !onAiTask || rewriteBusy) return
-    const semanticDocument = currentSemanticDocument()
-    const selection = semanticDocument.sourceMap.editorRangeToSemantic({ from, to })
-    const sourceHash = hashText(semanticDocument.text)
+  const captureRewriteAnchor = (): RewriteRequestAnchor | null => {
+    const range = editor.state?.selection
+    if (!range || range.from === range.to) return null
+    const selectedText = editor.state.doc.textBetween(range.from, range.to, ' ')
+    if (!selectedText?.trim()) return null
+    const document = currentSemanticDocument()
+    return {
+      context: { ...activeContextRef.current },
+      document,
+      selection: document.sourceMap.editorRangeToSemantic({ from: range.from, to: range.to }),
+      sourceHash: hashText(document.text),
+    }
+  }
+
+  const rewriteAnchorIsCurrent = (anchor: RewriteRequestAnchor): boolean => {
+    const latestContext = activeContextRef.current
+    return (
+      latestContext.workspaceId === anchor.context.workspaceId &&
+      latestContext.chapterId === anchor.context.chapterId &&
+      latestContext.revision === anchor.context.revision &&
+      hashText(currentSemanticDocument().text) === anchor.sourceHash
+    )
+  }
+
+  const openRewriteComposer = () => {
+    const anchor = captureRewriteAnchor()
+    if (!anchor) {
+      setRewriteError('请先选中需要修改的文字。')
+      return
+    }
+    rewriteComposerAnchorRef.current = anchor
+    lastRewriteRequestRef.current = null
+    setRewriteInstruction('')
+    setRewriteError(null)
+    setRewriteComposerOpen(true)
+  }
+
+  const cancelRewriteComposer = () => {
+    if (rewriteBusy) return
+    setRewriteComposerOpen(false)
+    setRewriteInstruction('')
+    setRewriteError(null)
+    rewriteComposerAnchorRef.current = null
+  }
+
+  const runRewrite = async (goal: string, requestedAnchor: RewriteRequestAnchor | null = null) => {
+    if (!onAiTask || rewriteBusy) return
+    const anchor = requestedAnchor ?? rewriteComposerAnchorRef.current ?? captureRewriteAnchor()
+    if (!anchor) {
+      setRewriteError('请先选中需要修改的文字。')
+      return
+    }
+    if (!rewriteAnchorIsCurrent(anchor)) {
+      setRewriteError('选区内容或章节已变化，请重新选择后生成。')
+      return
+    }
+
+    const requestGeneration = ++rewriteRequestGenerationRef.current
+    lastRewriteRequestRef.current = { anchor, goal }
     setRewriteBusy(true)
+    setRewriteError(null)
     try {
       const result = await onAiTask(
         createRewriteTask({
-          taskId: idGenerator.generate(`rewrite-${activeChapterId || 'selection'}`),
-          workspaceId: initialProjectId || '',
-          document: semanticDocument,
-          selection,
-          goal: '保持事实和原意，改进选中文本',
-          metadata: { source: 'selection-toolbar', sourceHash },
+          taskId: idGenerator.generate(`rewrite-${anchor.context.chapterId || 'selection'}`),
+          workspaceId: anchor.context.workspaceId,
+          document: anchor.document,
+          selection: anchor.selection,
+          goal,
+          metadata: { source: 'selection-toolbar', sourceHash: anchor.sourceHash },
         }),
       )
-      if (!result) return
+      if (requestGeneration !== rewriteRequestGenerationRef.current) return
+      if (!result) throw new Error('AI 没有返回建议。请重试。')
+      if (!rewriteAnchorIsCurrent(anchor)) {
+        throw new Error('选区内容或章节已变化，已丢弃过期建议。请重新选择后生成。')
+      }
       const resultRemote = getProposalSyncRemote(result)
       if (resultRemote) taskProposalSyncRemoteRef.current = resultRemote
       const proposal = proposalFromPatch(result, {
         id: `proposal-${result.taskId}`,
-        documentId: semanticDocument.documentId,
-        baseRevision: activeChapterRevision,
-        sourceHash,
+        documentId: anchor.document.documentId,
+        baseRevision: anchor.context.revision,
+        sourceHash: anchor.sourceHash,
       })
       const patch = proposal.patches[0]
-      if (patch.from < selection.from || patch.to > selection.to) {
+      if (patch.from < anchor.selection.from || patch.to > anchor.selection.to) {
         throw new Error('Rewrite proposal must stay within the selected semantic range')
       }
       proposalLedger.create(proposal)
+      setRewriteComposerOpen(false)
+      setRewriteError(null)
       setRewriteProposal({
         proposal,
-        originalText: semanticDocument.text.slice(patch.from, patch.to),
+        originalText: anchor.document.text.slice(patch.from, patch.to),
         proposedText: patch.text,
         status: 'pending',
       })
     } catch (error) {
-      setRewriteProposal((current) =>
-        current
-          ? { ...current, error: error instanceof Error ? error.message : String(error) }
-          : current,
-      )
+      if (requestGeneration !== rewriteRequestGenerationRef.current) return
+      setRewriteError(error instanceof Error ? error.message : String(error))
     } finally {
-      setRewriteBusy(false)
+      if (requestGeneration === rewriteRequestGenerationRef.current) setRewriteBusy(false)
     }
+  }
+
+  const aiPolish = () => void runRewrite(DEFAULT_REWRITE_GOAL, captureRewriteAnchor())
+
+  const submitRewrite = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    void runRewrite(
+      rewriteInstruction.trim() || DEFAULT_REWRITE_GOAL,
+      rewriteComposerAnchorRef.current,
+    )
+  }
+
+  const retryRewrite = () => {
+    const request = lastRewriteRequestRef.current
+    if (!request) {
+      setRewriteError('没有可重试的请求，请重新选择文本后生成。')
+      return
+    }
+    void runRewrite(request.goal, request.anchor)
   }
 
   const commitRewrite = async () => {
     if (!rewriteProposal || rewriteProposal.status !== 'pending') return
-    const current = currentSemanticDocument()
     const proposal = rewriteProposal.proposal
+    if (proposal.documentId !== currentDocumentId) return
+    const current = currentSemanticDocument()
     const targetWorkspaceId = initialProjectId || ''
-    const targetChapterId = activeChapterId || proposal.documentId
+    const targetChapterId = proposal.documentId
 
     const originalHtml = editor.getHTML?.() ?? editor.getText?.() ?? current.text
 
@@ -311,7 +434,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         workspaceId: targetWorkspaceId,
         chapterId: targetChapterId,
         proposalId: proposal.id,
-        expectedRevision: activeChapterRevision ?? proposal.baseRevision,
+        expectedRevision: proposal.baseRevision,
         nextContent: updatedHtml,
         inversePatches,
         sourceHash: hashText(current.text),
@@ -319,7 +442,11 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       })
 
       // 3. 落盘彻底成功后同步视口，绝不触发 editor onUpdate / autosave (INV-02)
-      if (editor.commands?.setContent) {
+      if (
+        activeContextRef.current.workspaceId === targetWorkspaceId &&
+        activeContextRef.current.chapterId === proposal.documentId &&
+        editor.commands?.setContent
+      ) {
         editor.commands.setContent(updatedHtml, { emitUpdate: false })
       }
 
@@ -364,15 +491,27 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   }
 
   const rejectRewrite = () => {
-    if (!rewriteProposal || rewriteProposal.status !== 'pending') return
+    if (
+      !rewriteProposal ||
+      rewriteProposal.status !== 'pending' ||
+      rewriteProposal.proposal.documentId !== currentDocumentId
+    ) {
+      return
+    }
     proposalLedger.reject(rewriteProposal.proposal.id)
     setRewriteProposal((value) => (value ? { ...value, status: 'rejected' } : value))
   }
 
   const undoRewrite = async () => {
-    if (!rewriteProposal || rewriteProposal.status !== 'committed') return
+    if (
+      !rewriteProposal ||
+      rewriteProposal.status !== 'committed' ||
+      rewriteProposal.proposal.documentId !== currentDocumentId
+    ) {
+      return
+    }
     const targetWorkspaceId = initialProjectId || ''
-    const targetChapterId = activeChapterId || rewriteProposal.proposal.documentId
+    const targetChapterId = rewriteProposal.proposal.documentId
     const currentRev = rewriteProposal.proposal.committedRevision ?? activeChapterRevision
 
     const originalHtml = editor.getHTML?.() ?? editor.getText?.() ?? currentSemanticDocument().text
@@ -403,7 +542,11 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       })
 
       // 3. 落盘彻底成功后同步视口，不触发 editor onUpdate / autosave (INV-02)
-      if (editor.commands?.setContent) {
+      if (
+        activeContextRef.current.workspaceId === targetWorkspaceId &&
+        activeContextRef.current.chapterId === targetChapterId &&
+        editor.commands?.setContent
+      ) {
         editor.commands.setContent(restoredHtml, { emitUpdate: false })
       }
 
@@ -442,7 +585,11 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       className="absolute z-20 -translate-x-1/2 flex items-center gap-0.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] px-1 py-1 shadow-[var(--ink-shadow-lg)]"
       style={{ top: state.show ? state.top : 20, left: state.show ? state.left : 20 }}
       // 阻止 mousedown 抢占选区，确保点击工具条时选区不丢失
-      onMouseDown={(e) => e.preventDefault()}
+      onMouseDown={(event) => {
+        const target = event.target
+        if (target instanceof HTMLElement && target.closest('textarea, input')) return
+        event.preventDefault()
+      }}
     >
       {state.show && (
         <>
@@ -479,6 +626,18 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             >
               <Wand2 className="w-3 h-3" />
               <span>{rewriteBusy ? '处理中…' : 'AI 润色'}</span>
+            </motion.button>
+          </Tooltip>
+          <Tooltip content="先写下语气、篇幅或描写方面的要求">
+            <motion.button
+              type="button"
+              {...gesture.button}
+              transition={spring.snappy}
+              onClick={openRewriteComposer}
+              aria-label="按要求修改"
+              className="px-2 py-1 rounded-md text-[12px] text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] transition-colors duration-150 cursor-pointer"
+            >
+              按要求修改
             </motion.button>
           </Tooltip>
 
@@ -537,32 +696,121 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
           )}
         </>
       )}
+      {rewriteComposerOpen && (
+        <form
+          data-testid="rewrite-instruction-form"
+          onSubmit={submitRewrite}
+          className="mt-2 w-72 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-2 text-xs shadow-[var(--ink-shadow-lg)]"
+        >
+          <label htmlFor="rewrite-instruction" className="mb-1 block font-medium">
+            修改要求（可选）
+          </label>
+          <textarea
+            id="rewrite-instruction"
+            aria-label="修改要求"
+            value={rewriteInstruction}
+            onChange={(event) => setRewriteInstruction(event.target.value)}
+            placeholder="例如：压缩句子、调整语气或补充动作细节"
+            rows={2}
+            maxLength={500}
+            className="w-full resize-y rounded border border-[var(--ink-border)] bg-[var(--ink-bg)] p-2 text-[var(--ink-text)] outline-none focus:border-[var(--ink-accent)]"
+          />
+          {rewriteError && (
+            <div data-testid="rewrite-task-error" role="alert" className="mt-1 text-rose-500">
+              {rewriteError}
+            </div>
+          )}
+          <div className="mt-2 flex gap-1">
+            <motion.button
+              type="submit"
+              {...gesture.button}
+              transition={spring.snappy}
+              disabled={rewriteBusy}
+              className="rounded bg-[var(--ink-accent)] px-2 py-1 text-white disabled:opacity-50"
+            >
+              {rewriteBusy ? '处理中…' : '生成建议'}
+            </motion.button>
+            {rewriteError && lastRewriteRequestRef.current && (
+              <motion.button
+                type="button"
+                {...gesture.button}
+                transition={spring.snappy}
+                onClick={retryRewrite}
+                disabled={rewriteBusy}
+                className="rounded border border-[var(--ink-border)] px-2 py-1 disabled:opacity-50"
+              >
+                重试
+              </motion.button>
+            )}
+            <motion.button
+              type="button"
+              {...gesture.button}
+              transition={spring.snappy}
+              onClick={cancelRewriteComposer}
+              disabled={rewriteBusy}
+              className="rounded border border-[var(--ink-border)] px-2 py-1 disabled:opacity-50"
+            >
+              取消
+            </motion.button>
+          </div>
+        </form>
+      )}
+      {rewriteError && !rewriteComposerOpen && !currentRewriteProposal && (
+        <div
+          data-testid="rewrite-task-error"
+          role="alert"
+          className="mt-2 flex max-w-sm items-center gap-2 rounded-md border border-rose-500/40 bg-[var(--ink-bg-panel)] p-2 text-xs"
+        >
+          <span className="flex-1 text-rose-500">{rewriteError}</span>
+          {lastRewriteRequestRef.current && (
+            <motion.button
+              type="button"
+              {...gesture.button}
+              transition={spring.snappy}
+              onClick={retryRewrite}
+              disabled={rewriteBusy}
+              className="rounded border border-[var(--ink-border)] px-2 py-1 disabled:opacity-50"
+            >
+              重试
+            </motion.button>
+          )}
+          <motion.button
+            type="button"
+            {...gesture.button}
+            transition={spring.snappy}
+            onClick={openRewriteComposer}
+            className="rounded border border-[var(--ink-border)] px-2 py-1"
+          >
+            修改要求
+          </motion.button>
+        </div>
+      )}
       <AnimatePresence>
-        {rewriteProposal && (
+        {currentRewriteProposal && (
           <motion.div
             {...variants.fadeUp}
             transition={spring.gentle}
             data-testid="rewrite-proposal-preview"
             className="mt-2 max-w-sm rounded-md border border-[var(--ink-accent)]/40 bg-[var(--ink-bg-panel)] p-2 text-xs"
           >
-            <div className="mb-1 font-medium">润色提案 · {rewriteProposal.status}</div>
+            <div className="mb-1 font-medium">润色提案 · {currentRewriteProposal.status}</div>
             <div className="space-y-1">
               <div className="rounded bg-rose-500/10 p-1 line-through">
-                {rewriteProposal.originalText || '（空）'}
+                {currentRewriteProposal.originalText || '（空）'}
               </div>
               <div className="rounded bg-emerald-500/10 p-1">
-                {rewriteProposal.proposedText || '（空）'}
+                {currentRewriteProposal.proposedText || '（空）'}
               </div>
             </div>
-            {rewriteProposal.error && (
-              <div className="mt-1 text-rose-500">{rewriteProposal.error}</div>
+            {currentRewriteProposal.error && (
+              <div className="mt-1 text-rose-500">{currentRewriteProposal.error}</div>
             )}
-            {rewriteProposal.status === 'stale' && (
+            {currentRewriteProposal.status === 'stale' && (
               <div data-testid="rewrite-proposal-conflict" className="mt-1 text-amber-500">
                 其他窗口的修改使此提案产生冲突，请重新审阅。
               </div>
             )}
-            {rewriteProposal.status === 'pending' && (
+            {currentRewriteProposal.status === 'pending' && (
               <div className="mt-2 flex gap-1">
                 <motion.button
                   type="button"
@@ -584,7 +832,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                 </motion.button>
               </div>
             )}
-            {rewriteProposal.status === 'committed' && (
+            {currentRewriteProposal.status === 'committed' && (
               <motion.button
                 type="button"
                 {...gesture.button}

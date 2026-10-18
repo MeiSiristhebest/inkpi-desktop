@@ -1,5 +1,5 @@
 import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { PowerTierSystem, ConsistencyViolation, PresetTierSystem } from '../types'
 import { consistencyEngine } from '../engine/ConsistencyEngine'
@@ -24,20 +24,35 @@ import {
   BookOpen,
 } from 'lucide-react'
 import { Tooltip, Select } from '../../../ui/primitives'
+import { createProvenance } from '../../../domain/story/provenance'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 
-export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const ConsistencyMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ProjectConsistencyView key={props.projectId} {...props} />
+)
+const ProjectConsistencyView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('consistency-sentinel')
   const [system, setSystem] = useState<PowerTierSystem>(() =>
     consistencyEngine.emptySystem(projectId),
   )
   const [savedSuccess, setSavedSuccess] = useState(false)
-  const [chapters, setChapters] = useState<any[]>([])
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
 
   // 巡检区状态
   const [auditText, setAuditText] = useState('')
-  const [violations, setViolations] = useState<ConsistencyViolation[]>([])
+  const [rawViolations, setViolations] = useState<ConsistencyViolation[]>([])
+  const identity = JSON.stringify([projectId, auditText, system, selectedChapterId])
+  const scopeRef = useRef(identity)
+  scopeRef.current = identity
+  const [scannedIdentity, setScannedIdentity] = useState<string | null>(null)
+  const violations = scannedIdentity === identity ? rawViolations : []
+  const aiTask = usePluginAiTask('consistency-sentinel', identity)
   // 「自洽」只能是对某一段已巡检文本的结论，不能是刚打开页面时的默认态。
   const [scannedText, setScannedText] = useState<string | null>(null)
   const [entityCount, setEntityCount] = useState(0)
@@ -46,10 +61,11 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
 
   const loadData = async () => {
     try {
-      const [existing, allCodex, allChapters] = await Promise.all([
+      const [existing, allCodex, allChapters, volumes] = await Promise.all([
         indexedDbPowerTierRepository.get(projectId),
         indexedDbCodexEntityRepository.getAll(),
         indexedDbProjectRepository.getChaptersByProject(projectId),
+        indexedDbProjectRepository.getVolumesByProject(projectId),
       ])
 
       if (existing) {
@@ -61,18 +77,19 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       const projectEntities = allCodex.filter((e) => e.projectId === projectId)
       setEntityCount(projectEntities.length)
 
-      allChapters.sort((a, b) => a.order - b.order)
-      setChapters(allChapters)
-      if (allChapters.length > 0 && !auditText) {
+      const orderedChapters = projectChapterSequence(projectId, allChapters, volumes)
+      setChapters(orderedChapters)
+      if (orderedChapters.length > 0 && !auditText) {
         const firstChapText = semanticTextFromContent(
-          allChapters[0].id,
-          allChapters[0].content || '',
-          allChapters[0].revision,
+          orderedChapters[0].id,
+          orderedChapters[0].content || '',
+          orderedChapters[0].revision,
         )
         setAuditText(firstChapText)
+        setSelectedChapterId(orderedChapters[0].id)
       }
     } catch (e) {
-      console.error('Failed to load consistency data:', e)
+      setError('设定或卷章信息读取失败，请重试。')
     }
   }
 
@@ -86,7 +103,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       const allText = chapters
         .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
         .join('\n\n')
-      setAuditText(allText.slice(0, 15000))
+      setAuditText(allText)
     } else {
       const chap = chapters.find((c) => c.id === chapId)
       setAuditText(chap ? semanticTextFromContent(chap.id, chap.content || '', chap.revision) : '')
@@ -98,11 +115,18 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     if (!auditText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
-      powerTiers: [...system.tiers],
-      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: semanticTextFromContent(`consistency-sentinel-${selectedChapterId}`, auditText).slice(
-        0,
-        2500,
+      powerSystem: system,
+      chapter: chap
+        ? {
+            id: chap.id,
+            chapterNumber: chap.chapterNumber,
+            revision: chap.revision,
+            title: chap.title,
+          }
+        : undefined,
+      text: semanticTextFromContent(chap?.id ?? 'manual-audit', auditText, chap?.revision ?? 0),
+      authorEntities: (await indexedDbCodexEntityRepository.getAll()).filter(
+        (entity) => entity.projectId === projectId,
       ),
     }
 
@@ -120,14 +144,33 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   }
 
   const handleSaveSystem = async () => {
-    const toSave: PowerTierSystem = {
-      ...system,
-      projectId,
-      updatedAt: clock.now(),
+    if (saving) return
+    const validation = consistencyEngine.validatePowerHierarchy(system)
+    if (!validation.isValid) {
+      setError(
+        [
+          ...validation.errors,
+          ...validation.cycles.map((cycle) => `关系包含环：${cycle.join(' < ')}`),
+        ].join('；'),
+      )
+      return
     }
-    await indexedDbPowerTierRepository.save(toSave)
-    setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 2000)
+    setSaving(true)
+    try {
+      const toSave: PowerTierSystem = {
+        ...system,
+        projectId,
+        provenance: createProvenance({ sourceType: 'author', factLevel: 'canonical-fact' }),
+        updatedAt: clock.now(),
+      }
+      await indexedDbPowerTierRepository.save(toSave)
+      setSavedSuccess(true)
+      setError('')
+    } catch {
+      setError('体系保存失败，请重试。')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleAddTier = (tierName: string) => {
@@ -145,38 +188,66 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   }
 
   const handleRunAudit = async () => {
-    if (!auditText.trim()) {
-      setViolations([])
-      setScannedText(null)
-      return
+    const requestedIdentity = identity
+    try {
+      if (!auditText.trim()) {
+        setViolations([])
+        setScannedText(null)
+        return
+      }
+      const allCodex = await indexedDbCodexEntityRepository.getAll()
+      if (scopeRef.current !== requestedIdentity) return
+      const projectEntities = allCodex.filter((e) => e.projectId === projectId)
+
+      // 提取实体与境界
+      const entitiesForPower = projectEntities.map((e) => ({
+        name: e.name,
+        realm: (e.attributes?.realm as string) || (e.attributes?.境界 as string),
+      }))
+
+      // 提取已故角色
+      const deceased = projectEntities
+        .filter((e) => e.attributes?.status === 'deceased' || e.attributes?.状态 === '已故')
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          deathAtChapter:
+            typeof e.attributes?.deathAtChapter === 'number'
+              ? e.attributes.deathAtChapter
+              : undefined,
+        }))
+
+      const powerViolations = consistencyEngine.scanTextForInversions(
+        auditText,
+        entitiesForPower,
+        system,
+      )
+      const deceasedViolations = consistencyEngine.scanTextForDeceased(
+        auditText,
+        deceased,
+        chapters.find((chapter) => chapter.id === selectedChapterId)?.chapterNumber ?? undefined,
+      )
+
+      setViolations([
+        ...consistencyEngine.scanPowerHierarchyCycles(system),
+        ...powerViolations,
+        ...deceasedViolations,
+      ])
+      setScannedText(auditText)
+      setScannedIdentity(requestedIdentity)
+      setError('')
+    } catch {
+      setError('设定读取或巡检失败，请重试。')
     }
-    const allCodex = await indexedDbCodexEntityRepository.getAll()
-    const projectEntities = allCodex.filter((e) => e.projectId === projectId)
-
-    // 提取实体与境界
-    const entitiesForPower = projectEntities.map((e) => ({
-      name: e.name,
-      realm: (e.attributes?.realm as string) || (e.attributes?.境界 as string),
-    }))
-
-    // 提取已故角色
-    const deceased = projectEntities
-      .filter((e) => e.attributes?.status === 'deceased' || e.attributes?.状态 === '已故')
-      .map((e) => ({ id: e.id, name: e.name }))
-
-    const powerViolations = consistencyEngine.scanTextForInversions(
-      auditText,
-      entitiesForPower,
-      system,
-    )
-    const deceasedViolations = consistencyEngine.scanTextForDeceased(auditText, deceased)
-
-    setViolations([...powerViolations, ...deceasedViolations])
-    setScannedText(auditText)
   }
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
+      {error && (
+        <p role="alert" className="p-2 text-xs text-rose-500">
+          {error}
+        </p>
+      )}
       {/* 顶栏 */}
       <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between gap-4">
         <div>
@@ -187,7 +258,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            构建严格战力阶梯偏序集，实时巡检无解越阶倒错、死者复生硬伤与设定吃书漏洞
+            登记作者等级约束，定位战斗和已故角色的字面候选；故事时间与能力例外须另行核对。
           </p>
         </div>
 
@@ -240,9 +311,50 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
           </div>
 
           {/* 阶梯序列 */}
+          <div className="space-y-1 text-xs">
+            <Select
+              aria-label="等级顺序"
+              value={system.relations === undefined ? 'linear' : 'partial'}
+              onValueChange={(value) =>
+                setSystem((current) => ({
+                  ...current,
+                  relations: value === 'linear' ? undefined : [],
+                }))
+              }
+            >
+              <option value="linear">按列表从低到高</option>
+              <option value="partial">只采用登记关系</option>
+            </Select>
+            {system.relations !== undefined && (
+              <label className="block">
+                登记关系（每行：低等级 &lt; 高等级；空白表示不可比）
+                <textarea
+                  aria-label="登记等级关系"
+                  className="w-full border bg-transparent"
+                  value={system.relations
+                    .map((relation) => `${relation.lowerTier} < ${relation.higherTier}`)
+                    .join('\n')}
+                  onChange={(event) =>
+                    setSystem((current) => ({
+                      ...current,
+                      relations: event.target.value
+                        .split('\n')
+                        .filter((line) => line.trim())
+                        .map((line) => {
+                          const [lower = '', higher = ''] = line.split('<')
+                          return { lowerTier: lower.trim(), higherTier: higher.trim() }
+                        }),
+                    }))
+                  }
+                />
+              </label>
+            )}
+          </div>
           <div className="space-y-2">
             <label className="text-[11px] text-[var(--ink-text-muted)] block">
-              当前阶梯顺序（从低到高）：
+              {system.relations === undefined
+                ? '当前阶梯顺序（从低到高）：'
+                : '已登记等级（排列不表示强弱）：'}
             </label>
             <div className="space-y-1">
               {system.tiers.map((tier, idx) => (
@@ -294,10 +406,10 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
             </div>
           </div>
 
-          {/* 越阶缓冲词库 */}
+          {/* 作者登记的越阶例外词 */}
           <div className="space-y-1.5 pt-2 border-t border-[var(--ink-border)]">
             <label className="text-[11px] text-[var(--ink-text-muted)] block">
-              越阶合理借力缓冲词库（出现则视为合理越阶）：
+              作者登记的越阶例外词（命中仍需核对）：
             </label>
             <div className="flex flex-wrap gap-1">
               {system.specialModifiers.map((mod, i) => (
@@ -327,6 +439,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                 <div className="flex items-center gap-1 text-xs text-[var(--ink-text-muted)]">
                   <BookOpen className="w-3.5 h-3.5" />
                   <Select
+                    aria-label="筛选章节"
                     value={selectedChapterId}
                     onValueChange={(v) => handleSelectChapter(v)}
                     size="sm"
@@ -334,7 +447,8 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                     <option value="all">全书章节采样</option>
                     {chapters.map((c) => (
                       <option key={c.id} value={c.id}>
-                        第 {c.order} 章 · {c.title || '无题'}
+                        {c.chapterNumber ? `第 ${c.chapterNumber} 章` : '位置未知'} ·{' '}
+                        {c.title || '无题'}
                       </option>
                     ))}
                   </Select>
@@ -376,7 +490,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
             {/* 巡检报告列表 */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-[var(--ink-text-muted)]">
-                <span>巡检发现的逻辑违规与硬伤：({violations.length})</span>
+                <span>待核对的规则候选：({violations.length})</span>
                 {violations.length === 0 && auditText.trim() && scannedText === null && (
                   <span>尚未巡检，点「立即巡检」后才有结论</span>
                 )}
@@ -386,6 +500,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                   scannedText !== auditText && <span>正文已改动，结论已过期</span>}
                 {violations.length === 0 &&
                   scannedText === auditText &&
+                  scannedIdentity === identity &&
                   auditText.trim() &&
                   system.tiers.length === 0 && (
                     <span className="text-amber-500 font-medium">
@@ -394,10 +509,12 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                   )}
                 {violations.length === 0 &&
                   scannedText === auditText &&
+                  scannedIdentity === identity &&
                   auditText.trim() &&
                   system.tiers.length > 0 && (
                     <span className="text-emerald-500 font-medium flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> 已巡检段落内未发现越阶或吃书矛盾
+                      <CheckCircle2 className="w-3.5 h-3.5" />{' '}
+                      已巡检段落未命中字面候选；完整语义尚未审阅
                     </span>
                   )}
               </div>
@@ -413,7 +530,7 @@ export const ConsistencyMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                       {v.type === 'power_tier_inversion' ? '战力越阶失真' : '死者复生矛盾'}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-semibold">
-                      高危逻辑硬伤
+                      待作者确认
                     </span>
                   </div>
 

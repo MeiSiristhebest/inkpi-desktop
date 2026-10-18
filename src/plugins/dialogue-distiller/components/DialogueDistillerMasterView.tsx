@@ -1,427 +1,278 @@
-import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, type FC } from 'react'
+import { useEffect, useMemo, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import type { CharacterVoiceprint, SimilarityPair } from '../types'
+import type { CharacterVoiceprint } from '../types'
 import { dialogueDistillerEngine } from '../engine/DialogueDistillerEngine'
 import { indexedDbDialogueVoiceprintRepository } from '../../../adapters/indexedDbDialogueVoiceprintRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import { semanticTextFromContent } from '../../../domain/content'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
-import {
-  Mic,
-  Users,
-  Search,
-  Zap,
-  Sparkles,
-  AlertTriangle,
-  CheckCircle2,
-  BookOpen,
-  Bot,
-} from 'lucide-react'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { clock } from '../../../adapters/clock'
 import { Select } from '../../../ui/primitives'
-
-export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('dialogue-distiller')
-  const [characterNames, setCharacterNames] = useState<string[]>([])
-  const [voiceprints, setVoiceprints] = useState<CharacterVoiceprint[]>([])
-  const [chapters, setChapters] = useState<any[]>([])
-  const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
-  const [extractText, setExtractText] = useState('')
+export const DialogueDistillerMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <DialogueWorkspace key={props.projectId} {...props} />
+)
+function DialogueWorkspace({ projectId }: DesktopPluginViewProps) {
+  const host = useOptionalPluginHostContext()
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
+  const [selected, setSelected] = useState('all')
+  const [text, setText] = useState('')
+  const [namesInput, setNamesInput] = useState('')
+  const [intent, setIntent] = useState('')
+  const [archives, setArchives] = useState<CharacterVoiceprint[]>([])
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
   const [charA, setCharA] = useState('')
   const [charB, setCharB] = useState('')
-  const [comparison, setComparison] = useState<SimilarityPair | null>(null)
-
-  const presets = dialogueDistillerEngine.getPresets()
-
-  const loadAll = async () => {
-    try {
-      const [allCodex, allVps, allChapters] = await Promise.all([
-        indexedDbCodexEntityRepository.getAll(),
-        indexedDbDialogueVoiceprintRepository.getAll(projectId),
-        indexedDbProjectRepository.getChaptersByProject(projectId),
-      ])
-
-      allChapters.sort((a, b) => a.order - b.order)
-      setChapters(allChapters)
-
-      // 提取真实角色列表（来自百科或主要配角）
-      const chars = allCodex
-        .filter((e) => e.projectId === projectId && e.category === 'character')
-        .map((e) => e.name)
-
-      const finalNames = chars.length > 0 ? chars : ['主角', '配角']
-      setCharacterNames(finalNames)
-      setVoiceprints(allVps)
-
-      if (finalNames.length >= 2) {
-        setCharA(finalNames[0])
-        setCharB(finalNames[1])
-      }
-
-      // 默认拼接全书正文或前几章真实对白供抽取分析
-      if (allChapters.length > 0) {
-        const sampleText = allChapters
-          .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
-          .filter(Boolean)
-          .join('\n\n')
-        setExtractText(sampleText.slice(0, 10000))
-      }
-    } catch (e) {
-      console.error('Failed to load dialogue distiller data:', e)
-    }
-  }
-
+  const [comparedScope, setComparedScope] = useState('')
+  const names = useMemo(
+    () => [...new Set(namesInput.split(/[,，、\s]+/).filter(Boolean))],
+    [namesInput],
+  )
+  const semanticText = semanticTextFromContent('manual-dialogue', text, 0)
+  const quotes = useMemo(
+    () => dialogueDistillerEngine.extractQuoteEvidence(semanticText, names),
+    [semanticText, names],
+  )
+  const profiles = useMemo(
+    () =>
+      names.map((name) =>
+        dialogueDistillerEngine.computeVoiceprint(
+          name,
+          quotes.filter((q) => q.characterName === name).map((q) => q.quote),
+          projectId,
+        ),
+      ),
+    [names, quotes, projectId],
+  )
+  const scope = JSON.stringify([text, names, charA, charB])
+  const a = profiles.find((p) => p.characterName === charA),
+    b = profiles.find((p) => p.characterName === charB)
+  const comparison =
+    comparedScope === scope && charA !== charB && a?.sampleDialogueCount && b?.sampleDialogueCount
+      ? dialogueDistillerEngine.comparePair(charA, a.vector, charB, b.vector)
+      : null
+  const ai = usePluginAiTask('dialogue-distiller', [
+    projectId,
+    selected,
+    text,
+    names,
+    intent,
+    charA,
+    charB,
+  ])
   useEffect(() => {
-    loadAll()
+    let disposed = false
+    Promise.all([
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject(projectId),
+      indexedDbCodexEntityRepository.getAll(),
+      indexedDbDialogueVoiceprintRepository.getAll(projectId),
+    ])
+      .then(([all, volumes, entities, records]) => {
+        if (disposed) return
+        const ordered = projectChapterSequence(projectId, all, volumes)
+        const realNames = [
+          ...new Set(
+            entities
+              .filter(
+                (e) => e.projectId === projectId && e.category === 'character' && e.name.trim(),
+              )
+              .map((e) => e.name),
+          ),
+        ]
+        setChapters(ordered)
+        setNamesInput(realNames.join('，'))
+        setCharA(realNames[0] ?? '')
+        setCharB(realNames[1] ?? '')
+        setArchives(records.filter((r) => r.projectId === projectId))
+        setText(
+          ordered.map((c) => semanticTextFromContent(c.id, c.content, c.revision)).join('\n\n'),
+        )
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
+    }
   }, [projectId])
-
-  // 章节切换
-  const handleSelectChapter = (chapId: string) => {
-    setSelectedChapterId(chapId)
-    if (chapId === 'all') {
-      const allText = chapters
-        .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
-        .join('\n\n')
-      setExtractText(allText.slice(0, 10000))
-    } else {
-      const chap = chapters.find((c) => c.id === chapId)
-      setExtractText(
-        chap ? semanticTextFromContent(chap.id, chap.content || '', chap.revision) : '',
-      )
+  const save = async () => {
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      const records = profiles
+        .filter((p) => p.sampleDialogueCount)
+        .map((p) => ({
+          ...p,
+          sourceText: text,
+          quoteEvidence: quotes.filter((q) => q.characterName === p.characterName),
+          updatedAt: clock.now(),
+        }))
+      for (const record of records) await indexedDbDialogueVoiceprintRepository.save(record)
+      setArchives((previous) => [
+        ...previous.filter((old) => !records.some((r) => r.id === old.id)),
+        ...records,
+      ])
+      setMessage('已保存 ' + records.length + ' 名角色的对白样本与测量。')
+    } catch (cause) {
+      setError(String(cause))
+    } finally {
+      setBusy(false)
     }
   }
-
-  const handleExtractFromText = () => {
-    const names = characterNames.length > 0 ? characterNames : ['主角', '配角']
-    const quotes = dialogueDistillerEngine.extractCharacterQuotes(extractText, names)
-    const newVps: CharacterVoiceprint[] = []
-
-    for (const name of names) {
-      const charQuotes = quotes[name] || []
-      if (charQuotes.length > 0) {
-        const vp = dialogueDistillerEngine.computeVoiceprint(name, charQuotes, projectId)
-        newVps.push(vp)
-      }
-    }
-
-    if (newVps.length > 0) {
-      setVoiceprints(newVps)
-      if (charA && charB) {
-        triggerCompare(charA, charB, newVps)
-      }
-    }
-  }
-
-  // 触发 AI 进行台词语气深度排查
-  const handleAiDialogueCheck = async () => {
-    if (!extractText.trim()) return
-    const analysisInput = {
-      characters: [...characterNames],
-      compare: [charA || '角色A', charB || '角色B'],
-      text: semanticTextFromContent('dialogue-distiller-ai-input', extractText).slice(0, 2000),
-    }
-
-    await aiTask.run(analysisInput)
-  }
-
-  const triggerCompare = (nameA: string, nameB: string, currentVps = voiceprints) => {
-    const vpA = currentVps.find((v) => v.characterName === nameA)
-    const vpB = currentVps.find((v) => v.characterName === nameB)
-
-    const vecA = vpA
-      ? {
-          asl: vpA.averageSentenceLength,
-          questionRatio: vpA.questionRatio,
-          exclamationRatio: vpA.exclamationRatio,
-          archaicRatio: vpA.toneStyle === 'archaic' ? 0.35 : 0.05,
-          colloquialRatio: vpA.toneStyle === 'colloquial' ? 0.35 : 0.05,
-        }
-      : {
-          asl: 12,
-          questionRatio: 0.2,
-          exclamationRatio: 0.2,
-          archaicRatio: 0.1,
-          colloquialRatio: 0.1,
-        }
-
-    const vecB = vpB
-      ? {
-          asl: vpB.averageSentenceLength,
-          questionRatio: vpB.questionRatio,
-          exclamationRatio: vpB.exclamationRatio,
-          archaicRatio: vpB.toneStyle === 'archaic' ? 0.35 : 0.05,
-          colloquialRatio: vpB.toneStyle === 'colloquial' ? 0.35 : 0.05,
-        }
-      : {
-          asl: 12,
-          questionRatio: 0.2,
-          exclamationRatio: 0.2,
-          archaicRatio: 0.1,
-          colloquialRatio: 0.1,
-        }
-
-    const res = dialogueDistillerEngine.comparePair(nameA, vecA, nameB, vecB)
-    setComparison(res)
-  }
-
-  const handleCompareClick = () => {
-    if (!charA || !charB) return
-    triggerCompare(charA, charB)
-  }
-
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
-      {/* 顶栏 */}
-      <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold tracking-tight">角色对白声纹分析仪</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-500 font-medium">
-              言语风格测度学 · 去“千人一面”
-            </span>
-          </div>
-          <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            提取多角色台词指纹，直连全书章节与百科角色，拦截语言同质化硬伤
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>角色对白样本分析</h2>
+      <p>
+        定位明确姓名和说话动词关联的引语；无法确定的说话人保留未知。句长不含空白和句末标点，问号与感叹号按实际标点统计。
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      <Select
+        aria-label="文本来源章节"
+        value={selected}
+        onValueChange={(id) => {
+          setSelected(id)
+          setMessage('')
+          const chosen = id === 'all' ? chapters : chapters.filter((c) => c.id === id)
+          setText(
+            chosen.map((c) => semanticTextFromContent(c.id, c.content, c.revision)).join('\n\n'),
+          )
+        }}
+      >
+        <option value="all">全书保存正文</option>
+        {chapters.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.chapterNumber ? '第 ' + c.chapterNumber + ' 章' : '位置未知'} · {c.title}
+          </option>
+        ))}
+      </Select>
+      <input
+        aria-label="目标角色列表"
+        value={namesInput}
+        onChange={(e) => setNamesInput(e.target.value)}
+        placeholder="输入实际角色名，以逗号分隔"
+        className="w-full border rounded p-2"
+      />
+      <textarea
+        aria-label="待分析对白正文"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          setMessage('')
+        }}
+        placeholder="粘贴含有角色对白的章节段落"
+        rows={6}
+        className="w-full border rounded p-3"
+      />
+      <textarea
+        aria-label="人物口吻约束"
+        value={intent}
+        onChange={(e) => setIntent(e.target.value)}
+        placeholder="人物目标、关系、情境和作者希望保留的语言特征"
+        className="w-full border rounded p-2"
+      />
+      {!quotes.length && <p>没有可归属的对白，不能比较人物口吻。</p>}
+      {profiles.map((profile) => (
+        <section key={profile.id} className="border rounded p-3">
+          <h3>{profile.characterName}</h3>
+          <p>
+            {profile.sampleDialogueCount} 段引语；{profile.sentenceCount} 个句段。
           </p>
-          <ScoreProvenanceBadge source="rule" detail="按台词文本的字面相似度统计" />
-        </div>
-
-        {/* 章节来源快速切换 */}
-        {chapters.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--ink-text-muted)] flex items-center gap-1">
-              <BookOpen className="w-3.5 h-3.5" />
-              文本来源:
-            </span>
-            <Select
-              value={selectedChapterId}
-              onValueChange={(v) => handleSelectChapter(v)}
-              size="sm"
-            >
-              <option value="all">全书正文聚合采样 (前10000字)</option>
-              {chapters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  第 {c.order} 章 · {c.title || '无标题'}
-                </option>
-              ))}
-            </Select>
-          </div>
-        )}
-      </div>
-
-      {/* 主体滚动区 */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* 台词自动抽取与解析条 */}
-        <div className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-              <Search className="w-3.5 h-3.5 text-pink-500" />
-              正文多角色台词快速抽取与声纹测算
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleExtractFromText}
-                className="px-3 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1 cursor-pointer"
-              >
-                <Zap className="w-3 h-3 text-pink-500" />
-                提取并解析声纹
-              </button>
-              {hostContext?.aiAssistant?.isAvailable && (
-                <button
-                  disabled={aiTask.isRunning}
-                  onClick={handleAiDialogueCheck}
-                  className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
-                >
-                  <Bot className="w-3 h-3" />
-                  AI 去千人一面鉴别
-                </button>
-              )}
-              <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
-            </div>
-          </div>
-
-          <textarea
-            rows={3}
-            value={extractText}
-            onChange={(e) => setExtractText(e.target.value)}
-            placeholder="粘贴含有角色对白的章节段落（如：陆沉冷笑道：“...”）..."
-            className="w-full p-2.5 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
-          />
-        </div>
-
-        {/* 核心双栏：已解析声纹卡片 (7 列) + 声纹余弦比对仪 (5 列) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* 左栏：角色声纹卡片列表 */}
-          <div className="lg:col-span-7 space-y-3">
-            <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-              <Mic className="w-3.5 h-3.5 text-pink-500" />
-              当前角色言语风格特征表 ({characterNames.length} 位角色)
-            </span>
-
-            {voiceprints.length === 0 ? (
-              <div className="p-8 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] text-center text-xs text-[var(--ink-text-muted)]">
-                在上方粘贴正文并点击「提取并解析声纹」，或使用下方声纹预设建立角色语言模型。
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {voiceprints.map((vp) => (
-                  <div
-                    key={vp.characterName}
-                    className="p-3.5 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-2 text-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm flex items-center gap-1 text-[var(--ink-text)]">
-                        <Users className="w-3.5 h-3.5 text-pink-500" />
-                        {vp.characterName}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-400 font-medium">
-                        {vp.toneStyle === 'archaic'
-                          ? '古雅沉缓'
-                          : vp.toneStyle === 'aggressive'
-                            ? '压迫跋扈'
-                            : vp.toneStyle === 'laconic'
-                              ? '简明清冷'
-                              : '直率口语'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-[11px] pt-1">
-                      <div className="p-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 text-center">
-                        <span className="text-[10px] text-[var(--ink-text-muted)] block">
-                          平均句长
-                        </span>
-                        <span className="font-bold text-[var(--ink-text)]">
-                          {vp.averageSentenceLength} 字
-                        </span>
-                      </div>
-                      <div className="p-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 text-center">
-                        <span className="text-[10px] text-[var(--ink-text-muted)] block">
-                          反问诘问率
-                        </span>
-                        <span className="font-bold text-amber-500">
-                          {(vp.questionRatio * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="p-1.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 text-center">
-                        <span className="text-[10px] text-[var(--ink-text-muted)] block">
-                          感叹祈使率
-                        </span>
-                        <span className="font-bold text-rose-500">
-                          {(vp.exclamationRatio * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
-
-                    <span className="text-[10px] text-[var(--ink-text-muted)] block pt-1">
-                      样本台词：{vp.sampleDialogueCount} 句
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 右栏：双角色同质化比对与告警 */}
-          <div className="lg:col-span-5 p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-            <span className="text-xs font-semibold text-[var(--ink-text)] block">
-              角色声纹余弦相似度比对
-            </span>
-
-            <div className="flex items-center gap-2 text-xs">
-              <Select value={charA} onValueChange={(v) => setCharA(v)} className="flex-1" size="sm">
-                {characterNames.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </Select>
-              <span className="text-[var(--ink-text-muted)]">VS</span>
-              <Select value={charB} onValueChange={(v) => setCharB(v)} className="flex-1" size="sm">
-                {characterNames.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </Select>
-              <button
-                onClick={handleCompareClick}
-                className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] text-xs font-medium hover:border-[var(--ink-accent)]"
-              >
-                比对
-              </button>
-            </div>
-
-            {comparison ? (
-              <div className="p-3.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold">余弦相似度:</span>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-base font-bold ${
-                        comparison.isHomogeneous ? 'text-rose-500' : 'text-emerald-500'
-                      }`}
-                    >
-                      {Math.round(comparison.similarity * 100)}%
-                    </span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                        comparison.isHomogeneous
-                          ? 'bg-rose-500/15 text-rose-500'
-                          : 'bg-emerald-500/15 text-emerald-500'
-                      }`}
-                    >
-                      {comparison.isHomogeneous ? '严重同质化' : '声纹差异鲜明'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-1.5 text-[11px] leading-relaxed pt-1 border-t border-[var(--ink-border)]/50">
-                  {comparison.isHomogeneous ? (
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
-                  ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                  )}
-                  <p className="text-[var(--ink-text)]">{comparison.advice}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] text-center text-xs text-[var(--ink-text-muted)]">
-                选择两位角色点击「比对」进行声纹重合度检测。
-              </div>
-            )}
-
-            {/* 经典声纹预设库 */}
-            <div className="space-y-2 pt-2 border-t border-[var(--ink-border)]">
-              <span className="text-[11px] font-semibold text-[var(--ink-text-muted)] flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                经典角色语言风格指纹对照：
-              </span>
-              <div className="space-y-1.5">
-                {presets.map((p) => (
-                  <div
-                    key={p.id}
-                    className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/50 text-[11px] space-y-1"
-                  >
-                    <div className="flex items-center justify-between font-semibold text-[var(--ink-text)]">
-                      <span>{p.name}</span>
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-pink-500/10 text-pink-400">
-                        {p.toneStyle}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-[var(--ink-text-muted)] italic">
-                      “{p.sampleSnippet}”
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+          {profile.sampleDialogueCount > 0 ? (
+            <p>
+              平均句长 {profile.averageSentenceLength.toFixed(2)} 字符；问号句段{' '}
+              {(profile.questionRatio * 100).toFixed(1)}%；感叹号句段{' '}
+              {(profile.exclamationRatio * 100).toFixed(1)}%。
+            </p>
+          ) : (
+            <p>样本缺失。</p>
+          )}
+          {quotes
+            .filter((q) => q.characterName === profile.characterName)
+            .map((q) => (
+              <p key={q.start}>
+                {q.attribution} — [{q.start}, {q.end})「{q.quote}」
+              </p>
+            ))}
+        </section>
+      ))}
+      <Select aria-label="对比角色 A" value={charA} onValueChange={setCharA}>
+        <option value="">选择角色</option>
+        {names.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </Select>
+      <Select aria-label="对比角色 B" value={charB} onValueChange={setCharB}>
+        <option value="">选择角色</option>
+        {names.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </Select>
+      <button
+        disabled={!a?.sampleDialogueCount || !b?.sampleDialogueCount || charA === charB}
+        onClick={() => setComparedScope(scope)}
+      >
+        比对
+      </button>
+      {comparison && (
+        <section>
+          <p>
+            A 减 B：平均句长差 {comparison.differences.averageSentenceLength.toFixed(2)}；问号比例差{' '}
+            {(comparison.differences.questionRatio * 100).toFixed(1)} 个百分点；感叹号比例差{' '}
+            {(comparison.differences.exclamationRatio * 100).toFixed(1)} 个百分点。
+          </p>
+          <p>{comparison.advice}</p>
+        </section>
+      )}
+      <button disabled={busy || !quotes.length} onClick={save}>
+        保存当前对白样本
+      </button>
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={ai.isRunning || !text.trim() || !names.length}
+          onClick={() =>
+            ai.run({
+              text: semanticTextFromContent('manual-dialogue', text, 0),
+              characters: names,
+              quoteAttributionCandidates: quotes,
+              authorConstraints: semanticTextFromContent('manual-constraints', intent, 0),
+              compare: charA && charB ? [charA, charB] : [],
+            })
+          }
+        >
+          AI 对白语境复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
+      <h3>已保存样本 ({archives.length})</h3>
+      {archives.map((record) => (
+        <p key={record.id}>
+          {record.characterName}：{record.sampleDialogueCount} 段；
+          {record.sourceText === undefined
+            ? '旧记录未绑定原文，不能用于当前比较。'
+            : '保存样本，请重新载入文本后再比较。'}
+        </p>
+      ))}
+      <h3>可选措辞示例</h3>
+      {dialogueDistillerEngine.getPresets().map((p) => (
+        <p key={p.id}>
+          {p.name}：{p.sampleSnippet}
+        </p>
+      ))}
     </div>
   )
 }

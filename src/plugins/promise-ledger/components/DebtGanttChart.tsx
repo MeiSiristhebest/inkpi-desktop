@@ -87,15 +87,19 @@ export const DebtGanttChart: FC<DebtGanttChartProps> = ({
         {/* 伏笔行数据 */}
         <div className="divide-y divide-[var(--ink-border)]/40 mt-1">
           {entries.map((entry) => {
+            const hasChapter = entry.plantChapter >= 1
+            const hasDeadline = entry.dueChapterLimit > 0
+            const hasWarning = entry.softDeadline > 0 && entry.softDeadline < entry.dueChapterLimit
             const plantPct = (entry.plantChapter / maxCh) * 100
-            const softCh = entry.plantChapter + entry.softDeadline
+            const softCh =
+              entry.plantChapter + (hasWarning ? entry.softDeadline : entry.dueChapterLimit)
             const softPct = (softCh / maxCh) * 100
             const dueCh = entry.plantChapter + entry.dueChapterLimit
             const duePct = (dueCh / maxCh) * 100
 
             const isPaid = entry.status === 'paid_off'
-            const isOverdue = !isPaid && currentChapter >= dueCh
-            const heat = ledgerEngine.computeMemoryHeat(entry, currentChapter)
+            const snapshot = ledgerEngine.computeDebtSnapshot([entry], currentChapter)[0]
+            const isOverdue = snapshot.isOverdue
 
             return (
               <div
@@ -117,39 +121,49 @@ export const DebtGanttChart: FC<DebtGanttChartProps> = ({
 
                 {/* 进度条轨道 */}
                 <div className="flex-1 relative h-4 bg-[var(--ink-bg-canvas)] rounded overflow-hidden">
-                  {/* 安全区间 */}
-                  <Tooltip content={`第${entry.plantChapter}章埋设`}>
-                    <div
-                      style={{
-                        left: `${plantPct}%`,
-                        width: `${Math.max(1, softPct - plantPct)}%`,
-                      }}
-                      className="absolute top-0 bottom-0 bg-emerald-500/30 border-l-2 border-emerald-500"
-                    />
-                  </Tooltip>
+                  {!hasChapter || !hasDeadline ? (
+                    <span className="px-2 text-[10px] text-[var(--ink-text-muted)]">
+                      {!hasChapter ? '未指定章节' : '未设置期限'}
+                    </span>
+                  ) : (
+                    <>
+                      {/* 安全区间 */}
+                      <Tooltip content={`第${entry.plantChapter}章埋设`}>
+                        <div
+                          style={{
+                            left: `${plantPct}%`,
+                            width: `${Math.max(1, softPct - plantPct)}%`,
+                          }}
+                          className="absolute top-0 bottom-0 bg-emerald-500/30 border-l-2 border-emerald-500"
+                        />
+                      </Tooltip>
 
-                  {/* 软告警区间 */}
-                  <Tooltip content={`第${softCh}章进入告警`}>
-                    <div
-                      style={{
-                        left: `${softPct}%`,
-                        width: `${Math.max(1, duePct - softPct)}%`,
-                      }}
-                      className="absolute top-0 bottom-0 bg-amber-500/35 border-l-2 border-amber-500"
-                    />
-                  </Tooltip>
+                      {/* 软告警区间 */}
+                      {hasWarning && (
+                        <Tooltip content={`第${softCh}章进入告警`}>
+                          <div
+                            style={{
+                              left: `${softPct}%`,
+                              width: `${Math.max(1, duePct - softPct)}%`,
+                            }}
+                            className="absolute top-0 bottom-0 bg-amber-500/35 border-l-2 border-amber-500"
+                          />
+                        </Tooltip>
+                      )}
 
-                  {/* 超期溢出区间 */}
-                  {currentChapter > dueCh && !isPaid && (
-                    <Tooltip content={`已超期 ${currentChapter - dueCh} 章`}>
-                      <div
-                        style={{
-                          left: `${duePct}%`,
-                          width: `${Math.max(1, ((currentChapter - dueCh) / maxCh) * 100)}%`,
-                        }}
-                        className="absolute top-0 bottom-0 bg-rose-500/40 border-l-2 border-rose-500 animate-pulse"
-                      />
-                    </Tooltip>
+                      {/* 超期溢出区间 */}
+                      {isOverdue && currentChapter > dueCh && (
+                        <Tooltip content={`已超期 ${currentChapter - dueCh} 章`}>
+                          <div
+                            style={{
+                              left: `${duePct}%`,
+                              width: `${Math.max(1, ((currentChapter - dueCh) / maxCh) * 100)}%`,
+                            }}
+                            className="absolute top-0 bottom-0 bg-rose-500/40 border-l-2 border-rose-500 animate-pulse"
+                          />
+                        </Tooltip>
+                      )}
+                    </>
                   )}
 
                   {/* 兑现点标记 */}
@@ -165,7 +179,17 @@ export const DebtGanttChart: FC<DebtGanttChartProps> = ({
 
                 {/* 记忆热度徽章 */}
                 <div className="w-16 shrink-0 text-right text-[10px] pl-2 text-[var(--ink-text-faint)]">
-                  热度 {Math.round(heat * 100)}%
+                  {entry.status === 'paid_off'
+                    ? '已回收'
+                    : entry.status === 'abandoned'
+                      ? '已放弃'
+                      : snapshot.remainingChapters == null
+                        ? '期限未知'
+                        : snapshot.isDue
+                          ? '本章到期'
+                          : snapshot.isOverdue
+                            ? `超期 ${-snapshot.remainingChapters} 章`
+                            : `剩余 ${snapshot.remainingChapters} 章`}
                 </div>
               </div>
             )

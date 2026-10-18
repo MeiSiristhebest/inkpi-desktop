@@ -12,3 +12,9 @@ export interface KeyValueStore {
   /** 删除键（不存在时静默） */
   remove?(key: string): Promise<void>
 }
+
+/** A key/value store that can serialize cross-context read-modify-write operations. */
+export interface AtomicKeyValueStore extends KeyValueStore {
+  /** The updater must be synchronous so transactional adapters can commit it in one transaction. */
+  update(key: string, updater: (current: string | null) => string): Promise<string>
+}

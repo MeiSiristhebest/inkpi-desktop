@@ -1,0 +1,98 @@
+# Desktop 插件与共享组件只读审计
+
+审计对象：E:/Mei/下载/cs/inkpi-desktop 当前工作树。既有未提交修改未改动。本报告用于计划与验收范围，不声明优化完成。
+
+## 现有基础
+
+44个第一方插件、43个写作抽屉、94个生产插件TSX组件、22个AI回执面板消费方。全部插件目录存在专属测试文件；本子任务没有运行现有测试套件。
+
+现有UI基础为Base UI Button/Select/Tooltip，atoms包括BookCover、IconButton、Placeholder、Row、ScoreProvenanceBadge、Spinner、StatCard，另有bookCoverPalettes/scoreProvenance工具；molecules包括ConfirmDialog、ContextMenu、Drawer/DrawerHeader、HelpTooltip、Modal、Popover。不应创建第二套组件系统。
+
+2026-10-12审查快照：484个原生button、47个motion.button、1个共享Button、49个共享Select；39个Select调用未传label、aria-label、aria-labelledby或id。选中项文字可能成为计算后的名称，因此这里判定为缺少稳定的功能标签，而非全部“空名称”。第一方插件组件单独包含268个原生button、0个共享Button。计数排除测试，原生button不含motion.button。Select 标签的后续状态见 [U06 补充验收](select-accessible-names-2026-10-13.md)。
+
+## 已确认缺陷与最小修复
+
+1. 插件保存失败被吞掉：src/core/pluginRegistry.tsx:79-91 catches并resolve；168-205先改UI集合、不等落库，PluginSettingsView:232-235直接显示已启用。隔离执行真实源码并注入失败仓储，返回promiseRejected=false、warning=1。修复：写入失败传播，明确saving/error/retry，落库成功才提交状态或失败回滚；勿让新项目创建等待一个吞错的Promise。
+2. hydration覆盖作者操作：pluginRegistry.tsx:150-160异步读取完成后替换整个集合。隔离执行真实源码：读取未返回时toggle safe-gate得到[safe-gate]；旧读取[living-codex]完成后变成[living-codex]。修复：读取完成前禁用切换并显示加载，或对当前scope串行合并；项目切换要取消旧scope状态提交。
+3. 插件管理键盘与状态语义不足：PluginSettingsView.tsx:162-169是仅点击div；190-207开关无名称、switch角色、aria-checked，且focus:outline-none未补可见焦点；134-151分类无aria-expanded。修复：分离可聚焦的选择按钮与Switch，不嵌套按钮，绑定稳定名称与当前状态。
+4. overlay所有实例同时关闭：src/ui/useOverlayFocus.ts:69-80每实例window Escape监听且无最上层/已处理/IME判断。隔离jsdom运行真实hook源码：一次Escape使outerClosed=1、innerClosed=1；isComposing=true仍onClose=1。修复：一个共享最上层浮层契约，输入法Esc不关闭，嵌套层关闭后归还上层焦点。
+5. overlay可聚焦项不完整：useOverlayFocus.ts:7-8遗漏链接、contenteditable和可见性；:56零控件不阻止Tab。真实源码隔离运行：首个链接之后的Save反而获初始焦点；零控件Tab defaultPrevented=false。修复：复用现有Base UI Dialog/Popover对焦点、inert与portal的能力，或在单一owner补完整契约。Select portal与Modal组合须真实浏览器验收。
+6. HelpTooltip模态声明与行为不一致：HelpTooltip.tsx:52、159-162使用trap+aria-modal=true；无背景inert/遮罩，document mousedown仍能操作外部并关闭。修复：帮助说明若允许外部操作，使用非模态Popover契约；若为模态，使用现有Modal门面。Popover.tsx当前实际是模态；先确定产品语义再改名/改行为。
+7. Select功能标签未关联：例如name-forge/NameForgeView.tsx:240-262的“性别/批次”span未关联Select；ui/primitives/select.tsx:165/179只接收可选ariaLabel/label。修复：复用Select的label入口；后续薄Field门面只统一标签、说明、错误关联，不改变领域表单。
+
+## 设计缺口与待验证项
+
+- usePluginAiTask.ts只存组件本地view，取消投影成failed；PluginAiTaskPanel仅展示文本，不展示provenance/artifact或任务中心入口。22个AI任务插件应统一回执的输入范围、状态、来源、原文修订和结果去向；维持作者确认，不自动写正文。实际跨导航/重启恢复由现有任务中心接续，避免再建插件专属任务库。
+- pluginHostContext.tsx:378-396 mutateCodexEntity从getAll按id选实体，没有projectId校验；现有仓储ports/codexEntityRepository.ts只提供getAll/save/delete。该入口未发现现有UI调用者，因此记录为已确认宿主契约缺口，未声称用户操作可复现跨项目修改。最小修复是宿主验证workspace和合并后projectId，并补按项目读取能力。
+- memory-palace/MemoryPalaceMasterView.tsx:92-132运行时失败catch空处理并用本地结果回退；本地检索本身有价值，须标注来源/降级原因。
+- 冷加载抽屉缺少局部Suspense/ErrorBoundary：pluginDefinitions.ts:814-829将抽屉包装为React.lazy，但DrawerDock.tsx:79-84直接渲染，RichEditor.tsx:849与Engine.tsx:112的editor分支未补边界；现有Suspense只包插件主视图。建议把加载和chunk失败限定在抽屉。实际慢网络/加载失败对编辑器的影响尚未通过GUI复现，不声明会丢稿或空白。
+- 文档存在当前调用链差异：ARCHITECTURE.md:284称22个AI插件消费runPluginTask；当前usePluginAiTask.ts:65/76实际调用runPluginOutcome。应更新调用链、状态投影、验收范围与真实缺口，不能继续将“文档同步”当作已关闭事实。
+- Button皮肤迁移未完成是设计系统覆盖缺口，不是484个功能缺陷。首先保留既有视觉尺寸，统一名称、状态、禁用、focus；有视觉基线后再逐模板迁移。
+- 44个插件的真实Provider、完整GUI、长文本规模、主题/DPI/屏幕阅读器、导出产物均未由本子任务验收。源码测试存在与注册通过不构成生产完成。
+
+## 分阶段方案与验收
+
+1. 固定当前基线与插件契约：以一个注册表生成能力、导航、抽屉、任务索引和文档，保留本地引擎与可选插件意图。验收44个id和运行时分类一致；停用后导航/快捷键/后台工作不运行；项目隔离。
+2. 先修真实交互和持久化：保存失败、加载竞争、管理开关键盘、IME、最上层Esc、焦点归还。验收storage拒绝后不显示已保存；快速切换项目不覆盖；仅键盘可以搜索、选择、启停；nested Modal/Select/帮助层不误关父层；输入法Esc不丢输入。
+3. 加强现有共享门面：Button/IconButton、Select/Field、Modal/Popover/Tooltip/ContextMenu，补稳定标签、错误说明、loading/cancelled状态。不要重复建立基础组件。验收真实浏览器键盘+读屏、reduced-motion、主题、Windows缩放与900/1280/1440宽度。
+4. 按真实任务迁移插件模板：先世界设定/伏笔/时间线，接着检测类，再工具和创作工作流。沉淀PluginHeader、ScopePicker、DiagnosticsList、TaskReceipt等有重复证据的组合组件；不把所有插件压成统一CRUD。每个批次同时更新文档、截图与情景验收。
+5. 逐插件完成生产验收：每项有项目/章节/选区范围、空状态、离线/无模型、失败/重试/取消、任务恢复、结果来源、作者采纳、持久化和导出证据。功能可用、交互改进、生产验证分别记录关闭/部分/未证实/未运行。
+
+## 当前行业原始资料
+
+- W3C APG Switch要求稳定名称、switch角色、aria-checked和Space交互：[Switch Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/switch/)。
+- W3C APG Modal要求活动对话框外不可交互，Tab在对话框内循环，关闭后归还触发者焦点：[Dialog Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)。
+- 现有依赖已有Dialog能力；是否迁移应保持本地门面与视觉回归：[Base UI Dialog](https://base-ui.com/react/components/dialog)。这是本报告据源码和原始资料提出的迁移判断，不是框架升级建议。
+
+## 44项插件矩阵
+
+CTX=上下文检视，ACTION=快捷操作，DIAG=实时诊断。所有状态均为“本地已注册、测试文件存在；未完成44项生产GUI/Provider验收”。测试文件数量不代表测试已通过。
+
+| 插件                                           | 主职责                         | Runtime边界      | 抽屉   | 代码引用的数据端口/仓储                                                                                                         | 组件/测试文件 | 审查深度与已知项                                                                                                               |
+| ---------------------------------------------- | ------------------------------ | ---------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| living-codex / 活体世界观                      | 世界设定实体与关系管理         | context-provider | CTX    | indexedDbCodexEntityRepository                                                                                                  | 5/7           | 目录/契约扫描及选定源码链路审查；Select缺少稳定功能标签：1处；Codex宿主写入未检查projectId；需补跨项目契约                     |
+| promise-ledger / 伏笔账本                      | 伏笔登记、回收与债务检查       | ai-task          | CTX    | indexedDbProjectRepository, indexedDbPromiseLedgerRepository                                                                    | 4/4           | 目录/契约扫描及选定源码链路审查；Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现      |
+| timeline-grid / 因果时空网                     | 时间线、因果关系与冲突检查     | ai-task          | 无     | indexedDbProjectRepository, indexedDbTimelineRepository                                                                         | 3/3           | 目录/契约扫描及选定源码链路审查；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现      |
+| safe-gate / 安全门禁                           | 敏感词检查与替换建议           | ai-task          | DIAG   | indexedDbProjectRepository                                                                                                      | 2/3           | 目录/契约扫描及选定源码链路审查；Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现      |
+| scene-beats / 场景节拍                         | 场景节拍和张力规划             | ai-task          | CTX    | indexedDbProjectRepository, indexedDbSceneBeatRepository                                                                        | 2/3           | 目录/注册/运行时分类/控件扫描；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现                                     |
+| describe-palette / 描写调色盘                  | 描写词句检索                   | pure-local       | ACTION | 宿主或本地UI                                                                                                                    | 2/3           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| name-forge / 起名姬                            | 人物、组织和地点命名           | pure-local       | ACTION | 宿主或本地UI                                                                                                                    | 2/3           | 目录/契约扫描及选定源码链路审查；Select缺少稳定功能标签：2处                                                                   |
+| expectation-engine / 期待感引擎                | 期待事件规划与释放检查         | ai-task          | CTX    | expectationRepository, indexedDbExpectationRepository, indexedDbProjectRepository                                               | 2/3           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| consistency-sentinel / 一致性哨兵              | 设定、角色状态和境界一致性检查 | hybrid           | DIAG   | indexedDbCodexEntityRepository, indexedDbPowerTierRepository, indexedDbProjectRepository, powerTierRepository                   | 2/4           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| sprint-arena / 心流竞技场                      | 写作计时与字数反馈             | ui-only          | ACTION | indexedDbSprintRepository, sprintRepository                                                                                     | 2/3           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| reader-hook / 黄金三章与钩子                   | 开篇和章尾钩子检查             | ai-task          | DIAG   | indexedDbProjectRepository, indexedDbReaderHookRepository, readerHookRepository                                                 | 2/3           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| clue-weaver / 线索织机                         | 悬疑线索与信息差管理           | ai-task          | CTX    | clueWeaverRepository, indexedDbClueWeaverRepository, indexedDbCodexEntityRepository, indexedDbProjectRepository                 | 2/3           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：4处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| water-meter / 字数水分表                       | 重复、套话与冗余文本检查       | ai-task          | DIAG   | indexedDbProjectRepository, waterAuditRepository                                                                                | 2/3           | 目录/契约扫描及选定源码链路审查；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现      |
+| volume-master / 分卷架构师                     | 分卷和章节篇幅规划             | ai-task          | CTX    | indexedDbProjectRepository, indexedDbVolumeArcRepository, volumeArcRepository                                                   | 2/3           | 目录/注册/运行时分类/控件扫描；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现                                     |
+| dialogue-distiller / 对话精炼器                | 对白风格与重复检查             | ai-task          | DIAG   | dialogueVoiceprintRepository, indexedDbCodexEntityRepository, indexedDbDialogueVoiceprintRepository, indexedDbProjectRepository | 2/3           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：3处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| faction-matrix / 势力外交盘                    | 势力和外交关系管理             | ai-task          | CTX    | factionDiplomacyRepository, indexedDbCodexEntityRepository, indexedDbFactionDiplomacyRepository                                 | 2/3           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| paywall-sentry / 上架卡点哨兵                  | 上架章节与章尾文本检查         | ai-task          | DIAG   | indexedDbPaywallAuditRepository, indexedDbProjectRepository                                                                     | 2/2           | 目录/注册/运行时分类/控件扫描；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现                                     |
+| press-forge / 出版铸造厂                       | 排版与出版资料准备             | tool             | ACTION | indexedDbPressConfigRepository, indexedDbProjectRepository, pressConfigRepository                                               | 2/2           | 目录/契约扫描及选定源码链路审查；Select缺少稳定功能标签：1处；已发现手动触发与输入匹配的AI排版保护；实际Provider和导出仍未验收 |
+| emotion-curve / 情绪张力曲线                   | 章节情绪变化检查               | ai-task          | CTX    | indexedDbEmotionAuditRepository, indexedDbProjectRepository                                                                     | 2/2           | 目录/注册/运行时分类/控件扫描；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现                                     |
+| brainstorm-spark / 破局灵感火花                | 写作方案与灵感生成             | pure-local       | ACTION | indexedDbBrainstormRepository                                                                                                   | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| reader-simulator / 虚拟读者群                  | 按读者画像提供文本意见         | ai-task          | DIAG   | indexedDbProjectRepository, indexedDbReaderSimulationRepository, readerSimulationRepository                                     | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| chekhov-radar / 契诃夫之枪                     | 伏笔回收时限检查               | ai-task          | DIAG   | chekhovGunRepository, indexedDbChekhovGunRepository, indexedDbProjectRepository                                                 | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| rhythm-metronome / 节奏节拍器                  | 句长与文本节奏检查             | pure-local       | DIAG   | indexedDbProjectRepository, indexedDbRhythmCadenceRepository, rhythmCadenceRepository                                           | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| geography-map / 山川地理图                     | 地图位置与距离管理             | pure-local       | CTX    | geoMapRepository, indexedDbGeoMapRepository                                                                                     | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处                                                                     |
+| combat-sandbox / 战力推演沙盘                  | 战力配置和战斗推演             | ai-task          | ACTION | combatSandboxRepository, indexedDbCodexEntityRepository, indexedDbCombatSandboxRepository, indexedDbPowerTierRepository         | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| multi-calendar / 多重纪元历法                  | 历法换算与时间对齐             | ai-task          | CTX    | indexedDbMultiCalendarRepository, indexedDbProjectRepository, multiCalendarRepository                                           | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：4处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| pov-guard / 视角守门人                         | 叙述视角检查                   | pure-local       | DIAG   | indexedDbPovGuardRepository, povGuardRepository                                                                                 | 2/3           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| narrative-linter / 叙事质检仪                  | 叙述用语与句式检查             | ai-task          | DIAG   | indexedDbProjectRepository, narrativeLinterRepository                                                                           | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| diff-reviewer / 双栏审校合稿                   | 文本对比与逐项合并             | tool             | ACTION | diffReviewRepository                                                                                                            | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| iron-chamber / 铁牢逻辑自洽                    | 命题与逻辑矛盾检查             | pure-local       | DIAG   | indexedDbIronChamberRepository, ironChamberRepository                                                                           | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处                                                                     |
+| soundscape / 白噪音音效                        | 写作环境音控制                 | ui-only          | ACTION | indexedDbSoundscapeConfigRepository, soundscapeConfigRepository                                                                 | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| scrapbook-recycler / 废稿回收站                | 废稿存储与检索                 | tool             | ACTION | indexedDbScrapbookRepository, scrapbookRepository                                                                               | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| aftermath-sync / 战后状态同步                  | 战后人物状态记录               | pure-local       | ACTION | aftermathRepository, indexedDbAftermathRepository, indexedDbCodexEntityRepository                                               | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| subtext-compiler / 微表情与潜台词              | 对白潜台词记录与分析           | ai-task          | ACTION | indexedDbSubtextRepository, subtextRepository                                                                                   | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现        |
+| rhythm-radar / 断章雷达                        | 章节长度和断章位置检查         | pure-local       | DIAG   | indexedDbRhythmRadarRepository, rhythmRadarRepository                                                                           | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| shadow-reader / 读者影子视角                   | 按读者视角标记阅读问题         | pure-local       | DIAG   | indexedDbShadowReaderRepository, shadowReaderRepository                                                                         | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| multiverse-whatif / 平行推演 What-If           | 备选剧情推演                   | workflow         | ACTION | indexedDbMultiverseRepository, indexedDbProjectRepository, multiverseRepository                                                 | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| voice-preview / 台词试音室                     | 文本语音预览                   | ui-only          | ACTION | indexedDbVoicePreviewRepository, voicePreviewRepository                                                                         | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| storyboard-gen / 动漫分镜工坊                  | 文本分镜生成                   | workflow         | ACTION | indexedDbStoryboardRepository, storyboardRepository                                                                             | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| archetype-cards / 人格原型素材库与叙事母题卡牌 | 人物原型与叙事素材管理         | pure-local       | CTX    | archetypeRepository                                                                                                             | 2/2           | 目录/注册/运行时分类/控件扫描；Select缺少稳定功能标签：1处                                                                     |
+| author-ops / 连载运营台账与作者商业名片        | 连载运营记录                   | pure-local       | CTX    | authorOpsRepository, indexedDbAuthorOpsRepository                                                                               | 2/2           | 目录/注册/运行时分类/控件扫描；本轮未确认插件专属缺陷；全流程体验待逐项验收                                                    |
+| gold-chapters-eval / 黄金三章与签约过稿诊断器  | 开篇章节检查                   | ai-task          | DIAG   | goldChaptersRepository, indexedDbGoldChaptersRepository, indexedDbProjectRepository                                             | 2/2           | 目录/注册/运行时分类/控件扫描；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现                                     |
+| memory-palace / 记忆宫殿与实体召回仪           | 实体和章节检索                 | tool             | CTX    | indexedDbCodexEntityRepository, indexedDbMemoryPalaceRepository, indexedDbProjectRepository                                     | 2/2           | 目录/契约扫描及选定源码链路审查；运行时检索失败静默回退本地；界面应显示结果来源                                                |
+| sub-plot-braid / 多线叙事编织器                | 多线情节规划                   | ai-task          | CTX    | indexedDbProjectRepository, indexedDbSubPlotRepository                                                                          | 2/2           | 目录/注册/运行时分类/控件扫描；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现                                     |
+
+机器可读矩阵：plugin-component-audit-matrix.json。仓储列仅表示源码导入，不证明每条读写均满足项目隔离。

@@ -322,6 +322,61 @@ class InkStudioDB {
     })
   }
 
+  /** Reads multiple stores from one readonly transaction for a consistent backup snapshot. */
+  public async getAllSnapshot(
+    stores: readonly StoreName[],
+  ): Promise<Partial<Record<StoreName, unknown[]>>> {
+    const uniqueStores = [...new Set(stores)]
+    if (uniqueStores.length === 0) return {}
+    const database = await this.openDB()
+    return new Promise((resolve, reject) => {
+      let transaction: IDBTransaction
+      try {
+        transaction = database.transaction(uniqueStores, 'readonly')
+      } catch (error) {
+        reject(error)
+        return
+      }
+
+      const snapshot: Partial<Record<StoreName, unknown[]>> = {}
+      let failedStore: StoreName | undefined
+      let settled = false
+      const rejectOnce = (error: unknown) => {
+        if (settled) return
+        settled = true
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+
+      transaction.oncomplete = () => {
+        if (settled) return
+        settled = true
+        resolve(snapshot)
+      }
+      transaction.onerror = () =>
+        rejectOnce(
+          failedStore
+            ? new Error(`IndexedDB snapshot failed while reading store "${failedStore}"`)
+            : (transaction.error ?? new Error('IndexedDB snapshot read failed')),
+        )
+      transaction.onabort = () =>
+        rejectOnce(
+          failedStore
+            ? new Error(`IndexedDB snapshot failed while reading store "${failedStore}"`)
+            : (transaction.error ?? new Error('IndexedDB snapshot read aborted')),
+        )
+
+      for (const storeName of uniqueStores) {
+        const request = transaction.objectStore(storeName).getAll()
+        request.onerror = () => {
+          failedStore = storeName
+        }
+        request.onsuccess = () => {
+          snapshot[storeName] = request.result as unknown[]
+        }
+      }
+    })
+  }
+
   public async getByIndex<T>(
     store: StoreName,
     indexName: string,

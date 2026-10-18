@@ -11,13 +11,16 @@ describe('ArchetypeEngine (人格原型与母题抽卡引擎)', () => {
     expect(cards[0].name).toBeDefined()
   })
 
-  it('当两角色为天然宿敌原型时，计算出极高的冲突张力火花', () => {
+  it('组合角色目标作为可讨论素材，不从卡牌标签推断冲突分数', () => {
     const presets = ArchetypeEngine.getPresetArchetypes()
     const rebel = presets.find((p) => p.id === 'arch-rebel')!
     const ruler = presets.find((p) => p.id === 'arch-ruler')!
 
     const chem = ArchetypeEngine.calculateChemistry(rebel, ruler)
-    expect(chem.tensionScore).toBeGreaterThanOrEqual(0.9)
-    expect(chem.dramaticPrompt).toContain('天然宿敌碰撞')
+    expect(chem).not.toHaveProperty('tensionScore')
+    expect(chem.coreEthicalConflict).toContain(rebel.coreDesire)
+    expect(chem.coreEthicalConflict).toContain(ruler.coreDesire)
+    expect(chem.dramaticPrompt).toMatch(/协商|合作|拒绝/)
+    expect(chem.dramaticPrompt).not.toMatch(/天然宿敌|不可调和|必然敌对/)
   })
 })

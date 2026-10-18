@@ -1,6 +1,23 @@
 import type { CalendarDefinition, ChapterChronologyEvent, ChronologyAuditResult } from '../types'
 
 export class MultiCalendarEngine {
+  /** Fixed-length years only. Integer years are continuous and include year zero. */
+  static validateCalendar(calendar: CalendarDefinition): number {
+    if (calendar.leapRules?.trim())
+      throw new RangeError('尚不支持闰日或闰月规则，不能按固定年换算。')
+    if (
+      !Number.isSafeInteger(calendar.epochOffsetDays) ||
+      !Number.isSafeInteger(calendar.monthsPerYear) ||
+      calendar.monthsPerYear < 1 ||
+      calendar.daysPerMonth.length !== calendar.monthsPerYear ||
+      calendar.daysPerMonth.some((days) => !Number.isSafeInteger(days) || days < 1)
+    ) {
+      throw new RangeError('历法需要整数纪元偏移和完整、正整数的月长。')
+    }
+    const daysInYear = calendar.daysPerMonth.reduce((a, b) => a + b, 0)
+    if (!Number.isSafeInteger(daysInYear)) throw new RangeError('年长超出可精确计算范围。')
+    return daysInYear
+  }
   /**
    * 东方玄幻流派的历法预设（上古灵历 + 大炎皇统历）。
    *
@@ -31,16 +48,28 @@ export class MultiCalendarEngine {
     calendar: CalendarDefinition,
     date: { year: number; month: number; day: number },
   ): number {
-    const daysInYear = calendar.daysPerMonth.reduce((a, b) => a + b, 0)
+    const daysInYear = this.validateCalendar(calendar)
+    if (
+      !Number.isSafeInteger(date.year) ||
+      !Number.isSafeInteger(date.month) ||
+      !Number.isSafeInteger(date.day) ||
+      date.month < 1 ||
+      date.month > calendar.monthsPerYear ||
+      date.day < 1 ||
+      date.day > calendar.daysPerMonth[date.month - 1]
+    ) {
+      throw new RangeError('日期不存在：请检查整数年、月及该月的天数。')
+    }
     let total = calendar.epochOffsetDays + (date.year - 1) * daysInYear
 
     // 累加当年前面月份的天数
     for (let m = 1; m < date.month && m <= calendar.monthsPerYear; m++) {
-      total += calendar.daysPerMonth[m - 1] || 30
+      total += calendar.daysPerMonth[m - 1]
     }
 
     // 累加当月日数
-    total += Math.max(0, date.day - 1)
+    total += date.day - 1
+    if (!Number.isSafeInteger(total)) throw new RangeError('日期超出可精确计算范围。')
     return total
   }
 
@@ -51,8 +80,13 @@ export class MultiCalendarEngine {
     calendar: CalendarDefinition,
     absoluteDay: number,
   ): { year: number; month: number; day: number } {
+    const daysInYear = this.validateCalendar(calendar)
+    if (
+      !Number.isSafeInteger(absoluteDay) ||
+      !Number.isSafeInteger(absoluteDay - calendar.epochOffsetDays)
+    )
+      throw new RangeError('绝对天数需要在安全整数范围内。')
     let dayRemainder = absoluteDay - calendar.epochOffsetDays
-    const daysInYear = calendar.daysPerMonth.reduce((a, b) => a + b, 0)
 
     let year = 1
     if (dayRemainder >= 0) {
@@ -99,46 +133,63 @@ export class MultiCalendarEngine {
   }
 
   /**
-   * 故事时间轴时间单调性与时间倒流悖论巡检
+   * Compare only events the author explicitly marked as part of the mainline.
+   * Chapter order alone does not establish story-time order.
    */
   static validateChronology(events: ChapterChronologyEvent[]): ChronologyAuditResult {
-    if (events.length <= 1) {
+    const mainlineEvents = events
+      .filter((event) => event.sequenceRole === 'mainline')
+      .sort((a, b) => a.chapterOrder - b.chapterOrder)
+    const excludedEventCount = events.length - mainlineEvents.length
+
+    if (mainlineEvents.length < 2) {
       return {
-        hasParadox: false,
-        paradoxCount: 0,
+        status: 'insufficient-data',
+        hasConflict: false,
+        conflictCount: 0,
+        checkedEventCount: mainlineEvents.length,
+        excludedEventCount,
         conflictPairs: [],
-        diagnostic: '时间线节点单调平稳，无逻辑倒流。',
+        diagnostic:
+          mainlineEvents.length === 0
+            ? `有 ${events.length} 个时间节点，但没有作者标记为主线推进；无法判断时间线是否一致。`
+            : `只有 ${mainlineEvents.length} 个主线推进节点；至少需要两个节点才能检查顺序。`,
       }
     }
 
-    const sortedByChapter = [...events].sort((a, b) => a.chapterOrder - b.chapterOrder)
     const conflictPairs: ChronologyAuditResult['conflictPairs'] = []
 
-    for (let i = 0; i < sortedByChapter.length - 1; i++) {
-      const current = sortedByChapter[i]
-      const next = sortedByChapter[i + 1]
+    for (let i = 0; i < mainlineEvents.length - 1; i++) {
+      const current = mainlineEvents[i]
+      const next = mainlineEvents[i + 1]
 
-      // 若后续章节对应的宇宙绝对天数比前文还小，说明发生了时间倒流！
+      // A regression among explicitly marked mainline events is a review signal,
+      // not proof of a story error. Flashbacks and unclassified events are excluded.
       if (next.timePoint.absoluteDayIndex < current.timePoint.absoluteDayIndex) {
         const gap = current.timePoint.absoluteDayIndex - next.timePoint.absoluteDayIndex
         conflictPairs.push({
+          earlierChapterId: current.chapterId,
+          laterChapterId: next.chapterId,
           earlierChapterOrder: current.chapterOrder,
           laterChapterOrder: next.chapterOrder,
           earlierDayIndex: current.timePoint.absoluteDayIndex,
           laterDayIndex: next.timePoint.absoluteDayIndex,
-          description: `第 ${next.chapterOrder} 章 (${next.chapterTitle}) 的历法绝对时间比第 ${current.chapterOrder} 章倒流了 ${gap} 天！`,
+          description: `第 ${next.chapterOrder} 章《${next.chapterTitle}》的主线时间比第 ${current.chapterOrder} 章早 ${gap} 天，请对照原文确认。`,
         })
       }
     }
 
-    const hasParadox = conflictPairs.length > 0
+    const hasConflict = conflictPairs.length > 0
     return {
-      hasParadox,
-      paradoxCount: conflictPairs.length,
+      status: hasConflict ? 'conflict' : 'consistent',
+      hasConflict,
+      conflictCount: conflictPairs.length,
+      checkedEventCount: mainlineEvents.length,
+      excludedEventCount,
       conflictPairs,
-      diagnostic: hasParadox
-        ? `🚨 发现 ${conflictPairs.length} 处严重时间倒流悖论！后文章节发生的时间早于前文已发生事件！`
-        : '时间单调性检验合格，全书编年史因果流动严密。',
+      diagnostic: hasConflict
+        ? `主线顺序与故事时间有 ${conflictPairs.length} 处不一致；请对照原文确认，非线性叙述不会自动判为错误。`
+        : `已比较 ${mainlineEvents.length} 个主线推进节点，未发现顺序冲突。${excludedEventCount > 0 ? `另有 ${excludedEventCount} 个非主线或顺序未确认的节点未参与检查。` : ''}`,
     }
   }
 }

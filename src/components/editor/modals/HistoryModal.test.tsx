@@ -126,4 +126,67 @@ describe('HistoryModal 里程碑与自动检查点分区', () => {
     ).toBeInTheDocument()
     expect(screen.getByText(/最多保留 20 条；里程碑定稿永久保留/)).toBeInTheDocument()
   })
+
+  it('报告历史读取失败，并允许重新读取', async () => {
+    const kvStore = memoryStore()
+    const get = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('IndexedDB unavailable'))
+      .mockResolvedValueOnce(JSON.stringify([milestone]))
+    kvStore.get = get
+    const onRestore = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <HistoryModal chapter={chapter} onRestore={onRestore} onClose={onClose} kvStore={kvStore} />,
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('无法读取历史版本')
+    expect(screen.queryByText('第一卷定稿')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '重试读取' }))
+
+    expect(await screen.findByText('第一卷定稿')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(onRestore).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('报告里程碑写入失败且不关闭历史窗口', async () => {
+    const kvStore = historyKv([newerAuto, milestone])
+    const set = vi.fn().mockRejectedValue(new Error('IndexedDB write failed'))
+    kvStore.set = set
+    const onClose = vi.fn()
+    render(
+      <HistoryModal chapter={chapter} onRestore={vi.fn()} onClose={onClose} kvStore={kvStore} />,
+    )
+    await screen.findByText('第一卷定稿')
+
+    fireEvent.click(screen.getByRole('button', { name: '保存当前为里程碑版本' }))
+    fireEvent.change(screen.getByPlaceholderText('里程碑名称（如：第一卷重写稿）'), {
+      target: { value: '未保存的里程碑' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('历史版本保存失败')
+    expect(screen.queryByText('未保存的里程碑')).not.toBeInTheDocument()
+    expect(set).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('恢复操作失败时保留当前历史窗口并说明正文未更改', async () => {
+    const kvStore = historyKv([milestone])
+    const onRestore = vi.fn().mockRejectedValue(new Error('Chapter save failed'))
+    const onClose = vi.fn()
+    render(
+      <HistoryModal chapter={chapter} onRestore={onRestore} onClose={onClose} kvStore={kvStore} />,
+    )
+    await screen.findByText('第一卷定稿')
+
+    fireEvent.click(screen.getByRole('button', { name: '恢复至此版本' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('恢复失败。当前正文未更改')
+    expect(onRestore).toHaveBeenCalledWith(milestone.content)
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

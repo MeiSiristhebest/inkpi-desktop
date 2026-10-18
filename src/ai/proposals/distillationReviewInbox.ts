@@ -10,6 +10,7 @@ import type { PromiseLedgerEntry } from '../../plugins/promise-ledger/types'
 import type { TimelineNode } from '../../plugins/timeline-grid/types'
 import { clock } from '../../adapters/clock'
 import { idGenerator } from '../../adapters/idGenerator'
+import { getProjectChapterNumber } from '../../services/projectChapterPosition'
 import {
   distillationReviewStore,
   type DistillationItem,
@@ -17,6 +18,13 @@ import {
 } from './distillationReviewStore'
 
 export type { DistillationItem, DistillationItemStatus }
+
+export interface DistillationAcceptOverrides {
+  name?: string
+  summary?: string
+  attributes?: Record<string, unknown>
+  chapterId?: string
+}
 
 /**
  * Distillation Review Inbox (事实审查收件箱 - Durable First)
@@ -40,7 +48,6 @@ export class DistillationReviewInbox {
     workspaceId: string,
     taskId: string,
     facts: DistilledStoryFacts,
-    evidence?: SourceEvidence[],
   ): Promise<DistillationItem[]> {
     const now = clock.now()
     const confidence = facts.confidence ?? 0.85
@@ -60,7 +67,7 @@ export class DistillationReviewInbox {
         kind: entity.kind,
         attributes: entity.attributes,
         confidence,
-        evidence: evidence ? [...evidence] : undefined,
+        ...sourceFields(entity),
         status: 'pending',
         createdAt: now,
       }
@@ -85,7 +92,7 @@ export class DistillationReviewInbox {
         kind: event.type,
         attributes: event.entityIds ? { entityIds: event.entityIds } : undefined,
         confidence,
-        evidence: evidence ? [...evidence] : undefined,
+        ...sourceFields(event),
         status: 'pending',
         createdAt: now,
       }
@@ -105,7 +112,7 @@ export class DistillationReviewInbox {
         name: promise.statement,
         summary: `AI 提炼伏笔：${promise.statement}`,
         confidence,
-        evidence: evidence ? [...evidence] : undefined,
+        ...sourceFields(promise),
         status: 'pending',
         createdAt: now,
       }
@@ -142,10 +149,7 @@ export class DistillationReviewInbox {
   /**
    * 采纳提议：将提议转化为权威领域实体/事件/伏笔并落库，提升为 canonical-fact
    */
-  public async accept(
-    itemId: string,
-    overrides?: { name?: string; summary?: string; attributes?: Record<string, unknown> },
-  ): Promise<void> {
+  public async accept(itemId: string, overrides?: DistillationAcceptOverrides): Promise<void> {
     const item = await this.loadItem(itemId)
     if (!item) throw new Error(`DistillationItem not found: ${itemId}`)
     if (item.status !== 'pending') {
@@ -156,10 +160,16 @@ export class DistillationReviewInbox {
     const finalName = overrides?.name ?? item.name
     const finalSummary = overrides?.summary ?? item.summary
     const finalAttributes = overrides?.attributes ?? item.attributes ?? {}
+    const resolvedItem: DistillationItem = { ...item, status: 'accepted', resolvedAt: now }
+    const resolution = await distillationReviewStore.prepareResolution(resolvedItem)
 
     const provenance: Provenance = {
       sourceType: 'ai-proposed',
       factLevel: 'proposal',
+      ...(item.sourceDocumentId ? { sourceDocumentId: item.sourceDocumentId } : {}),
+      ...(item.sourceBlockId ? { sourceBlockId: item.sourceBlockId } : {}),
+      ...(item.sourceRevision !== undefined ? { sourceRevision: item.sourceRevision } : {}),
+      confidence: item.confidence,
       evidence: item.evidence ? [...item.evidence] : undefined,
       createdAt: item.createdAt,
     }
@@ -187,15 +197,20 @@ export class DistillationReviewInbox {
         provenance,
       } as any
 
-      await codexApplicationService.saveEntity(codexEntity, 'ai-accepted')
+      await codexApplicationService.saveEntity(codexEntity, 'ai-accepted', [resolution])
     } else if (item.category === 'event') {
-      const parsedChapter =
-        typeof finalAttributes.chapterOrder === 'number' ? finalAttributes.chapterOrder : 0
+      const sourceChapterNumber = await getProjectChapterNumber(
+        item.workspaceId,
+        overrides?.chapterId ?? item.sourceDocumentId,
+      )
+      if (overrides?.chapterId && sourceChapterNumber === undefined) {
+        throw new Error('所选章节已不存在或不属于当前作品，请重新选择。')
+      }
       const timelineNode: TimelineNode = {
         id: idGenerator.generate('timeline-node'),
         projectId: item.workspaceId,
         threadId: (finalAttributes.threadId as string) || 'main-thread',
-        chapterOrder: parsedChapter,
+        chapterOrder: sourceChapterNumber ?? 0,
         eventTitle: finalName,
         summary: finalSummary,
         status: 'drafted',
@@ -208,16 +223,21 @@ export class DistillationReviewInbox {
         provenance,
       } as any
 
-      await timelineApplicationService.saveNode(timelineNode, 'ai-accepted')
+      await timelineApplicationService.saveNode(timelineNode, 'ai-accepted', [resolution])
     } else if (item.category === 'promise') {
-      const parsedPlantChapter =
-        typeof finalAttributes.plantChapter === 'number' ? finalAttributes.plantChapter : 0
+      const sourceChapterNumber = await getProjectChapterNumber(
+        item.workspaceId,
+        overrides?.chapterId ?? item.sourceDocumentId,
+      )
+      if (overrides?.chapterId && sourceChapterNumber === undefined) {
+        throw new Error('所选章节已不存在或不属于当前作品，请重新选择。')
+      }
       const promiseEntry: PromiseLedgerEntry = {
         id: idGenerator.generate('promise'),
         projectId: item.workspaceId,
         clueName: finalName,
-        tier: 'sub_plot',
-        plantChapter: parsedPlantChapter,
+        tier: 'side_arc',
+        plantChapter: sourceChapterNumber ?? 0,
         plantNote: finalSummary,
         dueChapterLimit:
           typeof finalAttributes.dueChapterLimit === 'number' ? finalAttributes.dueChapterLimit : 0,
@@ -233,13 +253,11 @@ export class DistillationReviewInbox {
         provenance,
       } as any
 
-      await promiseApplicationService.savePromise(promiseEntry, 'ai-accepted')
+      await promiseApplicationService.savePromise(promiseEntry, 'ai-accepted', [resolution])
     }
 
-    item.status = 'accepted'
-    item.resolvedAt = now
+    Object.assign(item, resolvedItem)
     this.memoryCache.set(item.id, item)
-    await distillationReviewStore.save(item)
   }
 
   /**
@@ -253,7 +271,9 @@ export class DistillationReviewInbox {
     }
 
     const now = clock.now()
+    const resolvedItem: DistillationItem = { ...item, status: 'hypothesis', resolvedAt: now }
     if (item.category === 'entity') {
+      const resolution = await distillationReviewStore.prepareResolution(resolvedItem)
       const categoryMap: Record<string, 'character' | 'item' | 'location' | 'faction'> = {
         character: 'character',
         item: 'item',
@@ -276,18 +296,22 @@ export class DistillationReviewInbox {
         provenance: {
           sourceType: 'derived',
           factLevel: 'hypothesis',
+          ...(item.sourceDocumentId ? { sourceDocumentId: item.sourceDocumentId } : {}),
+          ...(item.sourceBlockId ? { sourceBlockId: item.sourceBlockId } : {}),
+          ...(item.sourceRevision !== undefined ? { sourceRevision: item.sourceRevision } : {}),
+          confidence: item.confidence,
           evidence: item.evidence ? [...item.evidence] : undefined,
           createdAt: item.createdAt,
         },
       } as any
 
-      await codexApplicationService.saveEntity(codexEntity, 'demo')
+      await codexApplicationService.saveEntity(codexEntity, 'ai-hypothesis', [resolution])
+    } else {
+      await distillationReviewStore.resolve(resolvedItem)
     }
 
-    item.status = 'hypothesis'
-    item.resolvedAt = now
+    Object.assign(item, resolvedItem)
     this.memoryCache.set(item.id, item)
-    await distillationReviewStore.save(item)
   }
 
   /**
@@ -309,23 +333,27 @@ export class DistillationReviewInbox {
       summary: updatedSummary,
       updatedAt: now,
     }
+    const resolvedItem: DistillationItem = {
+      ...item,
+      status: 'merged',
+      mergedIntoId: targetEntity.id,
+      resolvedAt: now,
+    }
+    const resolution = await distillationReviewStore.prepareResolution(resolvedItem)
 
-    await codexApplicationService.saveEntity(mergedEntity, 'author-confirmed')
+    await codexApplicationService.saveEntity(mergedEntity, 'author-confirmed', [resolution])
 
-    item.status = 'merged'
-    item.mergedIntoId = targetEntity.id
-    item.resolvedAt = now
+    Object.assign(item, resolvedItem)
     this.memoryCache.set(item.id, item)
-    await distillationReviewStore.save(item)
   }
 
   public async reject(itemId: string): Promise<void> {
     const item = this.memoryCache.get(itemId) ?? (await this.loadItem(itemId))
     if (!item) throw new Error(`DistillationItem not found: ${itemId}`)
-    item.status = 'rejected'
-    item.resolvedAt = clock.now()
+    const resolvedItem: DistillationItem = { ...item, status: 'rejected', resolvedAt: clock.now() }
+    await distillationReviewStore.resolve(resolvedItem)
+    Object.assign(item, resolvedItem)
     this.memoryCache.set(item.id, item)
-    await distillationReviewStore.save(item)
   }
 
   public async clear(workspaceId?: string): Promise<void> {
@@ -359,3 +387,17 @@ export class DistillationReviewInbox {
 }
 
 export const distillationReviewInbox = new DistillationReviewInbox()
+
+function sourceFields(candidate: {
+  sourceDocumentId?: string
+  sourceBlockId?: string
+  sourceRevision?: number
+  evidence?: SourceEvidence[]
+}): Pick<DistillationItem, 'sourceDocumentId' | 'sourceBlockId' | 'sourceRevision' | 'evidence'> {
+  return {
+    ...(candidate.sourceDocumentId ? { sourceDocumentId: candidate.sourceDocumentId } : {}),
+    ...(candidate.sourceBlockId ? { sourceBlockId: candidate.sourceBlockId } : {}),
+    ...(candidate.sourceRevision !== undefined ? { sourceRevision: candidate.sourceRevision } : {}),
+    ...(candidate.evidence ? { evidence: candidate.evidence.map((item) => ({ ...item })) } : {}),
+  }
+}

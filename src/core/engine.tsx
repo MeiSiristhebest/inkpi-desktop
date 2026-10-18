@@ -46,6 +46,7 @@ import {
 import { useOptionalActiveWritingContext } from './activeWritingContext'
 import { useOptionalPluginHostContext } from './pluginHostContext'
 import { Tooltip } from '../ui/primitives'
+import type { ChatGPTPlanAssistant } from '../ports/aiGateway'
 
 interface EngineProps {
   projectId: string
@@ -64,10 +65,16 @@ interface EngineProps {
   isReconnecting?: boolean
   onReconnect?: () => void
   /** 行内 Ghost Text 续写请求 */
-  onRequestGhost?: (chapterId: string, text: string) => Promise<string | null>
+  onRequestGhost?: (
+    chapterId: string,
+    text: string,
+    sourceRevision: number,
+    signal?: AbortSignal,
+  ) => Promise<string | null>
   onProbeModelProvider?: (
     params: RuntimeModelProviderProbeParams,
   ) => Promise<RuntimeModelProviderProbeResult>
+  chatgptPlan?: ChatGPTPlanAssistant
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 返回书架/工作台入口（提供时顶栏显示返回按钮） */
   onHome?: () => void | Promise<void>
@@ -140,6 +147,7 @@ export const Engine: FC<EngineProps> = ({
   onReconnect,
   onRequestGhost,
   onProbeModelProvider,
+  chatgptPlan,
   onAiTask,
   onHome,
 }) => {
@@ -184,9 +192,9 @@ export const Engine: FC<EngineProps> = ({
     setNavigationHandler({
       openView: (tabId) => navigateToViewRef.current(tabId),
       openAssistant: openAssistant,
-      openActivityCenter: () => {
+      openActivityCenter: (resultId?: string) => {
         onOpenAssistant?.()
-        setInspectorState({ surface: 'activity' })
+        setInspectorState({ surface: 'activity', resultId })
       },
       openInspector: (surface: InspectorSurface, pluginId?: string) => {
         const request = resolveInspectorRequest(surface, pluginId)
@@ -626,6 +634,7 @@ export const Engine: FC<EngineProps> = ({
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         probeModelProvider={onProbeModelProvider}
+        chatgptPlan={chatgptPlan}
         runtimeState={deriveRuntimeReadiness({ isConnected, isReconnecting })}
         onReconnect={onReconnect}
       />

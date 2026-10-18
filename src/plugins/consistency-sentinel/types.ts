@@ -18,6 +18,9 @@ export interface ConsistencyViolation {
   suggestedAction: string
   entityName?: string
   opponentName?: string
+  status?: 'candidate'
+  startOffset?: number
+  endOffset?: number
 }
 
 export interface PresetTierSystem {
@@ -35,4 +38,6 @@ export interface TierRelation {
 export interface PosetValidationResult {
   isAcyclic: boolean
   cycles: string[][]
+  isValid: boolean
+  errors: string[]
 }

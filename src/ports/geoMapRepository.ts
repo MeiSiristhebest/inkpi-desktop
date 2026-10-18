@@ -22,6 +22,12 @@ export interface GeoMapGridRecord {
     foreshadowIds: string[] // 发生在此处的伏笔
     timelineEventIds: string[] // 关联历史事件
   }
+  travelPlan?: {
+    start: { x: number; y: number }
+    target: { x: number; y: number }
+    speedKmPerDay: number
+    terrainFactors: Record<TerrainType, number | null>
+  }
   updatedAt: number
   provenance?: Provenance
 }

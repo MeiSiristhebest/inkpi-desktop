@@ -14,3 +14,4 @@ These 10 invariants are absolute and non-negotiable across all layers of InkPi (
 | **INV-08** | **UI State & Durable State Consistency**  | 用户点击“应用/修复/恢复/写回”后，UI state 与 durable persistence 必须原子一致；成功提示必须在物理落库完成后给出，失败必须显式回滚并提示重试。                                                  |
 | **INV-09** | **Transparent AI Execution & Provenance** | 用户界面展示的 AI 状态、模型、连接、评分来源必须与实际执行一致，严禁硬编码虚假的“就绪”或将简单启发式规则包装成虚构的 AI 预测。                                                                 |
 | **INV-10** | **Decoupled Capability Lifecycle**        | Capability 是否存在、是否启用、是否出现在导航，是三件不同的事。未启用插件绝不能在后台运行、污染菜单或拦截全局快捷键。                                                                          |
+| **INV-11** | **Story Time Is Not Chapter Order**       | 章节顺序本身不能证明故事时间顺序。未标记的既有事件保持未知；只有作者标记的主线事件参与顺序检查。AI 检查必须引用输入证据，不能仅凭章节顺序判定矛盾。                                            |

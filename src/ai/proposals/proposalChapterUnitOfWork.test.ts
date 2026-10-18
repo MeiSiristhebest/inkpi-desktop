@@ -87,7 +87,9 @@ vi.mock('../../db/indexedDB', async (importOriginal) => {
   return { ...actual, db: { runTransaction } }
 })
 
-vi.mock('../../services/draftJournal', () => ({ draftJournal: { clear: vi.fn() } }))
+vi.mock('../../services/draftJournal', () => ({
+  draftJournal: { clear: vi.fn(), clearIfContentMatches: vi.fn() },
+}))
 vi.mock('../../ports/chapterSaveEvents', () => ({ chapterSaveEvents: { publish: vi.fn() } }))
 vi.mock('../../ports/proposalStateEvents', () => ({ proposalStateEvents: { publish: vi.fn() } }))
 vi.mock('../../adapters/indexedDbDailyStatsRepository', () => ({
@@ -180,6 +182,26 @@ describe('ProposalChapterUnitOfWork', () => {
     ).rejects.toBeInstanceOf(ProposalConflictError)
   })
 
+  it('commit: rejects a proposal whose document does not match the target chapter', async () => {
+    mockStores = {
+      chapters: { 'chapter-2': makeChapter({ id: 'chapter-2', content: '<p>Chapter 2</p>' }) },
+      aiProposals: { 'proposal-1': makeProposal({ documentId: 'chapter-1' }) },
+      domainChangeSets: {},
+    }
+
+    await expect(
+      ProposalChapterUnitOfWork.commitProposalWithChapter({
+        workspaceId: 'ws-1',
+        chapterId: 'chapter-2',
+        proposalId: 'proposal-1',
+        expectedRevision: 5,
+        nextContent: '<p>Updated</p>',
+      }),
+    ).rejects.toThrow(/targets chapter chapter-1, not chapter-2/)
+
+    expect(mockStores.chapters['chapter-2'].content).toBe('<p>Chapter 2</p>')
+  })
+
   it('commit: happy path updates chapter in DB, sets proposal status to committed, and publishes an incremental revision', async () => {
     mockStores = {
       chapters: { 'chapter-1': makeChapter() },
@@ -258,5 +280,37 @@ describe('ProposalChapterUnitOfWork', () => {
         restoredContent: '<p>Original</p>',
       }),
     ).rejects.toBeInstanceOf(ProposalConflictError)
+  })
+
+  it('undo: rejects a proposal whose document does not match the target chapter', async () => {
+    mockStores = {
+      chapters: {
+        'chapter-2': makeChapter({
+          id: 'chapter-2',
+          content: '<p>Chapter 2</p>',
+          revision: 6,
+        }),
+      },
+      aiProposals: {
+        'proposal-1': makeProposal({
+          documentId: 'chapter-1',
+          status: 'committed',
+          committedRevision: 6,
+        }),
+      },
+      domainChangeSets: {},
+    }
+
+    await expect(
+      ProposalChapterUnitOfWork.undoProposalWithChapter({
+        workspaceId: 'ws-1',
+        chapterId: 'chapter-2',
+        proposalId: 'proposal-1',
+        expectedRevision: 6,
+        restoredContent: '<p>Original</p>',
+      }),
+    ).rejects.toThrow(/targets chapter chapter-1, not chapter-2/)
+
+    expect(mockStores.chapters['chapter-2'].content).toBe('<p>Chapter 2</p>')
   })
 })

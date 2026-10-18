@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { db } from '../db/indexedDB'
+import { indexedDbSettingsKVRepository } from '../adapters/indexedDbSettingsKVRepository'
 import { blobFileDownloader } from '../adapters/blobFileDownloader'
 import {
   createProject,
   createDemoProject,
+  importProject,
   loadWorkspaceStats,
   loadStatsForProjects,
   loadProjects,
@@ -140,6 +142,43 @@ describe('projectService — 工作区聚合统计', () => {
     expect(p.templateType).toBe('demo')
     const ws = await loadWorkspaceStats([p])
     expect(ws.totalChapters).toBe(3)
+  })
+
+  it('returns invalid import JSON as a visible service error', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await importProject({ text: async () => '{' } as unknown as File)
+      expect(result).toMatchObject({ ok: false, error: expect.any(String) })
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('removes a partially created workspace when its plugin settings cannot be saved', async () => {
+    const existingIds = new Set(
+      (await db.getAll<ProjectRecord>('projects')).map((project) => project.id),
+    )
+    vi.spyOn(indexedDbSettingsKVRepository, 'set').mockRejectedValueOnce(
+      new Error('settings unavailable'),
+    )
+
+    await expect(createProject(form({ name: '失败后清理测试' }))).rejects.toThrow(
+      'settings unavailable',
+    )
+
+    expect((await db.getAll<ProjectRecord>('projects')).map((project) => project.id)).toEqual([
+      ...existingIds,
+    ])
+    expect(
+      (await db.getAll<VolumeRecord>('volumes')).some(
+        (volume) => !existingIds.has(volume.projectId),
+      ),
+    ).toBe(false)
+    expect(
+      (await db.getAll<ChapterRecord>('chapters')).some(
+        (chapter) => !existingIds.has(chapter.projectId),
+      ),
+    ).toBe(false)
   })
 })
 

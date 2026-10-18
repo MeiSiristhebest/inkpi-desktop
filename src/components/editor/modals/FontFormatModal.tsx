@@ -84,6 +84,7 @@ export const FontFormatModal: React.FC<FontFormatModalProps> = ({ onClose, model
           <div className="flex items-center gap-2">
             <span className="text-[13px] text-[var(--ink-text-muted)] w-10 shrink-0">字体</span>
             <Select
+              aria-label="字体"
               value={currentFont}
               onValueChange={(v) => model.updateSettings?.({ fontFamily: v as FontKind })}
               className="flex-1"

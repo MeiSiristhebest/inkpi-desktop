@@ -1,6 +1,6 @@
 # InkPi Desktop 技术架构
 
-状态：实现基线（冻结候选，Final Freeze pending）。关联 Runtime 本地 Phase 23 gate 已通过 20/20 原子条件和 13/13 可靠性场景；工作区 external/replay 记录 `inkpi-evidence/phase18/phase18-23-packaged-human-reviewed-final-20260914.json` 也记录 16/16 聚合组通过，其中包含 100/300 章真实 Provider、6 个 Gold、3 个 pairwise 和 packaged/GUI 记录。Runtime 本地 gate 明确不把 external/replay 记录自动升级为 formal freeze；生产长期运行与最终发布决策仍单独保留。
+状态：实现基线，产品验收未完成。2026-10-12 的当前工作树缺口、Pi 对标、组件/插件方案与验收范围见 [写作产品优化方案](docs/plans/writing-product-optimization-2026-10-12.md)。历史 Phase 23 与 external/replay 记录属于各自固定版本，不能证明当前未提交源码、Runtime pin、GUI 和真实供应商流程已全部验收；最终发布决策仍单独保留。
 
 本文记录 InkPi Desktop 与 InkPi Daemon 的进程边界、数据所有权、AI 任务入口和当前实现状态。规范性契约见 inkpi/docs/specs/AI_RUNTIME_SPEC_v1.md。
 
@@ -281,7 +281,7 @@ TaskRouter observer 和 task.event 可记录 taskId、kind、状态、时间、p
 
 ## 11. 插件与 Legacy 状态
 
-src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id；src/ai/tasks/pluginRuntimeCatalog.ts 为 44 个条目逐一标注 pure-local、ai-task、context-provider、tool、workflow、ui-only 或 hybrid 边界。当前 22 个 AI 插件组件通过 PluginHostContext.aiAssistant.runPluginTask 生成 plugin.<id>.analysis 任务，再由宿主映射到通用 runTask；其余条目也已显式分类和指向 Desktop、本地引擎、Story Context、Extension Tool 或 Runtime Workflow。`src/ai/tasks/pluginRuntimeMigration.test.ts` 对 44 个目录、定义、运行时分类、任务/Context Provider 证据和 legacy 入口扫描做一致性校验；packaged sidecar opt-in 已实际执行 4 个 Extension Tool 和 2 个 Runtime Workflow，生产环境的完整插件运行和 interface 审计仍待完成。
+src/ai/tasks/pluginCatalog.ts 与 src/core/pluginRegistry 对齐 44 个 first-party plugin id；src/ai/tasks/pluginRuntimeCatalog.ts 为 44 个条目逐一标注 pure-local、ai-task、context-provider、tool、workflow、ui-only 或 hybrid 边界。当前 22 个 AI 插件通过 usePluginAiTask 调用 PluginHostContext.aiAssistant.runPluginOutcome，宿主按目录生成任务并经通用 runTask 返回结构化 outcome；其余条目指向 Desktop、本地引擎、Story Context、Extension Tool 或 Runtime Workflow。`src/ai/tasks/pluginRuntimeMigration.test.ts` 校验目录、定义、分类与 legacy 入口。注册一致性及历史 packaged sidecar 测试不能替代逐插件生产验收；现有回执 UI、启停持久化与浮层合同仍有缺口，见 [44 项插件审计](docs/evidence/plugin-component-audit-2026-10-12.md)。
 
 src/architecture-ai.test.ts 已覆盖：
 

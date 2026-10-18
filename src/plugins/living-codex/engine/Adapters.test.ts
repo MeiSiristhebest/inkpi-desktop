@@ -181,6 +181,6 @@ describe('CodexAdapters Heterogeneous Form Mapping', () => {
     })
     expect(custom.name).toBe('未命名')
     expect(custom.category).toBe('term')
-    expect(custom.summary).toBe('术语 · 定义:无')
+    expect(custom.summary).toBe('术语 · 定义:未知')
   })
 })

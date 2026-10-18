@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   Search,
   Compass,
+  Home,
 } from 'lucide-react'
 import { spring, gesture } from '../../motion'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
@@ -48,6 +49,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   activeTabId,
   onSelectTab,
   projectName,
+  onBackToHome,
   onOpenSettings,
   onOpenCommandPalette,
   onClose,
@@ -130,6 +132,18 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           <span className="text-xs font-semibold truncate block">
             {projectName || '未命名小说'}
           </span>
+          {onBackToHome && (
+            <button
+              type="button"
+              aria-label="返回作品库"
+              title="返回作品库"
+              onClick={onBackToHome}
+              className="sidebar-nav-back-home w-full items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] transition-colors"
+            >
+              <Home className="w-3.5 h-3.5" />
+              <span>返回作品库</span>
+            </button>
+          )}
         </div>
 
         <nav

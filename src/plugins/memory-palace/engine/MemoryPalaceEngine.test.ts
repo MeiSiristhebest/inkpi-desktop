@@ -117,7 +117,7 @@ describe('MemoryPalaceEngine', () => {
     })
 
     expect(results.find((result) => result.entityId === 'e1')?.recentSnippets).toEqual([
-      '[第1章 踏入秘境] 秘境 正是九霄神雷剑的残片。',
+      '[第1章 踏入秘境] 秘境\n正是九霄神雷剑的残片。',
     ])
   })
 })

@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { PluginAiTaskPanel } from './PluginAiTaskPanel'
+import { setNavigationHandler } from '../../core/defaultCommands'
 
 describe('PluginAiTaskPanel', () => {
   afterEach(() => {
     cleanup()
+    setNavigationHandler(null)
   })
 
   it('idle 时不占位置', () => {
@@ -48,5 +50,32 @@ describe('PluginAiTaskPanel', () => {
 
     expect(screen.getByLabelText('AI 任务结果')).toHaveTextContent('第三章的伏笔在第七章仍未回收')
     expect(screen.getByText('未写入正文')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '查看活动中心' })).not.toBeInTheDocument()
+  })
+
+  it('routes a persisted plugin result to its activity record', () => {
+    const openActivityCenter = vi.fn()
+    const openInspector = vi.fn()
+    setNavigationHandler({
+      openView: vi.fn(),
+      openAssistant: vi.fn(),
+      openActivityCenter,
+      openInspector,
+    })
+    render(
+      <PluginAiTaskPanel
+        view={{
+          kind: 'result',
+          text: '建议继续回收第三章的伏笔',
+          taskId: 't2',
+          artifactId: 'artifact-t2',
+          provenance: { pluginId: 'reader-hook', workspaceId: 'ws-1', taskId: 't2', timestamp: 1 },
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '查看活动中心' }))
+    expect(openActivityCenter).toHaveBeenCalledWith('artifact-t2')
+    expect(openInspector).not.toHaveBeenCalled()
   })
 })

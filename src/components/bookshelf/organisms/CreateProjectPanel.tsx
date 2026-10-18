@@ -10,11 +10,11 @@ import {
   type ToolingCombo,
 } from '../../../domain/project/projectDefaults'
 import { readCoverImage } from '../coverUpload'
-import { Tooltip } from '../../../ui/primitives'
+import { Button, Tooltip } from '../../../ui/primitives'
 
 interface CreateProjectPanelProps {
   onClose: () => void
-  onCreate: (form: NewProjectForm) => void
+  onCreate: (form: NewProjectForm) => Promise<void>
 }
 
 const optionClass = (active: boolean) =>
@@ -42,6 +42,8 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
   const [tooling, setTooling] = useState<ToolingCombo>('recommended')
   const [customPluginIds, setCustomPluginIds] = useState<readonly string[]>(RECOMMENDED_PLUGIN_IDS)
   const [advanced, setAdvanced] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
   const toolingCount =
@@ -58,16 +60,24 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
     genre.trim() ? genre.trim() : '题材未定',
   ].join(' · ')
 
-  const handleCreate = () => {
-    if (!trimmedName) return
-    onCreate({
-      name: trimmedName,
-      genre: genre.trim(),
-      cover,
-      starter,
-      tooling,
-      customPluginIds,
-    })
+  const handleCreate = async () => {
+    if (!trimmedName || isCreating) return
+    setIsCreating(true)
+    setCreateError(null)
+    try {
+      await onCreate({
+        name: trimmedName,
+        genre: genre.trim(),
+        cover,
+        starter,
+        tooling,
+        customPluginIds,
+      })
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   const toggleCustomPlugin = (id: string) => {
@@ -142,7 +152,7 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
               id="new-project-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              onKeyDown={(e) => e.key === 'Enter' && void handleCreate()}
               placeholder="给这本书起个名字，其他信息之后随时可以补"
               autoFocus
               className="w-full text-[13px] px-3 py-2 rounded-lg bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]"
@@ -283,14 +293,27 @@ export const CreateProjectPanel = ({ onClose, onCreate }: CreateProjectPanelProp
             </div>
           )}
 
-          <button
+          {createError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300"
+            >
+              创建失败，表单内容已保留。{createError}
+            </div>
+          )}
+          <Button
             type="button"
-            onClick={handleCreate}
-            disabled={!trimmedName}
+            onClick={() => void handleCreate()}
+            disabled={!trimmedName || isCreating}
+            isLoading={isCreating}
+            loadingText="正在创建…"
+            size="lg"
+            variant="ghost"
+            data-testid="creation-submit"
             className="w-full h-9 rounded-lg bg-[var(--ink-accent)] text-white font-semibold text-[13px] hover:bg-[var(--ink-accent-hover)] disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
           >
-            {trimmedName ? '创建并进入项目' : '先写下书名'}
-          </button>
+            {isCreating ? '正在创建…' : trimmedName ? '创建并进入项目' : '先写下书名'}
+          </Button>
         </div>
       </div>
     </div>

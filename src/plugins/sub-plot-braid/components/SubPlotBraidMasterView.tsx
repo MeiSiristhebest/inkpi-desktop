@@ -11,13 +11,21 @@ import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
 import { GitMerge, Plus, AlertCircle, RefreshCw, Bot } from 'lucide-react'
+import {
+  projectChapterSequence,
+  latestPositionedChapterNumber,
+} from '../../../domain/chapter/chapterSequence'
 
-export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ProjectSubPlotView key={props.projectId} {...props} />
+)
+const ProjectSubPlotView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('sub-plot-braid')
   const [strands, setStrands] = useState<SubPlotStrand[]>([])
-  const [maxChapterOrder, setMaxChapterOrder] = useState<number>(1)
+  const [maxChapterOrder, setMaxChapterOrder] = useState<number>(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const aiTask = usePluginAiTask('sub-plot-braid', [projectId, strands, maxChapterOrder])
 
   // 新建副线草稿表单
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -26,19 +34,25 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const [newCharacters, setNewCharacters] = useState('')
   const [newTags, setNewTags] = useState('')
   const [newStartOrder, setNewStartOrder] = useState(1)
+  const [newReminder, setNewReminder] = useState('')
 
   const loadData = async () => {
     setLoading(true)
     try {
-      const [allStrands, allChapters] = await Promise.all([
+      const [allStrands, allChapters, volumes] = await Promise.all([
         indexedDbSubPlotRepository.getAll(projectId),
         indexedDbProjectRepository.getChaptersByProject(projectId),
+        indexedDbProjectRepository.getVolumesByProject(projectId),
       ])
       setStrands(allStrands)
       if (allChapters && allChapters.length > 0) {
-        const maxOrder = Math.max(...allChapters.map((c) => c.order))
+        const maxOrder = latestPositionedChapterNumber(
+          projectChapterSequence(projectId, allChapters, volumes),
+        )
         setMaxChapterOrder(maxOrder)
       }
+    } catch {
+      setError('副线档案加载失败，请重试。')
     } finally {
       setLoading(false)
     }
@@ -51,14 +65,35 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   // AI 深度支线交织收敛排查
   const handleAiSubPlotScan = async () => {
     if (strands.length === 0) return
-    const strandSummaries = strands
-      .map(
-        (s) =>
-          `支线【${semanticTextFromContent(`sub-plot-braid-title-${s.id}`, s.title)}】：涉及人物 [${s.involvedCharacterNames.join(', ')}]，始于第 ${s.startChapterOrder} 章，最近活跃第 ${s.lastActiveChapterOrder} 章，状态：${s.status}。梗概：${semanticTextFromContent(`sub-plot-braid-summary-${s.id}`, s.summary)}`,
-      )
-      .join('\n')
-
-    const analysisInput = { currentMaxChapter: maxChapterOrder, strands: strandSummaries }
+    const semanticStrands = strands.map((strand) => ({
+      ...strand,
+      title: semanticTextFromContent(`${strand.id}-title`, strand.title),
+      summary: semanticTextFromContent(`${strand.id}-summary`, strand.summary),
+      involvedCharacterNames: strand.involvedCharacterNames.map((name, index) =>
+        semanticTextFromContent(`${strand.id}-character-${index}`, name),
+      ),
+      targetVolumeTitle:
+        strand.targetVolumeTitle === undefined
+          ? undefined
+          : semanticTextFromContent(`${strand.id}-volume-title`, strand.targetVolumeTitle),
+      convergenceNote:
+        strand.convergenceNote === undefined
+          ? undefined
+          : semanticTextFromContent(`${strand.id}-convergence`, strand.convergenceNote),
+      lastProgressNote:
+        strand.lastProgressNote === undefined
+          ? undefined
+          : semanticTextFromContent(`${strand.id}-progress`, strand.lastProgressNote),
+      tags: strand.tags.map((tag, index) =>
+        semanticTextFromContent(`${strand.id}-tag-${index}`, tag),
+      ),
+    }))
+    const analysisInput = {
+      currentMaxChapter: maxChapterOrder,
+      strands: semanticStrands,
+      evidenceBoundary:
+        'Author-recorded goals, progress and prerequisites. A character mention does not prove subplot progress or convergence.',
+    }
 
     await aiTask.run(analysisInput)
   }
@@ -72,6 +107,16 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
 
   const handleCreateStrand = async () => {
     if (!newTitle.trim()) return
+    const reminderAfterChapters = newReminder.trim() ? Number(newReminder) : undefined
+    if (
+      !Number.isSafeInteger(newStartOrder) ||
+      newStartOrder < 1 ||
+      (reminderAfterChapters !== undefined &&
+        (!Number.isSafeInteger(reminderAfterChapters) || reminderAfterChapters < 1))
+    ) {
+      setError('开启章节和提醒间隔须为正整数；提醒可留空。')
+      return
+    }
     const charList = newCharacters.split(/[,，\s]+/).filter(Boolean)
     const tagList = newTags.split(/[,，\s]+/).filter(Boolean)
 
@@ -86,10 +131,16 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       startChapterOrder: Number(newStartOrder),
       lastActiveChapterOrder: Number(newStartOrder),
       tags: tagList,
+      reminderAfterChapters,
       updatedAt: clock.now(),
     }
 
-    await indexedDbSubPlotRepository.save(newStrand)
+    try {
+      await indexedDbSubPlotRepository.save(newStrand)
+    } catch {
+      setError('保存失败，副线尚未登记。')
+      return
+    }
     setShowCreateModal(false)
     setNewTitle('')
     setNewSummary('')
@@ -104,8 +155,17 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       status: newStatus,
       updatedAt: clock.now(),
     }
-    await indexedDbSubPlotRepository.save(updated)
-    loadData()
+    await saveStrand(updated)
+  }
+
+  const saveStrand = async (strand: SubPlotStrand) => {
+    try {
+      await indexedDbSubPlotRepository.save({ ...strand, updatedAt: clock.now() })
+      setError('')
+      await loadData()
+    } catch {
+      setError('保存失败，副线尚未更新。请重试。')
+    }
   }
 
   return (
@@ -117,7 +177,7 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
             多线叙事编织器与副线汇聚罗盘 (Sub-Plot Braid)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            监控宏观多股支线休眠度与掉线饥饿度，确保分卷终局前多线收敛交汇不烂尾。
+            记录副线推进位置、作者提醒间隔、交汇目标和前置副线。
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -148,6 +208,7 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           </button>
         </div>
       </div>
+      {error && <p role="alert">{error}</p>}
 
       {showCreateModal && (
         <div className="p-4 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-800 rounded-xl space-y-3 shadow-sm">
@@ -169,11 +230,20 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                 type="number"
                 min={1}
                 value={newStartOrder}
-                onChange={(e) => setNewStartOrder(parseInt(e.target.value) || 1)}
+                onChange={(e) => setNewStartOrder(Number(e.target.value))}
                 className="w-full p-2 bg-slate-50 dark:bg-slate-900 border rounded"
               />
             </div>
           </div>
+          <label className="block text-xs">
+            作者提醒间隔（章节数，留空不提醒）
+            <input
+              aria-label="副线提醒间隔"
+              value={newReminder}
+              onChange={(e) => setNewReminder(e.target.value)}
+              className="ml-2 w-24 bg-[var(--ink-bg-canvas)] border"
+            />
+          </label>
           <div className="text-xs">
             <label className="block text-slate-500 mb-1">副线核心诉求与目标：</label>
             <textarea
@@ -264,8 +334,8 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                     <div className="mb-2 p-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded text-xs text-rose-700 dark:text-rose-300 flex items-center gap-1.5 font-medium">
                       <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-500" />
                       <span>
-                        支线严重饥饿：距上次推进已跨越 {metric.dormancyDistance}{' '}
-                        章，急需推进防遗忘！
+                        作者提醒：距上次登记推进已跨越 {metric.dormancyDistance} 章，达到设置的{' '}
+                        {s.reminderAfterChapters} 章间隔。
                       </span>
                     </div>
                   )}
@@ -273,6 +343,81 @@ export const SubPlotBraidMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
                     {s.summary || '暂无副线详情描述'}
                   </p>
+                  <div className="text-xs space-y-2 mb-3">
+                    <label className="block">
+                      交汇目标
+                      <textarea
+                        key={`goal-${s.updatedAt}`}
+                        aria-label={`${s.title} 交汇目标`}
+                        defaultValue={s.convergenceNote ?? ''}
+                        onBlur={(e) => {
+                          if (e.target.value !== (s.convergenceNote ?? ''))
+                            void saveStrand({ ...s, convergenceNote: e.target.value })
+                        }}
+                        className="block w-full p-1 bg-[var(--ink-bg-canvas)] border"
+                      />
+                    </label>
+                    <label className="block">
+                      <input
+                        type="checkbox"
+                        checked={s.prerequisiteStrandIds !== undefined}
+                        onChange={(e) =>
+                          saveStrand({
+                            ...s,
+                            prerequisiteStrandIds: e.target.checked ? [] : undefined,
+                          })
+                        }
+                      />{' '}
+                      作者已确认前置副线清单（空清单表示无前置条件）
+                    </label>
+                    {s.prerequisiteStrandIds !== undefined &&
+                      strands
+                        .filter((other) => other.id !== s.id)
+                        .map((other) => (
+                          <label className="block" key={other.id}>
+                            <input
+                              type="checkbox"
+                              checked={s.prerequisiteStrandIds?.includes(other.id) ?? false}
+                              onChange={(e) =>
+                                saveStrand({
+                                  ...s,
+                                  prerequisiteStrandIds: e.target.checked
+                                    ? [...(s.prerequisiteStrandIds ?? []), other.id]
+                                    : s.prerequisiteStrandIds?.filter((id) => id !== other.id),
+                                })
+                              }
+                            />{' '}
+                            前置：{other.title}（{other.status}）
+                          </label>
+                        ))}
+                    <p>
+                      前置条件：
+                      {metric?.convergenceReadiness === 'unknown'
+                        ? '尚未登记完整目标与前置清单'
+                        : metric?.convergenceReadiness === 'blocked'
+                          ? `仍有 ${metric.pendingPrerequisites.length} 条未收束或缺失`
+                          : '作者清单中的前置副线均已收束'}
+                      。这不表示正文已经交汇。
+                    </p>
+                    <label className="block">
+                      最近推进章节
+                      <input
+                        key={`progress-${s.updatedAt}`}
+                        aria-label={`${s.title} 推进章节`}
+                        defaultValue={s.lastActiveChapterOrder || ''}
+                        onBlur={(e) => {
+                          const value = Number(e.target.value)
+                          if (!Number.isSafeInteger(value) || value < s.startChapterOrder) {
+                            setError('推进章节不得早于开启章节。')
+                            return
+                          }
+                          if (value !== s.lastActiveChapterOrder)
+                            void saveStrand({ ...s, lastActiveChapterOrder: value })
+                        }}
+                        className="ml-2 w-20 p-1 bg-[var(--ink-bg-canvas)] border"
+                      />
+                    </label>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 mb-3">
                     <div>

@@ -45,7 +45,7 @@ function payloadInterfaceKeys(source = BUS_SOURCE): string[] {
     normalizeSource(source),
   )?.[1]
   if (!iface) throw new Error('找不到 PluginEventPayloads，扫描规则需要跟着文件结构更新')
-  return [...iface.matchAll(/^ {2}([A-Z][A-Z_]+): \{/gm)].map((match) => match[1])
+  return [...iface.matchAll(/^ {2}([A-Z][A-Z_]+):/gm)].map((match) => match[1])
 }
 
 /** name -> 发出这个事件的产物文件（相对 src，便于失败时直接定位）。 */
@@ -128,11 +128,12 @@ describe('plugin event bus contract (§P2.12)', () => {
     const claimed = eventsClaimingARoute()
     // 以前这里写着 living-codex -> aftermath-sync，而 aftermath-sync 一处都没订阅过。
     expect(claimed.filter((name) => !subscribers.has(name))).toEqual([])
-    // 扫描不能是空转：4 条箭头是真的声明在联合类型上，第 5 个事件只有发布者、没冒充连接。
+    // Only routes with matching publishers and subscribers belong in the inventory.
     expect(claimed).toEqual([
       'CHAPTER_CONTENT_AUDITED',
       'CODEX_ENTITY_TOUCHED',
-      'FORESHADOW_PLANTED',
+      'COMBAT_DUEL_SAVED',
+      'POV_GUARD_CONFIG_SAVED',
       'POWER_BREACH_DETECTED',
     ])
     expect(subscribers.has('UNIFIED_CHAPTER_EVALUATED')).toBe(false)

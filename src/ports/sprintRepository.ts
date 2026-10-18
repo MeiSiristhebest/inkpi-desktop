@@ -1,6 +1,11 @@
 export interface SprintRecord {
   id: string
   projectId: string
+  chapterId?: string
+  startedAt?: number
+  startCharacters?: number
+  endCharacters?: number
+  metricVersion?: 2
   durationSeconds: number
   wordsWritten: number
   averageWpm: number

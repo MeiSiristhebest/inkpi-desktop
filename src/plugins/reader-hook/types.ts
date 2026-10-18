@@ -1,18 +1,10 @@
 import type { ReaderHookRecord, ReaderHookType } from '../../ports/readerHookRepository'
-
+import type { EndingReview } from '../../domain/endingReview'
 export type { ReaderHookRecord, ReaderHookType }
-
-export type HookRating = 'flat' | 'moderate' | 'cliffhanger' | 'god_tier'
-
-export interface HookAnalysisResult {
-  tensionScore: number
-  hookType: ReaderHookType
-  rating: HookRating
+export interface HookAnalysisResult extends EndingReview {
+  hookType: 'unclassified'
   feedback: string
-  detectedKeywords: string[]
-  suggestions: string[]
 }
-
 export interface HookTemplate {
   id: string
   type: ReaderHookType

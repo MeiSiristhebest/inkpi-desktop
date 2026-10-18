@@ -9,7 +9,13 @@ export interface ShadowDanmakuRecord {
   personaType: ReaderPersonaType
   personaName: string
   content: string
-  sentiment: 'toxic_rage' | 'applause' | 'suspicious' | 'excited'
+  sentiment: 'toxic_rage' | 'applause' | 'suspicious' | 'excited' | 'review_question'
+  sourceStart?: number
+  sourceEnd?: number
+  sourceQuote?: string
+  /** Set only when the reviewed text matches this saved chapter revision. */
+  sourceRevision?: number
+  sourceKind?: 'saved-chapter' | 'edited-copy'
   isToxicAlert: boolean
   toxicCategory?: 'weak_protagonist' | 'virgin_plot' | 'book_breaking' | 'cuckold_fear'
   createdAt: number

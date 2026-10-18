@@ -69,6 +69,9 @@ describe('CreativeWorkflowsPanel', () => {
       />,
     )
 
+    expect(screen.getByTestId('workflow-scope-help')).toHaveTextContent(
+      '检查所选章节与已确认设定的一致性。结果会标出正文位置，不会改动正文。',
+    )
     fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
     await waitFor(() =>
       expect(screen.getByTestId('continuity-findings')).toHaveTextContent('存在未回收伏笔'),
@@ -83,6 +86,29 @@ describe('CreativeWorkflowsPanel', () => {
     )
     expect(screen.getByTestId('continuity-diagnostic-location')).toHaveTextContent('编辑器位置')
     expect(audit).toHaveBeenCalledOnce()
+  })
+
+  it('explains the scope and result handling for each writing workflow', () => {
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={vi.fn()}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn()}
+        onSteerTask={vi.fn()}
+      />,
+    )
+
+    const help = screen.getByTestId('workflow-scope-help')
+    fireEvent.click(screen.getByRole('button', { name: /深度推理/ }))
+    expect(help).toHaveTextContent('基于所选章节和作品设定')
+    expect(help).toHaveTextContent('供你判断')
+
+    fireEvent.click(screen.getByRole('button', { name: /项目提炼/ }))
+    expect(help).toHaveTextContent('从作品章节提取待确认设定')
+    expect(help).toHaveTextContent('接受、编辑或拒绝后再保存')
   })
 
   it('debounces a continuity audit after the selected chapter is saved', async () => {

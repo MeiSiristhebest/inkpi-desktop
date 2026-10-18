@@ -1,305 +1,212 @@
-import { useState, useEffect, useMemo, type FC } from 'react'
+import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { RhythmMetronomeEngine } from '../engine/RhythmMetronomeEngine'
 import type { RhythmCadenceRecord } from '../../../ports/rhythmCadenceRepository'
+import {
+  projectChapterSequence,
+  latestPositionedChapterNumber,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 import { indexedDbRhythmCadenceRepository } from '../../../adapters/indexedDbRhythmCadenceRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import { semanticTextFromContent } from '../../../domain/content'
 import { clock } from '../../../adapters/clock'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import {
-  Activity,
-  Zap,
-  Layers,
-  Compass,
-  AlertOctagon,
-  CheckCircle,
-  Save,
-  RotateCcw,
-} from 'lucide-react'
 
-export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const RhythmMetronomeMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <RhythmMetronomeProjectView key={props.projectId} {...props} />
+)
+
+const RhythmMetronomeProjectView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const [config, setConfig] = useState<RhythmCadenceRecord | null>(null)
-  const [chapterCount, setChapterCount] = useState<number>(1)
-  const [stagnantInput, setStagnantInput] = useState<number>(0)
-  const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
-
-  const loadData = async () => {
-    const [existing, allChapters] = await Promise.all([
-      indexedDbRhythmCadenceRepository.get(projectId),
-      indexedDbProjectRepository.getChaptersByProject(projectId),
-    ])
-
-    const total = allChapters.length > 0 ? allChapters.length : 1
-    setChapterCount(total)
-
-    if (existing) {
-      setConfig(existing)
-      setStagnantInput(existing.stagnationChapterCount)
-    } else {
-      const initial: RhythmCadenceRecord = {
-        projectId,
-        microCycleLength: RhythmMetronomeEngine.DEFAULT_MICRO_LENGTH,
-        mesoCycleLength: RhythmMetronomeEngine.DEFAULT_MESO_LENGTH,
-        macroCycleLength: RhythmMetronomeEngine.DEFAULT_MACRO_LENGTH,
-        currentMicroStep: ((total - 1) % RhythmMetronomeEngine.DEFAULT_MICRO_LENGTH) + 1,
-        currentMesoStep: ((total - 1) % RhythmMetronomeEngine.DEFAULT_MESO_LENGTH) + 1,
-        currentMacroStep: ((total - 1) % RhythmMetronomeEngine.DEFAULT_MACRO_LENGTH) + 1,
-        stagnationChapterCount: 0,
-        autoDetectEnabled: true,
-        updatedAt: clock.now(),
-      }
-      setConfig(initial)
-      setStagnantInput(0)
-    }
-  }
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
+  const [stagnantInput, setStagnantInput] = useState(0)
+  const [message, setMessage] = useState('正在读取保存章节…')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    loadData()
+    let disposed = false
+    Promise.all([
+      indexedDbRhythmCadenceRepository.get(projectId),
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject(projectId),
+    ])
+      .then(([existing, records, volumes]) => {
+        if (disposed) return
+        setChapters(projectChapterSequence(projectId, records, volumes))
+        setConfig(
+          existing ?? {
+            projectId,
+            microCycleLength: 3,
+            mesoCycleLength: 15,
+            macroCycleLength: 50,
+            currentMicroStep: 0,
+            currentMesoStep: 0,
+            currentMacroStep: 0,
+            stagnationChapterCount: 0,
+            autoDetectEnabled: false,
+            updatedAt: clock.now(),
+          },
+        )
+        setStagnantInput(existing?.stagnationChapterCount ?? 0)
+        setMessage('')
+      })
+      .catch(() => {
+        if (!disposed) setMessage('读取节律配置或章节失败。')
+      })
+    return () => {
+      disposed = true
+    }
   }, [projectId])
 
-  const beats = useMemo(() => {
-    return RhythmMetronomeEngine.calculateBeats(chapterCount, config || undefined)
-  }, [chapterCount, config])
-
-  const stagnationReport = useMemo(() => {
-    return RhythmMetronomeEngine.diagnoseStagnation(stagnantInput, [2600, 2400, 2800])
-  }, [stagnantInput])
-
-  const handleSaveConfig = async () => {
-    if (!config) return
-    const updated: RhythmCadenceRecord = {
-      ...config,
-      stagnationChapterCount: stagnantInput,
-      updatedAt: clock.now(),
+  const reports = chapters.map((chapter) => {
+    const text = semanticTextFromContent(chapter.id, chapter.content, chapter.revision ?? 0)
+    return {
+      chapter,
+      characters: Array.from(text).length,
+      report: RhythmMetronomeEngine.analyzeText(text),
     }
-    await indexedDbRhythmCadenceRepository.save(updated)
-    setConfig(updated)
-    setSavedSuccessMsg('网文节奏律动参数已成功保存！')
-    setTimeout(() => setSavedSuccessMsg(null), 2500)
+  })
+  let beats: ReturnType<typeof RhythmMetronomeEngine.calculateBeats> | null = null
+  let report: ReturnType<typeof RhythmMetronomeEngine.diagnoseStagnation> | null = null
+  let validationError = ''
+  try {
+    beats = RhythmMetronomeEngine.calculateBeats(
+      latestPositionedChapterNumber(chapters),
+      config ?? undefined,
+    )
+    report = RhythmMetronomeEngine.diagnoseStagnation(
+      stagnantInput,
+      reports.map((item) => item.characters),
+    )
+  } catch (error) {
+    validationError = error instanceof Error ? error.message : '参数无效。'
   }
+  const period = RhythmMetronomeEngine.computeAutocorrelationPeriod(
+    reports.filter((item) => item.chapter.chapterNumber !== null).map((item) => item.characters),
+  )
 
-  const handleResetStagnation = async () => {
-    setStagnantInput(0)
-    if (config) {
-      const updated: RhythmCadenceRecord = {
+  const save = async () => {
+    if (!config || !beats || validationError) return
+    setSaving(true)
+    try {
+      await indexedDbRhythmCadenceRepository.save({
         ...config,
-        stagnationChapterCount: 0,
+        currentMicroStep: beats.micro.currentStep,
+        currentMesoStep: beats.meso.currentStep,
+        currentMacroStep: beats.macro.currentStep,
+        stagnationChapterCount: stagnantInput,
         updatedAt: clock.now(),
-      }
-      await indexedDbRhythmCadenceRepository.save(updated)
-      setConfig(updated)
+      })
+      setMessage('节律配置已保存。')
+    } catch {
+      setMessage('保存节律配置失败，可以重试。')
+    } finally {
+      setSaving(false)
     }
   }
 
   return (
-    <div className="p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
-      {/* 顶部标题栏 */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800 gap-4">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-            <Activity className="w-6 h-6 text-amber-500" />
-            商业网文黄金节拍器与高潮推进节律仪 (Rhythm Metronome)
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            黄金 3-15-50 章三层嵌套推进模型，把主线停滞与水文信号摊给你看。
-          </p>
-          <div className="mt-1.5">
-            <ScoreProvenanceBadge
-              source="rule"
-              detail="健康分由章数与你设定的节拍长度算出，不含读者数据"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {savedSuccessMsg && (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-              {savedSuccessMsg}
-            </span>
-          )}
-          <button
-            onClick={handleSaveConfig}
-            className="px-3.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm"
-          >
-            <Save className="w-4 h-4" /> 保存节律配置
-          </button>
-        </div>
-      </div>
-
-      {/* 节拍健康度与当前章节进度总览 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-          <div className="text-xs text-slate-400">当前累计章节进度</div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-            第 {chapterCount} 章
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">实时咬合全书三层推进时钟</div>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-          <div className="text-xs text-slate-400">节奏紧凑健康分</div>
-          <div
-            className={`text-2xl font-black mt-1 ${
-              stagnationReport.pacingPacingScore > 70
-                ? 'text-emerald-500'
-                : stagnationReport.pacingPacingScore > 50
-                  ? 'text-amber-500'
-                  : 'text-red-500'
-            }`}
-          >
-            {stagnationReport.pacingPacingScore} / 100
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            {stagnationReport.isStagnant ? '检测到主线滞缓' : '剧情高频自驱中'}
-          </div>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-          <div className="text-xs text-slate-400">当前微循环阶段</div>
-          <div className="text-base font-bold text-amber-500 mt-1">
-            {beats.micro.phaseDescription}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            步频: 第 {beats.micro.currentStep} / {beats.micro.totalSteps} 拍
-          </div>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-          <div className="text-xs text-slate-400">中循环大副本节律</div>
-          <div className="text-base font-bold text-blue-500 mt-1">
-            {beats.meso.phaseDescription}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            步频: 第 {beats.meso.currentStep} / {beats.meso.totalSteps} 拍
-          </div>
-        </div>
-      </div>
-
-      {/* 水文停滞预警板 */}
-      <div
-        className={`p-4 rounded-xl border transition ${
-          stagnationReport.isStagnant
-            ? 'bg-red-50/40 dark:bg-red-950/30 border-red-300 dark:border-red-800'
-            : 'bg-emerald-50/40 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {stagnationReport.isStagnant ? (
-              <AlertOctagon className="w-5 h-5 text-red-500" />
-            ) : (
-              <CheckCircle className="w-5 h-5 text-emerald-500" />
-            )}
-            <span className="font-bold text-sm text-slate-900 dark:text-white">
-              {stagnationReport.diagnostic}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span>连续无推进章数:</span>
+    <div className="p-6 space-y-5 overflow-y-auto text-[var(--ink-text)]">
+      <h2 className="text-xl font-bold">句长统计与章节节律计划</h2>
+      <p className="text-sm text-[var(--ink-text-muted)]">
+        统计当前保存版本的标点、句长和分段。章节周期是可调整的作者计划；3、15、50 只是初始示例。
+      </p>
+      <p>
+        已挂卷 {latestPositionedChapterNumber(chapters)} 章；未挂卷{' '}
+        {chapters.filter((chapter) => chapter.chapterNumber === null).length} 条文本。
+      </p>
+      <p role="status">{message}</p>
+      {validationError && <p role="alert">{validationError}</p>}
+      <div className="flex flex-wrap gap-4">
+        {(['micro', 'meso', 'macro'] as const).map((type) => (
+          <label key={type} className="space-x-2">
+            {type === 'micro' ? '短' : type === 'meso' ? '中' : '长'}周期章数
             <input
+              aria-label={type + '周期章数'}
               type="number"
-              min={0}
-              max={20}
-              value={stagnantInput}
-              onChange={(e) => setStagnantInput(Number(e.target.value))}
-              className="w-14 p-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold"
+              min={1}
+              value={config?.[(type + 'CycleLength') as 'microCycleLength'] ?? ''}
+              onChange={(event) =>
+                setConfig(
+                  (current) =>
+                    current && { ...current, [type + 'CycleLength']: Number(event.target.value) },
+                )
+              }
+              className="w-20 border rounded p-1 bg-[var(--ink-bg-panel)]"
             />
-            <button
-              onClick={handleResetStagnation}
-              className="px-2 py-1 rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center gap-1"
-            >
-              <RotateCcw className="w-3 h-3" /> 重置推进
-            </button>
-          </div>
-        </div>
-        <p className="text-xs text-slate-600 dark:text-slate-300 mt-2">
-          👉 <span className="font-semibold">节律抢救方案：</span>
-          {stagnationReport.remedyAction}
-        </p>
+          </label>
+        ))}
       </div>
-
-      {/* 三层嵌套黄金循环卡片流 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-        {/* 微循环卡片 */}
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 flex flex-col">
-          <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-700">
-            <span className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-amber-500" /> 微循环 (3章起承高潮)
-            </span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-600">
-              第 {beats.micro.currentStep} / {beats.micro.totalSteps} 拍
-            </span>
-          </div>
-          <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-amber-500 h-full rounded-full transition-all"
-              style={{ width: `${beats.micro.progressPct}%` }}
-            />
-          </div>
-          <div className="space-y-1 text-xs">
-            <div className="font-semibold text-slate-800 dark:text-slate-200">
-              当前阶段：{beats.micro.phaseDescription}
+      <div className="grid gap-3 md:grid-cols-3">
+        {beats &&
+          Object.values(beats).map((beat) => (
+            <div key={beat.cycleType} className="p-3 border rounded">
+              <h3>{beat.cycleName}</h3>
+              <p>
+                第 {beat.currentStep} / {beat.totalSteps} 步，{beat.progressPct}%
+              </p>
+              <p>{beat.phaseDescription}</p>
+              <p className="text-xs">{beat.recommendedAction}</p>
             </div>
-            <div className="text-slate-500 leading-relaxed">{beats.micro.recommendedAction}</div>
-          </div>
-          <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-400">
-            设计准则：每 3 篇连载必须出现一次局部战术逆转或打脸兑现。
-          </div>
+          ))}
+      </div>
+      <label className="flex gap-2 items-center">
+        作者标注连续未推进章数
+        <input
+          aria-label="作者标注连续未推进章数"
+          type="number"
+          min={0}
+          value={stagnantInput}
+          onChange={(event) => setStagnantInput(Number(event.target.value))}
+          className="w-20 border rounded p-1 bg-[var(--ink-bg-panel)]"
+        />
+      </label>
+      {report && (
+        <div className="space-y-2 text-sm">
+          <p>{report.diagnostic}</p>
+          <p>
+            篇幅样本：{report.sampleCount} 章；平均 {report.averageCharacters?.toFixed(1) ?? '未知'}{' '}
+            字符；变异系数 {report.coefficientOfVariation?.toFixed(3) ?? '未知'}。
+          </p>
+          <p>
+            篇幅自相关候选间隔：{period === null ? '证据不足' : period + ' 章'}
+            。它不代表文学节奏或经过验证的创作周期。
+          </p>
         </div>
-
-        {/* 中循环卡片 */}
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 flex flex-col">
-          <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-700">
-            <span className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-blue-500" /> 中循环 (15章副本闭环)
-            </span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-600">
-              第 {beats.meso.currentStep} / {beats.meso.totalSteps} 拍
-            </span>
-          </div>
-          <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-blue-500 h-full rounded-full transition-all"
-              style={{ width: `${beats.meso.progressPct}%` }}
-            />
-          </div>
-          <div className="space-y-1 text-xs">
-            <div className="font-semibold text-slate-800 dark:text-slate-200">
-              当前阶段：{beats.meso.phaseDescription}
-            </div>
-            <div className="text-slate-500 leading-relaxed">{beats.meso.recommendedAction}</div>
-          </div>
-          <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-400">
-            设计准则：每 10-15 章必须彻底打通一个支线或斩杀一名重要反派。
-          </div>
-        </div>
-
-        {/* 大循环卡片 */}
-        <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 flex flex-col">
-          <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-700">
-            <span className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-              <Compass className="w-4 h-4 text-purple-500" /> 大循环 (50章整卷宏观更替)
-            </span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-500/10 text-purple-600">
-              第 {beats.macro.currentStep} / {beats.macro.totalSteps} 拍
-            </span>
-          </div>
-          <div className="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-purple-500 h-full rounded-full transition-all"
-              style={{ width: `${beats.macro.progressPct}%` }}
-            />
-          </div>
-          <div className="space-y-1 text-xs">
-            <div className="font-semibold text-slate-800 dark:text-slate-200">
-              当前阶段：{beats.macro.phaseDescription}
-            </div>
-            <div className="text-slate-500 leading-relaxed">{beats.macro.recommendedAction}</div>
-          </div>
-          <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-400">
-            设计准则：整卷完结时必须换地图、大升级或重构世界地缘格局。
-          </div>
-        </div>
+      )}
+      <button
+        onClick={() => void save()}
+        disabled={!config || saving || Boolean(validationError)}
+        className="px-3 py-2 rounded bg-amber-600 text-white disabled:opacity-50"
+      >
+        {saving ? '正在保存…' : '保存节律配置'}
+      </button>
+      <div className="space-y-3" aria-label="保存章节的实际句长统计">
+        {reports.length === 0 && <p>没有保存章节，无法统计。</p>}
+        {reports.map(({ chapter, characters, report: textReport }) => (
+          <section key={chapter.id} className="p-3 border rounded">
+            <h3>
+              {chapter.title}（保存版本 {chapter.revision ?? 0}）
+            </h3>
+            <p>
+              {characters} 字符；{textReport.paragraphCount} 段；{textReport.sentenceCount}{' '}
+              个标点分句；平均句长 {textReport.averageSentenceCharacters?.toFixed(1) ?? '未知'}。
+            </p>
+            <p>
+              逗号 {textReport.punctuation.comma}；句号 {textReport.punctuation.fullStop}；问号{' '}
+              {textReport.punctuation.question}；感叹号 {textReport.punctuation.exclamation}。
+            </p>
+            <details>
+              <summary>查看原文句长与位置</summary>
+              {textReport.sentences.map((sentence) => (
+                <p key={sentence.start}>
+                  {sentence.characters} 字符，原文 [{sentence.start}, {sentence.end})：
+                  {sentence.quote}
+                </p>
+              ))}
+            </details>
+          </section>
+        ))}
       </div>
     </div>
   )

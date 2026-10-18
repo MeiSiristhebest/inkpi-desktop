@@ -7,102 +7,96 @@ import type {
 } from '../types'
 
 export class ClueWeaverEngine {
-  /**
-   * 鲁棒的多模式对话台词与说话者提取器 (Robust Speaker-Dialogue Extractor)
-   */
   private extractUtterances(
     text: string,
     knownCharNames: string[],
-  ): Array<{ speaker: string; speech: string; fullSnippet: string }> {
-    const utterances: Array<{ speaker: string; speech: string; fullSnippet: string }> = []
-    if (!text) return utterances
-
-    const speechVerbPattern =
-      '(?:道|说|冷笑|冷哼|暗道|心想|沉吟|怒斥|低语|喝道|叹道|大笑|微笑|问|答|呼喊|暴喝|低呼)'
-
-    // 模式 1：正向引领: 角色 + 动作动词 + 冒号 + “台词”
-    const leadingRegex = new RegExp(
-      `([\\u4e00-\\u9fa5A-Za-z0-9_]{2,15}?)${speechVerbPattern}[：:]\\s*[“「]([^”」]+)[”」]`,
-      'g',
+  ): Array<{ speaker: string; speech: string; speechStart: number }> {
+    const names = [...new Set(knownCharNames.filter((name) => name.trim()))].sort(
+      (a, b) => b.length - a.length,
     )
-    let m: RegExpExecArray | null
-    while ((m = leadingRegex.exec(text)) !== null) {
-      const prefix = m[1]
-      const speech = m[2]
-      const matched = knownCharNames.find((n) => prefix.endsWith(n) || prefix.includes(n)) || prefix
-      utterances.push({ speaker: matched.trim(), speech: speech.trim(), fullSnippet: m[0] })
+    if (!text || !names.length) return []
+    const escaped = names.map((name) => name.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&')).join('|')
+    const verb =
+      '(?:冷笑道|冷笑|冷哼道|说道|说|道|问道|问|回答|答|低语|沉吟道|怒斥|喝道|喊道|轻声说|低声说)'
+    const leading = new RegExp('(' + escaped + ')' + verb + '[：:]\\s*[“「"]([^”」"]+)[”」"]', 'g')
+    const trailing = new RegExp('[“「"]([^”」"]+)[”」"][，,。]?\\s*(' + escaped + ')' + verb, 'g')
+    const utterances: Array<{ speaker: string; speech: string; speechStart: number }> = []
+    for (const match of text.matchAll(leading))
+      utterances.push({
+        speaker: match[1],
+        speech: match[2],
+        speechStart: match.index! + match[0].indexOf(match[2], match[1].length),
+      })
+    for (const match of text.matchAll(trailing)) {
+      const speechStart = match.index! + 1
+      if (!utterances.some((utterance) => utterance.speechStart === speechStart))
+        utterances.push({ speaker: match[2], speech: match[1], speechStart })
     }
-
-    // 模式 2：倒装后置: “台词”，角色 + 动作动词
-    const trailingRegex = new RegExp(
-      `[“「]([^”」]+)[”」][，,。]?\\s*([\\u4e00-\\u9fa5A-Za-z0-9_]{2,15}?)${speechVerbPattern}`,
-      'g',
-    )
-    while ((m = trailingRegex.exec(text)) !== null) {
-      const speech = m[1]
-      const postfix = m[2]
-      const matched =
-        knownCharNames.find((n) => postfix.startsWith(n) || postfix.includes(n)) || postfix
-      utterances.push({ speaker: matched.trim(), speech: speech.trim(), fullSnippet: m[0] })
-    }
-
-    return utterances
+    return utterances.sort((a, b) => a.speechStart - b.speechStart)
   }
 
-  /**
-   * 扫描文本中的对话/内心独白，检测是否出现形式化“天降全知（未掌握线索却说了出来）”逻辑漏洞
-   */
   scanGodViewLeakage(
     text: string,
     clues: ClueItem[],
     cognitions: ClueCognitionRecord[],
+    currentChapter?: number,
   ): GodViewViolation[] {
     const violations: GodViewViolation[] = []
-    if (!text || clues.length === 0) return violations
-
-    const clueKeywordMap: Array<{ clue: ClueItem; keyword: string }> = []
-    for (const clue of clues) {
-      if (clue.status === 'abandoned') continue
-      for (const kw of clue.keywords) {
-        if (kw.trim().length >= 2) {
-          clueKeywordMap.push({ clue, keyword: kw.trim() })
-        }
-      }
-    }
-
-    const knownCharNames = Array.from(
-      new Set(cognitions.map((c) => c.characterName).filter(Boolean)),
+    const utterances = this.extractUtterances(
+      text,
+      cognitions.map((cognition) => cognition.characterName),
     )
-
-    const utterances = this.extractUtterances(text, knownCharNames)
-
-    for (const u of utterances) {
-      for (const { clue, keyword } of clueKeywordMap) {
-        if (u.speech.includes(keyword)) {
-          const cog = cognitions.find(
-            (c) =>
-              c.clueId === clue.id &&
-              (c.characterName === u.speaker || c.characterId === u.speaker),
+    for (const utterance of utterances)
+      for (const clue of clues) {
+        if (clue.status === 'abandoned') continue
+        const cognition = cognitions
+          .filter(
+            (record) =>
+              record.clueId === clue.id &&
+              (record.characterName === utterance.speaker ||
+                record.characterId === utterance.speaker),
           )
-
-          const state: EpistemicState = cog ? cog.epistemicState : 'blind'
-
-          if (state === 'blind') {
+          .sort((a, b) => b.updatedAt - a.updatedAt)[0]
+        if (!cognition) continue
+        const beforeAcquisition =
+          currentChapter !== undefined &&
+          cognition.learnedAtChapter !== undefined &&
+          currentChapter < cognition.learnedAtChapter
+        if (cognition.epistemicState !== 'blind' && !beforeAcquisition) continue
+        for (const keyword of new Set(
+          clue.keywords.map((keyword) => keyword.trim()).filter(Boolean),
+        )) {
+          let from = 0
+          while (from < utterance.speech.length) {
+            const index = utterance.speech.indexOf(keyword, from)
+            if (index < 0) break
+            const startOffset = utterance.speechStart + index,
+              endOffset = startOffset + keyword.length
             violations.push({
-              characterName: u.speaker,
-              characterId: cog?.characterId || u.speaker,
+              characterName: utterance.speaker,
+              characterId: cognition.characterId,
               clueId: clue.id,
               clueTitle: clue.title,
               matchedKeyword: keyword,
-              snippet:
-                u.fullSnippet.length > 60 ? u.fullSnippet.slice(0, 60) + '...' : u.fullSnippet,
-              reason: `角色【${u.speaker}】在认知模态图谱中对线索【${clue.title}】处于未知盲区(Blind)，却在对白中泄露了关键真值命题“${keyword}”！`,
+              startOffset,
+              endOffset,
+              snippet: text.slice(startOffset, endOffset),
+              status: 'candidate',
+              reason:
+                '角色「' +
+                utterance.speaker +
+                '」的台词提及「' +
+                keyword +
+                '」。' +
+                (beforeAcquisition
+                  ? '当前章节早于记录的获知章节。'
+                  : '作者记录其对本线索处于未知盲区。') +
+                '词项提及不能证明角色掌握真相；请复核提问、否定、猜测、引述和获知来源。',
             })
+            from = index + keyword.length
           }
         }
       }
-    }
-
     return violations
   }
 
@@ -153,12 +147,30 @@ export class ClueWeaverEngine {
 
     const denom = Math.max(1, allUnion.size)
     const rawScore = (knownByAOnly.length - knownByBOnly.length) / denom
-    const advantageScore = Math.round(rawScore * 100) / 100
+    const unrecordedPairs = activeClues.reduce(
+      (count, clue) =>
+        count +
+        [
+          [charAId, charAName],
+          [charBId, charBName],
+        ].filter(
+          ([id, name]) =>
+            !cognitions.some(
+              (record) =>
+                record.clueId === clue.id &&
+                (record.characterId === id || record.characterName === name),
+            ),
+        ).length,
+      0,
+    )
+    const advantageScore =
+      allUnion.size === 0 || unrecordedPairs > 0 ? null : Math.round(rawScore * 100) / 100
 
     return {
       characterA: charAName,
       characterB: charBName,
       advantageScore,
+      unrecordedPairs,
       knownByAOnly,
       knownByBOnly,
       mutualKnown,
@@ -174,7 +186,7 @@ export class ClueWeaverEngine {
     cognitions: ClueCognitionRecord[],
   ): Array<{
     character: { id: string; name: string }
-    clueStates: Array<{ clueId: string; state: EpistemicState }>
+    clueStates: Array<{ clueId: string; state: EpistemicState | 'unrecorded' }>
   }> {
     const activeClues = clues.filter((c) => c.status !== 'abandoned')
     return characters.map((char) => {
@@ -186,7 +198,7 @@ export class ClueWeaverEngine {
         )
         return {
           clueId: clue.id,
-          state: found ? found.epistemicState : ('blind' as EpistemicState),
+          state: found ? found.epistemicState : ('unrecorded' as const),
         }
       })
       return {

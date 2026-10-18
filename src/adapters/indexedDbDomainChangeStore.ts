@@ -24,6 +24,8 @@ export interface IndexedDbAggregateWrite {
     | 'powerTierSystems'
     | 'sceneBeats'
     | 'expectationContracts'
+    | 'aftermathPatches'
+    | 'scrapbookFragments'
   key: string
   operation: 'upsert' | 'delete'
   value?: unknown
@@ -105,84 +107,104 @@ export class IndexedDbDomainChangeStore implements AuthoritativeDomainChangeStor
   appendWithAggregate(
     changeSet: DomainChangeSet,
     aggregate: IndexedDbAggregateWrite,
+    relatedWrites: readonly IndexedDbAggregateWrite[] = [],
   ): Promise<void> {
     const operation = domainAppendQueue.then(async () => {
       assertValidChangeSet(changeSet)
-      assertAggregateWrite(aggregate)
-      await db.runTransaction(['domainChangeSets', aggregate.store], (transaction, fail) => {
-        const domainStore = transaction.objectStore('domainChangeSets')
-        const aggregateStore = transaction.objectStore(aggregate.store)
-        const changeRequest = domainStore.get(changeSet.id)
-        const aggregateRequest = aggregateStore.get(aggregate.key)
-        let existingChange: DomainChangeSet | undefined
-        let workspaceJournal: DomainChangeSet[] = []
-        let currentAggregate: unknown
-        let changeLoaded = false
-        let journalLoaded = false
-        let aggregateLoaded = false
+      const writes = [aggregate, ...relatedWrites]
+      const writeKeys = new Set<string>()
+      for (const write of writes) {
+        assertAggregateWrite(write)
+        const key = JSON.stringify([write.store, write.key])
+        if (writeKeys.has(key)) throw new Error('Duplicate aggregate write in transaction')
+        writeKeys.add(key)
+      }
+      await db.runTransaction(
+        ['domainChangeSets', ...writes.map((write) => write.store)],
+        (transaction, fail) => {
+          const domainStore = transaction.objectStore('domainChangeSets')
+          const changeRequest = domainStore.get(changeSet.id)
+          let existingChange: DomainChangeSet | undefined
+          let workspaceJournal: DomainChangeSet[] = []
+          const currentAggregates: unknown[] = []
+          let changeLoaded = false
+          let journalLoaded = false
+          let aggregatesLoaded = 0
 
-        const finish = () => {
-          if (!changeLoaded || !journalLoaded || !aggregateLoaded) return
-          try {
-            if (existingChange) {
-              assertValidChangeSet(existingChange)
-              if (existingChange.checksum !== changeSet.checksum) {
-                throw new Error(`Domain change set id collision: ${changeSet.id}`)
+          const finish = () => {
+            if (!changeLoaded || !journalLoaded || aggregatesLoaded !== writes.length) return
+            try {
+              if (existingChange) {
+                assertValidChangeSet(existingChange)
+                if (existingChange.checksum !== changeSet.checksum) {
+                  throw new Error(`Domain change set id collision: ${changeSet.id}`)
+                }
+                // The domain log and aggregate were committed atomically. A
+                // replay of the same change set is therefore already complete;
+                // do not apply its aggregate mutation a second time.
+                return
               }
-              // The domain log and aggregate were committed atomically. A
-              // replay of the same change set is therefore already complete;
-              // do not apply its aggregate mutation a second time.
-              return
-            }
 
-            const workspaceChanges = workspaceJournal.sort(
-              (left, right) => left.revision - right.revision,
-            )
-            validateOrderedChangeSets(workspaceChanges, changeSet.workspaceId)
-            const currentRevision = workspaceChanges.at(-1)?.revision ?? 0
-            if (
-              changeSet.baseRevision !== currentRevision ||
-              changeSet.revision !== currentRevision + 1
-            ) {
-              throw new Error(
-                `Domain change revision conflict: expected base ${currentRevision}, received ${changeSet.baseRevision}`,
+              const workspaceChanges = workspaceJournal.sort(
+                (left, right) => left.revision - right.revision,
               )
-            }
-            if (!valuesEqual(currentAggregate, aggregate.expected)) {
-              throw new Error(
-                `Aggregate ${aggregate.store}/${aggregate.key} changed during the write`,
-              )
-            }
+              validateOrderedChangeSets(workspaceChanges, changeSet.workspaceId)
+              const currentRevision = workspaceChanges.at(-1)?.revision ?? 0
+              if (
+                changeSet.baseRevision !== currentRevision ||
+                changeSet.revision !== currentRevision + 1
+              ) {
+                throw new Error(
+                  `Domain change revision conflict: expected base ${currentRevision}, received ${changeSet.baseRevision}`,
+                )
+              }
+              for (const [index, write] of writes.entries()) {
+                if (!valuesEqual(currentAggregates[index], write.expected)) {
+                  throw new Error(`Aggregate ${write.store}/${write.key} changed during the write`)
+                }
+              }
 
-            if (aggregate.operation === 'upsert') aggregateStore.put(aggregate.value)
-            else aggregateStore.delete(aggregate.key)
-            domainStore.put(cloneChangeSet(changeSet))
-          } catch (error) {
-            fail(error)
+              for (const write of writes) {
+                const store = transaction.objectStore(write.store)
+                if (write.operation === 'upsert') store.put(write.value)
+                else store.delete(write.key)
+              }
+              domainStore.put(cloneChangeSet(changeSet))
+            } catch (error) {
+              fail(error)
+            }
           }
-        }
 
-        changeRequest.onerror = () => fail(changeRequest.error)
-        changeRequest.onsuccess = () => {
-          existingChange = changeRequest.result as DomainChangeSet | undefined
-          changeLoaded = true
-          finish()
-        }
-        readIndexInTransaction<DomainChangeSet>(domainStore, 'workspaceId', changeSet.workspaceId, {
-          onSuccess: (records) => {
-            workspaceJournal = records
-            journalLoaded = true
+          changeRequest.onerror = () => fail(changeRequest.error)
+          changeRequest.onsuccess = () => {
+            existingChange = changeRequest.result as DomainChangeSet | undefined
+            changeLoaded = true
             finish()
-          },
-          onError: (error) => fail(error),
-        })
-        aggregateRequest.onerror = () => fail(aggregateRequest.error)
-        aggregateRequest.onsuccess = () => {
-          currentAggregate = aggregateRequest.result
-          aggregateLoaded = true
-          finish()
-        }
-      })
+          }
+          readIndexInTransaction<DomainChangeSet>(
+            domainStore,
+            'workspaceId',
+            changeSet.workspaceId,
+            {
+              onSuccess: (records) => {
+                workspaceJournal = records
+                journalLoaded = true
+                finish()
+              },
+              onError: (error) => fail(error),
+            },
+          )
+          for (const [index, write] of writes.entries()) {
+            const request = transaction.objectStore(write.store).get(write.key)
+            request.onerror = () => fail(request.error)
+            request.onsuccess = () => {
+              currentAggregates[index] = request.result
+              aggregatesLoaded += 1
+              finish()
+            }
+          }
+        },
+      )
     })
     domainAppendQueue = operation.catch(() => undefined)
     return operation
@@ -333,6 +355,8 @@ function assertAggregateWrite(aggregate: IndexedDbAggregateWrite): void {
     'powerTierSystems',
     'sceneBeats',
     'expectationContracts',
+    'aftermathPatches',
+    'scrapbookFragments',
   ])
   if (!allowedStores.has(aggregate.store)) {
     throw new Error('IndexedDB aggregate store is invalid')

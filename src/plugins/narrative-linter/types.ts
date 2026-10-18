@@ -23,6 +23,7 @@ export interface LintIssue {
   matchedSnippet: string
   message: string
   quickFix?: QuickFixAction
+  sourceText?: string
 }
 
 export interface LintSummary {
@@ -31,5 +32,5 @@ export interface LintSummary {
   warningCount: number
   infoCount: number
   issues: LintIssue[]
-  cleanScore: number // 100 - penalties
+  configErrors: string[]
 }

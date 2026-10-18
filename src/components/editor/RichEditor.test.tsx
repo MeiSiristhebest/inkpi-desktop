@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { useEffect, type ReactNode } from 'react'
 import {
   render as baseRender,
   screen,
@@ -11,7 +12,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import { RichEditor } from './RichEditor'
 import { db } from '../../db/indexedDB'
-import { SettingsProvider } from '../../core/settings'
+import { loadSettings, saveSettings, SettingsProvider, useSettings } from '../../core/settings'
 import type { TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
 import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
@@ -20,9 +21,15 @@ import { draftJournal } from '../../services/draftJournal'
 import { shortcutHint } from '../../core/editorShortcuts'
 import { dispatchCommandShortcut } from '../../core/commandRegistry'
 import { chapterMutationService } from '../../services/defaultChapterMutationService'
+import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
 import { SESSION_WORDS_LABEL } from './hooks/useWritingSessionStats'
 import { WRITE_ORIGIN_META } from './writeOrigin'
 import type { ChapterMutationExecutionResult } from '../../services/chapterMutationService'
+import {
+  ActiveWritingContextProvider,
+  useActiveWritingContext,
+} from '../../core/activeWritingContext'
+import type { ChapterRecord, VolumeRecord } from '../../types'
 
 // RichEditor 依赖 useSettings（§12.3：Provider 内才能使用），统一在此包裹 SettingsProvider。
 // rerender 也会落到 Provider 之外，故对 rerender 一并包裹。
@@ -39,12 +46,24 @@ const render = (
   }
 }
 
+const DisableAutoSaveForTest = ({ children }: { children: ReactNode }) => {
+  const [settings, updateSettings] = useSettings()
+  useEffect(() => {
+    if (settings.autoSave) updateSettings({ autoSave: false })
+  }, [settings.autoSave, updateSettings])
+  return settings.autoSave ? null : <>{children}</>
+}
+
 // 共享可变状态：在测试中动态改写 getHTML/getText/selectedText，并捕获 onUpdate 回调。
 const h = vi.hoisted(() => ({
   capturedOnUpdate: null as null | ((props?: unknown) => void),
-  getHTML: () => '<p>初始内容</p>',
-  getText: () => '初始内容',
+  capturedOnSelectionUpdate: null as null | (() => void),
+  capturedHandleKeyDown: null as null | ((view: any, event: KeyboardEvent) => boolean),
+  getHTML: (): string => '<p>初始内容</p>',
+  getText: (): string => '初始内容',
   selectedText: '',
+  selectionFrom: null as number | null,
+  selectionTo: null as number | null,
   chainCalls: [] as Array<[string, unknown[]]>,
 }))
 let editorInstance: any = null
@@ -81,12 +100,42 @@ const makeMockCommands = () => ({
   insertContent: vi.fn(),
   setTextSelection: vi.fn(),
   scrollIntoView: vi.fn(),
-  focus: () => ({ toggleBold: () => ({ run: () => {} }), toggleItalic: () => ({ run: () => {} }) }),
+  focus: () => ({
+    toggleBold: () => ({ run: () => {} }),
+    toggleItalic: () => ({ run: () => {} }),
+  }),
   chain: () => makeChainable(),
 })
 
 const makeMockEditor = () => {
   const handlers: Record<string, ((...a: any[]) => void) | undefined> = {}
+  const selection = {
+    get from() {
+      return h.selectionFrom ?? h.getText().length + 1
+    },
+    get to() {
+      return h.selectionTo ?? h.selectionFrom ?? h.getText().length + 1
+    },
+  }
+  const doc = {
+    textBetween: (from: number, to: number) =>
+      to > from
+        ? h.selectedText || h.getText().slice(Math.max(0, from - 1), Math.max(0, to - 1))
+        : '',
+    get content() {
+      return { size: h.getText().length + 2 }
+    },
+    toJSON: () => ({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: h.getText() }],
+        },
+      ],
+    }),
+    descendants: () => {},
+  }
   const inst: any = {
     getHTML: () => h.getHTML(),
     getText: () => h.getText(),
@@ -94,11 +143,15 @@ const makeMockEditor = () => {
     commands: makeMockCommands(),
     chain: () => makeChainable(),
     state: {
-      doc: { textBetween: () => h.selectedText, content: { size: 0 }, descendants: () => {} },
-      selection: { from: 0, to: 0 },
+      doc,
+      selection,
     },
     view: {
-      state: { selection: { to: 0 }, doc: { content: { size: 0 } }, tr: { setMeta: vi.fn() } },
+      state: {
+        selection,
+        doc,
+        tr: { setMeta: vi.fn((_key, value) => ({ value })) },
+      },
       dispatch: vi.fn(),
       coordsAtPos: () => ({ top: 100, left: 50, right: 150, bottom: 120 }),
     },
@@ -117,6 +170,8 @@ vi.mock('@tiptap/react', async (importOriginal) => {
     ...actual,
     useEditor: (opts: any) => {
       h.capturedOnUpdate = opts.onUpdate
+      h.capturedOnSelectionUpdate = opts.onSelectionUpdate
+      h.capturedHandleKeyDown = opts.editorProps?.handleKeyDown
       if (!editorInstance) editorInstance = makeMockEditor()
       return editorInstance
     },
@@ -192,6 +247,8 @@ beforeEach(async () => {
     'p-stat',
     'p-hist',
     'p-save-states',
+    'p-autosave-off',
+    'p-source-jump',
   ]
   for (const pid of testProjectIds) {
     await db.put('projects', {
@@ -208,25 +265,114 @@ beforeEach(async () => {
   h.getHTML = () => '<p>初始内容</p>'
   h.getText = () => '初始内容'
   h.selectedText = ''
+  h.selectionFrom = null
+  h.selectionTo = null
   h.chainCalls.length = 0
 })
 afterEach(() => {
   window.removeEventListener('keydown', dispatchCommandShortcut)
   cleanup()
   h.capturedOnUpdate = null
+  h.capturedOnSelectionUpdate = null
+  h.capturedHandleKeyDown = null
   editorInstance = null
+  saveSettings({ ...loadSettings(), autoSave: true })
 })
 
 describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('loads seed data, renders tree, toolbar and status bar', async () => {
     render(<RichEditor projectId="p-rich" />)
     expect(
-      await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' }),
+      await screen.findByText('第001章 寒潭惊变', {
+        selector: 'span.truncate',
+      }),
     ).toBeInTheDocument()
     expect(screen.getByText('章节目录')).toBeInTheDocument()
     expect(screen.queryByText(/Local IndexedDB/)).not.toBeInTheDocument()
     expect(screen.queryByText(/编码：UTF-8/)).not.toBeInTheDocument()
     expect(screen.getByText(/全书/)).toBeInTheDocument()
+  })
+
+  it('saves before switching chapters and selects a unique verified source excerpt', async () => {
+    const projectId = 'p-source-jump'
+    const volume: VolumeRecord = {
+      id: 'vol-source-jump',
+      projectId,
+      title: '第一卷',
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const currentChapter: ChapterRecord = {
+      id: 'chapter-current',
+      projectId,
+      volumeId: volume.id,
+      title: '当前章节',
+      content: '<p>当前章节。</p>',
+      wordCount: 5,
+      order: 0,
+      revision: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const sourceText = '前文独特出处后文'
+    const sourceChapter: ChapterRecord = {
+      id: 'chapter-source',
+      projectId,
+      volumeId: volume.id,
+      title: '来源章节',
+      content: `<p>${sourceText}</p>`,
+      wordCount: sourceText.length,
+      order: 1,
+      revision: 4,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    await db.put('volumes', volume)
+    await db.put('chapters', currentChapter)
+    await db.put('chapters', sourceChapter)
+    h.getText = () => sourceText
+    h.getHTML = () => `<p>${sourceText}</p>`
+
+    let navigationResult: unknown
+    const NavigationProbe = () => {
+      const context = useActiveWritingContext()
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            void context
+              .navigateToSource({
+                documentId: sourceChapter.id,
+                sourceRevision: 4,
+                excerpt: '独特出处',
+                semanticFrom: 2,
+                semanticTo: 6,
+              })
+              .then((result) => {
+                navigationResult = result
+              })
+          }
+        >
+          跳转到来源
+        </button>
+      )
+    }
+
+    render(
+      <ActiveWritingContextProvider workspaceId={projectId}>
+        <RichEditor projectId={projectId} />
+        <NavigationProbe />
+      </ActiveWritingContextProvider>,
+    )
+    await screen.findByText('当前章节', { selector: 'span.truncate' })
+    fireEvent.click(screen.getByRole('button', { name: '跳转到来源' }))
+
+    await waitFor(() => {
+      expect(navigationResult).toEqual({ status: 'opened', highlighted: true })
+    })
+    expect(h.chainCalls).toContainEqual(['setTextSelection', [{ from: 3, to: 7 }]])
+    expect(h.chainCalls).toContainEqual(['scrollIntoView', []])
   })
 
   it('autosaves edited content to IndexedDB after the debounce', async () => {
@@ -275,7 +421,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
       // 键入本身只是脏：落库还没开始，不能谎报「正在保存」
       expect(saveState()).toHaveAttribute('data-save-state', 'unsaved')
 
-      await waitFor(() => expect(mutateSpy).toHaveBeenCalled(), { timeout: 8000 })
+      await waitFor(() => expect(mutateSpy).toHaveBeenCalled(), {
+        timeout: 8000,
+      })
       expect(saveState()).toHaveAttribute('data-save-state', 'saving')
       expect(saveState()).toHaveTextContent('正在保存…')
 
@@ -349,9 +497,13 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
     h.getText = () => 'abc'
     h.getHTML = () => '<p>abc</p>'
-    fireEvent.click(screen.getByRole('button', { name: '查找' }))
-    fireEvent.change(screen.getByPlaceholderText('检索（文档内全文）'), { target: { value: 'a' } })
-    fireEvent.change(screen.getByPlaceholderText('替换为（可选）'), { target: { value: 'X' } })
+    fireEvent.click(screen.getByRole('button', { name: '查找与替换' }))
+    fireEvent.change(screen.getByPlaceholderText('检索（文档内全文）'), {
+      target: { value: 'a' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('替换为（可选）'), {
+      target: { value: 'X' },
+    })
     fireEvent.click(screen.getByText('全部替换'))
     await waitFor(() => {
       expect(editorInstance.commands.setContent).toHaveBeenCalledWith('<p>Xbc</p>', {
@@ -379,7 +531,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.queryByText(/第\d+卷 · 第\d+章/)).not.toBeInTheDocument()
     // 折叠目录：树完全隐藏，左上角显示「第X卷 · 第X章」
     fireEvent.click(
-      screen.getByRole('button', { name: shortcutHint('折叠目录', 'toggleChapterTree') }),
+      screen.getByRole('button', {
+        name: shortcutHint('折叠目录', 'toggleChapterTree'),
+      }),
     )
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     expect(screen.getByText(/第\d+卷 · 第\d+章/)).toBeInTheDocument()
@@ -468,7 +622,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-new" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     fireEvent.click(
-      screen.getByRole('button', { name: shortcutHint('在当前卷新建章节', 'newChapter') }),
+      screen.getByRole('button', {
+        name: shortcutHint('在当前卷新建章节', 'newChapter'),
+      }),
     )
     await waitFor(async () => {
       const chs = await db.getAll('chapters')
@@ -511,7 +667,7 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('toggles the find/replace bar open and closed', async () => {
     render(<RichEditor projectId="p-find2" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.click(screen.getByRole('button', { name: '查找' }))
+    fireEvent.click(screen.getByRole('button', { name: '查找与替换' }))
     expect(screen.getByPlaceholderText('检索（文档内全文）')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '关闭' }))
     expect(screen.queryByPlaceholderText('检索（文档内全文）')).not.toBeInTheDocument()
@@ -565,11 +721,15 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     render(<RichEditor projectId="p-side" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
     fireEvent.click(
-      screen.getByRole('button', { name: shortcutHint('折叠目录', 'toggleChapterTree') }),
+      screen.getByRole('button', {
+        name: shortcutHint('折叠目录', 'toggleChapterTree'),
+      }),
     )
     expect(screen.queryByText('章节目录')).not.toBeInTheDocument()
     fireEvent.click(
-      screen.getByRole('button', { name: shortcutHint('展开目录', 'toggleChapterTree') }),
+      screen.getByRole('button', {
+        name: shortcutHint('展开目录', 'toggleChapterTree'),
+      }),
     )
     expect(screen.getByText('章节目录')).toBeInTheDocument()
   })
@@ -602,8 +762,11 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(onRequestGhost).toHaveBeenCalled()
     fireEvent.click(screen.getByText('Tab 采纳续写'))
     const chained = h.chainCalls.map(([name]) => name)
-    expect(chained).toEqual(expect.arrayContaining(['insertContent', 'setMeta', 'run']))
-    expect(h.chainCalls.find(([name]) => name === 'insertContent')?.[1]).toEqual(['的续写内容'])
+    expect(chained).toEqual(expect.arrayContaining(['insertContentAt', 'setMeta', 'run']))
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')?.[1]).toEqual([
+      { from: h.getText().length + 1, to: h.getText().length + 1 },
+      '的续写内容',
+    ])
     // 采纳的字数挂在 AI 来源上，不进作者当日手打（§P3.10）
     expect(h.chainCalls.find(([name]) => name === 'setMeta')?.[1]).toEqual([
       WRITE_ORIGIN_META,
@@ -611,13 +774,117 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     ])
   })
 
+  it('accepts Ghost Text from the model with Tab and ignores Tab during IME composition', async () => {
+    const onRequestGhost = vi.fn().mockResolvedValue('的键盘续写')
+    h.getText = () => '这是一段足够长的正文内容用于续写'
+    render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    act(() => h.capturedOnUpdate?.())
+    await waitFor(() => expect(screen.getByText('Tab 采纳续写')).toBeInTheDocument(), {
+      timeout: 8000,
+    })
+
+    const composingEvent = {
+      key: 'Tab',
+      isComposing: true,
+      keyCode: 229,
+    } as KeyboardEvent
+    expect(h.capturedHandleKeyDown?.(editorInstance.view, composingEvent)).toBe(false)
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')).toBeUndefined()
+
+    const tabEvent = {
+      key: 'Tab',
+      isComposing: false,
+      keyCode: 9,
+    } as KeyboardEvent
+    expect(h.capturedHandleKeyDown?.(editorInstance.view, tabEvent)).toBe(true)
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')?.[1]?.[1]).toEqual(
+      '的键盘续写',
+    )
+  })
+
+  it.each([
+    ['ArrowRight', true, false, 'Alpha'],
+    ['ArrowRight', false, true, 'Alpha'],
+    ['ArrowDown', true, false, 'Alpha beta\n'],
+  ] as const)(
+    'accepts only the requested part with %s (Alt=%s, Ctrl=%s)',
+    async (key, altKey, ctrlKey, expected) => {
+      const onRequestGhost = vi.fn().mockResolvedValue('Alpha beta\ngamma')
+      h.getText = () => '这是一段足够长的正文内容用于续写'
+      render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+      await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+      act(() => h.capturedOnUpdate?.())
+      await waitFor(() => expect(screen.getByText('Tab 采纳续写')).toBeInTheDocument(), {
+        timeout: 8000,
+      })
+      const composing = {
+        key,
+        altKey,
+        ctrlKey,
+        isComposing: true,
+        keyCode: 229,
+      } as KeyboardEvent
+      expect(h.capturedHandleKeyDown?.(editorInstance.view, composing)).toBe(false)
+      expect(h.chainCalls.find(([name]) => name === 'insertContentAt')).toBeUndefined()
+      act(() => {
+        expect(
+          h.capturedHandleKeyDown?.(editorInstance.view, {
+            key,
+            altKey,
+            ctrlKey,
+          } as KeyboardEvent),
+        ).toBe(true)
+      })
+      expect(h.chainCalls.find(([name]) => name === 'insertContentAt')?.[1]?.[1]).toBe(expected)
+      expect(screen.getByRole('button', { name: '采纳续写建议' })).toBeInTheDocument()
+    },
+  )
+
+  it('offers word and line buttons without inserting the remaining suggestion', async () => {
+    const onRequestGhost = vi.fn().mockResolvedValue('Alpha beta\ngamma')
+    h.getText = () => '这是一段足够长的正文内容用于续写'
+    render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    act(() => h.capturedOnUpdate?.())
+    await waitFor(() => expect(screen.getByText('Tab 采纳续写')).toBeInTheDocument(), {
+      timeout: 8000,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '采纳一词', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: '采纳一行', exact: true }))
+    expect(
+      h.chainCalls.filter(([name]) => name === 'insertContentAt').map(([, args]) => args[1]),
+    ).toEqual(['Alpha', ' beta\n'])
+    expect(screen.getByRole('button', { name: '采纳续写建议' })).toBeInTheDocument()
+  })
+
+  it('clears an unaccepted Ghost Text suggestion with Escape', async () => {
+    const onRequestGhost = vi.fn().mockResolvedValue('的待采纳续写')
+    h.getText = () => '这是一段足够长的正文内容用于续写'
+    render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    act(() => h.capturedOnUpdate?.())
+    await waitFor(() => expect(screen.getByText('Tab 采纳续写')).toBeInTheDocument(), {
+      timeout: 8000,
+    })
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+
+    expect(screen.queryByText('Tab 采纳续写')).not.toBeInTheDocument()
+    expect(editorInstance.view.dispatch).toHaveBeenCalled()
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')).toBeUndefined()
+  })
+
   it('ignores a Ghost Text response after the chapter text changes', async () => {
     let resolveSuggestion: ((value: string) => void) | undefined
+    let requestSignal: AbortSignal | undefined
     const onRequestGhost = vi.fn(
-      () =>
-        new Promise<string>((resolve) => {
+      (_chapterId: string, _text: string, _sourceRevision: number, signal?: AbortSignal) => {
+        requestSignal = signal
+        return new Promise<string>((resolve) => {
           resolveSuggestion = resolve
-        }),
+        })
+      },
     )
     h.getText = () => '这是一段足够长的正文内容用于续写'
     render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
@@ -626,12 +893,15 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     act(() => {
       h.capturedOnUpdate?.()
     })
-    await waitFor(() => expect(onRequestGhost).toHaveBeenCalledTimes(1), { timeout: 8000 })
+    await waitFor(() => expect(onRequestGhost).toHaveBeenCalledTimes(1), {
+      timeout: 8000,
+    })
 
     h.getText = () => '这是一段足够长的新正文，旧请求不应覆盖它'
     act(() => {
       h.capturedOnUpdate?.()
     })
+    expect(requestSignal?.aborted).toBe(true)
 
     await act(async () => {
       resolveSuggestion?.('旧章节的过期续写')
@@ -639,7 +909,154 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
 
     expect(screen.queryByText('Tab 采纳续写')).not.toBeInTheDocument()
-    expect(h.chainCalls.find(([name]) => name === 'insertContent')).toBeUndefined()
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')).toBeUndefined()
+  })
+
+  it('ignores a Ghost Text response after the source revision advances with the same text', async () => {
+    let resolveSuggestion: ((value: string) => void) | undefined
+    let requestSignal: AbortSignal | undefined
+    const onRequestGhost = vi.fn(
+      (_chapterId: string, _text: string, _sourceRevision: number, signal?: AbortSignal) => {
+        requestSignal = signal
+        return new Promise<string>((resolve) => {
+          resolveSuggestion = resolve
+        })
+      },
+    )
+    const sourceText = '这是一段足够长的正文内容用于续写'
+    h.getText = () => sourceText
+    h.getHTML = () => `<p>${sourceText}</p>`
+    render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    const chapter = (await db.getAll('chapters')).find(
+      (item) => item.projectId === 'p-ghost' && item.title === '第001章 寒潭惊变',
+    )
+    if (!chapter) throw new Error('seed chapter not found')
+
+    act(() => h.capturedOnUpdate?.())
+    await waitFor(() => expect(onRequestGhost).toHaveBeenCalledOnce(), {
+      timeout: 8000,
+    })
+
+    act(() =>
+      chapterSaveEvents.publish({
+        ...chapter,
+        content: h.getHTML(),
+        revision: (chapter.revision ?? 1) + 1,
+      }),
+    )
+    expect(requestSignal?.aborted).toBe(false)
+
+    await act(async () => {
+      resolveSuggestion?.('保存前请求的旧续写')
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('Tab 采纳续写')).not.toBeInTheDocument()
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')).toBeUndefined()
+  })
+
+  it('aborts and ignores a Ghost Text response when its request context changes', async () => {
+    let resolveSuggestion: ((value: string) => void) | undefined
+    let requestSignal: AbortSignal | undefined
+    const originalRequest = vi.fn(
+      (_chapterId: string, _text: string, _sourceRevision: number, signal?: AbortSignal) => {
+        requestSignal = signal
+        return new Promise<string>((resolve) => {
+          resolveSuggestion = resolve
+        })
+      },
+    )
+    const updatedRequest = vi.fn().mockResolvedValue('新模型的续写')
+    h.getText = () => '这是一段足够长的正文内容用于续写'
+    const view = render(<RichEditor projectId="p-ghost" onRequestGhost={originalRequest} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    act(() => h.capturedOnUpdate?.())
+    await waitFor(() => expect(originalRequest).toHaveBeenCalledOnce(), {
+      timeout: 8000,
+    })
+    expect(requestSignal?.aborted).toBe(false)
+
+    view.rerender(<RichEditor projectId="p-ghost" onRequestGhost={updatedRequest} />)
+    expect(requestSignal?.aborted).toBe(true)
+
+    await act(async () => {
+      resolveSuggestion?.('旧模型的过期续写')
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('Tab 采纳续写')).toBeNull()
+    expect(updatedRequest).not.toHaveBeenCalled()
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')).toBeUndefined()
+  })
+
+  it('uses the text before a mid-chapter cursor and accepts at that cursor', async () => {
+    const onRequestGhost = vi.fn().mockResolvedValue('光标处的建议')
+    h.getText = () => '前文当前段落后文'
+    h.selectionFrom = 7
+    h.selectionTo = 7
+    render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    act(() => h.capturedOnUpdate?.())
+    await waitFor(() => expect(screen.getByText('Tab 采纳续写')).toBeInTheDocument(), {
+      timeout: 8000,
+    })
+
+    expect(onRequestGhost).toHaveBeenCalledWith(
+      expect.any(String),
+      '前文当前段落',
+      1,
+      expect.any(AbortSignal),
+    )
+    const ghostMeta = editorInstance.view.state.tr.setMeta.mock.calls.find(
+      ([, value]: [unknown, { text?: string; pos?: number } | null]) =>
+        value?.text === '光标处的建议',
+    )
+    expect(ghostMeta?.[1]).toEqual({ text: '光标处的建议', pos: 7 })
+
+    fireEvent.click(screen.getByText('Tab 采纳续写'))
+    expect(h.chainCalls.find(([name]) => name === 'insertContentAt')?.[1]).toEqual([
+      { from: 7, to: 7 },
+      '光标处的建议',
+    ])
+  })
+
+  it('cancels a pending Ghost Text request when the cursor moves', async () => {
+    let resolveSuggestion: ((value: string) => void) | undefined
+    let requestSignal: AbortSignal | undefined
+    const onRequestGhost = vi.fn(
+      (_chapterId: string, _text: string, _sourceRevision: number, signal?: AbortSignal) => {
+        requestSignal = signal
+        return new Promise<string>((resolve) => {
+          resolveSuggestion = resolve
+        })
+      },
+    )
+    h.getText = () => '前文当前段落后文'
+    h.selectionFrom = 7
+    h.selectionTo = 7
+    render(<RichEditor projectId="p-ghost" onRequestGhost={onRequestGhost} />)
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+
+    act(() => h.capturedOnUpdate?.())
+    await waitFor(() => expect(onRequestGhost).toHaveBeenCalledOnce(), {
+      timeout: 8000,
+    })
+    expect(requestSignal?.aborted).toBe(false)
+
+    h.selectionFrom = 5
+    h.selectionTo = 5
+    act(() => h.capturedOnSelectionUpdate?.())
+
+    expect(requestSignal?.aborted).toBe(true)
+    await act(async () => {
+      resolveSuggestion?.('已经过期的建议')
+      await Promise.resolve()
+    })
+    expect(screen.queryByText('Tab 采纳续写')).not.toBeInTheDocument()
   })
 
   it('counts only keystroke growth in 今日新增, never the adopted AI text', async () => {
@@ -652,7 +1069,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     }
 
     const tagged = (origin?: string) => ({
-      transaction: { getMeta: (key: string) => (key === WRITE_ORIGIN_META ? origin : undefined) },
+      transaction: {
+        getMeta: (key: string) => (key === WRITE_ORIGIN_META ? origin : undefined),
+      },
     })
 
     h.getText = () => '初始内容'
@@ -692,7 +1111,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('mounts without crashing when typewriter mode is on', async () => {
     render(<RichEditor projectId="p-type" isTypewriter={true} />)
     expect(
-      await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' }),
+      await screen.findByText('第001章 寒潭惊变', {
+        selector: 'span.truncate',
+      }),
     ).toBeInTheDocument()
   })
 
@@ -745,6 +1166,60 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     })
   })
 
+  it('keeps manual-save drafts recoverable when switching chapters', async () => {
+    h.getText = () => '关闭自动保存后写下的内容'
+    h.getHTML = () => '<p>关闭自动保存后写下的内容</p>'
+    let durabilityBarrier: {
+      drain: () => Promise<void>
+      hasPending: () => boolean
+    } | null = null
+    render(
+      <DisableAutoSaveForTest>
+        <RichEditor
+          projectId="p-autosave-off"
+          onRegisterDurabilityBarrier={(drain, hasPending) => {
+            durabilityBarrier = { drain, hasPending }
+            return () => {
+              durabilityBarrier = null
+            }
+          }}
+        />
+      </DisableAutoSaveForTest>,
+    )
+
+    await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chapters = (await db.getAll('chapters')).filter(
+      (chapter) => chapter.projectId === 'p-autosave-off',
+    )
+    const firstChapter = chapters.find((chapter) => chapter.title === '第001章 寒潭惊变')
+    const secondChapter = chapters.find((chapter) => chapter.title.startsWith('第002章'))
+    if (!firstChapter || !secondChapter) throw new Error('demo chapters not found')
+    await screen.findByRole('heading', { name: '第001章 寒潭惊变' })
+    const canonicalContent = firstChapter.content
+
+    expect(h.capturedOnUpdate).toBeTruthy()
+    act(() => h.capturedOnUpdate?.())
+    expect(draftJournal.get('p-autosave-off', firstChapter.id)?.editorContent).toBe(
+      '<p>关闭自动保存后写下的内容</p>',
+    )
+    expect(durabilityBarrier?.hasPending()).toBe(true)
+    await act(async () => {
+      await durabilityBarrier?.drain()
+    })
+    expect((await db.get('chapters', firstChapter.id))?.content).toBe(canonicalContent)
+
+    fireEvent.click(screen.getByText(secondChapter.title, { selector: 'span.truncate' }))
+    expect(await screen.findByRole('heading', { name: secondChapter.title })).toBeInTheDocument()
+    expect(screen.queryByTestId('draft-recovery-state')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText(firstChapter.title, { selector: 'span.truncate' }))
+    expect(await screen.findByTestId('draft-recovery-state')).toHaveTextContent(
+      '检测到上次未落盘的草稿',
+    )
+    expect((await db.get('chapters', firstChapter.id))?.content).toBe(canonicalContent)
+    for (const chapter of chapters) draftJournal.clear('p-autosave-off', chapter.id)
+  })
+
   it('opens the 全书检索 (cross-chapter) modal from the toolbar', async () => {
     render(<RichEditor projectId="p-global" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
@@ -755,7 +1230,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
   it('filters chapters in the tree via the search box', async () => {
     render(<RichEditor projectId="p-tree-search" />)
     await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
-    fireEvent.change(screen.getByPlaceholderText('搜索章节…'), { target: { value: '寒潭' } })
+    fireEvent.change(screen.getByPlaceholderText('搜索章节…'), {
+      target: { value: '寒潭' },
+    })
     expect(screen.getByText('第001章 寒潭惊变', { selector: 'span.truncate' })).toBeInTheDocument()
     expect(
       screen.queryByText('第002章 青云试炼', { selector: 'span.truncate' }),
@@ -992,7 +1469,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('triggers right-click context menu and supports renaming, duplicating, copying, and shortcuts', async () => {
     render(<RichEditor projectId="p-advanced-tools" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
 
     // 1. 鼠标右键章节项
     fireEvent.contextMenu(chItem)
@@ -1015,7 +1494,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
     // 断言新标题生效
     expect(
-      await screen.findByRole('heading', { name: /第001章 寒潭惊变【精修版】/i }),
+      await screen.findByRole('heading', {
+        name: /第001章 寒潭惊变【精修版】/i,
+      }),
     ).toBeInTheDocument()
 
     // 3. 测试快捷键: Alt+ArrowDown 触发下一章切章
@@ -1038,7 +1519,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('handles volume creation, right click actions like duplication, and sensitive check modal', async () => {
     render(<RichEditor projectId="p-advanced-cov" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
 
     // 复制/创建副本
     fireEvent.contextMenu(chItem)
@@ -1079,7 +1562,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('triggers chapter deletion confirmation modal and cancels or deletes', async () => {
     render(<RichEditor projectId="p-del-test" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
     fireEvent.contextMenu(chItem)
     fireEvent.click(screen.getByText('删除本章节'))
     expect(screen.getByText(/删除章节确认/)).toBeInTheDocument()
@@ -1099,7 +1584,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('safely deletes dirty active chapter with pending autosave without Chapter not found or hanging', async () => {
     render(<RichEditor projectId="p-del-dirty" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
 
     // 触发编辑变更使得章节处于 dirty / pending 状态
     h.getText = () => '未存盘的脏数据'
@@ -1126,7 +1613,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('updates status from context menu and covers search and jump', async () => {
     render(<RichEditor projectId="p-status-ctx" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
     fireEvent.contextMenu(chItem)
     const doneBtn = screen.getByRole('menuitemradio', { name: '状态：已发布' })
     await act(async () => {
@@ -1136,7 +1625,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('handles volume expansion and rename context menu', async () => {
     render(<RichEditor projectId="p-vol-ctx" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
 
     // 右键重命名触发
     fireEvent.contextMenu(chItem)
@@ -1150,7 +1641,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('covers toggleExcludeNumbering and chapter copy text', async () => {
     render(<RichEditor projectId="p-num-cov" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
     fireEvent.contextMenu(chItem)
     fireEvent.click(screen.getByText('设为不计入序号(序章/番外)'))
 
@@ -1160,7 +1653,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('handles rename modal Enter key submission and Escape cancellation', async () => {
     render(<RichEditor projectId="p-key-ctx" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
 
     // 1. Enter 提交重命名
     fireEvent.contextMenu(chItem)
@@ -1185,7 +1680,9 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
 
   it('covers onContextMenu preventDefault on overlay and rename cancel button', async () => {
     render(<RichEditor projectId="p-ctx-cov" />)
-    const chItem = await screen.findByText('第001章 寒潭惊变', { selector: 'span.truncate' })
+    const chItem = await screen.findByText('第001章 寒潭惊变', {
+      selector: 'span.truncate',
+    })
 
     // 右键打开菜单并右键点击 overlay
     fireEvent.contextMenu(chItem)

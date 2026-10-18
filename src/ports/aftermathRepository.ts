@@ -14,6 +14,11 @@ export interface AftermathPatchRecord {
   beforeValue: string
   afterValue: string
   evidenceSnippet: string
+  evidenceStart?: number
+  evidenceEnd?: number
+  evidenceStatus?: 'candidate'
+  sourceText?: string
+  authorReviewNote?: string
   status: PatchStatus
   createdAt: number
   appliedAt?: number

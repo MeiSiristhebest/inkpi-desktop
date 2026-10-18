@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import { DashboardView } from './DashboardView'
 import { db } from '../../db/indexedDB'
+import { indexedDbDailyStatsRepository } from '../../adapters/indexedDbDailyStatsRepository'
 
-afterEach(() => cleanup())
+afterEach(async () => {
+  cleanup()
+  for (const stat of await db.getAll<{ key: string; projectId: string }>('dailyStats')) {
+    if (stat.projectId === 'p-dash') await db.delete('dailyStats', stat.key)
+  }
+})
 
 describe('DashboardView', () => {
   it('renders the writing panel with stat cards and quick entries', async () => {
+    const now = new Date()
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     await db.put('projects', {
       id: 'p-dash',
       name: '示范',
@@ -34,8 +42,18 @@ describe('DashboardView', () => {
       createdAt: 1,
       updatedAt: Date.now(),
     })
+    await db.put('dailyStats', {
+      key: `p-dash::${date}`,
+      projectId: 'p-dash',
+      date,
+      words: 23,
+    })
 
     render(<DashboardView projectId="p-dash" onOpenView={vi.fn()} />)
+
+    expect(await screen.findByText('今日产出 23 字 · 本机统计')).toBeInTheDocument()
+    await indexedDbDailyStatsRepository.recordDailyWords('p-dash', 5)
+    await waitFor(() => expect(screen.getByText('今日产出 28 字 · 本机统计')).toBeInTheDocument())
 
     expect(screen.getByRole('heading', { name: '写作面板' })).toBeInTheDocument()
     expect(screen.getByText('累计字数')).toBeInTheDocument()

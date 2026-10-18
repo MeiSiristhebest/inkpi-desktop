@@ -1,107 +1,88 @@
+import type { GoldOpeningDimension } from '../../../ports/goldChaptersRepository'
 import type { GoldChaptersEvaluation } from '../types'
 
-/**
- * GoldChaptersEngine (黄金三章签约过稿诊断器引擎)
- *
- * 理论基础：网文商业过稿多维加权评价向量 SignabilityScore = W * S
- * 权重配置：
- * - 主角核心动机紧迫度 (0.25)
- * - 核心金手指/筹码登场时机与辨识度 (0.30)
- * - 主要矛盾与危机压迫感 (0.25)
- * - 3000 字阅读吸入与期待感 (0.20)
- */
+export const OPENING_DIMENSIONS: Record<GoldOpeningDimension, string> = {
+  motivation: '动机词项',
+  distinctive_asset: '筹码词项',
+  conflict: '冲突词项',
+  ending_hook: '结尾词项',
+}
+
+/** Locates literal vocabulary matches. It does not evaluate narrative quality or infer events. */
 export class GoldChaptersEngine {
-  /**
-   * 生成统一任务运行时使用的结构化诊断输入。
-   */
-  public static buildAnalysisInput(chaptersText: string): Record<string, unknown> {
+  public static buildAnalysisInput(chaptersText: string) {
+    const snapshot = this.evaluate(chaptersText)
     return {
-      text: chaptersText.slice(0, 3000),
-      rubric: ['motiveScore', 'goldFingerScore', 'conflictScore', 'expectationScore'],
-      outputFields: [
-        'score',
-        'isQualified',
-        'motiveScore',
-        'goldFingerScore',
-        'conflictScore',
-        'expectationScore',
-        'keyDiagnosis',
-        'suggestions',
-      ],
+      sources: snapshot.ranges.map((range, index) => ({ id: `excerpt-${index}`, ...range })),
+      coverage: {
+        totalCharacters: snapshot.sourceLength,
+        suppliedCharacters: snapshot.scannedCharacters,
+        complete: snapshot.complete,
+      },
+      offsetUnit: 'UTF-16 code units; evidence offsets are relative to the named excerpt',
+      rubric: Object.keys(OPENING_DIMENSIONS),
+      responseContract: {
+        findings: [
+          {
+            dimension: 'one of the rubric values',
+            observation: 'what the supplied text explicitly says',
+            interpretation: 'a contextual hypothesis, separate from the observation',
+            recommendation: 'an optional revision for the author to consider',
+            evidence: [{ sourceId: 'excerpt-0', start: 0, end: 2, quote: 'exact source text' }],
+          },
+        ],
+        insufficientEvidence: ['questions that cannot be answered from the supplied excerpts'],
+      },
     }
   }
 
   public static evaluate(chaptersText: string): GoldChaptersEvaluation {
-    const first3k = chaptersText.slice(0, 3000)
-
-    const keyDiagnosis: string[] = []
-    const suggestions: string[] = []
-
-    // 1. 主角核心动机明确度 (0 ~ 100)
-    let motiveScore = 60
-    if (/(复仇|报仇|生存|活下去|救母|登顶|变强|退婚|洗清冤屈)/.test(first3k)) {
-      motiveScore = 95
-      keyDiagnosis.push('[rule-analysis] 主角在前 3000 字展现出清晰强烈的主观动机')
-    } else {
-      motiveScore = 50
-      keyDiagnosis.push('[rule-analysis] 开篇缺乏高压动机驱动，主角行动过于被动随波逐流')
-      suggestions.push('在第 1000 字内注入外部生死/名誉/利益危机，明确主角第一阶段目标')
+    const sourceLength = chaptersText.length
+    if (!chaptersText.trim()) {
+      return {
+        status: 'empty',
+        sourceLength,
+        scannedCharacters: 0,
+        complete: false,
+        ranges: [],
+        observations: [],
+      }
     }
-
-    // 2. 金手指/核心筹码评估 (0 ~ 100)
-    let goldFingerScore = 55
-    if (/(系统|金手指|面板|铜戒|穿越|觉醒|签到|残卷|古玉|神级)/.test(first3k)) {
-      goldFingerScore = 90
-      keyDiagnosis.push('[rule-analysis] 核心筹码/金手指在前 3000 字即时登场，卖点鲜明')
-    } else {
-      goldFingerScore = 40
-      keyDiagnosis.push(
-        '[rule-analysis] 前 3000 字未见核心金手指或差异化卖点，建议提前登场以增强开篇吸引力',
-      )
-      suggestions.push('将主角核心特殊能力或机缘提前至第一章中段，形成读者第一爽点期待')
+    const openingEnd = Math.min(3000, sourceLength)
+    const endingStart = Math.max(0, sourceLength - 500)
+    const ranges =
+      endingStart <= openingEnd
+        ? [{ start: 0, end: sourceLength, text: chaptersText }]
+        : [
+            { start: 0, end: openingEnd, text: chaptersText.slice(0, openingEnd) },
+            { start: endingStart, end: sourceLength, text: chaptersText.slice(endingStart) },
+          ]
+    const probes: Array<[GoldOpeningDimension, RegExp, number, number]> = [
+      ['motivation', /(复仇|报仇|生存|活下去|救母|登顶|变强|退婚|洗清冤屈)/, 0, openingEnd],
+      ['distinctive_asset', /(系统|金手指|面板|铜戒|穿越|觉醒|签到|残卷|古玉|神级)/, 0, openingEnd],
+      ['conflict', /(欺凌|剥夺|杀意|逼迫|嘲弄|冷嘲热讽|生死战|危在旦夕)/, 0, openingEnd],
+      ['ending_hook', /(原来|冷笑|这一次|誓要|天翻地覆|且看|竟是)/, endingStart, sourceLength],
+    ]
+    const observations: GoldChaptersEvaluation['observations'] = []
+    for (const [dimension, pattern, start, end] of probes) {
+      const match = pattern.exec(chaptersText.slice(start, end))
+      if (match) {
+        observations.push({
+          dimension,
+          start: start + match.index,
+          end: start + match.index + match[0].length,
+          quote: match[0],
+        })
+      }
     }
-
-    // 3. 主要矛盾与危机压迫感 (0 ~ 100)
-    let conflictScore = 65
-    if (/(欺凌|剥夺|杀意|逼迫|嘲弄|冷嘲热讽|生死战|危在旦夕)/.test(first3k)) {
-      conflictScore = 90
-      keyDiagnosis.push('[rule-analysis] 开门见山确立主要矛盾冲突，戏剧张力饱满')
-    } else {
-      conflictScore = 55
-      keyDiagnosis.push('[rule-analysis] 主要矛盾确立拖沓，过多背景世界观铺垫削弱了冲突压迫')
-      suggestions.push('删减前 1500 字中的世界观纯说明段落，以动作戏或直接对手戏开局')
-    }
-
-    // 4. 期待感与章末断章切口 (0 ~ 100)
-    let expectationScore = 70
-    if (/(原来|冷笑|这一次|誓要|天翻地覆|且看|竟是)/.test(chaptersText.slice(-500))) {
-      expectationScore = 88
-      keyDiagnosis.push('[rule-analysis] 章末断章留钩有力，具备吸引读者点击下一章的强驱动')
-    } else {
-      expectationScore = 55
-      suggestions.push('在第三章末尾设置关键悬念或重大事件爆发前兆')
-    }
-
-    // 综合加权评分
-    const score = Math.round(
-      0.25 * motiveScore + 0.3 * goldFingerScore + 0.25 * conflictScore + 0.2 * expectationScore,
-    )
-
-    const isQualified = score >= 75
-
-    if (isQualified) {
-      keyDiagnosis.push('[rule-analysis] 规则检测通过: 未发现当前规则覆盖的问题')
-    }
-
+    const scannedCharacters = ranges.reduce((sum, range) => sum + range.end - range.start, 0)
     return {
-      score,
-      isQualified,
-      motiveScore,
-      goldFingerScore,
-      conflictScore,
-      expectationScore,
-      keyDiagnosis,
-      suggestions,
+      status: observations.length ? 'observed' : 'no-matches',
+      sourceLength,
+      scannedCharacters,
+      complete: scannedCharacters === sourceLength,
+      ranges,
+      observations,
     }
   }
 }

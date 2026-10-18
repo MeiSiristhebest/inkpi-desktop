@@ -20,6 +20,7 @@ import {
   withoutModelSecrets,
 } from './modelSecrets'
 import { setRuntimeModelPreference, setRuntimeModelRoutes } from './runtimeModelPreference'
+import type { RuntimeModelCatalogEntry } from '@inkpi/protocol'
 
 // ─────────────────────────────────────────────────────────────
 // 统一应用设置中心
@@ -55,6 +56,7 @@ export type ThemeSkin =
  * 这是 Daemon Runtime 路由实际支持的 provider 全集——UI 不做删减。
  */
 export type ProviderType =
+  | 'openai-chatgpt-plan'
   | 'openai'
   | 'deepseek'
   | 'claude'
@@ -84,9 +86,9 @@ export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 /**
  * 完全对齐 @inkpi/ai 的 ModelConfig —— Daemon Runtime 接收的全部模型配置字段。
  * 自定义 AI 界面把这些字段全盘暴露给用户配置。
- * 末尾四个可选字段为桌面端 UI 管理字段（enabled / contextWindow /
- * availableModelIds / thinkingLevel）：daemon 侧 JSON 透传时直接忽略未知键，
- * 不影响运行时行为，仅供设置界面的启用开关、模型目录与思考等级档位使用。
+ * 桌面端 UI 管理字段包括 enabled、contextWindow、availableModelIds、
+ * availableModelCatalog、catalogFetchedAt 与 thinkingLevel。路由适配器不会发送这些字段，
+ * 它们只用于设置界面的启用状态、模型目录和思考等级档位。
  */
 export interface ModelConfig {
   id: string
@@ -110,6 +112,10 @@ export interface ModelConfig {
   contextWindow?: number
   /** 该供应商端点已拉取到的可用模型 ID 快照（"获取列表"结果持久化，供模型目录与勾选面板复用） */
   availableModelIds?: string[]
+  /** Metadata returned by this provider credential; kept with its model configuration. */
+  availableModelCatalog?: RuntimeModelCatalogEntry[]
+  /** Time of the last successful provider catalog read. */
+  catalogFetchedAt?: string
   /** 思考等级档位（对齐 protocol ThinkingLevel；"none"=关闭） */
   thinkingLevel?: ThinkingLevel
   /** 模型别名 (Alias)，在显示模型名称的地方生效（对齐参考实现的 ModelBinding.alias） */
@@ -174,6 +180,11 @@ export const PROVIDER_META: Record<
     label: 'OpenAI',
     defaultBaseUrl: 'https://api.openai.com/v1',
     apiKeyEnv: 'OPENAI_API_KEY',
+    streamKind: 'openai',
+  },
+  'openai-chatgpt-plan': {
+    label: 'ChatGPT 计划用量',
+    defaultBaseUrl: 'https://api.openai.com/v1',
     streamKind: 'openai',
   },
   deepseek: {

@@ -1,3 +1,4 @@
+import { ScrapbookEngine } from '../engine/ScrapbookEngine'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ScrapbookMasterView } from './ScrapbookMasterView'
@@ -54,10 +55,8 @@ function renderWithRuntimeTool(
   )
 }
 
-const aiRanked = [
-  { fragment: fragment('frag-b', FRAG_B, 200), similarityScore: 0.9, matchedKeywords: ['林凡'] },
-  { fragment: fragment('frag-a', FRAG_A, 300), similarityScore: 0.4, matchedKeywords: ['林凡'] },
-]
+const corpus = [fragment('frag-a', FRAG_A, 300), fragment('frag-b', FRAG_B, 200)]
+const aiRanked = ScrapbookEngine.recommendFragments('林凡 城楼', corpus, 2)
 
 describe('ScrapbookRecycler UI Components', () => {
   beforeEach(() => {
@@ -94,19 +93,21 @@ describe('ScrapbookRecycler UI Components', () => {
     )
   })
 
-  it('reorders the local matches only on the explicit AI run, at the projected boundary', async () => {
+  it('reorders using actual lexical weights only on the explicit request', async () => {
     const onPluginTool = vi.fn(async () => aiRanked)
     renderWithRuntimeTool(onPluginTool)
     await loadedCorpus()
 
-    fireEvent.change(screen.getByPlaceholderText(/搜索废稿内容/), { target: { value: '林凡' } })
+    fireEvent.change(screen.getByPlaceholderText(/搜索废稿内容/), {
+      target: { value: '林凡 城楼' },
+    })
     fireEvent.click(screen.getByTestId('scrapbook-ai-run'))
 
     await waitFor(() => expect(onPluginTool).toHaveBeenCalledTimes(1))
     expect(onPluginTool).toHaveBeenCalledWith(
       'scrapbook-recycler',
       expect.objectContaining({
-        contextText: '林凡',
+        contextText: '林凡 城楼',
         topK: 2,
         fragments: expect.arrayContaining([
           expect.objectContaining({ id: 'frag-a', snippet: FRAG_A }),
@@ -114,18 +115,16 @@ describe('ScrapbookRecycler UI Components', () => {
       }),
     )
     await waitFor(() => expect(snippetCards()[0]).toHaveTextContent('城楼'))
-    expect(screen.getByTestId('scrapbook-result-origin')).toHaveTextContent(
-      '排序来源：AI 语义重排（对「林凡」的本次显式运行）',
-    )
+    expect(screen.getByTestId('scrapbook-result-origin')).toHaveTextContent('排序来源：词项 TF-IDF')
   })
 
-  it('drops an AI ordering once its query changes, without issuing a second call', async () => {
+  it('drops a lexical ordering once its query changes, without issuing a second call', async () => {
     const onPluginTool = vi.fn(async () => aiRanked)
     renderWithRuntimeTool(onPluginTool)
     await loadedCorpus()
 
     const search = screen.getByPlaceholderText(/搜索废稿内容/)
-    fireEvent.change(search, { target: { value: '林' } })
+    fireEvent.change(search, { target: { value: '林凡 城楼' } })
     fireEvent.click(screen.getByTestId('scrapbook-ai-run'))
     await waitFor(() => expect(snippetCards()[0]).toHaveTextContent('城楼'))
 
@@ -139,7 +138,7 @@ describe('ScrapbookRecycler UI Components', () => {
     expect(onPluginTool).toHaveBeenCalledTimes(1)
   })
 
-  it('reports an unavailable AI channel instead of a silent no-op', async () => {
+  it('sorts locally when Runtime is unavailable', async () => {
     const onPluginTool = vi.fn(async () => aiRanked)
     render(
       <DesktopPluginHostProvider
@@ -151,12 +150,14 @@ describe('ScrapbookRecycler UI Components', () => {
         <ScrapbookMasterView projectId="p1" />
       </DesktopPluginHostProvider>,
     )
-    await screen.findByTestId('scrapbook-ai-run')
+    await loadedCorpus()
 
     fireEvent.change(screen.getByPlaceholderText(/搜索废稿内容/), { target: { value: '林凡' } })
     fireEvent.click(screen.getByTestId('scrapbook-ai-run'))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('AI 通道不可用，语义排序没有发出')
+    await waitFor(() =>
+      expect(screen.getByTestId('scrapbook-result-origin')).toHaveTextContent('词项 TF-IDF'),
+    )
     expect(onPluginTool).not.toHaveBeenCalled()
   })
 
@@ -167,7 +168,7 @@ describe('ScrapbookRecycler UI Components', () => {
 
     fireEvent.click(screen.getByTestId('scrapbook-ai-run'))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('先在上方输入关键词')
+    expect(await screen.findByRole('alert')).toHaveTextContent('先输入检索词或上下文')
     expect(onPluginTool).not.toHaveBeenCalled()
   })
 })

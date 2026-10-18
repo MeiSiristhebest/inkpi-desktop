@@ -51,7 +51,8 @@ describe('PovGuardEngine (POV心智防火墙)', () => {
     expect(result.violations.length).toBe(1)
     expect(result.violations[0].type).toBe('head_hopping')
     expect(result.violations[0].characterName).toBe('苏雨柔')
-    expect(result.violations[0].explanation).toContain('视角跳跃(Head-Hopping)')
+    expect(result.violations[0].status).toBe('candidate')
+    expect(result.violations[0].explanation).toContain('不能确认视角越界')
   })
 
   it('当POV角色尚未获知机密却在正文直呼该机密时，标记全知泄漏', () => {

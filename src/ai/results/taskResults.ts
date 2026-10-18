@@ -1,4 +1,6 @@
 import type { TaskResult, TaskOutput } from '@inkpi/protocol'
+import type { SemanticDocument } from '../../domain/content'
+import type { SourceEvidence } from '../../domain/story/provenance'
 
 export interface ContinuityFinding {
   id: string
@@ -11,10 +13,26 @@ export interface ContinuityFinding {
 
 export interface DistilledStoryFacts {
   summary: string
-  entities: Array<{ id?: string; kind: string; name: string; attributes?: Record<string, unknown> }>
-  events: Array<{ id?: string; type: string; description?: string; entityIds?: string[] }>
-  promises: Array<{ id?: string; statement: string; status?: string }>
+  entities: Array<
+    DistilledSource & {
+      id?: string
+      kind: string
+      name: string
+      attributes?: Record<string, unknown>
+    }
+  >
+  events: Array<
+    DistilledSource & { id?: string; type: string; description?: string; entityIds?: string[] }
+  >
+  promises: Array<DistilledSource & { id?: string; statement: string; status?: string }>
   confidence?: number
+}
+
+interface DistilledSource {
+  sourceDocumentId?: string
+  sourceBlockId?: string
+  sourceRevision?: number
+  evidence?: SourceEvidence[]
 }
 
 export interface DeepReasoningResult {
@@ -42,7 +60,10 @@ export function requireStructuredResult<T>(result: TaskResult): T {
   return output.data as T
 }
 
-export function parseContinuityFindings(result: TaskResult): ContinuityFinding[] {
+export function parseContinuityFindings(
+  result: TaskResult,
+  sourceDocuments: SemanticDocument[] = [],
+): ContinuityFinding[] {
   const value = requireStructuredResult<unknown>(result)
   const findings = normalizeContinuityFindings(value)
   if (!Array.isArray(findings)) throw new Error('Continuity audit output must be an array')
@@ -56,13 +77,38 @@ export function parseContinuityFindings(result: TaskResult): ContinuityFinding[]
     if (typeof finding.description !== 'string') {
       throw new Error(`Continuity finding ${index} is missing a description`)
     }
+    const evidence = typeof finding.evidence === 'string' ? finding.evidence : undefined
+    let blockIds = asStringArray(finding.blockIds)
+    let verifiedEvidence = evidence
+    if (sourceDocuments.length > 0) {
+      const matchingBlockIds = new Set(
+        sourceDocuments.flatMap((document) =>
+          evidence
+            ? document.blocks
+                .filter((block) => block.text.includes(evidence))
+                .map((block) => block.id)
+            : [],
+        ),
+      )
+      const verifiedBlockIds = [...new Set(blockIds ?? [])].filter((blockId) =>
+        matchingBlockIds.has(blockId),
+      )
+      if (verifiedBlockIds.length > 0) {
+        blockIds = verifiedBlockIds
+      } else if (evidence && matchingBlockIds.size === 1) {
+        blockIds = [...matchingBlockIds]
+      } else {
+        blockIds = undefined
+        verifiedEvidence = undefined
+      }
+    }
     return {
       id: typeof finding.id === 'string' ? finding.id : `finding-${index}`,
       severity,
       description: finding.description,
       entityIds: asStringArray(finding.entityIds),
-      blockIds: asStringArray(finding.blockIds),
-      evidence: typeof finding.evidence === 'string' ? finding.evidence : undefined,
+      blockIds,
+      evidence: verifiedEvidence,
     }
   })
 }
@@ -76,16 +122,19 @@ function normalizeContinuityFindings(value: unknown): unknown {
   return value
 }
 
-export function parseDistilledFacts(result: TaskResult): DistilledStoryFacts {
+export function parseDistilledFacts(
+  result: TaskResult,
+  sourceDocuments: SemanticDocument[] = [],
+): DistilledStoryFacts {
   const value = requireStructuredResult<unknown>(result)
   if (!value || typeof value !== 'object') throw new Error('Distillation output must be an object')
   const data = value as Record<string, unknown>
   if (typeof data.summary !== 'string') throw new Error('Distillation output is missing summary')
   return {
     summary: data.summary,
-    entities: parseNamedItems(data.entities),
-    events: parseEventItems(data.events),
-    promises: parsePromiseItems(data.promises),
+    entities: parseNamedItems(data.entities, sourceDocuments),
+    events: parseEventItems(data.events, sourceDocuments),
+    promises: parsePromiseItems(data.promises, sourceDocuments),
     confidence: typeof data.confidence === 'number' ? data.confidence : undefined,
   }
 }
@@ -123,7 +172,10 @@ function asStringArray(value: unknown): string[] | undefined {
   return [...value]
 }
 
-function parseNamedItems(value: unknown): DistilledStoryFacts['entities'] {
+function parseNamedItems(
+  value: unknown,
+  sourceDocuments: SemanticDocument[],
+): DistilledStoryFacts['entities'] {
   if (!Array.isArray(value)) return []
   return value.map((item) => {
     if (!item || typeof item !== 'object') throw new Error('Invalid distilled entity')
@@ -135,6 +187,7 @@ function parseNamedItems(value: unknown): DistilledStoryFacts['entities'] {
       id: typeof data.id === 'string' ? data.id : undefined,
       kind: data.kind,
       name: data.name,
+      ...resolveDistilledSource(data, sourceDocuments),
       attributes:
         data.attributes && typeof data.attributes === 'object'
           ? { ...(data.attributes as Record<string, unknown>) }
@@ -143,7 +196,10 @@ function parseNamedItems(value: unknown): DistilledStoryFacts['entities'] {
   })
 }
 
-function parseEventItems(value: unknown): DistilledStoryFacts['events'] {
+function parseEventItems(
+  value: unknown,
+  sourceDocuments: SemanticDocument[],
+): DistilledStoryFacts['events'] {
   if (!Array.isArray(value)) return []
   return value.map((item) => {
     if (!item || typeof item !== 'object') throw new Error('Invalid distilled event')
@@ -154,11 +210,15 @@ function parseEventItems(value: unknown): DistilledStoryFacts['events'] {
       type: data.type,
       description: typeof data.description === 'string' ? data.description : undefined,
       entityIds: asStringArray(data.entityIds),
+      ...resolveDistilledSource(data, sourceDocuments),
     }
   })
 }
 
-function parsePromiseItems(value: unknown): DistilledStoryFacts['promises'] {
+function parsePromiseItems(
+  value: unknown,
+  sourceDocuments: SemanticDocument[],
+): DistilledStoryFacts['promises'] {
   if (!Array.isArray(value)) return []
   return value.map((item) => {
     if (!item || typeof item !== 'object') throw new Error('Invalid distilled promise')
@@ -168,6 +228,52 @@ function parsePromiseItems(value: unknown): DistilledStoryFacts['promises'] {
       id: typeof data.id === 'string' ? data.id : undefined,
       statement: data.statement,
       status: typeof data.status === 'string' ? data.status : undefined,
+      ...resolveDistilledSource(data, sourceDocuments),
     }
   })
+}
+
+function resolveDistilledSource(
+  candidate: Record<string, unknown>,
+  sourceDocuments: SemanticDocument[],
+): DistilledSource {
+  const documentId = candidate.sourceDocumentId
+  const excerpt = candidate.evidence
+  if (typeof documentId !== 'string' || typeof excerpt !== 'string' || excerpt.length === 0) {
+    return {}
+  }
+
+  const matchingDocuments = sourceDocuments.filter((source) => source.documentId === documentId)
+  if (matchingDocuments.length !== 1) return {}
+  const document = matchingDocuments[0]
+  if (!document || !Number.isSafeInteger(document.revision) || document.revision < 0) {
+    return {}
+  }
+  const semanticFrom = document.text.indexOf(excerpt)
+  if (semanticFrom < 0) return {}
+  const semanticTo = semanticFrom + excerpt.length
+  const overlappingBlocks = document.blocks.filter(
+    (block) => block.from < semanticTo && block.to > semanticFrom,
+  )
+  const block =
+    overlappingBlocks.length === 1 &&
+    overlappingBlocks[0].from <= semanticFrom &&
+    overlappingBlocks[0].to >= semanticTo
+      ? overlappingBlocks[0]
+      : undefined
+
+  return {
+    sourceDocumentId: document.documentId,
+    sourceBlockId: block?.id,
+    sourceRevision: document.revision,
+    evidence: [
+      {
+        documentId: document.documentId,
+        ...(block ? { blockId: block.id } : {}),
+        excerpt,
+        semanticFrom,
+        semanticTo,
+      },
+    ],
+  }
 }

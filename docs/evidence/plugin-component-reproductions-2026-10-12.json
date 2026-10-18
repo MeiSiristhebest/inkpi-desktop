@@ -1,0 +1,37 @@
+{
+  "scope": "Read-only isolated execution of current repository source; no repository edits or commits",
+  "pluginRegistry": {
+    "method": "TypeScript transpile of actual pluginRegistry.tsx into a VM; injected React state/effect scheduler and storage adapter",
+    "storageSaveRejection": { "promiseRejected": false, "warnings": 1 },
+    "hydrationRace": {
+      "userToggleBeforeReadCompletes": ["safe-gate"],
+      "afterOriginalReadResolves": ["living-codex"]
+    },
+    "limit": "Isolated contract reproduction, not real React GUI or physical IndexedDB integration"
+  },
+  "overlayFocus": {
+    "method": "TypeScript transpile of actual useOverlayFocus.ts into jsdom; injected hook effect scheduler",
+    "nestedEscape": { "outerClosed": 1, "innerClosed": 1 },
+    "imeCompositionEscape": { "onCloseCalls": 1 },
+    "zeroControlsTab": { "defaultPrevented": false },
+    "linkBeforeButtonInitialFocus": { "focusedId": "save" },
+    "limit": "Source hook executed in jsdom; native Windows WebView, Base UI portal composition, and screen readers not tested"
+  },
+  "inventory": {
+    "method": "TypeScript AST and local production source scan excluding test files",
+    "plugins": 44,
+    "uniquePluginIds": 44,
+    "pluginDrawers": 43,
+    "pluginComponents": 94,
+    "pluginAiTaskPanelConsumers": 22,
+    "pluginLiteralButtons": 268,
+    "pluginSharedButtonUsages": 0,
+    "allProductionLiteralButtons": 484,
+    "allProductionMotionButtons": 47,
+    "allProductionSharedButtonUsages": 1,
+    "allProductionSelectUsages": 49,
+    "selectCallsWithoutStableLabelPropsOrId": 39,
+    "limit": "Missing explicit label association does not automatically imply an empty computed accessible name; selected option text may supply a value-based name"
+  },
+  "existingTests": "Test source inspected and presence inventoried; this subagent did not run existing Vitest suites"
+}

@@ -43,16 +43,16 @@ describe('Button 门面', () => {
     ])
   })
 
-  it('isLoading 设为 true 时禁用交互，透传 aria-busy 并挂载 Spinner 指示器', () => {
+  it('isLoading 设为 true 时禁用交互，保留按钮名称并透传 aria-busy', () => {
     render(
       <Button isLoading loadingText="正在构思…">
         生成大纲
       </Button>,
     )
-    const btn = screen.getByRole('button')
+    const btn = screen.getByRole('button', { name: '正在构思…' })
     expect(btn).toBeDisabled()
     expect(btn).toHaveAttribute('aria-busy', 'true')
     expect(btn).toHaveTextContent('正在构思…')
-    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

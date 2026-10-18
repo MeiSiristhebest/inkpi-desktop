@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ReaderHookMasterView } from './ReaderHookMasterView'
-import { indexedDbReaderHookRepository } from '../../../adapters/indexedDbReaderHookRepository'
-
+import { indexedDbReaderHookRepository as repo } from '../../../adapters/indexedDbReaderHookRepository'
 vi.mock('../../../adapters/indexedDbReaderHookRepository', () => ({
   indexedDbReaderHookRepository: {
     getAll: vi.fn().mockResolvedValue([]),
@@ -10,38 +9,36 @@ vi.mock('../../../adapters/indexedDbReaderHookRepository', () => ({
     delete: vi.fn().mockResolvedValue(undefined),
   },
 }))
-
-vi.mock('../../../adapters/clipboardWriter', () => ({
-  clipboardWriter: {
-    writeText: vi.fn().mockResolvedValue(undefined),
+vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
+  indexedDbProjectRepository: {
+    getChaptersByProject: vi.fn().mockResolvedValue([]),
+    getVolumesByProject: vi.fn().mockResolvedValue([]),
   },
 }))
-
 describe('ReaderHookMasterView', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+  beforeEach(() => vi.clearAllMocks())
+  it('starts without fabricated sample text', () => {
+    render(<ReaderHookMasterView projectId="p" />)
+    expect(screen.getByLabelText('待审章节正文')).toHaveValue('')
+    expect(screen.getByRole('button', { name: '入库本章断章' })).toBeDisabled()
   })
-
-  it('renders heading, tension index score, and paradigm templates', () => {
-    render(<ReaderHookMasterView projectId="p1" />)
-    expect(screen.getByText('断章钩子与追读率工坊')).toBeDefined()
-    expect(screen.getByText(/Zeigarnik 效应/)).toBeDefined()
-    expect(screen.getByText(/网文 6 大高张力断章范式/)).toBeDefined()
-  })
-
-  it('allows recalculating CTI tension score on button click', () => {
-    render(<ReaderHookMasterView projectId="p1" />)
-    const btn = screen.getByText('测算 CTI 张力')
-    fireEvent.click(btn)
-    expect(screen.getByText(/断章张力指数/)).toBeDefined()
-  })
-
-  it('saves new hook into repository', async () => {
-    render(<ReaderHookMasterView projectId="p1" />)
-    const saveBtn = screen.getByText('入库本章断章')
-    fireEvent.click(saveBtn)
-    await waitFor(() => {
-      expect(indexedDbReaderHookRepository.save).toHaveBeenCalled()
-    })
+  it('preserves source and exposes failed save before retry', async () => {
+    vi.mocked(repo.save).mockRejectedValueOnce(new Error('storage failed'))
+    render(<ReaderHookMasterView projectId="p" />)
+    const text = screen.getByLabelText('待审章节正文')
+    fireEvent.change(text, { target: { value: '😀她没有倒计时。' } })
+    fireEvent.click(screen.getByRole('button', { name: '入库本章断章' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('storage failed'))
+    expect(text).toHaveValue('😀她没有倒计时。')
+    fireEvent.click(screen.getByRole('button', { name: '入库本章断章' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('已保存'))
+    expect(repo.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        projectId: 'p',
+        hookText: '😀她没有倒计时。',
+        hookType: 'unclassified',
+      }),
+    )
+    expect(vi.mocked(repo.save).mock.calls.at(-1)![0]).not.toHaveProperty('tensionScore')
   })
 })

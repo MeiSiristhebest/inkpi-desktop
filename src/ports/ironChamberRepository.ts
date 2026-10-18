@@ -13,6 +13,9 @@ export interface IronChamberRecord {
   pledgedAt: number
   completedAt?: number
   emergencyReasons?: string[]
+  chapterId?: string
+  measurementUnit?: 'unicode_non_whitespace'
+  chapterRevisionAtStart?: number
 }
 
 export interface IronChamberRepository {
@@ -20,5 +23,7 @@ export interface IronChamberRepository {
   getActive(projectId: string): Promise<IronChamberRecord | undefined>
   get(id: string): Promise<IronChamberRecord | undefined>
   save(record: IronChamberRecord): Promise<void>
+  startSession(record: IronChamberRecord): Promise<void>
+  finishSession(record: IronChamberRecord): Promise<void>
   delete(id: string): Promise<void>
 }

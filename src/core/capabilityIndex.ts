@@ -1,7 +1,11 @@
 import type { PluginStaticDefinition } from './pluginDefinitions'
 import { ALL_PLUGIN_DEFINITIONS } from './pluginDefinitions'
 import { TAB_DEFINITIONS } from '../config/tabDefinitions'
-import { CAPABILITY_REGISTRY, type CapabilityOverlay } from './capabilityRegistry'
+import {
+  CAPABILITY_REGISTRY,
+  isPrimaryNavigationPlugin,
+  type CapabilityOverlay,
+} from './capabilityRegistry'
 import type { CapabilityDescriptor } from './capabilityRegistry'
 import type { CapabilitySurface } from './capabilityRegistry'
 
@@ -14,7 +18,9 @@ import type { CapabilitySurface } from './capabilityRegistry'
  * flags) are deliberately left undeclared, because `maturity` renders as a stability badge.
  */
 function derivePluginCapability(definition: PluginStaticDefinition): CapabilityDescriptor {
-  const surfaces: CapabilitySurface[] = ['navigation', 'canvas']
+  const surfaces: CapabilitySurface[] = []
+  if (isPrimaryNavigationPlugin(definition.id)) surfaces.push('navigation')
+  surfaces.push('canvas')
   if (definition.drawer) surfaces.push('drawer')
   surfaces.push('command')
   return {

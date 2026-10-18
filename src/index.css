@@ -601,6 +601,8 @@
   box-sizing: border-box;
   min-width: 0;
   max-width: 100%;
+  container-name: editor-toolbar;
+  container-type: inline-size;
   min-height: 2.75rem;
   max-height: 2.75rem;
   flex: 0 0 2.75rem;
@@ -634,6 +636,7 @@
   min-width: 0;
   max-width: 58%;
   flex: 0 1 auto;
+  width: max-content;
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
@@ -671,6 +674,10 @@
   border: 1px solid var(--ink-border);
   background: var(--ink-bg-panel);
   box-shadow: var(--ink-shadow-sm);
+}
+
+.sidebar-nav-back-home {
+  display: none;
 }
 
 .project-engine-root[data-nav-open='false'] > .sidebar-nav-compact-toggle {
@@ -736,6 +743,14 @@
   }
 
   .project-engine-root[data-nav-open='true'] > .sidebar-nav {
+    display: flex;
+  }
+
+  .project-engine-root[data-nav-open='true'] .editor-chapter-tree {
+    display: none;
+  }
+
+  .sidebar-nav-back-home {
     display: flex;
   }
 
@@ -838,7 +853,8 @@
   /* 目录保持可通过工具栏收起/展开，但不再挤压正文。 */
   .editor-chapter-tree {
     position: absolute;
-    inset-block: 0;
+    top: 2.75rem;
+    bottom: 2rem;
     left: 0;
     z-index: 40;
     width: min(240px, calc(100% - 1rem)) !important;
@@ -936,6 +952,47 @@
     right: 0.5rem !important;
     bottom: 0.5rem !important;
     width: calc(100vw - 1rem) !important;
+  }
+}
+
+/* 收纳工具栏内容时看编辑器实际宽度，不看包含导航和侧栏的窗口宽度。 */
+@container editor-toolbar (max-width: 1100px) {
+  .editor-toolbar-menu-trigger,
+  .editor-toolbar-action-button {
+    gap: 0;
+    justify-content: center;
+    padding-inline: 0.4rem;
+  }
+
+  .editor-toolbar-menu-trigger .editor-toolbar-label,
+  .editor-toolbar-menu-trigger > svg:last-child,
+  .editor-toolbar-find-trigger .editor-toolbar-label,
+  .editor-toolbar-ghost-action .editor-toolbar-label,
+  .editor-toolbar-inline-label {
+    display: none;
+  }
+
+  .editor-toolbar-actions {
+    max-width: 52%;
+    gap: 0.125rem;
+  }
+}
+
+@container editor-toolbar (max-width: 760px) {
+  .editor-toolbar-inline-controls {
+    display: none;
+  }
+
+  .editor-toolbar-left {
+    gap: 0.375rem;
+  }
+
+  .editor-toolbar-left > input {
+    min-width: 3rem;
+  }
+
+  .editor-toolbar-actions {
+    max-width: 60%;
   }
 }
 

@@ -8,6 +8,11 @@ export interface DiffHunkRecord {
   newLineCount: number
   lines: string[]
   resolution: HunkResolution
+  sourceSnapshot?: string
+  sourceStart?: number
+  sourceEnd?: number
+  sourceQuote?: string
+  replacementText?: string
 }
 
 export interface DiffReviewRecord {

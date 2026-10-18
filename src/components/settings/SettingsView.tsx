@@ -39,9 +39,11 @@ import { PluginSettingsView } from '../plugins/PluginSettingsView'
 import { WritingHabitsTab } from './WritingHabitsTab'
 import { ShortcutsTab } from './ShortcutsTab'
 import type {
+  OpenAIChatGPTPlanModel,
   RuntimeModelProviderProbeParams,
   RuntimeModelProviderProbeResult,
 } from '@inkpi/protocol'
+import type { ChatGPTPlanAssistant } from '../../ports/aiGateway'
 import {
   useSettings,
   PROVIDER_META,
@@ -57,7 +59,9 @@ import { ASSISTANT_HISTORY_TURN_LIMIT } from '../../ai/context/requestScope'
 import { readCatalogMeta, writeCatalogMeta } from '../../adapters/localStorageCatalogMetaStore'
 import { secretStore } from '../../adapters/secretStore'
 import { modelSecretKey } from '../../core/modelSecrets'
+import { mergeProviderCatalog } from '../../core/providerModelCatalog'
 import { ProviderDetailView } from './ProviderDetailView'
+import { ChatGPTPlanSettings } from './ChatGPTPlanSettings'
 import {
   classifyProbeStatus,
   deriveAiReadiness,
@@ -374,12 +378,14 @@ interface SettingsViewProps {
   probeModelProvider?: (
     params: RuntimeModelProviderProbeParams,
   ) => Promise<RuntimeModelProviderProbeResult>
+  chatgptPlan?: ChatGPTPlanAssistant
 }
 
 export const SettingsView: FC<SettingsViewProps> = ({
   open,
   onClose,
   probeModelProvider,
+  chatgptPlan,
   runtimeState = 'unknown',
   onReconnect,
 }) => {
@@ -571,7 +577,12 @@ export const SettingsView: FC<SettingsViewProps> = ({
             {tab === 'shortcuts' && <ShortcutsTab />}
             {tab === 'plugins' && <PluginSettingsView />}
             {tab === 'ai' && (
-              <AiTab settings={settings} update={update} probeModelProvider={probeModelProvider} />
+              <AiTab
+                settings={settings}
+                update={update}
+                probeModelProvider={probeModelProvider}
+                chatgptPlan={chatgptPlan}
+              />
             )}
             {tab === 'connection' && (
               <ConnectionTab
@@ -1106,7 +1117,8 @@ const AiTab: FC<{
   settings: AppSettings
   update: (p: Partial<AppSettings>) => void
   probeModelProvider?: SettingsViewProps['probeModelProvider']
-}> = ({ settings, update, probeModelProvider }) => {
+  chatgptPlan?: ChatGPTPlanAssistant
+}> = ({ settings, update, probeModelProvider, chatgptPlan }) => {
   // 当前已保存的所有供应商列表
   const savedList = useMemo<ModelConfig[]>(() => {
     if (settings.savedAiModels && settings.savedAiModels.length > 0) {
@@ -1200,11 +1212,13 @@ const AiTab: FC<{
 
   // 删除供应商
   const handleDeleteProvider = async (target: ModelConfig) => {
-    try {
-      await secretStore.remove(modelSecretKey(target))
-    } catch {
-      setCatalogMsg('无法从系统凭据存储删除该供应商的密钥')
-      return
+    if (target.provider !== 'openai-chatgpt-plan') {
+      try {
+        await secretStore.remove(modelSecretKey(target))
+      } catch {
+        setCatalogMsg('无法从系统凭据存储删除该供应商的密钥')
+        return
+      }
     }
     const updatedList = savedList.filter(
       (m) => !(m.id === target.id && m.provider === target.provider && m.name === target.name),
@@ -1238,7 +1252,10 @@ const AiTab: FC<{
   // 更新模型目录
   const handleRefreshCatalog = async () => {
     const targets = savedList.filter(
-      (m) => m.enabled !== false && (m.baseUrl || PROVIDER_META[m.provider]?.defaultBaseUrl),
+      (m) =>
+        m.provider !== 'openai-chatgpt-plan' &&
+        m.enabled !== false &&
+        (m.baseUrl || PROVIDER_META[m.provider]?.defaultBaseUrl),
     )
     if (targets.length === 0) {
       setCatalogMsg('暂无已保存的供应商端点可更新')
@@ -1248,6 +1265,7 @@ const AiTab: FC<{
     setCatalogMsg(null)
     let okCount = 0
     let failedCount = 0
+    const catalogFetchedAt = new Date().toISOString()
     const nextList = [...savedList]
     for (let i = 0; i < nextList.length; i++) {
       const m = nextList[i]
@@ -1261,7 +1279,16 @@ const AiTab: FC<{
           m.credentialConfigured ? modelSecretKey(m) : undefined,
         )
         if (probe.status >= 200 && probe.status < 300 && probe.modelIds.length > 0) {
-          nextList[i] = { ...m, availableModelIds: probe.modelIds }
+          nextList[i] = {
+            ...m,
+            availableModelIds: probe.modelIds,
+            availableModelCatalog: mergeProviderCatalog(
+              probe.modelIds,
+              [],
+              probe.catalogModels ?? [],
+            ),
+            catalogFetchedAt,
+          }
           okCount += 1
         } else {
           failedCount += 1
@@ -1284,6 +1311,49 @@ const AiTab: FC<{
         : `已更新 ${okCount} 个供应商端点的模型列表`,
     )
     setCatalogBusy(false)
+  }
+
+  const handlePlanUsageStatusChange = (enabled: boolean) => {
+    const hasPlanModels = savedList.some((model) => model.provider === 'openai-chatgpt-plan')
+    if (!hasPlanModels) return
+
+    const nextList = savedList.map((model) =>
+      model.provider === 'openai-chatgpt-plan'
+        ? { ...model, credentialConfigured: enabled }
+        : model,
+    )
+    const nextActive =
+      settings.aiModel?.provider === 'openai-chatgpt-plan'
+        ? { ...settings.aiModel, credentialConfigured: enabled }
+        : settings.aiModel
+    update({ savedAiModels: nextList, aiModel: nextActive })
+  }
+
+  const handleAddChatGPTModel = (model: OpenAIChatGPTPlanModel) => {
+    const existing = savedList.find(
+      (item) => item.provider === 'openai-chatgpt-plan' && item.id === model.id,
+    )
+    const config: ModelConfig = {
+      ...existing,
+      id: model.id,
+      name: model.name,
+      provider: 'openai-chatgpt-plan',
+      baseUrl: PROVIDER_META['openai-chatgpt-plan'].defaultBaseUrl,
+      credentialConfigured: true,
+      enabled: existing?.enabled ?? true,
+      availableModelIds: Array.from(new Set([...(existing?.availableModelIds ?? []), model.id])),
+    }
+    const nextList = existing
+      ? savedList.map((item) =>
+          item.provider === config.provider && item.id === config.id ? config : item,
+        )
+      : [...savedList, config]
+    const isCurrentModel =
+      settings.aiModel?.provider === config.provider && settings.aiModel?.id === config.id
+    update({
+      savedAiModels: nextList,
+      aiModel: settings.aiModel ? (isCurrentModel ? config : settings.aiModel) : config,
+    })
   }
 
   // 弹窗保存成功回调
@@ -1349,7 +1419,7 @@ const AiTab: FC<{
           if (probe.status < 200 || probe.status >= 300) {
             throw new Error(`Runtime HTTP ${probe.status}`)
           }
-          return probe.modelIds
+          return probe
         }}
       />
     )
@@ -1444,6 +1514,12 @@ const AiTab: FC<{
         </div>
       </section>
 
+      <ChatGPTPlanSettings
+        assistant={chatgptPlan}
+        onAddModel={handleAddChatGPTModel}
+        onUsageStatusChange={handlePlanUsageStatusChange}
+      />
+
       {/* ── 模块 1：AI 服务列表（与图一 100% 对齐）── */}
       <section className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
@@ -1537,31 +1613,35 @@ const AiTab: FC<{
                         设为默认
                       </button>
                     )}
-                    <Tooltip content="编辑此服务">
-                      <button
-                        type="button"
-                        onClick={() => setEditingTarget(m)}
-                        className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                    </Tooltip>
-                    <Tooltip content="测试连通性">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleQuickSpeedTest(
-                            m.baseUrl || pMeta?.defaultBaseUrl,
-                            m.credentialConfigured ? modelSecretKey(m) : undefined,
-                            cardKey,
-                            m.provider,
-                          )
-                        }
-                        className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
-                      >
-                        <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      </button>
-                    </Tooltip>
+                    {m.provider !== 'openai-chatgpt-plan' && (
+                      <Tooltip content="编辑此服务">
+                        <button
+                          type="button"
+                          onClick={() => setEditingTarget(m)}
+                          className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
+                    )}
+                    {m.provider !== 'openai-chatgpt-plan' && (
+                      <Tooltip content="测试连通性">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleQuickSpeedTest(
+                              m.baseUrl || pMeta?.defaultBaseUrl,
+                              m.credentialConfigured ? modelSecretKey(m) : undefined,
+                              cardKey,
+                              m.provider,
+                            )
+                          }
+                          className="p-1.5 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] active:scale-95 transition-all duration-150 cursor-pointer"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-500" />
+                        </button>
+                      </Tooltip>
+                    )}
                     <Tooltip content="删除此服务">
                       <button
                         type="button"

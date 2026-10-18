@@ -13,7 +13,7 @@ describe('WaterMeterEngine', () => {
       '众所周知，在整个修仙界中，所有人都忍不住倒吸了一口凉气。陆沉心中掀起惊涛骇浪，暗暗心惊，只觉得自己整个人都不好了。'
     const report = waterMeterEngine.auditText(wateryText)
 
-    expect(report.waterScore).toBeGreaterThan(40)
+    expect(report.matchedCharacters).toBeGreaterThan(0)
     expect(report.bloatItems.length).toBeGreaterThan(3)
     const types = report.bloatItems.map((b) => b.type)
     expect(types).toContain('phantom')
@@ -27,13 +27,13 @@ describe('WaterMeterEngine', () => {
     const report = waterMeterEngine.auditText(leanActionText)
 
     expect(report.actionVerbRatio).toBeGreaterThan(0.08)
-    expect(report.waterLevel).toBe('lean')
+    expect(report.clicheRatio).toBe(0)
     expect(report.bloatItems.length).toBe(0)
   })
 
   it('handles short or empty texts gracefully', () => {
     const report = waterMeterEngine.auditText('你好')
-    expect(report.waterScore).toBe(0)
+    expect(report.matchedCharacters).toBe(0)
     expect(report.totalWordCount).toBe(2)
   })
 })

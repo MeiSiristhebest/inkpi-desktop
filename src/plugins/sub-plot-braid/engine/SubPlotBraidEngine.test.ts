@@ -14,6 +14,7 @@ describe('SubPlotBraidEngine', () => {
       involvedCharacterNames: ['白长老', '楚风'],
       startChapterOrder: 10,
       lastActiveChapterOrder: 12,
+      reminderAfterChapters: 15,
       tags: ['卧底', '宗门'],
       updatedAt: 1,
     },
@@ -41,7 +42,7 @@ describe('SubPlotBraidEngine', () => {
     const s1Health = health.find((h) => h.strandId === 's1')
     expect(s1Health?.dormancyDistance).toBe(23)
     expect(s1Health?.isStarved).toBe(true)
-    expect(s1Health?.isCriticalAbandoned).toBe(false)
+    expect(s1Health?.convergenceReadiness).toBe('unknown')
   })
 
   it('detects active strands mentioned in chapter text', () => {

@@ -1,117 +1,29 @@
-import { useState, useMemo, type FC } from 'react'
+import { useState, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { PaywallSentryEngine } from '../engine/PaywallSentryEngine'
-import type { PaywallAuditResult } from '../types'
-import { Flame, ShieldCheck, AlertTriangle, Skull } from 'lucide-react'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-
-export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
-  const [inputText, setInputText] = useState('')
-
-  const textToAnalyze = inputText || currentText || ''
-
-  const audit: PaywallAuditResult = useMemo(() => {
-    return PaywallSentryEngine.analyzeChapter({
-      chapterId: 'drawer-current',
-      chapterTitle: '当前章节',
-      chapterOrder: 1,
-      content: textToAnalyze,
-    })
-  }, [textToAnalyze])
-
+import { EndingEvidence } from '../../../components/plugins/EndingEvidence'
+export const PaywallSentryDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <PaywallDrawerBody key={props.projectId} {...props} />
+)
+function PaywallDrawerBody({ currentText, currentChapterNumber }: DesktopPluginDrawerProps) {
+  const [input, setInput] = useState('')
+  const report = PaywallSentryEngine.analyzeChapter({
+    chapterId: 'preview',
+    chapterTitle: '当前正文',
+    chapterOrder: currentChapterNumber ?? null,
+    content: input || currentText || '',
+  })
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
-      <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-2">
-        <span className="font-semibold text-sm flex items-center gap-1.5 text-amber-500">
-          <Flame className="w-4 h-4" /> 付费卡点哨兵 (PPI)
-        </span>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">
-          {currentText ? '编辑器联动感知' : '手动诊断模式'}
-        </span>
-      </div>
-
-      <ScoreProvenanceBadge source="rule" detail="按当前正文的文本特征当场计分" />
-
-      <div className="space-y-1.5">
-        <label className="text-[11px] text-[var(--ink-text-muted)] block">
-          快速诊断正文（留空则联动编辑器正文）：
-        </label>
-        <textarea
-          rows={3}
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="粘贴章尾或整章文本，扫描断章势能的文本特征..."
-          className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
-        />
-      </div>
-
-      <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3 rounded-lg border border-amber-500/30">
-        <div className="flex items-baseline justify-between mb-1">
-          <span className="font-medium text-[var(--ink-text)]">PPI 规则评分</span>
-          <span className="text-xl font-bold text-amber-500">{audit.ppiScore} / 100</span>
-        </div>
-        <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-          <div
-            className="bg-amber-500 h-full rounded-full transition-all"
-            style={{ width: `${audit.ppiScore}%` }}
-          />
-        </div>
-        <div className="mt-2 text-[11px] flex items-center gap-1">
-          {audit.recommendation === 'prime_paywall' && (
-            <span className="text-amber-500 flex items-center gap-1 font-semibold">
-              <Flame className="w-3.5 h-3.5" /> 黄金卡点信号：章尾悬念与期待特征最强。
-            </span>
-          )}
-          {audit.recommendation === 'acceptable' && (
-            <span className="text-emerald-500 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" /> 合格卡点：末段仍留有待释放的期待。
-            </span>
-          )}
-          {audit.recommendation === 'weak_cut' && (
-            <span className="text-[var(--ink-text-muted)] flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5" /> 偏弱卡点：建议强化末尾断章悬念。
-            </span>
-          )}
-          {audit.recommendation === 'toxic_drop' && (
-            <span className="text-rose-500 flex items-center gap-1 font-medium">
-              <Skull className="w-3.5 h-3.5" /> 风险断点信号：说明性文字占比偏高，建议关注。
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-1.5 bg-[var(--ink-bg-elevated)] p-2.5 rounded-lg border border-[var(--ink-border)]">
-        <div className="flex justify-between">
-          <span className="text-[var(--ink-text-muted)]">末尾悬念强度 (C):</span>
-          <span className="font-semibold">{audit.cliffhangerScore}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-[var(--ink-text-muted)]">核心期待唤醒 (D):</span>
-          <span className="font-semibold">{audit.unresolvedDesireScore}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-[var(--ink-text-muted)]">战力爽点高潮 (P):</span>
-          <span className="font-semibold">{audit.powerClimaxScore}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-[var(--ink-text-muted)]">疲劳冗余风险 (F):</span>
-          <span className={`font-semibold ${audit.fatigueRiskScore > 50 ? 'text-rose-500' : ''}`}>
-            {audit.fatigueRiskScore}
-          </span>
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <div className="font-medium text-[var(--ink-text)] text-[11px]">实战修改建议：</div>
-        {audit.suggestions.map((item, idx) => (
-          <div
-            key={idx}
-            className="p-2 bg-[var(--ink-bg-canvas)] rounded border border-[var(--ink-border)] text-[11px] leading-relaxed text-[var(--ink-text-muted)]"
-          >
-            {item}
-          </div>
-        ))}
-      </div>
+    <div className="p-4 space-y-3 text-xs">
+      <h3>付费过渡章尾复核</h3>
+      <p>当前正文用于章尾观察；付费与受众效果需要实测数据。</p>
+      <textarea
+        aria-label="手动过渡章正文"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="留空使用当前编辑器正文"
+      />
+      <EndingEvidence report={report.ending} />
     </div>
   )
 }

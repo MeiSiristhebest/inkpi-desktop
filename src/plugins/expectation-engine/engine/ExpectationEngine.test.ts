@@ -8,8 +8,8 @@ describe('ExpectationEngine — 爽点与期待感曲线调度器引擎', () => 
   it('calculates SPR accurately', () => {
     expect(engine.calculateSPR(6, 2)).toBe(3.0)
     expect(engine.calculateSPR(2, 4)).toBe(0.5)
-    expect(engine.calculateSPR(5, 0)).toBe(5.0)
-    expect(engine.calculateSPR(0, 0)).toBe(1.0)
+    expect(engine.calculateSPR(5, 0)).toBeNull()
+    expect(engine.calculateSPR(0, 0)).toBeNull()
   })
 
   it('evaluates single chapter text for suppression and payoff cues', () => {
@@ -19,26 +19,37 @@ describe('ExpectationEngine — 爽点与期待感曲线调度器引擎', () => 
     expect(report.chapterIndex).toBe(1)
     expect(report.suppressionSum).toBeGreaterThan(0)
     expect(report.payoffSum).toBeGreaterThan(0)
-    expect(report.dominantTags).toContain('打压蓄势')
-    expect(report.dominantTags).toContain('高能翻盘')
+    expect(report.dominantTags).toContain('压迫定位词')
+    expect(report.dominantTags).toContain('结果定位词')
+    for (const observation of report.observations)
+      expect(text.slice(observation.startOffset, observation.endOffset)).toBe(observation.quote)
   })
 
-  it('identifies suppression-heavy chapter as high risk', () => {
+  it('locates pressure terms without deriving a reader risk', () => {
     const heavyText = '屈辱！嘲讽！打压！吐血！命悬一线！绝境中又被围攻，敌人冷笑羞辱他是废物！'
     const report = engine.evaluateChapterText(heavyText, 2)
-    expect(report.riskLevel).toBe('suppression_heavy')
+    expect(report.suppressionSum).toBeGreaterThan(5)
+    expect(report.spr).toBeNull()
+    expect(report).not.toHaveProperty('riskLevel')
   })
 
-  it('diagnoses golden three chapters correctly', () => {
+  it('locates terms in all three chapters with source evidence', () => {
     const ch1 = '少年身陷退婚屈辱，绝境中脑海中的古玉与至尊骨突然觉醒！'
     const ch2 = '恶仆嘲讽挑衅，少年悍然出手当众突破，一拳秒杀震惊全场！'
     const ch3 = '宗门大比迫在眉睫，三年之约与惊天阴谋悄然浮出水面。'
 
     const diag = engine.diagnoseGoldenThree(ch1, ch2, ch3)
-    expect(diag.chapter1Status.passed).toBe(true)
-    expect(diag.chapter2Status.passed).toBe(true)
-    expect(diag.chapter3Status.passed).toBe(true)
-    expect(diag.overallScore).toBe(100)
+    expect(new Set(diag.observations.map((observation) => observation.chapterIndex))).toEqual(
+      new Set([1, 2, 3]),
+    )
+    expect(diag.missingChapters).toEqual([])
+    for (const observation of diag.observations)
+      expect(
+        [ch1, ch2, ch3][observation.chapterIndex - 1].slice(
+          observation.startOffset,
+          observation.endOffset,
+        ),
+      ).toBe(observation.quote)
   })
 
   it('projects rich chapter content before building AI analysis input', () => {

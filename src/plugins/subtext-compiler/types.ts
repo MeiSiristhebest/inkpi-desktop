@@ -1,12 +1,21 @@
 import type { SubtextDialogueRecord } from '../../ports/subtextRepository'
-
 export type { SubtextDialogueRecord }
-
+export type AuthorEmotion = 'anger' | 'fear' | 'pride' | 'affection' | 'jealousy' | 'guilt'
+export interface SubtextIntent {
+  goal?: string
+  intendedMeaning?: string
+  action?: string
+  relationship?: string
+  whyHidden?: string
+}
 export interface CompiledDialogueTrack {
   speakerName: string
-  spoken: string // 表面台词
-  subtext: string // 水下潜台词
-  beatAction: string // 肢体微反应与停顿
-  tensionLevel: number
-  defenseMechanism: string
+  spoken: string
+  authorEmotion?: AuthorEmotion
+  goal: string
+  subtext: string
+  beatAction: string
+  relationship: string
+  whyHidden: string
+  status: 'author_draft' | 'needs_context'
 }

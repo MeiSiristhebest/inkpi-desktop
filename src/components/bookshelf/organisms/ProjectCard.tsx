@@ -99,6 +99,9 @@ export const ProjectCard = ({
               <Tooltip content="更多操作">
                 <button
                   type="button"
+                  aria-label="更多操作"
+                  aria-haspopup="menu"
+                  aria-expanded={isMenuOpen}
                   onClick={onToggleMenu}
                   className="w-7 h-7 rounded-lg text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] hover:bg-[var(--ink-bg-hover)] flex items-center justify-center transition-colors cursor-pointer"
                 >
@@ -163,6 +166,7 @@ export const ProjectCard = ({
           <Tooltip content="导出完整备份（含设定/时间线/插件/AI 数据）">
             <motion.button
               type="button"
+              aria-label="导出完整备份（含设定/时间线/插件/AI 数据）"
               onClick={onExport}
               {...gesture.iconButton}
               transition={spring.snappy}

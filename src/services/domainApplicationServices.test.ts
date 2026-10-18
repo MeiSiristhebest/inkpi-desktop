@@ -191,6 +191,52 @@ describe('DomainApplicationServices & StoryState Integration', () => {
     expect(entityChange.changes[0].operation).toBe('upsert')
   })
 
+  it('preserves source references when saving an AI hypothesis without promoting its fact level', async () => {
+    await codexApplicationService.saveEntity(
+      {
+        id: 'ent-ai-hypothesis',
+        projectId: workspaceId,
+        name: '雨中黑衣人',
+        aliases: [],
+        category: 'character',
+        attributes: {},
+        relations: [],
+        summary: '待核对的人物',
+        createdAt: 100,
+        updatedAt: 100,
+        provenance: {
+          sourceType: 'ai-proposed',
+          factLevel: 'proposal',
+          sourceDocumentId: 'chapter-9',
+          sourceBlockId: 'block-6',
+          sourceRevision: 12,
+          evidence: [
+            {
+              documentId: 'chapter-9',
+              blockId: 'block-6',
+              excerpt: '黑衣人立于雨中',
+              semanticFrom: 40,
+              semanticTo: 47,
+            },
+          ],
+        },
+      },
+      'ai-hypothesis',
+    )
+
+    const entities = await db.getAll<CodexEntity>('codexEntities')
+    const saved = entities.find((entity) => entity.id === 'ent-ai-hypothesis')
+
+    expect(saved?.provenance).toMatchObject({
+      sourceType: 'derived',
+      factLevel: 'hypothesis',
+      sourceDocumentId: 'chapter-9',
+      sourceBlockId: 'block-6',
+      sourceRevision: 12,
+      evidence: [{ documentId: 'chapter-9', excerpt: '黑衣人立于雨中' }],
+    })
+  })
+
   it('codexApplicationService.saveEntity publishes CODEX_ENTITY_TOUCHED once for the write it made (§P2.12)', async () => {
     // 独立的 workspaceId：总线带 replay 缓冲区，同文件早先的写入不能串到这次的计数里。
     const eventProject = `${workspaceId}-entity-updated`

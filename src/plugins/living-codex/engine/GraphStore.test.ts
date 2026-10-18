@@ -100,7 +100,7 @@ describe('CodexGraphStore Topology & Context Slicing', () => {
     expect(slice.matchedEntities[0].id).toBe('char-chen')
     expect(slice.xmlContext).toContain('<living_codex_context>')
     expect(slice.xmlContext).toContain('[CHARACTER] 陈渊')
-    expect(slice.xmlContext).toContain('宿敌->萧景行')
+    expect(slice.xmlContext).toContain('宿敌-&gt;萧景行')
   })
 
   it('should strictly respect tokenBudget and truncate excessive entities', () => {

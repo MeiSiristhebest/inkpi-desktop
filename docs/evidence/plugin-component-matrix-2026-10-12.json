@@ -1,0 +1,1122 @@
+{
+  "generatedAt": "2026-10-12T12:53:16.678Z",
+  "scope": "read-only current working tree; no source mutation",
+  "sourceRoot": "E:/Mei/下载/cs/inkpi-desktop",
+  "verification": "AST registry/component inventory; focused source review; isolated source reproductions for overlay and plugin state. Existing test files inspected but not run by this subagent.",
+  "plugins": [
+    {
+      "id": "living-codex",
+      "name": "活体世界观",
+      "responsibility": "世界设定实体与关系管理",
+      "category": "lore",
+      "definitionLine": 72,
+      "runtimeClass": "context-provider",
+      "runtimeTarget": "story-context-compiler",
+      "drawer": "context-inspector",
+      "dataBoundary": ["indexedDbCodexEntityRepository"],
+      "components": 5,
+      "testFiles": 7,
+      "aiPanel": false,
+      "rawButtons": 30,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/living-codex/components/CodexEntityEditor.tsx",
+          "line": 248
+        }
+      ],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；Codex宿主写入未检查projectId；需补跨项目契约"
+    },
+    {
+      "id": "promise-ledger",
+      "name": "伏笔账本",
+      "responsibility": "伏笔登记、回收与债务检查",
+      "category": "plot",
+      "definitionLine": 90,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": ["indexedDbProjectRepository", "indexedDbPromiseLedgerRepository"],
+      "components": 4,
+      "testFiles": 4,
+      "aiPanel": true,
+      "rawButtons": 23,
+      "selects": 2,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/promise-ledger/components/PromiseEntryEditor.tsx",
+          "line": 111
+        },
+        {
+          "file": "src/plugins/promise-ledger/components/PromiseEntryEditor.tsx",
+          "line": 125
+        }
+      ],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "timeline-grid",
+      "name": "因果时空网",
+      "responsibility": "时间线、因果关系与冲突检查",
+      "category": "plot",
+      "definitionLine": 107,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": null,
+      "dataBoundary": ["indexedDbProjectRepository", "indexedDbTimelineRepository"],
+      "components": 3,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 13,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/timeline-grid/components/TimelineGridView.tsx",
+          "line": 539
+        }
+      ],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "safe-gate",
+      "name": "安全门禁",
+      "responsibility": "敏感词检查与替换建议",
+      "category": "review",
+      "definitionLine": 119,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbProjectRepository"],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 9,
+      "selects": 2,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/safe-gate/components/SafeGateView.tsx",
+          "line": 206
+        },
+        {
+          "file": "src/plugins/safe-gate/components/SafeGateView.tsx",
+          "line": 221
+        }
+      ],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "scene-beats",
+      "name": "场景节拍",
+      "responsibility": "场景节拍和张力规划",
+      "category": "plot",
+      "definitionLine": 134,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": ["indexedDbProjectRepository", "indexedDbSceneBeatRepository"],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 10,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "describe-palette",
+      "name": "描写调色盘",
+      "responsibility": "描写词句检索",
+      "category": "craft",
+      "definitionLine": 150,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "quick-action",
+      "dataBoundary": [],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": false,
+      "rawButtons": 7,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "name-forge",
+      "name": "起名姬",
+      "responsibility": "人物、组织和地点命名",
+      "category": "craft",
+      "definitionLine": 167,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "quick-action",
+      "dataBoundary": [],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": false,
+      "rawButtons": 8,
+      "selects": 2,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/name-forge/components/NameForgeView.tsx",
+          "line": 242
+        },
+        {
+          "file": "src/plugins/name-forge/components/NameForgeView.tsx",
+          "line": 258
+        }
+      ],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：2处"
+    },
+    {
+      "id": "expectation-engine",
+      "name": "期待感引擎",
+      "responsibility": "期待事件规划与释放检查",
+      "category": "rhythm",
+      "definitionLine": 182,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": [
+        "expectationRepository",
+        "indexedDbExpectationRepository",
+        "indexedDbProjectRepository"
+      ],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 6,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/expectation-engine/components/ExpectationMasterView.tsx",
+          "line": 308
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "consistency-sentinel",
+      "name": "一致性哨兵",
+      "responsibility": "设定、角色状态和境界一致性检查",
+      "category": "review",
+      "definitionLine": 199,
+      "runtimeClass": "hybrid",
+      "runtimeTarget": "creative-task-and-story-context",
+      "drawer": "live-diagnostic",
+      "dataBoundary": [
+        "indexedDbCodexEntityRepository",
+        "indexedDbPowerTierRepository",
+        "indexedDbProjectRepository",
+        "powerTierRepository"
+      ],
+      "components": 2,
+      "testFiles": 4,
+      "aiPanel": true,
+      "rawButtons": 6,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/consistency-sentinel/components/ConsistencyMasterView.tsx",
+          "line": 329
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "sprint-arena",
+      "name": "心流竞技场",
+      "responsibility": "写作计时与字数反馈",
+      "category": "flow",
+      "definitionLine": 217,
+      "runtimeClass": "ui-only",
+      "runtimeTarget": "desktop-ui",
+      "drawer": "quick-action",
+      "dataBoundary": ["indexedDbSprintRepository", "sprintRepository"],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": false,
+      "rawButtons": 11,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "reader-hook",
+      "name": "黄金三章与钩子",
+      "responsibility": "开篇和章尾钩子检查",
+      "category": "rhythm",
+      "definitionLine": 233,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": [
+        "indexedDbProjectRepository",
+        "indexedDbReaderHookRepository",
+        "readerHookRepository"
+      ],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 7,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/reader-hook/components/ReaderHookMasterView.tsx",
+          "line": 172
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "clue-weaver",
+      "name": "线索织机",
+      "responsibility": "悬疑线索与信息差管理",
+      "category": "plot",
+      "definitionLine": 249,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": [
+        "clueWeaverRepository",
+        "indexedDbClueWeaverRepository",
+        "indexedDbCodexEntityRepository",
+        "indexedDbProjectRepository"
+      ],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 7,
+      "selects": 4,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/clue-weaver/components/ClueWeaverMasterView.tsx",
+          "line": 238
+        },
+        {
+          "file": "src/plugins/clue-weaver/components/ClueWeaverMasterView.tsx",
+          "line": 375
+        },
+        {
+          "file": "src/plugins/clue-weaver/components/ClueWeaverMasterView.tsx",
+          "line": 454
+        },
+        {
+          "file": "src/plugins/clue-weaver/components/ClueWeaverMasterView.tsx",
+          "line": 465
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：4处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "water-meter",
+      "name": "字数水分表",
+      "responsibility": "重复、套话与冗余文本检查",
+      "category": "review",
+      "definitionLine": 265,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbProjectRepository", "waterAuditRepository"],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 4,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/water-meter/components/WaterMeterMasterView.tsx",
+          "line": 115
+        }
+      ],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "volume-master",
+      "name": "分卷架构师",
+      "responsibility": "分卷和章节篇幅规划",
+      "category": "plot",
+      "definitionLine": 281,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": [
+        "indexedDbProjectRepository",
+        "indexedDbVolumeArcRepository",
+        "volumeArcRepository"
+      ],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 3,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "dialogue-distiller",
+      "name": "对话精炼器",
+      "responsibility": "对白风格与重复检查",
+      "category": "craft",
+      "definitionLine": 298,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": [
+        "dialogueVoiceprintRepository",
+        "indexedDbCodexEntityRepository",
+        "indexedDbDialogueVoiceprintRepository",
+        "indexedDbProjectRepository"
+      ],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 4,
+      "selects": 3,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/dialogue-distiller/components/DialogueDistillerMasterView.tsx",
+          "line": 200
+        },
+        {
+          "file": "src/plugins/dialogue-distiller/components/DialogueDistillerMasterView.tsx",
+          "line": 335
+        },
+        {
+          "file": "src/plugins/dialogue-distiller/components/DialogueDistillerMasterView.tsx",
+          "line": 343
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：3处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "faction-matrix",
+      "name": "势力外交盘",
+      "responsibility": "势力和外交关系管理",
+      "category": "lore",
+      "definitionLine": 319,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": [
+        "factionDiplomacyRepository",
+        "indexedDbCodexEntityRepository",
+        "indexedDbFactionDiplomacyRepository"
+      ],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": true,
+      "rawButtons": 6,
+      "selects": 2,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/faction-matrix/components/FactionMatrixMasterView.tsx",
+          "line": 379
+        },
+        {
+          "file": "src/plugins/faction-matrix/components/FactionMatrixMasterView.tsx",
+          "line": 388
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "paywall-sentry",
+      "name": "上架卡点哨兵",
+      "responsibility": "上架章节与章尾文本检查",
+      "category": "rhythm",
+      "definitionLine": 336,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbPaywallAuditRepository", "indexedDbProjectRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 4,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "press-forge",
+      "name": "出版铸造厂",
+      "responsibility": "排版与出版资料准备",
+      "category": "tools",
+      "definitionLine": 354,
+      "runtimeClass": "tool",
+      "runtimeTarget": "extension-tool",
+      "drawer": "quick-action",
+      "dataBoundary": [
+        "indexedDbPressConfigRepository",
+        "indexedDbProjectRepository",
+        "pressConfigRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 7,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/press-forge/components/PressForgeMasterView.tsx",
+          "line": 180
+        }
+      ],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；已发现手动触发与输入匹配的AI排版保护；实际Provider和导出仍未验收"
+    },
+    {
+      "id": "emotion-curve",
+      "name": "情绪张力曲线",
+      "responsibility": "章节情绪变化检查",
+      "category": "rhythm",
+      "definitionLine": 370,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": ["indexedDbEmotionAuditRepository", "indexedDbProjectRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 3,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "brainstorm-spark",
+      "name": "破局灵感火花",
+      "responsibility": "写作方案与灵感生成",
+      "category": "craft",
+      "definitionLine": 388,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "quick-action",
+      "dataBoundary": ["indexedDbBrainstormRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 6,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "reader-simulator",
+      "name": "虚拟读者群",
+      "responsibility": "按读者画像提供文本意见",
+      "category": "review",
+      "definitionLine": 405,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": [
+        "indexedDbProjectRepository",
+        "indexedDbReaderSimulationRepository",
+        "readerSimulationRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 4,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/reader-simulator/components/ReaderSimulatorMasterView.tsx",
+          "line": 171
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "chekhov-radar",
+      "name": "契诃夫之枪",
+      "responsibility": "伏笔回收时限检查",
+      "category": "plot",
+      "definitionLine": 422,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": [
+        "chekhovGunRepository",
+        "indexedDbChekhovGunRepository",
+        "indexedDbProjectRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 11,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/chekhov-radar/components/ChekhovRadarMasterView.tsx",
+          "line": 239
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "rhythm-metronome",
+      "name": "节奏节拍器",
+      "responsibility": "句长与文本节奏检查",
+      "category": "craft",
+      "definitionLine": 439,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "live-diagnostic",
+      "dataBoundary": [
+        "indexedDbProjectRepository",
+        "indexedDbRhythmCadenceRepository",
+        "rhythmCadenceRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 2,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "geography-map",
+      "name": "山川地理图",
+      "responsibility": "地图位置与距离管理",
+      "category": "lore",
+      "definitionLine": 456,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "context-inspector",
+      "dataBoundary": ["geoMapRepository", "indexedDbGeoMapRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 6,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/geography-map/components/GeographyMapMasterView.tsx",
+          "line": 303
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处"
+    },
+    {
+      "id": "combat-sandbox",
+      "name": "战力推演沙盘",
+      "responsibility": "战力配置和战斗推演",
+      "category": "review",
+      "definitionLine": 473,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "quick-action",
+      "dataBoundary": [
+        "combatSandboxRepository",
+        "indexedDbCodexEntityRepository",
+        "indexedDbCombatSandboxRepository",
+        "indexedDbPowerTierRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 5,
+      "selects": 2,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/combat-sandbox/components/CombatSandboxMasterView.tsx",
+          "line": 276
+        },
+        {
+          "file": "src/plugins/combat-sandbox/components/CombatSandboxMasterView.tsx",
+          "line": 346
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：2处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "multi-calendar",
+      "name": "多重纪元历法",
+      "responsibility": "历法换算与时间对齐",
+      "category": "lore",
+      "definitionLine": 490,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": [
+        "indexedDbMultiCalendarRepository",
+        "indexedDbProjectRepository",
+        "multiCalendarRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 6,
+      "selects": 4,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/multi-calendar/components/MultiCalendarMasterView.tsx",
+          "line": 355
+        },
+        {
+          "file": "src/plugins/multi-calendar/components/MultiCalendarMasterView.tsx",
+          "line": 401
+        },
+        {
+          "file": "src/plugins/multi-calendar/components/MultiCalendarMasterView.tsx",
+          "line": 444
+        },
+        {
+          "file": "src/plugins/multi-calendar/components/MultiCalendarMasterView.tsx",
+          "line": 459
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：4处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "pov-guard",
+      "name": "视角守门人",
+      "responsibility": "叙述视角检查",
+      "category": "review",
+      "definitionLine": 507,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbPovGuardRepository", "povGuardRepository"],
+      "components": 2,
+      "testFiles": 3,
+      "aiPanel": false,
+      "rawButtons": 2,
+      "selects": 2,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "narrative-linter",
+      "name": "叙事质检仪",
+      "responsibility": "叙述用语与句式检查",
+      "category": "review",
+      "definitionLine": 523,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbProjectRepository", "narrativeLinterRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 3,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/narrative-linter/components/NarrativeLinterMasterView.tsx",
+          "line": 145
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "diff-reviewer",
+      "name": "双栏审校合稿",
+      "responsibility": "文本对比与逐项合并",
+      "category": "tools",
+      "definitionLine": 540,
+      "runtimeClass": "tool",
+      "runtimeTarget": "extension-tool",
+      "drawer": "quick-action",
+      "dataBoundary": ["diffReviewRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 7,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "iron-chamber",
+      "name": "铁牢逻辑自洽",
+      "responsibility": "命题与逻辑矛盾检查",
+      "category": "review",
+      "definitionLine": 557,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbIronChamberRepository", "ironChamberRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 5,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/iron-chamber/components/IronChamberMasterView.tsx",
+          "line": 136
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处"
+    },
+    {
+      "id": "soundscape",
+      "name": "白噪音音效",
+      "responsibility": "写作环境音控制",
+      "category": "flow",
+      "definitionLine": 573,
+      "runtimeClass": "ui-only",
+      "runtimeTarget": "desktop-ui",
+      "drawer": "quick-action",
+      "dataBoundary": ["indexedDbSoundscapeConfigRepository", "soundscapeConfigRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 4,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "scrapbook-recycler",
+      "name": "废稿回收站",
+      "responsibility": "废稿存储与检索",
+      "category": "tools",
+      "definitionLine": 589,
+      "runtimeClass": "tool",
+      "runtimeTarget": "extension-tool",
+      "drawer": "quick-action",
+      "dataBoundary": ["indexedDbScrapbookRepository", "scrapbookRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 4,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "aftermath-sync",
+      "name": "战后状态同步",
+      "responsibility": "战后人物状态记录",
+      "category": "lore",
+      "definitionLine": 606,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "quick-action",
+      "dataBoundary": [
+        "aftermathRepository",
+        "indexedDbAftermathRepository",
+        "indexedDbCodexEntityRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 3,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "subtext-compiler",
+      "name": "微表情与潜台词",
+      "responsibility": "对白潜台词记录与分析",
+      "category": "craft",
+      "definitionLine": 622,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "quick-action",
+      "dataBoundary": ["indexedDbSubtextRepository", "subtextRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 2,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/subtext-compiler/components/SubtextMasterView.tsx",
+          "line": 109
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处；AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "rhythm-radar",
+      "name": "断章雷达",
+      "responsibility": "章节长度和断章位置检查",
+      "category": "rhythm",
+      "definitionLine": 639,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbRhythmRadarRepository", "rhythmRadarRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 1,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "shadow-reader",
+      "name": "读者影子视角",
+      "responsibility": "按读者视角标记阅读问题",
+      "category": "review",
+      "definitionLine": 656,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "live-diagnostic",
+      "dataBoundary": ["indexedDbShadowReaderRepository", "shadowReaderRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 2,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "multiverse-whatif",
+      "name": "平行推演 What-If",
+      "responsibility": "备选剧情推演",
+      "category": "plot",
+      "definitionLine": 674,
+      "runtimeClass": "workflow",
+      "runtimeTarget": "runtime-workflow",
+      "drawer": "quick-action",
+      "dataBoundary": [
+        "indexedDbMultiverseRepository",
+        "indexedDbProjectRepository",
+        "multiverseRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 3,
+      "selects": 1,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "voice-preview",
+      "name": "台词试音室",
+      "responsibility": "文本语音预览",
+      "category": "craft",
+      "definitionLine": 691,
+      "runtimeClass": "ui-only",
+      "runtimeTarget": "desktop-ui",
+      "drawer": "quick-action",
+      "dataBoundary": ["indexedDbVoicePreviewRepository", "voicePreviewRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 5,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "storyboard-gen",
+      "name": "动漫分镜工坊",
+      "responsibility": "文本分镜生成",
+      "category": "craft",
+      "definitionLine": 708,
+      "runtimeClass": "workflow",
+      "runtimeTarget": "runtime-workflow",
+      "drawer": "quick-action",
+      "dataBoundary": ["indexedDbStoryboardRepository", "storyboardRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 4,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "archetype-cards",
+      "name": "人格原型素材库与叙事母题卡牌",
+      "responsibility": "人物原型与叙事素材管理",
+      "category": "craft",
+      "definitionLine": 725,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "context-inspector",
+      "dataBoundary": ["archetypeRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 2,
+      "selects": 1,
+      "selectsWithoutStableLabel": [
+        {
+          "file": "src/plugins/archetype-cards/components/ArchetypeMasterView.tsx",
+          "line": 50
+        }
+      ],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "Select缺少稳定功能标签：1处"
+    },
+    {
+      "id": "author-ops",
+      "name": "连载运营台账与作者商业名片",
+      "responsibility": "连载运营记录",
+      "category": "flow",
+      "definitionLine": 742,
+      "runtimeClass": "pure-local",
+      "runtimeTarget": "desktop-local-engine",
+      "drawer": "context-inspector",
+      "dataBoundary": ["authorOpsRepository", "indexedDbAuthorOpsRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 4,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "本轮未确认插件专属缺陷；全流程体验待逐项验收"
+    },
+    {
+      "id": "gold-chapters-eval",
+      "name": "黄金三章与签约过稿诊断器",
+      "responsibility": "开篇章节检查",
+      "category": "review",
+      "definitionLine": 758,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "live-diagnostic",
+      "dataBoundary": [
+        "goldChaptersRepository",
+        "indexedDbGoldChaptersRepository",
+        "indexedDbProjectRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 2,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    },
+    {
+      "id": "memory-palace",
+      "name": "记忆宫殿与实体召回仪",
+      "responsibility": "实体和章节检索",
+      "category": "tools",
+      "definitionLine": 775,
+      "runtimeClass": "tool",
+      "runtimeTarget": "extension-tool",
+      "drawer": "context-inspector",
+      "dataBoundary": [
+        "indexedDbCodexEntityRepository",
+        "indexedDbMemoryPalaceRepository",
+        "indexedDbProjectRepository"
+      ],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": false,
+      "rawButtons": 1,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/契约扫描及选定源码链路审查",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "运行时检索失败静默回退本地；界面应显示结果来源"
+    },
+    {
+      "id": "sub-plot-braid",
+      "name": "多线叙事编织器",
+      "responsibility": "多线情节规划",
+      "category": "plot",
+      "definitionLine": 792,
+      "runtimeClass": "ai-task",
+      "runtimeTarget": "creative-task",
+      "drawer": "context-inspector",
+      "dataBoundary": ["indexedDbProjectRepository", "indexedDbSubPlotRepository"],
+      "components": 2,
+      "testFiles": 2,
+      "aiPanel": true,
+      "rawButtons": 6,
+      "selects": 0,
+      "selectsWithoutStableLabel": [],
+      "reviewDepth": "目录/注册/运行时分类/控件扫描",
+      "status": "已注册；测试文件存在；本轮未逐插件执行测试或真实Provider/GUI验收",
+      "knownIssueOrGap": "AI回执简化为本地文本状态；取消显示失败，来源/产物入口未呈现"
+    }
+  ]
+}

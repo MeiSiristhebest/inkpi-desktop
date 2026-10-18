@@ -15,4 +15,5 @@ export interface PressFormatOptions {
   dialogueStyle: 'standard-quotes' | 'dash' | 'bracket'
   fixPunctuation: boolean
   checkSensitiveWords: boolean
+  literalWords?: string[]
 }

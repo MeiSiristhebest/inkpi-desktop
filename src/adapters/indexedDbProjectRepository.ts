@@ -9,6 +9,8 @@ import {
 } from './indexedDbDomainChangeStore'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
+import { ScrapbookEngine } from '../plugins/scrapbook-recycler/engine/ScrapbookEngine'
+import { semanticTextFromContent } from '../domain/content'
 import type { DeleteVolumeCascadeResult } from '../ports/projectCommand'
 
 const domainChangeStore = new IndexedDbDomainChangeStore()
@@ -265,6 +267,7 @@ export const indexedDbProjectRepository: ProjectRepository = {
             value: chapter,
             expected: existing,
           },
+          deletedChapterWrites(existing, chapter),
         )
       } catch (error) {
         // React StrictMode or two initial loaders can race on the same seed
@@ -318,6 +321,7 @@ export const indexedDbProjectRepository: ProjectRepository = {
           value: chapter,
           expected: current,
         },
+        deletedChapterWrites(current, chapter),
       )
     } catch (error) {
       const saved = await readChapter(chapter.id)
@@ -326,6 +330,14 @@ export const indexedDbProjectRepository: ProjectRepository = {
           success: true,
           conflict: false,
           currentRevision: chapter.revision,
+        }
+      }
+      if (isConcurrentChapterWriteConflict(error)) {
+        return {
+          success: false,
+          conflict: true,
+          ...(saved ? { currentRevision: saved.revision ?? 1 } : {}),
+          error: `CAS Conflict: Chapter changed before revision ${expectedRevision} could be saved`,
         }
       }
       throw error
@@ -370,6 +382,13 @@ function isIdempotentChapterRace(error: unknown): boolean {
   )
 }
 
+function isConcurrentChapterWriteConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /^Aggregate chapters\/[^/]+ changed during the write$/.test(error.message)
+  )
+}
+
 async function appendDomainChange(
   aggregateType: string,
   aggregateId: string,
@@ -379,6 +398,7 @@ async function appendDomainChange(
   occurredAt: number,
   aggregateRevision = 0,
   aggregate?: IndexedDbAggregateWrite,
+  relatedWrites: readonly IndexedDbAggregateWrite[] = [],
 ): Promise<void> {
   const operationPromise = enqueueIndexedDbDomainChange(async () => {
     const baseRevision = await domainChangeStore.latestRevision(workspaceId)
@@ -401,9 +421,45 @@ async function appendDomainChange(
       ],
       createdAt: occurredAt,
     })
-    if (aggregate) await domainChangeStore.appendWithAggregate(changeSet, aggregate)
+    if (aggregate) await domainChangeStore.appendWithAggregate(changeSet, aggregate, relatedWrites)
     else await domainChangeStore.append(changeSet)
     domainChangeEvents.publish(workspaceId, changeSet.baseRevision + 1)
   })
   await operationPromise
+}
+
+function deletedChapterWrites(
+  previous: ChapterRecord | undefined,
+  chapter: ChapterRecord,
+): IndexedDbAggregateWrite[] {
+  if (!previous || previous.projectId !== chapter.projectId || previous.content === chapter.content)
+    return []
+  const oldText = semanticTextFromContent(previous.id, previous.content ?? '', previous.revision)
+  const newText = semanticTextFromContent(chapter.id, chapter.content ?? '', chapter.revision)
+  return ScrapbookEngine.extractDeletedFragments(oldText, newText, previous.id, previous.title).map(
+    (fragment, index) => {
+      const id =
+        'scrapbook-' +
+        chapter.id +
+        '-' +
+        (chapter.revision ?? 0) +
+        '-' +
+        chapter.updatedAt +
+        '-' +
+        index
+      return {
+        store: 'scrapbookFragments',
+        key: id,
+        operation: 'upsert',
+        expected: undefined,
+        value: {
+          ...fragment,
+          id,
+          projectId: chapter.projectId,
+          sourceRevision: previous.revision,
+          deletedAt: chapter.updatedAt,
+        },
+      }
+    },
+  )
 }

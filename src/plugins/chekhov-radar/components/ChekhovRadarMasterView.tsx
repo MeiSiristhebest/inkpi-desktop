@@ -23,13 +23,25 @@ import {
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Select, Tooltip } from '../../../ui/primitives'
+import {
+  projectChapterSequence,
+  latestPositionedChapterNumber,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 
-export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ProjectRadarView key={props.projectId} {...props} />
+)
+const ProjectRadarView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('chekhov-radar')
   const [guns, setGuns] = useState<ChekhovGunRecord[]>([])
-  const [chapters, setChapters] = useState<any[]>([])
-  const [maxChapterOrder, setMaxChapterOrder] = useState<number>(1)
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
+  const [maxChapterOrder, setMaxChapterOrder] = useState<number>(0)
+  const [error, setError] = useState('')
+  const [deadline, setDeadline] = useState('')
+  const [fireNote, setFireNote] = useState('')
+  const [fireChapter, setFireChapter] = useState('')
+  const aiTask = usePluginAiTask('chekhov-radar', [projectId, guns, chapters])
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isCreating, setIsCreating] = useState(false)
 
@@ -41,14 +53,15 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const [formNotes, setFormNotes] = useState('')
 
   const loadData = useCallback(async () => {
-    const [allGuns, allChapters] = await Promise.all([
+    const [allGuns, allChapters, volumes] = await Promise.all([
       indexedDbChekhovGunRepository.getAll(projectId),
       indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject(projectId),
     ])
 
-    allChapters.sort((a, b) => a.order - b.order)
-    setChapters(allChapters)
-    const maxOrder = allChapters.length > 0 ? Math.max(...allChapters.map((c) => c.order)) : 1
+    const orderedChapters = projectChapterSequence(projectId, allChapters, volumes)
+    setChapters(orderedChapters)
+    const maxOrder = latestPositionedChapterNumber(orderedChapters)
     setMaxChapterOrder(maxOrder)
 
     // 更新锈蚀距离与预警
@@ -57,10 +70,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       return {
         ...g,
         rustingDistance: dist,
-        isRustingAlert:
-          dist >= ChekhovRadarEngine.RUSTING_THRESHOLD &&
-          g.status !== 'fired' &&
-          g.status !== 'abandoned',
+        isRustingAlert: ChekhovRadarEngine.isReminderDue(g, maxOrder),
       }
     })
 
@@ -68,21 +78,22 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [projectId])
 
   useEffect(() => {
-    void loadData()
+    void loadData().catch(() => setError('伏笔档案加载失败，请重试。'))
   }, [loadData])
 
   // 核心：基于已写章节正文，让 AI 自动扫描前文埋下的道具/伏线
   const handleAiScanGuns = async () => {
     if (chapters.length === 0) return
-    const chaptersSnippet = chapters
-      .slice(0, 15)
-      .map(
-        (c) =>
-          `第 ${c.order} 章《${c.title}》：\n${semanticTextFromContent(c.id, c.content || '', c.revision).slice(0, 300)}...`,
-      )
-      .join('\n\n')
-
-    const analysisInput = { chapterSamples: chaptersSnippet }
+    const analysisInput = {
+      authorRecords: guns,
+      chapterSources: chapters.map((c) => ({
+        id: c.id,
+        chapterNumber: c.chapterNumber,
+        revision: c.revision,
+        title: c.title,
+        text: semanticTextFromContent(c.id, c.content, c.revision),
+      })),
+    }
 
     await aiTask.run(analysisInput)
   }
@@ -100,6 +111,17 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   const handleCreateGun = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formName.trim()) return
+    const expectedPayoffChapterOrder = deadline.trim() ? Number(deadline) : undefined
+    if (
+      !Number.isSafeInteger(formPlantOrder) ||
+      formPlantOrder < 1 ||
+      (expectedPayoffChapterOrder !== undefined &&
+        (!Number.isSafeInteger(expectedPayoffChapterOrder) ||
+          expectedPayoffChapterOrder < formPlantOrder))
+    ) {
+      setError('埋设章须为正整数；兑现章不能早于埋设章。')
+      return
+    }
 
     const dist = Math.max(0, maxChapterOrder - formPlantOrder)
     const newRecord: ChekhovGunRecord = {
@@ -109,36 +131,65 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
       category: formCategory,
       status: 'dormant',
       plantChapterOrder: Number(formPlantOrder),
-      plantSnippet: formSnippet.trim() || '埋下关键线索',
+      plantSnippet: formSnippet.trim(),
+      expectedPayoffChapterOrder,
       notes: formNotes.trim(),
       rustingDistance: dist,
-      isRustingAlert: dist >= ChekhovRadarEngine.RUSTING_THRESHOLD,
+      isRustingAlert:
+        expectedPayoffChapterOrder !== undefined && maxChapterOrder > expectedPayoffChapterOrder,
       updatedAt: clock.now(),
     }
 
-    await indexedDbChekhovGunRepository.save(newRecord)
+    try {
+      await indexedDbChekhovGunRepository.save(newRecord)
+    } catch {
+      setError('保存失败，伏笔尚未登记。')
+      return
+    }
     setIsCreating(false)
     setFormName('')
     setFormSnippet('')
     setFormNotes('')
-    await loadData()
+    await loadData().catch(() => setError('保存成功，重新加载失败。'))
   }
 
   const handleUpdateStatus = async (gun: ChekhovGunRecord, newStatus: GunStatus) => {
+    const chapter = fireChapter.trim() ? Number(fireChapter) : maxChapterOrder
+    if (
+      newStatus === 'fired' &&
+      (!fireNote.trim() ||
+        !Number.isSafeInteger(chapter) ||
+        chapter < Math.max(1, gun.plantChapterOrder))
+    ) {
+      setError('请填写作者兑现说明，并登记有效兑现章节。')
+      return
+    }
     const updated: ChekhovGunRecord = {
       ...gun,
       status: newStatus,
-      actualFiredChapterOrder:
-        newStatus === 'fired' ? maxChapterOrder : gun.actualFiredChapterOrder,
+      actualFiredChapterOrder: newStatus === 'fired' ? chapter : undefined,
+      firedSnippet: newStatus === 'fired' ? gun.firedSnippet : undefined,
+      notes:
+        newStatus === 'fired'
+          ? [gun.notes, `作者兑现说明：${fireNote.trim()}`].filter(Boolean).join('\n')
+          : gun.notes,
       updatedAt: clock.now(),
     }
-    await indexedDbChekhovGunRepository.save(updated)
-    await loadData()
+    try {
+      await indexedDbChekhovGunRepository.save(updated)
+      await loadData()
+    } catch {
+      setError('状态更新失败，请重试。')
+    }
   }
 
   const handleDelete = async (id: string) => {
-    await indexedDbChekhovGunRepository.delete(id)
-    await loadData()
+    try {
+      await indexedDbChekhovGunRepository.delete(id)
+      await loadData()
+    } catch {
+      setError('删除失败，请重试。')
+    }
   }
 
   return (
@@ -151,7 +202,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
             契诃夫之枪与全景伏笔闭合雷达 (Chekhov Radar)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            第一幕挂在墙上的枪，第三幕必须响。防止百万字长篇因伏笔遗忘、死锁锈蚀而烂尾。
+            记录作者设置的伏笔、兑现章节和状态。字面提及需要结合原文复核。
           </p>
           <ScoreProvenanceBadge source="rule" detail="按伏笔标注的回收比例统计" />
         </div>
@@ -176,6 +227,31 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           </button>
         </div>
       </div>
+      {error && <p role="alert">{error}</p>}
+      <div className="text-xs flex gap-3">
+        <label>
+          作者兑现说明
+          <input
+            aria-label="作者兑现说明"
+            value={fireNote}
+            onChange={(e) => setFireNote(e.target.value)}
+            className="ml-2 p-1 border bg-[var(--ink-bg-canvas)]"
+          />
+        </label>
+        <label>
+          兑现章节
+          <input
+            aria-label="兑现章节"
+            value={fireChapter}
+            placeholder={maxChapterOrder > 0 ? String(maxChapterOrder) : '未登记'}
+            onChange={(e) => setFireChapter(e.target.value)}
+            className="ml-2 p-1 w-20 border bg-[var(--ink-bg-canvas)]"
+          />
+          {maxChapterOrder > 0 && !fireChapter.trim()
+            ? `（采用最新保存章 ${maxChapterOrder}）`
+            : ''}
+        </label>
+      </div>
 
       {/* 核心宏观指标卡片 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -198,13 +274,18 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-xs text-slate-400 flex items-center gap-1">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            严重锈蚀未引爆
+            超过作者期限
           </div>
           <div className="text-xl font-bold text-amber-500 mt-1">{stats.rustingCount}</div>
         </div>
         <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-xs text-slate-400">伏笔闭环率</div>
-          <div className="text-xl font-bold text-rose-500 mt-1">{stats.closureRate}%</div>
+          <div className="text-xl font-bold text-rose-500 mt-1">
+            {stats.closureRate == null ? '无可统计记录' : `${stats.closureRate}%`}
+          </div>
+          <p className="text-xs">
+            已放弃 {stats.abandonedCount} 条不计入比例；未登记位置 {stats.unpositionedCount} 条。
+          </p>
         </div>
       </div>
 
@@ -214,6 +295,15 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           onSubmit={handleCreateGun}
           className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-rose-200 dark:border-rose-900/60 shadow-sm space-y-3"
         >
+          <label className="block text-xs">
+            作者计划兑现章节（留空不提醒）
+            <input
+              aria-label="计划兑现章节"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="ml-2 w-24 border rounded bg-[var(--ink-bg-canvas)]"
+            />
+          </label>
           <div className="font-semibold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-rose-500" />
             在剧情中挂上一柄新“契诃夫之枪”
@@ -237,6 +327,7 @@ export const ChekhovRadarMasterView: FC<DesktopPluginViewProps> = ({ projectId }
                 伏笔分类：
               </label>
               <Select
+                aria-label="伏笔分类"
                 value={formCategory}
                 onValueChange={(v) => setFormCategory(v as ChekhovGunRecord['category'])}
                 className="w-full"

@@ -540,6 +540,17 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           ))}
         </Select>
       )}
+      <p
+        data-testid="workflow-scope-help"
+        role="status"
+        className="mb-2 text-[10px] leading-snug text-[var(--ink-text-muted)]"
+      >
+        {tab === 'audit'
+          ? '检查所选章节与已确认设定的一致性。结果会标出正文位置，不会改动正文。'
+          : tab === 'reason'
+            ? '基于所选章节和作品设定，列出人物动机、前提和下一步剧情风险，供你判断。'
+            : '从作品章节提取待确认设定。请在“审查提炼”中接受、编辑或拒绝后再保存。'}
+      </p>
       <motion.button
         type="button"
         {...gesture.button}
@@ -723,6 +734,12 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       {isInboxOpen && (
         <DistillationInboxModal
           items={pendingReviewItems}
+          sourceChapters={chapters}
+          onOpenSource={(request) =>
+            activeWritingCtx
+              ? activeWritingCtx.navigateToSource(request)
+              : Promise.resolve({ status: 'editor-unavailable' })
+          }
           onAccept={async (itemId, overrides) => {
             await distillationReviewInbox.accept(itemId, overrides)
             refreshPendingReviews()

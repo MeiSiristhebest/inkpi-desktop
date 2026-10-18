@@ -14,7 +14,7 @@ export interface ProjectEditFormValues {
 interface ProjectEditFormProps {
   project: ProjectRecord
   onCancel: () => void
-  onSave: (form: ProjectEditFormValues) => void
+  onSave: (form: ProjectEditFormValues) => void | Promise<void>
 }
 
 /**
@@ -29,10 +29,25 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
     intro: project.intro || '',
     cover: project.cover || '',
   })
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
   const setField = (field: keyof ProjectEditFormValues, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }))
+
+  const handleSave = async () => {
+    if (!form.name.trim() || isSaving) return
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      await onSave(form)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <div className="bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] rounded-2xl p-5 shadow-[var(--ink-shadow)]">
@@ -84,8 +99,9 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
             </label>
             <input
               value={form.name}
+              disabled={isSaving}
               onChange={(e) => setField('name', e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && onSave(form)}
+              onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && void handleSave()}
               placeholder="请输入作品名称"
               autoFocus
               className="w-full text-[13px] px-3 py-2 rounded-xl bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]"
@@ -98,6 +114,7 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
             </label>
             <input
               value={form.genre}
+              disabled={isSaving}
               onChange={(e) => setField('genre', e.target.value)}
               placeholder="如：仙侠修真、东方玄幻、都市异能、科幻未来"
               className="w-full text-[12.5px] px-3 py-1.5 rounded-xl bg-[var(--ink-bg-panel)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:border-[var(--ink-accent)]"
@@ -110,6 +127,7 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
             </label>
             <textarea
               value={form.intro}
+              disabled={isSaving}
               onChange={(e) => setField('intro', e.target.value)}
               rows={3}
               placeholder="写下本书的核心看点、故事主旨或一句话大纲..."
@@ -119,20 +137,31 @@ export const ProjectEditForm = ({ project, onCancel, onSave }: ProjectEditFormPr
         </div>
       </div>
 
+      {saveError && (
+        <div
+          role="alert"
+          className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300"
+        >
+          保存失败，编辑内容已保留。{saveError}
+        </div>
+      )}
+
       <div className="mt-4 flex items-center gap-2 justify-end border-t border-[var(--ink-border)] pt-3">
         <button
           type="button"
           onClick={onCancel}
+          disabled={isSaving}
           className="px-4 h-8 text-[12px] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] border border-[var(--ink-border)] rounded-xl hover:bg-[var(--ink-bg-hover)] transition-colors cursor-pointer"
         >
           取消
         </button>
         <button
           type="button"
-          onClick={() => onSave(form)}
+          onClick={() => void handleSave()}
+          disabled={!form.name.trim() || isSaving}
           className="px-4 h-8 rounded-xl bg-[var(--ink-accent)] text-white text-[12px] font-medium flex items-center gap-1.5 hover:bg-[var(--ink-accent-hover)] transition-colors cursor-pointer shadow-xs"
         >
-          <Check size={13} /> 保存作品信息
+          <Check size={13} /> {isSaving ? '正在保存…' : '保存作品信息'}
         </button>
       </div>
     </div>

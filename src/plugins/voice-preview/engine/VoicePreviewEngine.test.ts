@@ -8,24 +8,21 @@ describe('VoicePreviewEngine (角色拟真有声对白试听器)', () => {
 赵家长老厉声喝道：“放肆！无知小辈安敢口出狂言，给我受死！”
 苏清月低声耳语：“林凡哥哥，小心他的烈火剑气。”
 `
-    const script = VoicePreviewEngine.extractScript(text)
+    const script = VoicePreviewEngine.extractScript(text, ['林凡', '赵家长老', '苏清月'])
 
     expect(script.totalLines).toBe(3)
     expect(script.characterSpeakers).toContain('林凡')
     expect(script.characterSpeakers).toContain('赵家长老')
     expect(script.characterSpeakers).toContain('苏清月')
 
-    expect(script.lines[0].emotion).toBe('cold')
-    expect(script.lines[1].emotion).toBe('angry')
-    expect(script.lines[2].emotion).toBe('whisper')
+    expect(script.lines.every((line) => line.emotion === 'unassigned')).toBe(true)
   })
 
-  it('能根据角色性别与年龄段自适应生成声学基频与 DSP 滤波器配置', () => {
+  it('uses neutral defaults until the author selects a system voice and adjustments', () => {
     const elder = VoicePreviewEngine.deriveDefaultProfile('赵家长老', 'male', 'elder')
-    expect(elder.pitch).toBeLessThan(1.0)
-    expect(elder.timbreFilter).toBe('villain_lowpass')
+    expect(elder).toMatchObject({ pitch: 1, rate: 1, timbreFilter: 'standard' })
 
     const femaleYouth = VoicePreviewEngine.deriveDefaultProfile('苏清月', 'female', 'youth')
-    expect(femaleYouth.pitch).toBeGreaterThan(1.1)
+    expect(femaleYouth).toMatchObject({ pitch: 1, rate: 1, timbreFilter: 'standard' })
   })
 })

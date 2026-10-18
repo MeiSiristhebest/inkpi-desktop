@@ -5,20 +5,24 @@ import { WaterMeterMasterView } from './WaterMeterMasterView'
 describe('WaterMeterMasterView', () => {
   it('renders heading, stat cards and caught water words', () => {
     render(<WaterMeterMasterView projectId="p1" />)
-    expect(screen.getByText('信息熵与水分压缩计')).toBeDefined()
-    expect(screen.getByText(/水分综合评分/)).toBeDefined()
-    expect(screen.getAllByText(/香农信息熵/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/动作动词密度/).length).toBeGreaterThan(0)
-    expect(screen.getByText(/抓捕到的冗余水词/)).toBeDefined()
+    expect(screen.getByText('文本统计与词项复核')).toBeDefined()
+    expect(screen.getByText(/字符频率熵/)).toBeDefined()
+    expect(screen.getByText(/动作词表字符占比/)).toBeDefined()
+    expect(screen.getByText(/可定位的词项/)).toBeDefined()
+    expect(screen.queryByText(/水分综合评分|精炼高能/)).not.toBeInTheDocument()
   })
 
-  it('triggers deep audit on button click and allows cleaning bloat', () => {
+  it('recalculates actual input and previews removal of only one selected occurrence', () => {
     render(<WaterMeterMasterView projectId="p1" />)
-    const auditBtn = screen.getByText('深度脱水体检')
+    const editor = screen.getByRole('textbox')
+    fireEvent.change(editor, { target: { value: '他忍不住笑了，她忍不住哭了。' } })
+    const auditBtn = screen.getByText('重新计算文本统计')
     fireEvent.click(auditBtn)
 
-    const cleanBtn = screen.getByText('一键剔除水词')
-    fireEvent.click(cleanBtn)
-    expect(screen.getByText(/深度脱水体检/)).toBeDefined()
+    const removals = screen.getAllByRole('button', { name: '移除该处词项（预览）' })
+    expect(removals).toHaveLength(2)
+    fireEvent.click(removals[0])
+    expect(editor).toHaveValue('他笑了，她忍不住哭了。')
+    expect(screen.getAllByRole('button', { name: '移除该处词项（预览）' })).toHaveLength(1)
   })
 })

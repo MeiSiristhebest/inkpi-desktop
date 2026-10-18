@@ -1,4 +1,9 @@
-import type { ChapterEmotionalScore, GoldenThreeDiagnostic, ExpectationContract } from '../types'
+import type {
+  ChapterEmotionalScore,
+  GoldenThreeDiagnostic,
+  ExpectationContract,
+  ExpectationObservation,
+} from '../types'
 import { semanticTextFromContent } from '../../../domain/content'
 
 const SUPPRESSION_CUES = [
@@ -78,219 +83,138 @@ const HOOK_CUES = [
 ]
 
 export class ExpectationEngine {
-  /**
-   * 生成统一任务运行时使用的结构化黄金三章诊断输入。
-   */
   public static buildAnalysisInput(params: {
     chapters: Array<{ order: number; title: string; content: string }>
   }): Record<string, unknown> {
     return {
       chapters: params.chapters.map((chapter) => ({
-        order: chapter.order,
-        title: chapter.title,
-        content: semanticTextFromContent(
-          `expectation-chapter-${chapter.order}`,
-          chapter.content,
-        ).slice(0, 1500),
+        ...chapter,
+        content: semanticTextFromContent('expectation-chapter-' + chapter.order, chapter.content),
       })),
-      rubric: [
-        'golden-finger-clarity',
-        'suppression-payoff-balance',
-        'long-term-hooks',
-        'drop-off-risk',
+      reviewQuestions: [
+        'What expectation is explicitly established?',
+        'What outcome is still pending?',
+        'What changes the reader can identify from the supplied text?',
+        'Which author-recorded deadline or state conflicts with the supplied text?',
       ],
-      outputFields: ['score', 'claritySummary', 'hookLevel', 'sprAnalysis', 'actionableAdvice'],
+      measurementBoundary:
+        'Interpretation needs source evidence and context; keyword mentions do not establish conflict, payoff or reader behavior.',
     }
   }
 
-  /**
-   * 连续张力梯度积分分析 (Continuous Tension Gradient Integral)：
-   * 将长文本划分为 N 个段落分块 (Chunk)，计算情感正负梯度累积量。
-   */
+  private locate(
+    text: string,
+    chapterIndex: number,
+    terms: string[],
+    category: ExpectationObservation['category'],
+  ): ExpectationObservation[] {
+    const observations: ExpectationObservation[] = []
+    for (const term of new Set(terms)) {
+      let from = 0
+      while (from < text.length) {
+        const startOffset = text.indexOf(term, from)
+        if (startOffset < 0) break
+        const endOffset = startOffset + term.length
+        observations.push({
+          chapterIndex,
+          category,
+          quote: text.slice(startOffset, endOffset),
+          startOffset,
+          endOffset,
+        })
+        from = endOffset
+      }
+    }
+    return observations
+  }
+
   public computeTensionIntegral(text: string): {
     suppressionArea: number
     payoffArea: number
-    dynamicSpr: number
+    dynamicSpr: number | null
   } {
-    if (!text || text.length < 50) return { suppressionArea: 0, payoffArea: 0, dynamicSpr: 1.0 }
-
-    const paragraphs = text
-      .split(/\n+/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 5)
-    if (paragraphs.length === 0) return { suppressionArea: 0, payoffArea: 0, dynamicSpr: 1.0 }
-
-    let suppArea = 0
-    let payArea = 0
-
-    for (const p of paragraphs) {
-      let suppWeight = 0
-      let payWeight = 0
-
-      for (const cue of SUPPRESSION_CUES) {
-        if (p.includes(cue)) suppWeight += 1.0
-      }
-      for (const cue of PAYOFF_CUES) {
-        if (p.includes(cue)) payWeight += 1.0
-      }
-
-      suppArea += suppWeight
-      payArea += payWeight
-    }
-
-    const dynamicSpr =
-      payArea > 0 ? Number((suppArea / payArea).toFixed(2)) : suppArea > 0 ? suppArea : 1.0
+    const report = this.evaluateChapterText(text, 0)
     return {
-      suppressionArea: Math.round(suppArea * 10) / 10,
-      payoffArea: Math.round(payArea * 10) / 10,
-      dynamicSpr,
+      suppressionArea: report.suppressionSum,
+      payoffArea: report.payoffSum,
+      dynamicSpr: report.spr,
     }
   }
 
-  /**
-   * 计算压抑-释放比率 (SPR: Suppression to Payoff Ratio)
-   */
-  public calculateSPR(suppressionScore: number, payoffScore: number): number {
-    if (payoffScore <= 0) {
-      return suppressionScore > 0 ? Number(suppressionScore.toFixed(2)) : 1.0
-    }
-    return Number((suppressionScore / payoffScore).toFixed(2))
+  public calculateSPR(suppressionCount: number, payoffCount: number): number | null {
+    if (
+      !Number.isFinite(suppressionCount) ||
+      !Number.isFinite(payoffCount) ||
+      suppressionCount < 0 ||
+      payoffCount <= 0
+    )
+      return null
+    return suppressionCount / payoffCount
   }
 
-  /**
-   * 评估单章情绪与爽点压抑度
-   */
   public evaluateChapterText(text: string, chapterIndex: number): ChapterEmotionalScore {
-    let suppressionHits = 0
-    let payoffHits = 0
-    const dominantTags: string[] = []
-
-    for (const cue of SUPPRESSION_CUES) {
-      const count = (text.match(new RegExp(cue, 'g')) || []).length
-      if (count > 0) {
-        suppressionHits += count
-        if (!dominantTags.includes('打压蓄势')) dominantTags.push('打压蓄势')
-      }
-    }
-
-    for (const cue of PAYOFF_CUES) {
-      const count = (text.match(new RegExp(cue, 'g')) || []).length
-      if (count > 0) {
-        payoffHits += count
-        if (!dominantTags.includes('高能翻盘')) dominantTags.push('高能翻盘')
-      }
-    }
-
-    const spr = this.calculateSPR(suppressionHits, payoffHits)
-
-    let riskLevel: ChapterEmotionalScore['riskLevel'] = 'healthy'
-    if (spr >= 3.5 && suppressionHits >= 4) {
-      riskLevel = 'suppression_heavy' // 压抑过重，存在毒发弃书风险
-    } else if (spr <= 0.4 && payoffHits >= 6) {
-      riskLevel = 'fatigue_slap' // 爽点过密无阻力，易导致读者审美疲劳
-    }
-
+    const setup = this.locate(text, chapterIndex, SUPPRESSION_CUES, 'setup-term')
+    const outcome = this.locate(text, chapterIndex, PAYOFF_CUES, 'outcome-term')
     return {
       chapterIndex,
-      suppressionSum: suppressionHits,
-      payoffSum: payoffHits,
-      spr,
-      riskLevel,
-      dominantTags,
+      suppressionSum: setup.length,
+      payoffSum: outcome.length,
+      spr: this.calculateSPR(setup.length, outcome.length),
+      dominantTags: [
+        ...(setup.length ? ['压迫定位词'] : []),
+        ...(outcome.length ? ['结果定位词'] : []),
+      ],
+      observations: [...setup, ...outcome].sort((a, b) => a.startOffset - b.startOffset),
     }
   }
 
-  /**
-   * 黄金三章节奏自动化体检诊断
-   */
   public diagnoseGoldenThree(
     ch1Text: string,
     ch2Text: string,
     ch3Text: string,
   ): GoldenThreeDiagnostic {
-    // 第 1 章诊断：困境 + 金手指初现
-    const c1Conflict = SUPPRESSION_CUES.some((cue) => ch1Text.includes(cue))
-    const c1Cheat = GOLDEN_FINGER_CUES.some((cue) => ch1Text.includes(cue))
-    const c1Passed = c1Conflict && c1Cheat
-    const c1Feedback = c1Passed
-      ? '开篇矛盾冲突清晰，且金手指/核心底牌及时显露，黄金开头标准。'
-      : !c1Cheat
-        ? '开篇缺少金手指或外挂机缘初现，读者缺乏对主角破局能力的期待。'
-        : '主角缺少核心现实压迫困境，故事切入点偏平淡。'
-
-    // 第 2 章诊断：矛盾升级 + 微型打脸立威
-    const c2Escalate = SUPPRESSION_CUES.some((cue) => ch2Text.includes(cue))
-    const c2Payoff = PAYOFF_CUES.some((cue) => ch2Text.includes(cue))
-    const c2Passed = c2Escalate && c2Payoff
-    const c2Feedback = c2Passed
-      ? '矛盾在第二章有效升级，且完成了首个微观立威/爽点兑现。'
-      : !c2Payoff
-        ? '第二章持续遭难却无任何局部反击，存在拖沓憋屈风险。'
-        : '第二章缺乏升级的外部阻力，爽点缺乏张力。'
-
-    // 第 3 章诊断：主线大悬念/危机 + 中长期大钩子
-    const c3Crisis = SUPPRESSION_CUES.some((cue) => ch3Text.includes(cue))
-    const c3Hook = HOOK_CUES.some((cue) => ch3Text.includes(cue))
-    const c3Passed = c3Crisis || c3Hook
-    const c3Feedback = c3Passed
-      ? '第三章成功展开主线危机并立下中长期悬念钩子，留存能力极高。'
-      : '第三章未抛出核心主线悬念或生死倒计时大钩子，属于潜在追读流失信号。'
-
-    let score = 50
-    if (c1Passed) score += 20
-    if (c2Passed) score += 15
-    if (c3Passed) score += 15
-
-    let advice = '黄金三章节奏良好，具备商业追读的基本张力与期待闭环。'
-    if (score < 70) {
-      advice = '黄金三章存在节奏硬伤：需警惕金手指展示过晚或前三章持续压抑无反弹的弃书点。'
-    }
-
+    const observations = [ch1Text, ch2Text, ch3Text]
+      .flatMap((text, index) => [
+        ...this.evaluateChapterText(text, index + 1).observations,
+        ...this.locate(text, index + 1, GOLDEN_FINGER_CUES, 'ability-term'),
+        ...this.locate(text, index + 1, HOOK_CUES, 'question-term'),
+      ])
+      .sort((a, b) => a.chapterIndex - b.chapterIndex || a.startOffset - b.startOffset)
     return {
-      chapter1Status: {
-        passed: c1Passed,
-        coreConflictFound: c1Conflict,
-        goldenFingerFound: c1Cheat,
-        feedback: c1Feedback,
-      },
-      chapter2Status: {
-        passed: c2Passed,
-        escalationFound: c2Escalate,
-        miniPayoffFound: c2Payoff,
-        feedback: c2Feedback,
-      },
-      chapter3Status: {
-        passed: c3Passed,
-        majorCrisisFound: c3Crisis,
-        longHookFound: c3Hook,
-        feedback: c3Feedback,
-      },
-      overallScore: score,
-      advice,
+      observations,
+      missingChapters: [ch1Text, ch2Text, ch3Text].flatMap((text, index) =>
+        text.trim() ? [] : [index + 1],
+      ),
+      advice:
+        '以下仅定位词项。请结合否定、对白和上下文检查实际承诺与兑现；词频不表示质量或受众反应。',
     }
   }
 
-  /**
-   * 统计全书爽点契约闭环率与逾期契约
-   */
   public auditContracts(contracts: ExpectationContract[], currentChapter: number) {
     const total = contracts.length
     const fulfilled = contracts.filter((c) => c.status === 'fulfilled').length
     const active = contracts.filter(
       (c) => c.status === 'planted' || c.status === 'building' || c.status === 'climax',
     )
-    const overdue = active.filter((c) => c.promisedResolveChapter < currentChapter)
-
-    const fulfillmentRate = total > 0 ? Math.round((fulfilled / total) * 100) : 100
-
+    const positioned = Number.isSafeInteger(currentChapter) && currentChapter > 0
+    const hasDeadline = (c: ExpectationContract) =>
+      Number.isSafeInteger(c.promisedResolveChapter) && c.promisedResolveChapter > 0
+    const overdue = active.filter(
+      (c) => positioned && hasDeadline(c) && c.promisedResolveChapter < currentChapter,
+    )
+    const dueContracts = active.filter(
+      (c) => positioned && hasDeadline(c) && c.promisedResolveChapter === currentChapter,
+    )
+    const unknownDeadlines = active.filter((c) => !hasDeadline(c))
     return {
       total,
       fulfilled,
       activeCount: active.length,
       overdueContracts: overdue,
-      fulfillmentRate,
+      dueContracts,
+      unknownDeadlines,
+      fulfillmentRate: total ? Math.round((fulfilled / total) * 100) : null,
     }
   }
 }
-
 export const expectationEngine = new ExpectationEngine()

@@ -11,13 +11,14 @@
 > [!TIP]
 > 💡 **如果本项目的架构设计、工程实现或工具链对你的学习或工作有所启发，欢迎点亮右上角的 ⭐ Star！**
 > 📚 深入探索系统技术架构蓝图：[ARCHITECTURE.md](./ARCHITECTURE.md)
+> 当前实现缺口与验收安排：[写作产品优化方案](./docs/plans/writing-product-optimization-2026-10-12.md)。
 
 <p align="center">
   <b>基于 Tauri 2 + React 构建的 AI 智能写作桌面工作台 · Windows</b>
 </p>
 
 <p align="center">
-  <b>平台状态：Windows 已可生产（NSIS 安装包）。macOS / Linux 在计划中，目前既不可构建，也不随发布提供。</b>
+  <b>平台状态：Windows 已可构建 NSIS 安装包，当前 GUI 与真实供应商验收尚未完成。macOS / Linux 在计划中，目前不可构建，也不随发布提供。</b>
 </p>
 
 <p align="center">
@@ -202,7 +203,7 @@ npm run tauri:build
 
 1. **终端用户零环境前置要求**：独立打包完整可执行文件，无需安装任何开发工具；
 2. **离线优先数据完整性**：所有草稿、实体与配置均通过事务写入 IndexedDB，数据资产安全可靠；
-3. **自动化聚合质量门禁（行 $\ge 80\%$、分支 $\ge 70\%$、语句/函数 $\ge 75\%$）**：`npm run test:coverage` 按 `vitest.config.ts` 执行门禁。最近一次运行通过 213 个测试文件（925 个通过、2 个跳过），行覆盖率 87.07%、分支 76.82%、语句 84.52%、函数 76.47%；
+3. **自动化聚合质量门禁（行 $\ge 80\%$、分支 $\ge 70\%$、语句/函数 $\ge 75\%$）**：`npm run test:coverage` 按 `vitest.config.ts` 执行门禁。具体版本的结果以及 GUI、供应商和产物验收范围见 [验收方案](./docs/plans/writing-product-optimization-2026-10-12.md)；
 4. **纯净进程与通信解耦**：Tauri Rust 容器与后台进程完全通过类型化 JSON-RPC 2.0 WebSocket 帧通信；
 5. **可复现的依赖解析**：`package-lock.json` 和 `pnpm-lock.yaml` 是 `package.json` 依赖范围对应的已提交安装锁文件。
 

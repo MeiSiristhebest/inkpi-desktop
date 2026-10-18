@@ -1,9 +1,16 @@
 export interface EntityOccurrence {
   chapterId: string
   chapterTitle: string
-  chapterOrder: number
+  chapterOrder?: number
   snippet: string
   offset: number
+  sourceQuote?: string
+  sourceStart?: number
+  sourceEnd?: number
+  snippetStart?: number
+  snippetEnd?: number
+  matchedTerm?: string
+  chapterRevision?: number
 }
 
 export interface MemoryPalaceSnapshotRecord {

@@ -96,28 +96,32 @@ describe('BrainstormSpark Components', () => {
     await waitFor(() => expect(indexedDbBrainstormRepository.save).toHaveBeenCalledTimes(1))
   })
 
-  it('§P2.4：抽屉不在渲染时替作者推演，点一次才产一次', async () => {
+  it('抽屉使用当前正文和作者目标，只有明确点击后才展示候选', async () => {
     render(<BrainstormSparkDrawer projectId="proj-1" currentText="四面大军压境，主角命悬一线！" />)
 
     expect(screen.getByText(/写作卡文破局炉/)).toBeInTheDocument()
-    expect(screen.getByText(/应急破局脑洞方案/)).toBeInTheDocument()
-    // 旧的「未点击即给出八条仙侠脑洞」行为已被否定。
     expect(screen.queryByText(/空间置换 \/ 金蝉脱壳/)).not.toBeInTheDocument()
     expect(screen.getByText(/未推演/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByText('按当前选段推演'))
+    fireEvent.change(screen.getByLabelText('当前破局目标'), {
+      target: { value: '让同伴安全离开' },
+    })
+    fireEvent.change(screen.getByLabelText('当前剧情限制'), {
+      target: { value: '不能暴露同伴身份' },
+    })
+    fireEvent.click(screen.getByText('按当前正文推演'))
 
     await waitFor(() => expect(screen.getAllByText('复制脑洞')).toHaveLength(3))
     expect(screen.getAllByText(/四面大军压境，主角命悬一线！/).length).toBeGreaterThan(0)
   })
 
-  it('抽屉没有选段时点推演只说明缺什么，不编方案', () => {
+  it('抽屉没有正文时说明缺少输入，不编方案', () => {
     render(<BrainstormSparkDrawer projectId="proj-1" currentText="" />)
 
-    fireEvent.click(screen.getByText('按当前选段推演'))
+    fireEvent.click(screen.getByText('按当前正文推演'))
 
-    expect(screen.getByText(/未选中正文：先在编辑器里圈出那段卡住的危机/)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('当前正文为空，先提供困境文本。')
     expect(screen.queryByText(/复制脑洞/)).not.toBeInTheDocument()
-    expect(screen.getByText('未选中正文')).toBeInTheDocument()
+    expect(screen.getByText(/未推演/)).toBeInTheDocument()
   })
 })

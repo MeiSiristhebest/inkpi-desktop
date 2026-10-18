@@ -29,6 +29,19 @@ vi.mock('../../../adapters/indexedDbGeoMapRepository', () => ({
     save: vi.fn().mockResolvedValue(undefined),
   },
 }))
+vi.mock('../../../adapters/indexedDbCodexEntityRepository', () => ({
+  indexedDbCodexEntityRepository: {
+    getByProject: vi.fn().mockResolvedValue([
+      {
+        id: 'location-authored',
+        projectId: 'p1',
+        name: '青云门',
+        category: 'location',
+        aliases: [],
+      },
+    ]),
+  },
+}))
 
 describe('GeographyMap Components', () => {
   beforeEach(() => {
@@ -40,7 +53,7 @@ describe('GeographyMap Components', () => {
 
     expect(screen.getByText(/物理拓扑网格地图与战局沙盘/)).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText(/行军日程精密测算仪/)).toBeInTheDocument()
+      expect(screen.getByText(/网格路线与行程估算/)).toBeInTheDocument()
       expect(screen.getByText(/拓扑结构完整连通/)).toBeInTheDocument()
     })
 
@@ -60,6 +73,8 @@ describe('GeographyMap Components', () => {
     expect(screen.getByText(/地理拓扑随动感知/)).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.getByText(/青云门/)).toBeInTheDocument()
+      expect(screen.getByText(/未保存路线、速度与通行假设/)).toBeInTheDocument()
+      expect(screen.queryByText(/2-4 天/)).not.toBeInTheDocument()
     })
   })
 })

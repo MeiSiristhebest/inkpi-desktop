@@ -32,7 +32,7 @@ describe('DiffReviewer UI Components', () => {
   it('DiffReviewerDrawer reports real facts and never invents revision hunks', async () => {
     render(<DiffReviewerDrawer projectId="p1" currentText="林凡走在大街上。" />)
     expect(screen.getByText(/双栏审校随动/)).toBeDefined()
-    expect(screen.getByText(/已保存稿 8 字/)).toBeDefined()
+    expect(screen.getByText(/当前正文 8 字/)).toBeDefined()
     // §P2.3/INV-05：随动面板以前用正则改写正文造出一份假 diff，再报「N 处修订分块」。
     expect(screen.queryByText(/处修订分块/)).not.toBeInTheDocument()
     expect(screen.queryByText(/新增字行/)).not.toBeInTheDocument()
@@ -179,6 +179,8 @@ describe('DiffReviewer UI Components', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: '撤销写回' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /写回正文章节/ })).toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: /计算差异分块/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: /写回正文章节/ })).toBeEnabled())
     expect(saveChapter).toHaveBeenCalledTimes(2)
     expect(saveChapter.mock.calls[1][0]).toMatchObject({
@@ -244,6 +246,8 @@ describe('DiffReviewer UI Components', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: '撤销写回' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /写回正文章节/ })).toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: /计算差异分块/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: /写回正文章节/ })).toBeEnabled())
     expect(saveChapter).toHaveBeenCalledTimes(2)
     expect(saveChapter.mock.calls[1][0]).toMatchObject({

@@ -6,12 +6,14 @@ export interface VolumeArcRecord {
   volumeId: string
   volumeTitle: string
   volumeOrder: number
-  targetWordCount: number
+  targetWordCount?: number
   coreConflict: string
   climaxNode: string
   rewardOutcome: string
   crossVolumeCliffhanger: string
-  actStage: ActStage
+  actStage?: ActStage
+  isCompleted?: boolean
+  constraints?: string
   updatedAt: number
 }
 

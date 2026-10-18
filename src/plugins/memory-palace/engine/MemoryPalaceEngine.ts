@@ -1,167 +1,172 @@
 import type { EntitySearchResult } from '../types'
 import type { CodexEntity } from '../../living-codex/types'
-import type { ChapterRecord } from '../../../types'
-import { semanticTextFromContent } from '../../../domain/content'
+import type { ChapterRecord, VolumeRecord } from '../../../types'
+import { projectSemanticTextFields, semanticTextFromContent } from '../../../domain/content'
+import type { EntityOccurrence } from '../../../ports/memoryPalaceRepository'
 
-/**
- * Workspace-local chapter index used by the Memory Palace JIT search path.
- * Runtime remains the execution authority; this index only provides a
- * deterministic local projection and avoids rebuilding unchanged chapters.
- */
 export class MemoryPalaceWorkspaceIndex {
   private readonly chapters = new Map<string, ChapterRecord>()
-
+  private volumes: VolumeRecord[] | undefined
   readonly workspaceId: string
-
   constructor(workspaceId: string) {
     this.workspaceId = workspaceId
   }
-
-  update(chapter: ChapterRecord): void {
-    if (chapter.projectId !== this.workspaceId) return
-    this.chapters.set(chapter.id, chapter)
+  setVolumes(volumes: VolumeRecord[]): void {
+    this.volumes = structuredClone(volumes.filter((v) => v.projectId === this.workspaceId))
   }
-
+  update(chapter: ChapterRecord): void {
+    if (chapter.projectId === this.workspaceId)
+      this.chapters.set(chapter.id, structuredClone(chapter))
+  }
   updateMany(chapters: readonly ChapterRecord[]): void {
     for (const chapter of chapters) this.update(chapter)
   }
-
-  remove(chapterId: string): void {
-    this.chapters.delete(chapterId)
+  remove(id: string): void {
+    this.chapters.delete(id)
   }
-
   clear(): void {
     this.chapters.clear()
   }
-
   get size(): number {
     return this.chapters.size
   }
-
   snapshot(): ChapterRecord[] {
-    return [...this.chapters.values()]
+    return structuredClone([...this.chapters.values()])
   }
-
   search(query: string, entities: CodexEntity[]): EntitySearchResult[] {
     return MemoryPalaceEngine.searchEntityOccurrences({
       query,
       entities,
       chapters: this.snapshot(),
+      volumes: this.volumes,
+      projectId: this.workspaceId,
     })
   }
 }
 
 export class MemoryPalaceEngine {
-  /**
-   * 建立长篇小说跨章实体倒排索引，并快速召回特定实体的历史登场轨迹
-   */
   static searchEntityOccurrences(params: {
     query: string
     entities: CodexEntity[]
     chapters: ChapterRecord[]
+    volumes?: VolumeRecord[]
+    projectId?: string
   }): EntitySearchResult[] {
-    const { query, entities, chapters } = params
-    const trimmedQuery = query.trim().toLowerCase()
-
-    // 章节按顺序排序
-    const sortedChapters = [...chapters].sort((a, b) => a.order - b.order)
-
-    // 匹配候选实体
-    const matchedEntities = entities.filter((e) => {
-      if (!trimmedQuery) return true
-      const nameMatch = e.name.toLowerCase().includes(trimmedQuery)
-      const aliasMatch = e.aliases?.some((a: string) => a.toLowerCase().includes(trimmedQuery))
-      const descMatch = e.summary?.toLowerCase().includes(trimmedQuery)
-      return nameMatch || aliasMatch || descMatch
-    })
-
+    const semanticParams = projectSemanticTextFields(params) as typeof params
+    const { query, volumes, projectId } = semanticParams
+    const needle = query.trim().toLocaleLowerCase()
+    const chapters = semanticParams.chapters.filter((c) => !projectId || c.projectId === projectId)
+    const volumeOrder = new Map(volumes?.map((v) => [v.id, v.order]))
+    const ordered = [...chapters].sort(
+      (a, b) =>
+        (volumeOrder.get(a.volumeId) ?? Infinity) - (volumeOrder.get(b.volumeId) ?? Infinity) ||
+        a.order - b.order ||
+        a.id.localeCompare(b.id),
+    )
+    const positions = new Map<string, number>()
+    const known = volumes
+      ? ordered.filter((c) => volumeOrder.has(c.volumeId))
+      : new Set(ordered.map((c) => c.volumeId)).size <= 1
+        ? ordered
+        : []
+    known.forEach((c, i) => positions.set(c.id, i + 1))
+    const entities = semanticParams.entities
+      .filter((e) => !projectId || e.projectId === projectId)
+      .filter(
+        (e) =>
+          !needle ||
+          [e.name, ...(e.aliases ?? []), e.summary ?? ''].some((t) =>
+            t.toLocaleLowerCase().includes(needle),
+          ),
+      )
     const results: EntitySearchResult[] = []
-
-    for (const ent of matchedEntities) {
-      const searchTerms = [ent.name, ...(ent.aliases || [])].filter(Boolean)
-      const occurrences: { chapter: ChapterRecord; snippet: string }[] = []
-
-      for (const ch of sortedChapters) {
-        const text = semanticTextFromContent(ch.id, ch.content || '', ch.revision)
-        if (!text) continue
-
-        for (const term of searchTerms) {
-          const idx = text.indexOf(term)
-          if (idx !== -1) {
-            // 提取上下文摘要 (前后 35 字)
-            const start = Math.max(0, idx - 30)
-            const end = Math.min(text.length, idx + term.length + 30)
-            const snippet =
-              (start > 0 ? '...' : '') +
-              text.slice(start, end).replace(/\n/g, ' ') +
-              (end < text.length ? '...' : '')
-            occurrences.push({ chapter: ch, snippet })
-            break // 该章已命中，避免同一章因多别名重复记录
+    for (const entity of entities) {
+      const terms = [
+        ...new Set([entity.name, ...(entity.aliases ?? [])].filter((t) => t.trim().length > 0)),
+      ]
+      const occurrences: EntityOccurrence[] = []
+      for (const chapter of ordered) {
+        const text = semanticTextFromContent(chapter.id, chapter.content ?? '', chapter.revision)
+        const hits: Array<{ start: number; end: number; term: string }> = []
+        for (const term of terms) {
+          let cursor = 0
+          while (cursor <= text.length - term.length) {
+            const start = text.indexOf(term, cursor)
+            if (start < 0) break
+            hits.push({ start, end: start + term.length, term })
+            cursor = start + term.length
           }
         }
+        hits.sort((a, b) => a.start - b.start || b.end - a.end)
+        let previousEnd = -1
+        for (const hit of hits) {
+          if (hit.start < previousEnd) continue
+          previousEnd = hit.end
+          const snippetStart = Math.max(0, hit.start - 30)
+          const snippetEnd = Math.min(text.length, hit.end + 30)
+          occurrences.push({
+            chapterId: chapter.id,
+            chapterTitle: chapter.title,
+            chapterOrder: positions.get(chapter.id),
+            snippet: text.slice(snippetStart, snippetEnd),
+            offset: hit.start,
+            sourceQuote: text.slice(hit.start, hit.end),
+            sourceStart: hit.start,
+            sourceEnd: hit.end,
+            snippetStart,
+            snippetEnd,
+            matchedTerm: hit.term,
+            chapterRevision: chapter.revision,
+          })
+        }
       }
-
-      const totalOccurrences = occurrences.length
-      const firstOcc = occurrences[0]
-      const lastOcc = occurrences[occurrences.length - 1]
-
-      // 提取最新登场的几条摘要
-      const recentSnippets = occurrences
-        .slice(-3)
-        .map((o) => `[第${o.chapter.order}章 ${o.chapter.title}] ${o.snippet}`)
-
-      // 计算相关度评分
-      let relevanceScore = 50
-      if (ent.name.toLowerCase() === trimmedQuery) {
-        relevanceScore = 100
-      } else if (ent.name.toLowerCase().includes(trimmedQuery)) {
-        relevanceScore = 85
-      } else if (ent.aliases?.some((a: string) => a.toLowerCase() === trimmedQuery)) {
-        relevanceScore = 90
-      }
-
+      const first = occurrences[0]
+      const last = occurrences.at(-1)
       results.push({
-        entityId: ent.id,
-        entityName: ent.name,
-        category: ent.category,
-        relevanceScore,
-        totalOccurrences,
-        firstAppearedChapter: firstOcc
-          ? {
-              id: firstOcc.chapter.id,
-              title: firstOcc.chapter.title,
-              order: firstOcc.chapter.order,
-            }
+        entityId: entity.id,
+        entityName: entity.name,
+        category: entity.category,
+        aliases: entity.aliases ?? [],
+        matchKind:
+          entity.name.toLocaleLowerCase() === needle
+            ? 'exact_name'
+            : entity.aliases?.some((a) => a.toLocaleLowerCase() === needle)
+              ? 'exact_alias'
+              : 'contains',
+        totalOccurrences: occurrences.length,
+        matchedChapterCount: new Set(occurrences.map((o) => o.chapterId)).size,
+        indexedChapterCount: ordered.length,
+        occurrences,
+        firstAppearedChapter: first
+          ? { id: first.chapterId, title: first.chapterTitle, order: first.chapterOrder }
           : undefined,
-        lastAppearedChapter: lastOcc
-          ? { id: lastOcc.chapter.id, title: lastOcc.chapter.title, order: lastOcc.chapter.order }
+        lastAppearedChapter: last
+          ? { id: last.chapterId, title: last.chapterTitle, order: last.chapterOrder }
           : undefined,
-        recentSnippets,
+        recentSnippets: occurrences
+          .slice(-3)
+          .map(
+            (o) =>
+              '[' +
+              (o.chapterOrder ? '第' + o.chapterOrder + '章 ' : '章序未知 ') +
+              o.chapterTitle +
+              '] ' +
+              o.snippet,
+          ),
       })
     }
-
-    // 按相关度与出现频次降序
-    results.sort(
-      (a, b) => b.relevanceScore - a.relevanceScore || b.totalOccurrences - a.totalOccurrences,
+    const rank = { exact_name: 0, exact_alias: 1, contains: 2 }
+    return results.sort(
+      (a, b) =>
+        rank[a.matchKind!] - rank[b.matchKind!] ||
+        b.totalOccurrences - a.totalOccurrences ||
+        a.entityId.localeCompare(b.entityId),
     )
-    return results
   }
 
-  /**
-   * 自动探测当前章节正文中提到的历史实体（辅助免打扰即时召回）
-   */
   static detectEntitiesInText(text: string, entities: CodexEntity[]): CodexEntity[] {
-    if (!text) return []
-    const detected: CodexEntity[] = []
-
-    for (const ent of entities) {
-      const terms = [ent.name, ...(ent.aliases || [])].filter(Boolean)
-      const found = terms.some((t) => text.includes(t))
-      if (found) {
-        detected.push(ent)
-      }
-    }
-
-    return detected
+    return entities.filter((e) =>
+      [e.name, ...(e.aliases ?? [])].some((t) => t.trim() && text.includes(t)),
+    )
   }
 }

@@ -8,7 +8,7 @@ export type PromiseTier = 'main_plot' | 'romance' | 'power_system' | 'side_arc' 
 export interface ProgressEntry {
   chapter: number
   note: string
-  memoryBoost: number // 0 ~ 1 之间，恢复读者记忆热度
+  memoryBoost?: number // Legacy annotation, retained when importing old records.
   timestamp?: number
 }
 
@@ -17,12 +17,12 @@ export interface PromiseLedgerEntry {
   projectId: string
   clueName: string
   tier: PromiseTier
-  plantChapter: number
+  plantChapter: number // 作品内从 1 开始的章号；0 表示未指定
   plantNote: string
-  dueChapterLimit: number // 硬红线（距埋设章节的跨度）
-  softDeadline: number // 软警告线（距埋设章节的跨度）
+  dueChapterLimit: number // 硬红线（距埋设章节的跨度）；0 表示未设置
+  softDeadline: number // 软警告线（距埋设章节的跨度）；0 表示未设置
   status: PromiseStatus
-  memoryDecayLambda: number // 遗忘指数衰减常数，默认 0.05
+  memoryDecayLambda?: number // Legacy uncalibrated parameter; not used to assess readers.
   progressHistory: ProgressEntry[]
   payoffChapter?: number
   payoffNote?: string
@@ -35,16 +35,21 @@ export interface PromiseLedgerEntry {
 
 export interface DebtSnapshot {
   entry: PromiseLedgerEntry
-  elapsedChapters: number
+  elapsedChapters: number | null
   isOverdue: boolean
   isWarning: boolean
-  memoryHeat: number // 0.0 ~ 1.0
-  urgencyScore: number
+  isDue: boolean
+  deadlineChapter: number | null
+  remainingChapters: number | null
+  lastProgressChapter: number | null
 }
 
 export interface PayoffCandidate {
   entryId: string
   clueName: string
   matchedKeyword: string
-  confidence: number
+  snippet: string
+  startOffset: number
+  endOffset: number
+  status: 'mention'
 }

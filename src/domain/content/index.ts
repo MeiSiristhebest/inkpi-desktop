@@ -9,10 +9,12 @@ export {
 export {
   projectContent,
   projectEditorContent,
+  projectSemanticTextFields,
   semanticTextFromContent,
   type EditorContentInput,
 } from './semanticProjection'
 export { createBlockId } from './blockIdentity'
+export { resolveSourceEvidenceRange, type SemanticRange } from './sourceReference'
 export {
   createTextSourceMap,
   type EditorPosition,

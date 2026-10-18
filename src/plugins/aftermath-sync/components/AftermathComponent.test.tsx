@@ -163,7 +163,11 @@ describe('AftermathSync UI Components', () => {
     })
     fireEvent.click(screen.getByText('扫描章节设定变迁'))
 
-    fireEvent.click(await screen.findByLabelText('采纳回写'))
+    await screen.findByLabelText('采纳回写')
+    fireEvent.change(screen.getByRole('textbox', { name: /作者确认说明/ }), {
+      target: { value: '已核对本章，作者确认境界变化' },
+    })
+    fireEvent.click(screen.getByLabelText('采纳回写'))
 
     await waitFor(async () => {
       const entities = await indexedDbCodexEntityRepository.getAll()
@@ -197,6 +201,53 @@ describe('AftermathSync UI Components', () => {
       await screen.findByText(/扫描完成：正文里没有命中可对照实体的状态变迁/),
     ).toBeInTheDocument()
     expect(screen.getByText('暂无待审阅的设定回写补丁')).toBeInTheDocument()
+  })
+
+  it('rolls back the entity and review status when the proposal write fails, then retries', async () => {
+    const summary = '作者原始摘要'.repeat(12)
+    await indexedDbCodexEntityRepository.save(
+      makeEntity({ id: 'e-lin', name: '林凡', summary, attributes: { realm: '练气九层' } }),
+    )
+    render(<AftermathMasterView projectId="p1" />)
+    await screen.findByText(/对照名单/)
+    fireEvent.change(screen.getByPlaceholderText(/粘贴你写完的章节正文/), {
+      target: { value: '林凡一举迈入筑基初期！' },
+    })
+    fireEvent.click(screen.getByText('扫描章节设定变迁'))
+    const accept = await screen.findByLabelText('采纳回写')
+    fireEvent.change(screen.getByRole('textbox', { name: /作者确认说明/ }), {
+      target: { value: '作者已核对境界变化' },
+    })
+    const originalPut = IDBObjectStore.prototype.put
+    const fault = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      value,
+      key,
+    ) {
+      if (this.name === 'aftermathPatches' && value.status === 'applied')
+        throw new Error('proposal transaction fault')
+      return originalPut.call(this, value, key)
+    })
+    try {
+      fireEvent.click(accept)
+      expect(await screen.findByRole('alert')).toHaveTextContent('proposal transaction fault')
+      expect((await indexedDbAftermathRepository.getAll('p1'))[0].status).toBe('pending')
+      const entity = (await indexedDbCodexEntityRepository.getAll()).find(
+        (entry) => entry.id === 'e-lin',
+      )!
+      expect(entity.attributes.realm).toBe('练气九层')
+      expect(entity.summary).toBe(summary)
+    } finally {
+      fault.mockRestore()
+    }
+    fireEvent.click(accept)
+    await waitFor(async () =>
+      expect((await indexedDbAftermathRepository.getAll('p1'))[0].status).toBe('applied'),
+    )
+    expect(
+      (await indexedDbCodexEntityRepository.getAll()).find((entry) => entry.id === 'e-lin')
+        ?.summary,
+    ).toBe(summary)
   })
 
   it('AftermathDrawer renders correctly', () => {

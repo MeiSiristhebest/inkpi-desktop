@@ -8,9 +8,10 @@ import { clock } from '../adapters/clock'
 import { appendIndexedDbDomainChange } from '../adapters/indexedDbDomainChangeAppender'
 import { pluginEventBus } from '../core/pluginEventBus'
 import type { Provenance } from '../domain/story/provenance'
+import type { IndexedDbAggregateWrite } from '../adapters/indexedDbDomainChangeStore'
 
 export type DomainWriteIntent =
-  'author-confirmed' | 'ai-accepted' | 'ai-proposed' | 'demo' | 'imported-unknown'
+  'author-confirmed' | 'ai-accepted' | 'ai-proposed' | 'ai-hypothesis' | 'demo' | 'imported-unknown'
 
 function stripUndefined<T>(value: T): T {
   if (value === null || typeof value !== 'object') return value
@@ -50,6 +51,7 @@ export function createIntentProvenance(intent: DomainWriteIntent): Provenance {
         factLevel: 'proposal',
         createdAt: now,
       }
+    case 'ai-hypothesis':
     case 'demo':
       return {
         sourceType: 'derived',
@@ -79,6 +81,15 @@ export function resolveProvenance(
       createdAt: existingProvenance?.createdAt ?? clock.now(),
     }
   }
+  if (intent === 'ai-hypothesis') {
+    return {
+      ...(existingProvenance ?? {}),
+      sourceType: 'derived',
+      factLevel: 'hypothesis',
+      evidence: existingProvenance?.evidence ? [...existingProvenance.evidence] : undefined,
+      createdAt: existingProvenance?.createdAt ?? clock.now(),
+    }
+  }
   return createIntentProvenance(intent)
 }
 
@@ -86,7 +97,12 @@ export function resolveProvenance(
  * Living Codex 领域应用服务
  */
 export const codexApplicationService = {
-  async saveEntity(entity: CodexEntity, intent: DomainWriteIntent): Promise<void> {
+  async saveEntity(
+    entity: CodexEntity,
+    intent: DomainWriteIntent,
+    relatedWrites?: readonly IndexedDbAggregateWrite[],
+    expectedEntity?: CodexEntity,
+  ): Promise<void> {
     const workspaceId = entity.projectId
     if (!workspaceId || !workspaceId.trim()) {
       throw new Error(
@@ -94,6 +110,9 @@ export const codexApplicationService = {
       )
     }
     const existing = await db.get<CodexEntity>('codexEntities', entity.id)
+    if (expectedEntity && JSON.stringify(existing) !== JSON.stringify(expectedEntity)) {
+      throw new Error('设定实体已变化，请重新核对提案。')
+    }
     const existingProv = (entity as any).provenance ?? (existing as any)?.provenance
     const withProvenance: CodexEntity = {
       ...entity,
@@ -109,6 +128,7 @@ export const codexApplicationService = {
       operation: 'upsert',
       payload: stripUndefined(withProvenance),
       occurredAt,
+      relatedWrites,
       aggregate: {
         store: 'codexEntities',
         key: entity.id,
@@ -214,7 +234,11 @@ export const timelineApplicationService = {
     }
   },
 
-  async saveNode(node: TimelineNode, intent: DomainWriteIntent): Promise<void> {
+  async saveNode(
+    node: TimelineNode,
+    intent: DomainWriteIntent,
+    relatedWrites?: readonly IndexedDbAggregateWrite[],
+  ): Promise<void> {
     const workspaceId = node.projectId
     if (!workspaceId || !workspaceId.trim()) {
       throw new Error(
@@ -237,6 +261,7 @@ export const timelineApplicationService = {
       operation: 'upsert',
       payload: stripUndefined(withProvenance),
       occurredAt,
+      relatedWrites,
       aggregate: {
         store: 'timelineNodes',
         key: node.id,
@@ -277,7 +302,11 @@ export const timelineApplicationService = {
  * Promise Ledger 领域应用服务
  */
 export const promiseApplicationService = {
-  async savePromise(entry: PromiseLedgerEntry, intent: DomainWriteIntent): Promise<void> {
+  async savePromise(
+    entry: PromiseLedgerEntry,
+    intent: DomainWriteIntent,
+    relatedWrites?: readonly IndexedDbAggregateWrite[],
+  ): Promise<void> {
     const workspaceId = entry.projectId
     if (!workspaceId || !workspaceId.trim()) {
       throw new Error(
@@ -300,6 +329,7 @@ export const promiseApplicationService = {
       operation: 'upsert',
       payload: stripUndefined(withProvenance),
       occurredAt,
+      relatedWrites,
       aggregate: {
         store: 'promiseLedger',
         key: entry.id,

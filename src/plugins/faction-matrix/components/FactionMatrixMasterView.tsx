@@ -1,15 +1,14 @@
-import { useState, useEffect, useCallback, type FC } from 'react'
+import { useEffect, useMemo, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type {
   FactionNode,
   FactionDiplomacyRecord,
   FactionStance,
-  BalanceParadox,
   EventRippleResult,
 } from '../types'
 import { factionMatrixEngine } from '../engine/FactionMatrixEngine'
-import { indexedDbFactionDiplomacyRepository } from '../../../adapters/indexedDbFactionDiplomacyRepository'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { indexedDbFactionDiplomacyRepository } from '../../../adapters/indexedDbFactionDiplomacyRepository'
 import { codexApplicationService } from '../../../services/domainApplicationServices'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
@@ -17,455 +16,382 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { semanticTextFromContent } from '../../../domain/content'
-import { Shield, Zap, CheckCircle2, AlertTriangle, GitBranch, Bot, Plus } from 'lucide-react'
 import { Select } from '../../../ui/primitives'
-
-export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('faction-matrix')
+const STANCES: Record<FactionStance, string> = {
+  allied: '同盟',
+  friendly: '友好',
+  neutral: '中立',
+  hostile: '敌对',
+  mortal_enemy: '仇敌',
+  vassal: 'A 从属于 B',
+}
+const samePair = (record: FactionDiplomacyRecord, a: string, b: string) =>
+  (record.factionAId === a && record.factionBId === b) ||
+  (record.factionAId === b && record.factionBId === a)
+export const FactionMatrixMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <FactionWorkspace key={props.projectId} {...props} />
+)
+function FactionWorkspace({ projectId }: DesktopPluginViewProps) {
+  const host = useOptionalPluginHostContext()
   const [factions, setFactions] = useState<FactionNode[]>([])
-  const [diplomacies, setDiplomacies] = useState<FactionDiplomacyRecord[]>([])
-  const [newFactionName, setNewFactionName] = useState('')
-  const [isAddingFaction, setIsAddingFaction] = useState(false)
-
-  // 事件涟漪推演状态
-  const [rippleTargetId, setRippleTargetId] = useState('')
-  const [rippleDelta, setRippleDelta] = useState(-30)
-  const [rippleResult, setRippleResult] = useState<EventRippleResult | null>(null)
-
-  const loadAll = useCallback(async () => {
-    try {
-      const [allCodex, allDips] = await Promise.all([
-        indexedDbCodexEntityRepository.getAll(),
-        indexedDbFactionDiplomacyRepository.getAll(projectId),
-      ])
-
-      const codexFactions = allCodex
-        .filter((e) => e.projectId === projectId && e.category === 'faction')
-        .map((e) => ({
-          id: e.id,
-          name: e.name,
-          type: (e.attributes?.factionType as any) || 'righteous',
-          powerTier:
-            (e.attributes?.powerTier as string) || (e.attributes?.位阶 as string) || '宗门',
-          protagonistReputation: Number(e.attributes?.reputation ?? 10),
-        }))
-
-      setFactions(codexFactions)
-      setDiplomacies(allDips)
-      if (codexFactions.length > 0) {
-        setRippleTargetId((current) => current || codexFactions[0].id)
-      }
-    } catch (e) {
-      console.error('Failed to load faction data:', e)
-    }
-  }, [projectId])
-
+  const [relationships, setRelationships] = useState<FactionDiplomacyRecord[]>([])
+  const [reload, setReload] = useState(0)
+  const [newName, setNewName] = useState('')
+  const [newScore, setNewScore] = useState('')
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const [stance, setStance] = useState<FactionStance>('neutral')
+  const [notes, setNotes] = useState('')
+  const [coefficient, setCoefficient] = useState('')
+  const [rationale, setRationale] = useState('')
+  const [target, setTarget] = useState('')
+  const [delta, setDelta] = useState('')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [ripple, setRipple] = useState<{ scope: string; result: EventRippleResult } | null>(null)
+  const scope = JSON.stringify([factions, relationships, target, delta])
+  const result = ripple?.scope === scope ? ripple.result : null
+  const ai = usePluginAiTask('faction-matrix', [projectId, factions, relationships, target, delta])
   useEffect(() => {
-    loadAll().catch(() => undefined)
-  }, [loadAll])
-
-  // 支持直接在矩阵中新增宗门并持久化到 Codex 百科
-  const handleCreateFaction = async () => {
-    if (!newFactionName.trim()) return
-    const now = clock.now()
-    const entity = {
-      id: idGenerator.generate('ent_fac'),
-      projectId,
-      name: newFactionName.trim(),
-      category: 'faction' as const,
-      aliases: [],
-      summary: '在势力矩阵中创建的阵营/宗门',
-      content: '',
-      relations: [],
-      attributes: {
-        powerTier: '主要阵营',
-        reputation: 10,
-        factionType: 'righteous',
-      },
-      tags: ['阵营', '势力'],
-      createdAt: now,
-      updatedAt: now,
+    let disposed = false
+    Promise.all([
+      indexedDbCodexEntityRepository.getAll(),
+      indexedDbFactionDiplomacyRepository.getAll(projectId),
+    ])
+      .then(([all, records]) => {
+        if (disposed) return
+        const real = all
+          .filter((e) => e.projectId === projectId && e.category === 'faction')
+          .map((e) => ({
+            id: e.id,
+            projectId: e.projectId,
+            name: e.name,
+            type:
+              typeof e.attributes?.factionType === 'string' ? e.attributes.factionType : undefined,
+            powerTier:
+              typeof e.attributes?.powerTier === 'string' ? e.attributes.powerTier : undefined,
+            protagonistReputation:
+              typeof e.attributes?.reputation === 'number' &&
+              Number.isFinite(e.attributes.reputation)
+                ? e.attributes.reputation
+                : undefined,
+          }))
+        setFactions(real)
+        setRelationships(records.filter((r) => r.projectId === projectId))
+        setTarget((previous) =>
+          real.some((f) => f.id === previous) ? previous : (real[0]?.id ?? ''),
+        )
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
     }
-    await codexApplicationService.saveEntity(entity as any, 'author-confirmed')
-    setNewFactionName('')
-    setIsAddingFaction(false)
-    await loadAll()
-  }
-
-  // 触发 AI 分析宗门博弈与剧情暗线
-  const handleAiFactionAnalysis = async () => {
-    if (factions.length === 0) return
-    const analysisInput = {
-      factions: factions.map((faction) => ({
-        ...faction,
-        name: semanticTextFromContent(`faction-matrix-name-${faction.id}`, faction.name),
-        powerTier: faction.powerTier
-          ? semanticTextFromContent(`faction-matrix-tier-${faction.id}`, faction.powerTier)
-          : faction.powerTier,
-      })),
-      paradoxes: paradoxes.map((paradox, index) => ({
-        ...paradox,
-        reason: semanticTextFromContent(`faction-matrix-paradox-${index}`, paradox.reason),
-      })),
-    }
-
-    await aiTask.run(analysisInput)
-  }
-
-  const getStance = (idA: string, idB: string): FactionStance => {
-    const d = diplomacies.find(
-      (rec) =>
-        (rec.factionAId === idA && rec.factionBId === idB) ||
-        (rec.factionBId === idA && rec.factionAId === idB),
-    )
-    return d ? d.stance : 'neutral'
-  }
-
-  const handleToggleStance = async (fA: FactionNode, fB: FactionNode) => {
-    const existing = diplomacies.find(
-      (rec) =>
-        (rec.factionAId === fA.id && rec.factionBId === fB.id) ||
-        (rec.factionBId === fA.id && rec.factionAId === fB.id),
-    )
-
-    let nextStance: FactionStance = 'allied'
-    if (existing) {
-      if (existing.stance === 'allied') nextStance = 'friendly'
-      else if (existing.stance === 'friendly') nextStance = 'neutral'
-      else if (existing.stance === 'neutral') nextStance = 'hostile'
-      else if (existing.stance === 'hostile') nextStance = 'mortal_enemy'
-      else nextStance = 'allied'
-    }
-
-    const record: FactionDiplomacyRecord = {
-      id: existing ? existing.id : idGenerator.generate('dip'),
-      projectId,
-      factionAId: fA.id,
-      factionAName: fA.name,
-      factionBId: fB.id,
-      factionBName: fB.name,
-      stance: nextStance,
-      reputationScore: nextStance === 'allied' ? 80 : nextStance === 'mortal_enemy' ? -90 : 0,
-      updatedAt: clock.now(),
-    }
-
-    await indexedDbFactionDiplomacyRepository.save(record)
-    await loadAll()
-  }
-
-  const handleRunRipple = () => {
-    if (!rippleTargetId) return
-    const res = factionMatrixEngine.simulateEventRipple(
-      factions,
-      diplomacies,
-      rippleTargetId,
-      rippleDelta,
-    )
-    setRippleResult(res)
-  }
-
-  const paradoxes: BalanceParadox[] = factionMatrixEngine.detectStructuralParadoxes(
-    factions,
-    diplomacies,
+  }, [projectId, reload])
+  const graphErrors = useMemo(
+    () => factionMatrixEngine.validateGraph(factions, relationships),
+    [factions, relationships],
   )
-
+  const candidates = useMemo(
+    () =>
+      graphErrors.length
+        ? []
+        : factionMatrixEngine.detectStructuralParadoxes(factions, relationships),
+    [factions, relationships, graphErrors],
+  )
+  const operation = async (action: () => Promise<void>) => {
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await action()
+    } catch (cause) {
+      setError(String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const create = () =>
+    operation(async () => {
+      if (!newName.trim()) throw new Error('填写实际势力名称。')
+      if (newScore !== '' && !Number.isFinite(Number(newScore)))
+        throw new Error('登记数值须为有限数值。')
+      const now = clock.now()
+      await codexApplicationService.saveEntity(
+        {
+          id: idGenerator.generate('ent_fac'),
+          projectId,
+          name: newName.trim(),
+          category: 'faction',
+          aliases: [],
+          summary: '',
+          relations: [],
+          attributes: newScore === '' ? {} : { reputation: Number(newScore) },
+          createdAt: now,
+          updatedAt: now,
+        },
+        'author-confirmed',
+      )
+      setNewName('')
+      setNewScore('')
+      setReload((n) => n + 1)
+      setMessage('已创建作者填写的势力。')
+    })
+  const saveRelationship = () =>
+    operation(async () => {
+      if (!a || !b || a === b) throw new Error('选择两个不同的实际势力。')
+      const factionA = factions.find((f) => f.id === a),
+        factionB = factions.find((f) => f.id === b)
+      if (!factionA || !factionB) throw new Error('势力已经变化，请重新选择。')
+      const previous = relationships.filter((r) => samePair(r, a, b))
+      if (previous.length > 1) throw new Error('此关系有重复记录，先整理当前状态。')
+      if (coefficient !== '' && (!Number.isFinite(Number(coefficient)) || !rationale.trim()))
+        throw new Error('影响系数需要有限数值和适用理由。')
+      const record: FactionDiplomacyRecord = {
+        ...(previous[0] ?? {}),
+        id: previous[0]?.id ?? idGenerator.generate('dip'),
+        projectId,
+        factionAId: a,
+        factionAName: factionA.name,
+        factionBId: b,
+        factionBName: factionB.name,
+        stance,
+        notes,
+        rippleCoefficient: coefficient === '' ? undefined : Number(coefficient),
+        rippleRationale: coefficient === '' ? undefined : rationale,
+        updatedAt: clock.now(),
+      }
+      await indexedDbFactionDiplomacyRepository.save(record)
+      setRelationships((current) => [...current.filter((r) => r.id !== record.id), record])
+      setMessage('已保存作者关系与事件假设。')
+    })
+  const edit = (fA: FactionNode, fB: FactionNode) => {
+    const existing = relationships.find((r) => samePair(r, fA.id, fB.id))
+    setA(existing?.factionAId ?? fA.id)
+    setB(existing?.factionBId ?? fB.id)
+    setStance(existing?.stance ?? 'neutral')
+    setNotes(existing?.notes ?? '')
+    setCoefficient(
+      existing?.rippleCoefficient === undefined ? '' : String(existing.rippleCoefficient),
+    )
+    setRationale(existing?.rippleRationale ?? '')
+  }
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
-      {/* 顶栏 */}
-      <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold tracking-tight">势力声望与宗门地缘沙盘</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-medium">
-              符号平衡图 · 事件连锁涟漪推演
-            </span>
-          </div>
-          <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            掌控全书各大宗门外交敌友状态，推演主角大事件引发的声望仇恨连锁反应
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {hostContext?.aiAssistant?.isAvailable && (
-            <button
-              disabled={aiTask.isRunning}
-              onClick={handleAiFactionAnalysis}
-              className="px-3 py-1.5 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1 cursor-pointer"
-            >
-              <Bot className="w-3.5 h-3.5 text-indigo-400" />
-              AI 地缘博弈推演
-            </button>
-          )}
-          <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
-          <button
-            onClick={() => setIsAddingFaction(!isAddingFaction)}
-            className="px-3 py-1.5 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            新增阵营宗门
-          </button>
-        </div>
-      </div>
-
-      {isAddingFaction && (
-        <div className="p-4 bg-[var(--ink-bg-elevated)] border-b border-[var(--ink-border)] flex items-center gap-3">
-          <span className="text-xs font-medium">宗门/阵营名:</span>
-          <input
-            type="text"
-            value={newFactionName}
-            onChange={(e) => setNewFactionName(e.target.value)}
-            placeholder="如：九幽冥殿、万宝商会..."
-            className="px-2.5 py-1 text-xs rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-[var(--ink-text)]"
-          />
-          <button
-            onClick={handleCreateFaction}
-            className="px-3 py-1 text-xs rounded bg-[var(--ink-accent)] text-white font-medium"
-          >
-            保存并入库
-          </button>
-          <button
-            onClick={() => setIsAddingFaction(false)}
-            className="px-2 py-1 text-xs text-[var(--ink-text-muted)]"
-          >
-            取消
-          </button>
-        </div>
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>作者势力关系与条件推演</h2>
+      <p>
+        关系空缺显示未知；声望数值不推导追杀、资源共享或结盟事实。事件结果仅按作者给定系数计算。
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {graphErrors.map((e) => (
+        <p key={e} role="alert">
+          {e}
+        </p>
+      ))}
+      {message && <p role="status">{message}</p>}
+      <input
+        aria-label="新势力名称"
+        value={newName}
+        onChange={(e) => setNewName(e.target.value)}
+        placeholder="填写作品中的势力名"
+      />
+      <input
+        aria-label="可选登记声望值"
+        value={newScore}
+        onChange={(e) => setNewScore(e.target.value)}
+        type="number"
+        placeholder="没有数值则留空"
+      />
+      <button disabled={busy || !newName.trim()} onClick={create}>
+        保存并入库
+      </button>
+      {!factions.length && <p>设定库里尚无势力条目。</p>}
+      {factions.map((f) => (
+        <p key={f.id}>
+          {f.name}：{factionMatrixEngine.getReputationLevel(f.protagonistReputation).desc}
+        </p>
+      ))}
+      <table className="w-full text-xs">
+        <thead>
+          <tr>
+            <th>势力关系</th>
+            {factions.map((f) => (
+              <th key={f.id}>{f.name}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {factions.map((fA) => (
+            <tr key={fA.id}>
+              <th>{fA.name}</th>
+              {factions.map((fB) => (
+                <td key={fB.id}>
+                  {fA.id === fB.id ? (
+                    '—'
+                  ) : (
+                    <button onClick={() => edit(fA, fB)}>
+                      {(() => {
+                        const relation = relationships.find((r) => samePair(r, fA.id, fB.id))
+                        return relation
+                          ? relation.stance === 'vassal'
+                            ? relation.factionAName + ' → ' + relation.factionBName
+                            : STANCES[relation.stance]
+                          : '未知'
+                      })()}
+                    </button>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h3>明确登记关系</h3>
+      <Select aria-label="关系势力 A" value={a} onValueChange={setA}>
+        <option value="">选择势力 A</option>
+        {factions.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+          </option>
+        ))}
+      </Select>
+      <Select aria-label="关系势力 B" value={b} onValueChange={setB}>
+        <option value="">选择势力 B</option>
+        {factions.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+          </option>
+        ))}
+      </Select>
+      <Select
+        aria-label="作者关系状态"
+        value={stance}
+        onValueChange={(value) => setStance(value as FactionStance)}
+      >
+        {Object.entries(STANCES).map(([id, label]) => (
+          <option key={id} value={id}>
+            {label}
+          </option>
+        ))}
+      </Select>
+      <textarea
+        aria-label="关系条件与依据"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="关系的时期、利益条件和原文依据"
+      />
+      <input
+        aria-label="事件影响系数"
+        type="number"
+        step="any"
+        value={coefficient}
+        onChange={(e) => setCoefficient(e.target.value)}
+        placeholder="可选系数，不填则影响未知"
+      />
+      <textarea
+        aria-label="影响系数适用理由"
+        value={rationale}
+        onChange={(e) => setRationale(e.target.value)}
+        placeholder="仅是作者假设；说明适用事件和方向"
+      />
+      <button disabled={busy || !a || !b || a === b} onClick={saveRelationship}>
+        保存作者关系
+      </button>
+      <h3>作者条件推演</h3>
+      <Select aria-label="行动影响目标" value={target} onValueChange={setTarget}>
+        <option value="">选择目标</option>
+        {factions.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+          </option>
+        ))}
+      </Select>
+      <input
+        aria-label="直接增减假设"
+        type="number"
+        step="any"
+        value={delta}
+        onChange={(e) => setDelta(e.target.value)}
+      />
+      <button
+        disabled={!target || delta === '' || Boolean(graphErrors.length)}
+        onClick={() => {
+          setError('')
+          try {
+            setRipple({
+              scope,
+              result: factionMatrixEngine.simulateEventRipple(
+                factions,
+                relationships,
+                target,
+                Number(delta),
+              ),
+            })
+          } catch (cause) {
+            setError(String(cause))
+          }
+        }}
+      >
+        按作者系数计算
+      </button>
+      {result && (
+        <section>
+          {result.ripples.map((r) => (
+            <p key={r.factionId}>
+              {r.factionName}：
+              {r.change === null
+                ? '影响未知'
+                : '假设增减 ' + r.change + '；计算后数值 ' + (r.newReputation ?? '基线未知')}
+              。{r.reason}
+            </p>
+          ))}
+        </section>
       )}
-
-      {/* 主体滚动区 */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* 顶部：主角在各势力的声望卡片条 */}
-        <div className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-          <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-emerald-500" />
-            主角全宗门声望天平
-          </span>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {factions.map((f) => {
-              const repInfo = factionMatrixEngine.getReputationLevel(f.protagonistReputation)
-              return (
-                <div
-                  key={f.id}
-                  className="p-3 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] text-xs space-y-1.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">{f.name}</span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full border ${repInfo.badgeClass}`}
-                    >
-                      {repInfo.label} (
-                      {f.protagonistReputation > 0
-                        ? `+${f.protagonistReputation}`
-                        : f.protagonistReputation}
-                      )
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-[var(--ink-text-muted)]">{repInfo.desc}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* 中部：2D 外交地缘关系网格 */}
-        <div className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-              <GitBranch className="w-3.5 h-3.5 text-indigo-400" />
-              宗门双边外交关系矩阵 (点击单元格切换关系)
-            </span>
-            <div className="flex items-center gap-2 text-[10px] text-[var(--ink-text-muted)]">
-              <span>🟢 同盟</span>
-              <span>🔵 友善</span>
-              <span>⚪ 中立</span>
-              <span>🟠 敌对</span>
-              <span>🔴 不死不休</span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-elevated)]">
-                  <th className="p-2.5 text-left font-medium text-[var(--ink-text-muted)] w-32">
-                    势力 \ 势力
-                  </th>
-                  {factions.map((f) => (
-                    <th
-                      key={f.id}
-                      className="p-2.5 text-center font-medium text-[var(--ink-text)] min-w-[110px]"
-                    >
-                      {f.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {factions.map((fA, idxA) => (
-                  <tr
-                    key={fA.id}
-                    className="border-b border-[var(--ink-border)]/40 hover:bg-[var(--ink-bg-hover)]/20"
-                  >
-                    <td className="p-2.5 font-medium text-[var(--ink-text)]">{fA.name}</td>
-                    {factions.map((fB, idxB) => {
-                      if (idxA === idxB) {
-                        return (
-                          <td
-                            key={fB.id}
-                            className="p-2 text-center text-[10px] text-[var(--ink-text-muted)]"
-                          >
-                            —
-                          </td>
-                        )
-                      }
-                      const st = getStance(fA.id, fB.id)
-                      return (
-                        <td key={fB.id} className="p-2 text-center">
-                          <button
-                            onClick={() => handleToggleStance(fA, fB)}
-                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
-                              st === 'allied'
-                                ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
-                                : st === 'friendly'
-                                  ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
-                                  : st === 'hostile'
-                                    ? 'bg-orange-500/15 text-orange-500 border border-orange-500/30'
-                                    : st === 'mortal_enemy'
-                                      ? 'bg-rose-500/15 text-rose-500 border border-rose-500/30'
-                                      : 'bg-[var(--ink-bg-canvas)] text-[var(--ink-text-muted)] border border-[var(--ink-border)]'
-                            }`}
-                          >
-                            {st === 'allied'
-                              ? '同盟'
-                              : st === 'friendly'
-                                ? '友善'
-                                : st === 'hostile'
-                                  ? '敌对'
-                                  : st === 'mortal_enemy'
-                                    ? '仇敌'
-                                    : '中立'}
-                          </button>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* 底部双栏：事件连锁推演模拟器 (7 列) + 结构悖论检测 (5 列) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* 左栏：大事件推演器 */}
-          <div className="lg:col-span-7 p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-amber-500" />
-                大事件连锁涟漪推演模拟
-              </span>
-              <button
-                onClick={handleRunRipple}
-                className="px-3 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90"
-              >
-                模拟涟漪影响
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-[var(--ink-text-muted)]">行动影响目标:</span>
-              <Select value={rippleTargetId} onValueChange={(v) => setRippleTargetId(v)} size="sm">
-                {factions.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </Select>
-
-              <span className="text-[var(--ink-text-muted)]">直接好感增减:</span>
-              <Select
-                value={rippleDelta}
-                onValueChange={(v) => setRippleDelta(Number(v))}
-                size="sm"
-              >
-                <option value={-50}>-50 (诛杀真传/覆灭分舵)</option>
-                <option value={-30}>-30 (大比当众击败/结仇)</option>
-                <option value={+30}>+30 (拯救外门/归还秘籍)</option>
-                <option value={+50}>+50 (挽救宗门大阵/生死救命)</option>
-              </Select>
-            </div>
-
-            {rippleResult && (
-              <div className="p-3.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] space-y-2 text-xs">
-                <span className="font-semibold text-[var(--ink-text)]">
-                  连锁反应推演分析（直接受创/获益：{rippleResult.directFaction}{' '}
-                  {rippleResult.directChange > 0
-                    ? `+${rippleResult.directChange}`
-                    : rippleResult.directChange}
-                  ）：
-                </span>
-                {rippleResult.ripples.length === 0 ? (
-                  <p className="text-[11px] text-[var(--ink-text-muted)]">
-                    该宗门暂无强外交绑定势力，未引发跨宗门连锁震荡。
-                  </p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {rippleResult.ripples.map((rip, i) => (
-                      <div
-                        key={i}
-                        className="p-2 rounded border border-[var(--ink-border)]/60 bg-[var(--ink-bg-elevated)] flex items-start justify-between gap-2 text-[11px]"
-                      >
-                        <div>
-                          <span className="font-semibold text-[var(--ink-text)]">
-                            {rip.factionName}
-                          </span>
-                          <p className="text-[10px] text-[var(--ink-text-muted)] mt-0.5">
-                            {rip.reason}
-                          </p>
-                        </div>
-                        <span
-                          className={`font-bold ${rip.change > 0 ? 'text-emerald-500' : 'text-rose-500'}`}
-                        >
-                          {rip.change > 0 ? `+${rip.change}` : rip.change}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 右栏：地缘平衡悖论排查 */}
-          <div className="lg:col-span-5 p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-            <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-              地缘结构平衡理论排查
-            </span>
-
-            {paradoxes.length === 0 ? (
-              <div className="p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 text-xs flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>当前地缘格局结构平衡，无盟友背刺逻辑悖论。</span>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {paradoxes.map((p, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-500 space-y-1"
-                  >
-                    <span className="font-semibold block">【三角地缘失衡警报】</span>
-                    <p className="text-[11px] text-[var(--ink-text)] opacity-90">{p.reason}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <h3>关系三角复核候选</h3>
+      {candidates.length ? (
+        candidates.map((c, index) => (
+          <p key={index}>
+            {c.factionA}、{c.factionB}、{c.factionC}：{c.reason}
+          </p>
+        ))
+      ) : (
+        <p>没有满足当前符号条件的候选；这不证明关系没有其他问题。</p>
+      )}
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={ai.isRunning || !factions.length}
+          onClick={() =>
+            ai.run({
+              authorFactions: factions,
+              authorRelationships: relationships.map((relationship) => ({
+                ...relationship,
+                notes:
+                  relationship.notes === undefined
+                    ? undefined
+                    : semanticTextFromContent(`${relationship.id}-notes`, relationship.notes),
+                rippleRationale:
+                  relationship.rippleRationale === undefined
+                    ? undefined
+                    : semanticTextFromContent(
+                        `${relationship.id}-rationale`,
+                        relationship.rippleRationale,
+                      ),
+              })),
+              structuralCandidates: candidates,
+              eventHypothesis: {
+                targetId: target,
+                directDelta: delta === '' ? null : Number(delta),
+              },
+              missingInformation: '关系缺失、时期、目标和事件语境须明确说明；数值不是实测反应',
+            })
+          }
+        >
+          AI 关系与情境复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
     </div>
   )
 }

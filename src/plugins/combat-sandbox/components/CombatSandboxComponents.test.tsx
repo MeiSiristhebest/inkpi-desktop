@@ -72,6 +72,7 @@ async function assertEachLadderSelect(assertion: () => void | Promise<void>) {
 describe('CombatSandbox Components', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
+    pluginEventBus.clear()
     await indexedDbPowerTierRepository.delete('p1')
     vi.mocked(indexedDbCombatSandboxRepository.getAll).mockResolvedValue([savedDuel] as never)
   })
@@ -131,13 +132,22 @@ describe('CombatSandbox Components', () => {
   })
 
   // P2.12：巡检结论是渲染期算出来的，事件只能由"保存对决"这个权威写入动作发出。
-  it('publishes POWER_BREACH_DETECTED on save, never while merely rendering', async () => {
+  it('publishes only an author-reviewed conflict on save, never from rank difference', async () => {
     vi.mocked(indexedDbCombatSandboxRepository.getAll).mockResolvedValue([])
     await indexedDbPowerTierRepository.save(authorLadder)
 
     const seen: unknown[] = []
     const unsub = pluginEventBus.on('POWER_BREACH_DETECTED', (payload) => {
       seen.push(payload)
+    })
+    let persistenceFinished = false
+    vi.mocked(indexedDbCombatSandboxRepository.save).mockImplementation(async () => {
+      persistenceFinished = true
+    })
+    const savedNotifications: Array<{ recordId: string; projectId: string; afterSave: boolean }> =
+      []
+    const unsubSaved = pluginEventBus.on('COMBAT_DUEL_SAVED', (payload) => {
+      savedNotifications.push({ ...payload, afterSave: persistenceFinished })
     })
 
     render(<CombatSandboxMasterView projectId="p1" />)
@@ -149,6 +159,7 @@ describe('CombatSandbox Components', () => {
     fireEvent.click(screen.getByText('保存对决演武'))
     expect(indexedDbCombatSandboxRepository.save).not.toHaveBeenCalled()
     expect(seen).toHaveLength(0)
+    expect(savedNotifications).toHaveLength(0)
 
     // 门面没有 change 事件：序位得像用户那样展开弹层、点中那一行才落得下去
     const selects = screen.getAllByRole('combobox')
@@ -160,9 +171,33 @@ describe('CombatSandbox Components', () => {
     fireEvent.click(screen.getByText('保存对决演武'))
 
     await waitFor(() => expect(indexedDbCombatSandboxRepository.save).toHaveBeenCalled())
+    await waitFor(() => expect(savedNotifications).toHaveLength(1))
+    expect(seen).toHaveLength(0)
+    fireEvent.change(screen.getByLabelText('新增战术约束'), {
+      target: { value: '射程超出已给能力' },
+    })
+    fireEvent.click(screen.getByText('添加约束'))
+    await userEvent.click(screen.getByRole('combobox', { name: '约束 1 状态' }))
+    await userEvent.click(await screen.findByRole('option', { name: '作者确认不满足' }))
+    fireEvent.change(screen.getByLabelText('约束 1 理由'), {
+      target: { value: '能力射程 10 米，目标 20 米' },
+    })
+    fireEvent.click(screen.getByText('保存对决演武'))
     await waitFor(() => expect(seen).toHaveLength(1))
-    expect(seen[0]).toMatchObject({ tierDiff: 20, riskLevel: 'CRITICAL_COLLAPSE' })
+    await waitFor(() => expect(savedNotifications).toHaveLength(2))
+    expect(seen[0]).toMatchObject({
+      recordId: expect.any(String),
+      tierDiff: 20,
+      riskLevel: 'CRITICAL_COLLAPSE',
+    })
+    expect(savedNotifications.every((notification) => notification.afterSave)).toBe(true)
+    expect(savedNotifications.map(({ recordId }) => recordId)).toEqual([
+      savedNotifications[0].recordId,
+      savedNotifications[0].recordId,
+    ])
+    expect(savedNotifications[0].projectId).toBe('p1')
     unsub()
+    unsubSaved()
   })
 
   it('renders CombatSandboxDrawer with live duel parameters', async () => {

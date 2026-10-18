@@ -1,351 +1,405 @@
-import { useState, useEffect, useRef, type FC } from 'react'
+import { matchesSerializedResult } from '../../../domain/serializedResult'
+import { useEffect, useMemo, useRef, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import { indexedDbMultiverseRepository } from '../../../adapters/indexedDbMultiverseRepository'
-import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
-import { MultiverseEngine } from '../engine/MultiverseEngine'
 import type { MultiverseBranchRecord, MultiverseSimulationResult } from '../types'
-import { GitFork, GitBranch, Send, Trash2, ArrowRight } from 'lucide-react'
+import { MultiverseEngine, type BranchEvent, type CanonChapter } from '../engine/MultiverseEngine'
+import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
+import { indexedDbMultiverseRepository } from '../../../adapters/indexedDbMultiverseRepository'
+import { semanticTextFromContent } from '../../../domain/content'
+import { redactPluginValue } from '../../../core/pluginDataRedaction'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
-import { semanticTextFromContent } from '../../../domain/content'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
 
-type CanonChapter = { index: number; title: string; summary: string; entities: string[] }
-
-export const MultiverseMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
-  const host = useOptionalPluginHostContext()
-  const [canonChapters, setCanonChapters] = useState<CanonChapter[]>([])
-  const [forkIndex, setForkIndex] = useState<number>(0)
-  const [premise, setPremise] = useState<string>('')
-  const [branches, setBranches] = useState<MultiverseBranchRecord[]>([])
-  const [activeBranch, setActiveBranch] = useState<MultiverseSimulationResult | null>(null)
-  const [isRunning, setIsRunning] = useState(false)
-  const workflowRunRef = useRef(0)
-
-  const loadBranches = async () => {
-    const list = await indexedDbMultiverseRepository.getAll(projectId)
-    setBranches(list)
-  }
-
-  useEffect(() => {
-    loadBranches().catch(console.error)
-  }, [projectId])
-
-  // Load real chapters from IndexedDB and map to CanonChapter shape
-  useEffect(() => {
-    indexedDbProjectRepository
-      .getChaptersByProject(projectId)
-      .then((chapters) => {
-        const mapped: CanonChapter[] = chapters
-          .sort((a, b) => a.order - b.order)
-          .map((ch) => ({
-            index: ch.order,
-            title: ch.title,
-            summary: ch.content.replace(/<[^>]+>/g, '').slice(0, 80),
-            entities: [],
-          }))
-        setCanonChapters(mapped)
-        if (mapped.length > 0) setForkIndex(mapped[0].index)
-      })
-      .catch(console.error)
-  }, [projectId])
-
-  useEffect(() => {
-    onStats?.({
-      title: '平行宇宙因果沙盒',
-      wordCount: branches.length,
-      updatedAt: clock.now(),
-    })
-  }, [branches, onStats])
-
-  // 离线本地模拟可以即时预览；联网 Runtime 工作流必须由作者明确运行。
-  useEffect(() => {
-    if (canonChapters.length < 2) return
-    setActiveBranch(MultiverseEngine.simulateFork(canonChapters, forkIndex, premise))
-  }, [canonChapters, forkIndex, premise])
-
-  useEffect(() => {
-    workflowRunRef.current += 1
-  }, [canonChapters, forkIndex, premise])
-
-  useEffect(() => {
-    return () => {
-      workflowRunRef.current += 1
-    }
-  }, [])
-
-  const handleRunWorkflow = async () => {
-    const runtimeAssistant = host?.aiAssistant
-    if (
-      canonChapters.length < 2 ||
-      !runtimeAssistant?.isAvailable ||
-      !runtimeAssistant.runPluginWorkflow ||
-      isRunning
-    ) {
-      return
-    }
-
-    const runId = workflowRunRef.current + 1
-    workflowRunRef.current = runId
-    setIsRunning(true)
-
-    try {
-      const result = await runtimeAssistant.runPluginWorkflow(
-        'multiverse-whatif',
-        {
-          canonChapters: canonChapters.map((chapter) => ({
-            ...chapter,
-            title: semanticTextFromContent(`multiverse-title-${chapter.index}`, chapter.title),
-            summary: semanticTextFromContent(
-              `multiverse-summary-${chapter.index}`,
-              chapter.summary,
-            ),
-            entities: chapter.entities.map((entity, index) =>
-              semanticTextFromContent(`multiverse-entity-${chapter.index}-${index}`, entity),
-            ),
-          })),
-          forkChapterIndex: forkIndex,
-          divergencePremise: semanticTextFromContent('multiverse-divergence-premise', premise),
-        },
-        { projectId, executionMode: 'explicit', cancellable: true },
-      )
-      if (
-        workflowRunRef.current === runId &&
-        result?.status === 'completed' &&
-        isMultiverseSimulationResult(result.result)
-      ) {
-        setActiveBranch(result.result)
-      }
-    } catch (error) {
-      if (workflowRunRef.current === runId) console.error('Multiverse workflow failed:', error)
-    } finally {
-      if (workflowRunRef.current === runId) setIsRunning(false)
-    }
-  }
-
-  const handleSaveBranch = async () => {
-    if (!activeBranch) return
-    const record: MultiverseBranchRecord = MultiverseEngine.createBranchRecord(
-      idGenerator.generate('branch'),
-      projectId,
-      activeBranch,
-      clock.now(),
-    )
-    await indexedDbMultiverseRepository.save(record)
-    await loadBranches()
-  }
-
-  const handleDeleteBranch = async (id: string) => {
-    await indexedDbMultiverseRepository.delete(id)
-    await loadBranches()
-  }
-
-  return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto text-slate-800 dark:text-slate-100">
-      <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <GitFork className="w-6 h-6 text-purple-500" />
-            <span>平行宇宙因果沙盒推演器 (MultiverseWhatIf)</span>
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            设定剧情分支分歧奇点，推演“如果主角未救女配/错失机缘”的因果涟漪与蝴蝶效应
-          </p>
-          <ScoreProvenanceBadge source="rule" detail="按分支正文的词集重合度推算" />
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleRunWorkflow}
-            disabled={
-              canonChapters.length < 2 ||
-              !host?.aiAssistant?.isAvailable ||
-              !host?.aiAssistant?.runPluginWorkflow ||
-              isRunning
-            }
-            className="px-3.5 py-1.5 border border-purple-300 text-purple-700 dark:border-purple-800 dark:text-purple-300 text-xs rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isRunning ? '运行中…' : '运行 AI 推演'}
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveBranch}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg font-medium shadow-sm transition"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>归档当前推演分支</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 空状态提示 */}
-      {canonChapters.length < 2 && (
-        <div className="text-center py-16 text-slate-400 dark:text-slate-500">
-          <GitFork className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">请先在项目中创建至少 2 个章节，才能启动平行宇宙推演。</p>
-        </div>
-      )}
-
-      {/* 分支控制输入 */}
-      {canonChapters.length >= 2 && (
-        <div className="p-4 rounded-xl border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="text-xs font-bold text-slate-500 block mb-1">
-              分歧奇点章节 (Fork Point):
-            </label>
-            <Select
-              aria-label="分歧奇点章节"
-              value={forkIndex}
-              onValueChange={(v) => setForkIndex(Number(v))}
-              className="w-full"
-              size="sm"
-            >
-              {canonChapters.map((ch) => (
-                <option key={ch.index} value={ch.index}>
-                  {ch.title}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="md:col-span-3">
-            <label className="text-xs font-bold text-slate-500 block mb-1">
-              “What-If” 假设前提假设词:
-            </label>
-            <input
-              type="text"
-              aria-label="What-If 假设前提"
-              value={premise}
-              onChange={(e) => setPremise(e.target.value)}
-              className="w-full p-2 border rounded text-xs bg-white dark:bg-slate-950"
-              placeholder="例如：如果主角在第14章没有救下女配..."
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 主宇宙 vs 平行宇宙双轨因果对照 */}
-      {activeBranch && (
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold flex items-center gap-2 text-slate-700 dark:text-slate-200">
-            <GitBranch className="w-4 h-4 text-purple-500" />
-            <span>双轨因果对照：主宇宙 (Canon) vs 平行宇宙 (What-If)</span>
-          </h3>
-
-          <div className="space-y-3">
-            {canonChapters.map((canon, idx) => {
-              const branch = activeBranch.nodes[idx]
-              const isFork = canon.index === forkIndex
-              const isPost = canon.index > forkIndex
-
-              return (
-                <div
-                  key={canon.index}
-                  className={`p-4 rounded-xl border grid grid-cols-1 md:grid-cols-2 gap-4 text-xs transition ${
-                    isFork
-                      ? 'border-purple-400 bg-purple-50/40 dark:bg-purple-950/20'
-                      : isPost
-                        ? 'border-slate-300 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60'
-                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950'
-                  }`}
-                >
-                  {/* 左侧：原著主宇宙 */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between font-bold text-slate-500">
-                      <span>{canon.title} · 主宇宙</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600">
-                        Canon
-                      </span>
-                    </div>
-                    <p className="text-slate-700 dark:text-slate-300">{canon.summary}</p>
-                  </div>
-
-                  {/* 右侧：推演分支宇宙 */}
-                  <div className="space-y-1 border-t md:border-t-0 md:border-l md:pl-4 border-slate-200 dark:border-slate-800">
-                    <div className="flex items-center justify-between font-bold">
-                      <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
-                        <ArrowRight className="w-3.5 h-3.5" />
-                        {branch?.chapterTitle}
-                      </span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                          (branch?.divergenceLevel || 0) >= 0.7
-                            ? 'bg-rose-100 dark:bg-rose-950 text-rose-600'
-                            : (branch?.divergenceLevel || 0) > 0
-                              ? 'bg-purple-100 dark:bg-purple-950 text-purple-600'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        偏离度: {Math.round((branch?.divergenceLevel || 0) * 100)}%
-                      </span>
-                    </div>
-                    <p className="text-slate-700 dark:text-slate-200">{branch?.eventSummary}</p>
-                    {branch?.butterflyEffects && branch.butterflyEffects.length > 0 && (
-                      <div className="text-[11px] text-purple-600 dark:text-purple-300 font-medium">
-                        {branch.butterflyEffects.join('；')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 已归档历史分支库 */}
-      {branches.length > 0 && (
-        <div className="border-t pt-4 border-slate-200 dark:border-slate-800 space-y-3">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            已归档平行宇宙分支 ({branches.length})
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {branches.map((b) => (
-              <div
-                key={b.id}
-                className="p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs space-y-2 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between font-bold text-purple-600 dark:text-purple-400 mb-1">
-                    <span>{b.name}</span>
-                    <span className="text-[10px] text-slate-400">
-                      第 {b.forkChapterIndex} 章奇点
-                    </span>
-                  </div>
-                  <p className="text-slate-600 dark:text-slate-400">{b.divergencePremise}</p>
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400">
-                    {new Date(b.createdAt).toLocaleDateString()}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteBranch(b.id)}
-                    className="text-rose-500 hover:text-rose-600 transition flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> 删除
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+interface DraftEvent {
+  eventSummary: string
+  assumptions: string
+  consequences: string
+  premiseLink: string
+  revision?: number
 }
-
-function isMultiverseSimulationResult(value: unknown): value is MultiverseSimulationResult {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const result = value as Partial<MultiverseSimulationResult>
+export const MultiverseMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <MultiverseSession key={props.projectId} {...props} />
+)
+const MultiverseSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+  const host = useOptionalPluginHostContext()
+  const [canon, setCanon] = useState<CanonChapter[]>([])
+  const [fork, setFork] = useState(1)
+  const [premise, setPremise] = useState('')
+  const [drafts, setDrafts] = useState<Partial<Record<string, DraftEvent>>>({})
+  const [branches, setBranches] = useState<MultiverseBranchRecord[]>([])
+  const [workflowRun, setWorkflowRun] = useState<{
+    identity: string
+    result: MultiverseSimulationResult
+  } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let stale = false
+    Promise.all([
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject?.(projectId) ?? Promise.resolve([]),
+      indexedDbMultiverseRepository.getAll(projectId),
+    ])
+      .then(([chapters, volumes, branches]) => {
+        if (stale) return
+        const scoped = chapters.filter((c) => c.projectId === projectId)
+        const ordered = volumes.length
+          ? volumes
+              .filter((v) => v.projectId === projectId)
+              .sort((a, b) => a.order - b.order)
+              .flatMap((v) =>
+                scoped.filter((c) => c.volumeId === v.id).sort((a, b) => a.order - b.order),
+              )
+          : new Set(scoped.map((c) => c.volumeId)).size <= 1
+            ? scoped.sort((a, b) => a.order - b.order)
+            : []
+        const mapped = ordered.map((c, i) => ({
+          index: i + 1,
+          chapterId: c.id,
+          chapterRevision: c.revision,
+          title: semanticTextFromContent(`${c.id}-title`, c.title, c.revision),
+          summary: semanticTextFromContent(c.id, c.content ?? '', c.revision),
+          entities: [],
+        }))
+        setCanon(mapped)
+        setFork((previous) =>
+          mapped.some((c) => c.index === previous) ? previous : (mapped[0]?.index ?? 1),
+        )
+        setBranches(branches.filter((b) => b.projectId === projectId))
+        setError(ordered.length !== scoped.length ? '部分章节缺少卷顺序，尚未纳入分支。' : null)
+      })
+      .catch((cause) => {
+        if (!stale) setError(String(cause))
+      })
+    return () => {
+      stale = true
+    }
+  }, [projectId, attempt])
+  useEffect(
+    () =>
+      chapterSaveEvents.subscribe(({ chapter }) => {
+        if (chapter.projectId === projectId)
+          setCanon((current) =>
+            current.map((c) =>
+              c.chapterId === chapter.id
+                ? {
+                    ...c,
+                    title: semanticTextFromContent(
+                      `${chapter.id}-title`,
+                      chapter.title,
+                      chapter.revision,
+                    ),
+                    summary: semanticTextFromContent(
+                      chapter.id,
+                      chapter.content ?? '',
+                      chapter.revision,
+                    ),
+                    chapterRevision: chapter.revision,
+                  }
+                : c,
+            ),
+          )
+      }),
+    [projectId],
+  )
+  useEffect(() => {
+    onStats?.({ title: '平行分支计划', wordCount: 0, updatedAt: clock.now() })
+  }, [branches, onStats])
+  const events: BranchEvent[] = canon
+    .filter((c) => c.index >= fork)
+    .flatMap((c) => {
+      const draft = drafts[c.chapterId!]
+      return draft?.eventSummary.trim() && draft.revision === c.chapterRevision
+        ? [
+            {
+              chapterIndex: c.index,
+              eventSummary: draft.eventSummary,
+              assumptions: draft.assumptions.split('\n').filter(Boolean),
+              consequences: draft.consequences.split('\n').filter(Boolean),
+              premiseLink: draft.premiseLink,
+            },
+          ]
+        : []
+    })
+  const semanticPremise = semanticTextFromContent(`${projectId}-divergence-premise`, premise)
+  const semanticEvents: BranchEvent[] = events.map((event) => ({
+    ...event,
+    eventSummary: semanticTextFromContent(
+      `${projectId}-${event.chapterIndex}-summary`,
+      event.eventSummary,
+    ),
+    assumptions: event.assumptions?.map((assumption, index) =>
+      semanticTextFromContent(`${projectId}-${event.chapterIndex}-assumption-${index}`, assumption),
+    ),
+    consequences: event.consequences?.map((consequence, index) =>
+      semanticTextFromContent(
+        `${projectId}-${event.chapterIndex}-consequence-${index}`,
+        consequence,
+      ),
+    ),
+    premiseLink:
+      event.premiseLink === undefined
+        ? undefined
+        : semanticTextFromContent(
+            `${projectId}-${event.chapterIndex}-premise-link`,
+            event.premiseLink,
+          ),
+  }))
+  const semanticInput = {
+    divergencePremise: semanticPremise,
+    canonChapters: canon,
+    forkChapterIndex: fork,
+    branchEvents: semanticEvents,
+  }
+  const identity = JSON.stringify([projectId, canon, fork, premise, events])
+  const scopeRef = useRef<string | null>(identity)
+  scopeRef.current = identity
+  useEffect(
+    () => () => {
+      scopeRef.current = null
+    },
+    [],
+  )
+  const ai = usePluginAiTask('multiverse-whatif', identity)
+  const local = useMemo(
+    () =>
+      canon.length && semanticPremise.trim() && canon.some((c) => c.index === fork)
+        ? MultiverseEngine.simulateFork(canon, fork, semanticPremise, semanticEvents)
+        : null,
+    [identity],
+  )
+  const active = workflowRun?.identity === identity ? workflowRun.result : local
+  const run = async () => {
+    if (!local || busy) return
+    const expected = local
+    const scope = identity
+    setBusy(true)
+    setError(null)
+    try {
+      if (!host?.aiAssistant?.isAvailable || !host.aiAssistant.runPluginWorkflow)
+        throw new Error('Runtime 工作流未连接。')
+      const outcome = await host.aiAssistant.runPluginWorkflow('multiverse-whatif', semanticInput, {
+        projectId,
+        executionMode: 'explicit',
+      })
+      if (scopeRef.current !== scope) return
+      if (outcome?.status !== 'completed')
+        throw new Error(outcome?.status === 'failed' ? outcome.error : '工作流尚未完成。')
+      if (!matchesSerializedResult(outcome.result, redactPluginValue(expected)))
+        throw new Error('返回的分支与当前前提、来源或作者事件不一致。')
+      setWorkflowRun({ identity: scope, result: expected })
+      setNotice('Runtime 已构建当前分支计划；后续故事尚需作者或模型推演。')
+    } catch (cause) {
+      if (scopeRef.current === scope) setError(String(cause))
+    } finally {
+      if (scopeRef.current !== null) setBusy(false)
+    }
+  }
+  const save = async () => {
+    if (!active || busy) return
+    setBusy(true)
+    try {
+      const record = MultiverseEngine.createBranchRecord(
+        idGenerator.generate('branch'),
+        projectId,
+        active,
+        clock.now(),
+      )
+      await indexedDbMultiverseRepository.save(record)
+      setBranches((current) => [...current, record])
+      setNotice('分支计划已归档。')
+      setError(null)
+    } catch (cause) {
+      setError('保存失败：' + String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const update = (
+    chapter: CanonChapter,
+    field: keyof Omit<DraftEvent, 'revision'>,
+    value: string,
+  ) =>
+    setDrafts((current) => ({
+      ...current,
+      [chapter.chapterId!]: {
+        eventSummary: '',
+        assumptions: '',
+        consequences: '',
+        premiseLink: '',
+        ...(current[chapter.chapterId!] ?? {}),
+        revision: chapter.chapterRevision,
+        [field]: value,
+      },
+    }))
   return (
-    typeof result.branchId === 'string' &&
-    typeof result.branchName === 'string' &&
-    typeof result.forkChapterIndex === 'number' &&
-    Array.isArray(result.nodes) &&
-    Array.isArray(result.divergenceCurve) &&
-    Array.isArray(result.butterflyEffects)
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>平行宇宙因果沙盒推演器 (MultiverseWhatIf)</h2>
+      <p>分歧前继承主线；分歧后只记录明确假设和作者给定事件。缺少的后续情节保持未知。</p>
+      {!canon.length && <p>请先保存具有明确卷顺序的章节。</p>}
+      {error && (
+        <p role="alert">
+          {error}
+          <button onClick={() => setAttempt((n) => n + 1)}>重新读取</button>
+        </p>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      <select
+        aria-label="分歧奇点章节"
+        value={fork}
+        onChange={(e) => setFork(Number(e.target.value))}
+      >
+        {canon.map((c) => (
+          <option key={c.chapterId} value={c.index}>
+            第 {c.index} 章 · {c.title}
+          </option>
+        ))}
+      </select>
+      <input
+        aria-label="What-If 假设前提"
+        placeholder="填写改变的选择或条件"
+        value={premise}
+        onChange={(e) => setPremise(e.target.value)}
+      />
+      <button
+        disabled={!local || busy || !host?.aiAssistant?.isAvailable}
+        onClick={() => void run()}
+      >
+        {busy ? '运行中…' : '运行 Runtime 分支工作流'}
+      </button>
+      <button disabled={!active || busy} onClick={() => void save()}>
+        归档当前推演分支
+      </button>
+      {active && (
+        <section>
+          <h3>双轨因果对照：主线与分支</h3>
+          {active.nodes.map((node) => {
+            const chapter = canon.find((c) => c.index === node.chapterIndex)!
+            const draft = drafts[chapter.chapterId!] ?? {
+              eventSummary: '',
+              assumptions: '',
+              consequences: '',
+              premiseLink: '',
+            }
+            return (
+              <article key={chapter.chapterId} className="border rounded p-3 space-y-2">
+                <h4>
+                  第 {node.chapterIndex} 章 · {node.chapterTitle} · 来源版本{' '}
+                  {node.sourceRevision ?? '未知'}
+                </h4>
+                <details>
+                  <summary>主线原文 / 作者梗概</summary>
+                  <pre className="whitespace-pre-wrap">{node.canonSummary}</pre>
+                </details>
+                <p>分支：{node.eventSummary}</p>
+                <p>
+                  {node.status === 'inherited'
+                    ? '继承主线'
+                    : node.status === 'hypothesis'
+                      ? '假设草稿'
+                      : '尚未规划'}
+                </p>
+                {node.divergenceLevel === null ? (
+                  <p>状态差异未知；未提供可比的作者事实集。</p>
+                ) : node.stateDifferenceMethod === 'inherited' ? (
+                  <p>分歧前来源相同。</p>
+                ) : (
+                  <p>作者事实集差异：{Math.round(node.divergenceLevel * 100)}%</p>
+                )}
+                {node.chapterIndex >= fork && (
+                  <>
+                    <textarea
+                      aria-label={'分支事件 ' + node.chapterIndex}
+                      placeholder="此章的分支事件（作者草稿）"
+                      value={draft.eventSummary}
+                      onChange={(e) => update(chapter, 'eventSummary', e.target.value)}
+                    />
+                    <textarea
+                      aria-label={'所需假设 ' + node.chapterIndex}
+                      placeholder="所需假设，每行一项"
+                      value={draft.assumptions}
+                      onChange={(e) => update(chapter, 'assumptions', e.target.value)}
+                    />
+                    <textarea
+                      aria-label={'后续影响 ' + node.chapterIndex}
+                      placeholder="需要处理的后续影响，每行一项"
+                      value={draft.consequences}
+                      onChange={(e) => update(chapter, 'consequences', e.target.value)}
+                    />
+                    <input
+                      aria-label={'前提联系 ' + node.chapterIndex}
+                      placeholder="说明此事件如何依赖分歧前提"
+                      value={draft.premiseLink}
+                      onChange={(e) => update(chapter, 'premiseLink', e.target.value)}
+                    />
+                    {draft.revision !== undefined && draft.revision !== chapter.chapterRevision && (
+                      <p>主线版本已变化，旧草稿尚未纳入本次计划。</p>
+                    )}
+                  </>
+                )}
+              </article>
+            )
+          })}
+        </section>
+      )}
+      {host?.aiAssistant?.isAvailable && (
+        <button disabled={!active || ai.isRunning} onClick={() => void ai.run(semanticInput)}>
+          AI 前提与后果复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
+      <h3>已归档平行宇宙分支 ({branches.length})</h3>
+      {branches.map((branch) => (
+        <article key={branch.id} className="border p-2">
+          <p>
+            {branch.name} · 第 {branch.forkChapterIndex} 章
+          </p>
+          <p>{branch.divergencePremise}</p>
+          {branch.schemaVersion !== 2 && <p>旧推演记录的情节与数值未经本轮验证。</p>}
+          <button
+            onClick={() => {
+              setFork(branch.forkChapterIndex)
+              setPremise(branch.divergencePremise)
+              setDrafts(
+                Object.fromEntries(
+                  branch.nodes
+                    .filter((n) => n.status === 'hypothesis' && n.sourceChapterId)
+                    .map((n) => [
+                      n.sourceChapterId!,
+                      {
+                        eventSummary: n.eventSummary,
+                        assumptions: n.assumptions?.join('\n') ?? '',
+                        consequences: n.butterflyEffects.join('\n'),
+                        premiseLink: n.premiseLink ?? '',
+                        revision: n.sourceRevision,
+                      },
+                    ]),
+                ),
+              )
+              setNotice('已载入归档假设，按当前主线版本重新核对。')
+            }}
+          >
+            载入计划
+          </button>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void indexedDbMultiverseRepository
+                .delete(branch.id)
+                .then(() => setBranches((current) => current.filter((b) => b.id !== branch.id)))
+                .catch((cause) => setError(String(cause)))
+            }
+          >
+            删除
+          </button>
+        </article>
+      ))}
+    </div>
   )
 }

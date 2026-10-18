@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { SafeGateScanResult, SensitiveWord, RegexRule } from '../types'
 import { SafeGateEngine } from '../engine/SafeGateEngine'
@@ -25,21 +25,25 @@ export const SafeGateDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) =>
   })
 
   const [copiedText, setCopiedText] = useState<string | null>(null)
-  const [scanResult, setScanResult] = useState<SafeGateScanResult>(() =>
-    engine.scan(currentText, 'xianxia'),
+  const [copyError, setCopyError] = useState('')
+  const scanResult: SafeGateScanResult = useMemo(
+    () => engine.scan(currentText, 'neutral'),
+    [engine, currentText],
   )
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setScanResult(engine.scan(currentText, 'xianxia'))
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [currentText, engine])
+    setCopiedText(null)
+    setCopyError('')
+  }, [currentText])
 
-  const handleCopy = (text: string) => {
-    clipboardWriter.writeText(text).catch((e) => console.warn('Clipboard write failed:', e))
-    setCopiedText(text)
-    setTimeout(() => setCopiedText(null), 1500)
+  const handleCopy = async (text: string) => {
+    try {
+      await clipboardWriter.writeText(text)
+      setCopiedText(text)
+      setCopyError('')
+    } catch {
+      setCopyError('复制失败，请重试。')
+    }
   }
 
   return (
@@ -87,10 +91,18 @@ export const SafeGateDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) =>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+        {copyError && <p role="alert">{copyError}</p>}
+        {scanResult.ruleErrors.map((issue) => (
+          <p role="alert" key={issue.ruleId}>
+            {issue.ruleId}：{issue.message}
+          </p>
+        ))}
         {scanResult.violations.length === 0 ? (
           <div className="text-center py-12 text-[var(--ink-text-muted)]">
             <ShieldCheck className="w-7 h-7 mx-auto text-emerald-500 mb-2 opacity-80" />
-            <p className="font-medium text-emerald-500">当前正文未命中本地规则</p>
+            <p className="font-medium text-emerald-500">
+              {scanResult.complete ? '当前正文未命中本地规则' : '部分规则未完成，结果不完整'}
+            </p>
             <p className="text-[10px] text-[var(--ink-text-faint)] mt-1">
               按本地词库和正则规则扫描，并提供可选替换建议
             </p>

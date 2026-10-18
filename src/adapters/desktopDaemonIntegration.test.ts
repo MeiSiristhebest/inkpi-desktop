@@ -1,12 +1,15 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { InstructionRegistryStatus, TaskStatusSnapshot } from '@inkpi/protocol'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { semanticDocumentFromText } from '../domain/content'
-import { createStoryState } from '../domain/story'
+import { createStoryEntity, createStoryState, upsertEntity } from '../domain/story'
 import { createAssistantTask, createContinueTask } from '../ai/tasks/taskFactories'
 import { createPluginAnalysisTask } from '../ai/tasks/pluginTasks'
+import { projectWorkspaceResults } from '../ai/results/standardAiResult'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 import { createDaemonAiAssistant } from './daemonAiAssistant'
@@ -164,14 +167,62 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
   it('carries the authoritative StoryState through the real context providers', async () => {
     const { client, assistant } = await connectAssistant()
     try {
+      const storyState = upsertEntity(
+        createStoryState(12),
+        createStoryEntity({
+          id: 'hero',
+          kind: 'character',
+          name: '林青',
+          attributes: { role: 'protagonist', age: 19 },
+          provenance: {
+            sourceType: 'author',
+            factLevel: 'canonical-fact',
+            confidence: 1,
+            sourceDocumentId: 'desktop-story-context-doc',
+            sourceBlockId: 'block-1',
+            evidence: [
+              {
+                documentId: 'desktop-story-context-doc',
+                blockId: 'block-1',
+                excerpt: '林青把笔停在最后一个字上。',
+                semanticFrom: 0,
+                semanticTo: 14,
+              },
+            ],
+          },
+        }),
+      )
       const task = createContinueTask({
         taskId: 'desktop-daemon-story-context',
         workspaceId: 'test-ws',
-        document: semanticDocumentFromText('desktop-story-context-doc', '她把笔停在最后一个字上。'),
-        storyState: createStoryState(12),
+        document: semanticDocumentFromText(
+          'desktop-story-context-doc',
+          '林青把笔停在最后一个字上。',
+        ),
+        storyState,
         targetCharacters: 40,
         instruction: '保留故事状态后等待作者确认。',
       })
+      const payload = task.input.payload as {
+        context: { storyContext?: { canonicalFacts?: Array<Record<string, unknown>> } }
+      }
+
+      expect(payload.context.storyContext?.canonicalFacts).toContainEqual(
+        expect.objectContaining({
+          id: 'hero',
+          details: { kind: 'character', attributes: { role: 'protagonist', age: 19 } },
+          provenance: expect.objectContaining({
+            sourceDocumentId: 'desktop-story-context-doc',
+            sourceBlockId: 'block-1',
+            evidence: expect.arrayContaining([
+              expect.objectContaining({
+                blockId: 'block-1',
+                excerpt: '林青把笔停在最后一个字上。',
+              }),
+            ]),
+          }),
+        }),
+      )
 
       const result = await assistant.runTask(task, { pollIntervalMs: 10 })
 
@@ -243,9 +294,93 @@ describe('Desktop ↔ InkPi daemon RPC integration', () => {
       await client.close()
     }
   })
+
+  it('restores a plugin result after a daemon process restart', async () => {
+    const workspaceId = 'plugin-result-restart-workspace'
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'inkpi-daemon-artifact-restart-'))
+    const databasePath = join(dataDirectory, 'daemon.sqlite')
+    const initialDaemon = daemon
+    let persistentHarness: DaemonHarness | undefined
+    let client: RpcClient | undefined
+    let freshClient: RpcClient | undefined
+    let restartedClient: RpcClient | undefined
+    try {
+      persistentHarness = startDaemonHarness(databasePath)
+      const runningDaemon = await persistentHarness.ready
+      const connected = await connectAssistant(runningDaemon)
+      client = connected.client
+      const { assistant } = connected
+
+      const task = createPluginAnalysisTask({
+        pluginId: 'reader-hook',
+        input: { chapter: '雨停后，门外只剩一盏冷灯。' },
+        workspaceId,
+        documentId: 'plugin-result-chapter',
+        documentRevision: 7,
+      })
+
+      const result = await assistant.runTask(task, { pollIntervalMs: 10 })
+      expect(result).toMatchObject({ status: 'completed', artifactIds: [expect.any(String)] })
+
+      const artifactId = result?.artifactIds?.[0]
+      expect(artifactId).toBeTruthy()
+      const artifacts = await assistant.listArtifacts?.(workspaceId)
+      expect(artifacts?.map((artifact) => artifact.id)).toContain(artifactId)
+      expect(projectWorkspaceResults(artifacts ?? [], [])).toEqual([
+        expect.objectContaining({
+          id: artifactId,
+          taskId: task.id,
+          status: 'result',
+          data: 'desktop-daemon-fixture:completed',
+          scope: expect.objectContaining({
+            workspaceId,
+            document: { id: 'plugin-result-chapter', revision: 7 },
+          }),
+        }),
+      ])
+
+      const freshConnection = await connectAssistant(runningDaemon)
+      freshClient = freshConnection.client
+      const freshArtifacts = await freshConnection.assistant.listArtifacts?.(workspaceId)
+      expect(freshArtifacts?.map((artifact) => artifact.id)).toContain(artifactId)
+
+      await freshClient.close()
+      freshClient = undefined
+      await client.close()
+      client = undefined
+      await stopDaemonHarness(persistentHarness.child)
+      persistentHarness = undefined
+
+      persistentHarness = startDaemonHarness(databasePath)
+      const restartedDaemon = await persistentHarness.ready
+      const restartedConnection = await connectAssistant(restartedDaemon)
+      restartedClient = restartedConnection.client
+      const restartedArtifacts = await restartedConnection.assistant.listArtifacts?.(workspaceId)
+      expect(restartedArtifacts?.map((artifact) => artifact.id)).toContain(artifactId)
+      expect(projectWorkspaceResults(restartedArtifacts ?? [], [])).toEqual([
+        expect.objectContaining({
+          id: artifactId,
+          taskId: task.id,
+          status: 'result',
+          data: 'desktop-daemon-fixture:completed',
+          scope: expect.objectContaining({
+            workspaceId,
+            document: { id: 'plugin-result-chapter', revision: 7 },
+          }),
+        }),
+      ])
+    } finally {
+      daemon = initialDaemon
+      await client?.close()
+      await freshClient?.close()
+      await restartedClient?.close()
+      if (persistentHarness) await stopDaemonHarness(persistentHarness.child)
+      await rm(dataDirectory, { recursive: true, force: true })
+    }
+  }, 30_000)
 })
 
-async function connectAssistant(): Promise<{
+async function connectAssistant(target: DaemonReadyMessage = daemon): Promise<{
   client: RpcClient
   assistant: ReturnType<typeof createDaemonAiAssistant>
 }> {
@@ -255,18 +390,19 @@ async function connectAssistant(): Promise<{
   // real Node `ws` fallback for this cross-process test, then restore jsdom.
   testGlobal.WebSocket = undefined
   try {
-    const client = await inkpiDaemonGateway.connect(`ws://127.0.0.1:${daemon.wsPort}`)
+    const client = await inkpiDaemonGateway.connect(`ws://127.0.0.1:${target.wsPort}`)
     return { client, assistant: createDaemonAiAssistant(client) }
   } finally {
     testGlobal.WebSocket = browserWebSocket
   }
 }
 
-function startDaemonHarness(): DaemonHarness {
+function startDaemonHarness(databasePath?: string): DaemonHarness {
   const child = spawn(process.execPath, [fixturePath], {
     cwd: desktopRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
+    ...(databasePath ? { env: { ...process.env, INKPI_TEST_DAEMON_DB_PATH: databasePath } } : {}),
   })
   return { child, ready: waitForDaemonReady(child) }
 }

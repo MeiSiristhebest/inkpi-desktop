@@ -18,6 +18,23 @@ export interface GhostTextState {
   pos: number
 }
 
+export type GhostTextAcceptance = 'all' | 'word' | 'line'
+
+const wordSegmenter = new Intl.Segmenter('zh', { granularity: 'word' })
+
+export function ghostTextPrefix(text: string, mode: GhostTextAcceptance): string {
+  if (mode === 'line') {
+    const newline = text.indexOf('\n')
+    return newline < 0 ? text : text.slice(0, newline + 1)
+  }
+  if (mode === 'word') {
+    for (const segment of wordSegmenter.segment(text)) {
+      if (segment.segment.trim()) return text.slice(0, segment.index + segment.segment.length)
+    }
+  }
+  return text
+}
+
 export const ghostTextPluginKey = new PluginKey<GhostTextState | null>('inkGhostText')
 
 export const GhostText = Extension.create({

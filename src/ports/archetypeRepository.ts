@@ -3,6 +3,7 @@ export type ArchetypeCategory =
 
 export interface NarrativeArchetypeRecord {
   id: string
+  projectId?: string
   name: string
   category: ArchetypeCategory
   coreDesire: string

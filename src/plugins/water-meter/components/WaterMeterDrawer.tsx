@@ -1,23 +1,22 @@
-import { useState, useMemo, type FC } from 'react'
+import { useState, useMemo, useEffect, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { waterMeterEngine } from '../engine/WaterMeterEngine'
-import { Droplet, Sparkles, Scissors } from 'lucide-react'
+import { Droplet, Sparkles } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 
-export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
-  const [text, setText] = useState('')
+export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
+  const [text, setText] = useState(currentText ?? '')
+  useEffect(() => {
+    setText(currentText ?? '')
+  }, [currentText])
 
   const report = useMemo(() => {
     return waterMeterEngine.auditText(text)
   }, [text])
 
-  const handleClearBloat = () => {
-    let cleaned = text
-    for (const item of report.bloatItems) {
-      cleaned = cleaned.replaceAll(item.text, '')
-    }
-    cleaned = cleaned.replace(/\n\s*\n/g, '\n').trim()
-    setText(cleaned)
+  const handleRemove = (start?: number, end?: number, quote?: string) => {
+    if (start === undefined || end === undefined || text.slice(start, end) !== quote) return
+    setText(text.slice(0, start) + text.slice(end))
   }
 
   return (
@@ -25,29 +24,16 @@ export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
       <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-3">
         <div className="flex items-center gap-1.5 font-semibold">
           <Droplet className="w-4 h-4 text-cyan-500" />
-          <span>正文水分与信息熵</span>
+          <span>文本统计与词项复核</span>
         </div>
-        <span
-          className={`text-[11px] font-bold ${
-            report.waterScore > 50
-              ? 'text-rose-500'
-              : report.waterScore > 25
-                ? 'text-amber-500'
-                : 'text-emerald-500'
-          }`}
-        >
-          {report.waterScore} 分 · {report.waterLevel}
-        </span>
+        <span className="text-[11px]">{report.bloatItems.length} 处词项</span>
       </div>
 
-      <ScoreProvenanceBadge
-        source="rule"
-        detail="按固定词表、动词密度与文本熵计算；结果仅供人工复核"
-      />
+      <ScoreProvenanceBadge source="rule" detail="字符频率与词项覆盖率不判断文学质量" />
 
       <div className="space-y-2">
         <label className="text-[11px] text-[var(--ink-text-muted)] block">
-          粘贴当前段落进行实时脱水检测：
+          当前正文预览，可编辑以复核：
         </label>
         <textarea
           rows={4}
@@ -56,28 +42,24 @@ export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
           placeholder="粘贴待审文字，实时检测假动作与套话..."
           className="w-full p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
         />
-        {report.bloatItems.length > 0 && (
-          <button
-            onClick={handleClearBloat}
-            className="w-full py-1 rounded bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-emerald-500 text-emerald-500 text-xs font-medium flex items-center justify-center gap-1"
-          >
-            <Scissors className="w-3 h-3" />
-            一键剔除当前抓捕到的水词 ({report.bloatItems.length})
-          </button>
-        )}
+        <p className="text-[var(--ink-text-muted)]">
+          这里只修改预览。正文词项可能承担必要作用，请逐处复核。
+        </p>
       </div>
 
       {/* 核心指标卡 */}
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/60">
-          <span className="text-[var(--ink-text-muted)] block">动词密度 (AVR)</span>
+          <span className="text-[var(--ink-text-muted)] block">动作词表字符占比</span>
           <span className="font-bold text-[var(--ink-text)]">
             {(report.actionVerbRatio * 100).toFixed(1)}%
           </span>
         </div>
         <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/60">
-          <span className="text-[var(--ink-text-muted)] block">预估可精简</span>
-          <span className="font-bold text-emerald-500">-{report.dehydrationRate}%</span>
+          <span className="text-[var(--ink-text-muted)] block">词项覆盖字符</span>
+          <span className="font-bold">
+            {report.matchedCharacters} · {(report.clicheRatio * 100).toFixed(1)}%
+          </span>
         </div>
       </div>
 
@@ -85,7 +67,7 @@ export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
       {report.bloatItems.length > 0 && (
         <div className="space-y-1.5 pt-2 border-t border-[var(--ink-border)]">
           <span className="text-[11px] font-semibold text-rose-400 block">
-            捕获水词 ({report.bloatItems.length}):
+            原文词项 ({report.bloatItems.length}):
           </span>
           <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
             {report.bloatItems.map((item, i) => (
@@ -94,7 +76,9 @@ export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
                 className="p-1.5 rounded bg-[var(--ink-bg-canvas)] border border-rose-500/20 text-[10px] flex items-center justify-between"
               >
                 <span className="font-medium text-rose-400">“{item.text}”</span>
-                <span className="text-[var(--ink-text-muted)]">{item.type}</span>
+                <button type="button" onClick={() => handleRemove(item.start, item.end, item.text)}>
+                  移除该处（预览）
+                </button>
               </div>
             ))}
           </div>
@@ -108,7 +92,7 @@ export const WaterMeterDrawer: FC<DesktopPluginDrawerProps> = () => {
           精简建议：
         </span>
         <p className="text-[10px] text-[var(--ink-text)] leading-relaxed">
-          {report.advice[0] || '叙事密度良好。'}
+          {report.advice[0] || '词表没有命中，无法据此判断叙事作用。'}
         </p>
       </div>
     </div>

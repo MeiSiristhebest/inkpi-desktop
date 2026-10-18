@@ -21,15 +21,17 @@ describe('RhythmMetronomeEngine', () => {
     expect(beatsCh50.macro.phase).toBe('breather_reward')
   })
 
-  it('diagnoses stagnation accurately when stagnant chapters accumulate', () => {
+  it('reports chapter statistics and the author-provided stagnation annotation', () => {
     const reportHealthy = RhythmMetronomeEngine.diagnoseStagnation(0, [2500, 2600, 2400])
     expect(reportHealthy.isStagnant).toBe(false)
-    expect(reportHealthy.pacingPacingScore).toBeGreaterThanOrEqual(80)
+    expect(reportHealthy.averageCharacters).toBe(2500)
+    expect(reportHealthy.sampleCount).toBe(3)
 
     const reportSevere = RhythmMetronomeEngine.diagnoseStagnation(3, [2200, 2000, 1800])
     expect(reportSevere.isStagnant).toBe(true)
     expect(reportSevere.stagnantChapters).toBe(3)
-    expect(reportSevere.pacingPacingScore).toBeLessThan(50)
-    expect(reportSevere.diagnostic).toContain('严重警报')
+    expect(reportSevere.averageCharacters).toBe(2000)
+    expect(reportSevere.diagnostic).toContain('作者标注连续 3 章')
+    expect(reportSevere.diagnostic).toContain('不能证明情节停滞')
   })
 })

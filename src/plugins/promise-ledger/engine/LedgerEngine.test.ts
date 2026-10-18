@@ -21,95 +21,95 @@ const makeEntry = (overrides: Partial<PromiseLedgerEntry> = {}): PromiseLedgerEn
   ...overrides,
 })
 
-describe('LedgerEngine — 伏笔记忆衰减与债务状态分析', () => {
+describe('LedgerEngine — 作者期限与原文提及', () => {
   const engine = new LedgerEngine()
-
-  it('calculates memory heat correctly at plant chapter and over decay', () => {
-    const entry = makeEntry()
-    // 埋设本章，热度应为 1.0
-    expect(engine.computeMemoryHeat(entry, 5)).toBe(1.0)
-    expect(engine.computeMemoryHeat(entry, 3)).toBe(1.0)
-
-    // 跨越 10 章：e^(-0.05 * 10) = e^(-0.5) ≈ 0.606
-    const heatAt15 = engine.computeMemoryHeat(entry, 15)
-    expect(heatAt15).toBeCloseTo(0.606, 2)
-
-    // 跨越 40 章：e^(-0.05 * 40) = e^(-2) ≈ 0.135 (< 0.2 警戒线)
-    const heatAt45 = engine.computeMemoryHeat(entry, 45)
-    expect(heatAt45).toBeLessThan(0.2)
+  it('computes elapsed positions and does not infer reader memory', () => {
+    expect(engine.computeDebtSnapshot([makeEntry()], 5)[0].elapsedChapters).toBe(0)
+    expect(engine.computeDebtSnapshot([makeEntry()], 15)[0].elapsedChapters).toBe(10)
+    expect(engine.computeDebtSnapshot([makeEntry()], 3)[0].lastProgressChapter).toBeNull()
+    expect(engine.computeDebtSnapshot([makeEntry()], 45)[0]).not.toHaveProperty('memoryHeat')
   })
-
-  it('boosts memory heat when progress points are recorded', () => {
+  it('uses the latest actual progress record, excluding future records', () => {
     const entry = makeEntry({
-      progressHistory: [{ chapter: 15, note: '玉佩在拍卖行引起黑衣人关注', memoryBoost: 0.6 }],
+      progressHistory: [
+        { chapter: 15, note: '再次出现', memoryBoost: 0.6 },
+        { chapter: 100, note: '未来', memoryBoost: 1 },
+      ],
     })
-
-    // 在第 15 章发生推进，热度得到恢复
-    const heatWithoutBoost = engine.computeMemoryHeat(makeEntry(), 16)
-    const heatWithBoost = engine.computeMemoryHeat(entry, 16)
-    expect(heatWithBoost).toBeGreaterThan(heatWithoutBoost)
-    expect(heatWithBoost).toBeLessThanOrEqual(1.0)
+    expect(engine.computeDebtSnapshot([entry], 16)[0].lastProgressChapter).toBe(15)
+    expect(engine.computeDebtSnapshot([entry], 10)[0].lastProgressChapter).toBe(5)
   })
-
-  it('evaluates debt snapshots: normal, warning, overdue and closed states', () => {
-    const entry = makeEntry() // plant: 5, soft: 15, due: 20
-    const entries = [entry]
-
-    // 第 10 章：经过 5 章，未达到软警告（5 < 15）
-    const snapNormal = engine.computeDebtSnapshot(entries, 10)[0]
-    expect(snapNormal.isWarning).toBe(false)
-    expect(snapNormal.isOverdue).toBe(false)
-    expect(snapNormal.urgencyScore).toBe(0)
-
-    // 第 21 章：经过 16 章，达到软警告（16 >= 15 且 < 20）
-    const snapWarn = engine.computeDebtSnapshot(entries, 21)[0]
-    expect(snapWarn.isWarning).toBe(true)
-    expect(snapWarn.isOverdue).toBe(false)
-    expect(snapWarn.urgencyScore).toBeGreaterThan(0)
-
-    // 第 26 章：经过 21 章，已超期（21 >= 20）
-    const snapOverdue = engine.computeDebtSnapshot(entries, 26)[0]
-    expect(snapOverdue.isOverdue).toBe(true)
-    expect(snapOverdue.urgencyScore).toBeGreaterThan(100)
-
-    // 已回收或废弃状态不产生警告
-    const snapPaid = engine.computeDebtSnapshot([makeEntry({ status: 'paid_off' })], 26)[0]
-    expect(snapPaid.isOverdue).toBe(false)
-    expect(snapPaid.urgencyScore).toBe(0)
+  it('evaluates normal, warning, due, overdue and closed states from author deadlines', () => {
+    const entry = makeEntry()
+    expect(engine.computeDebtSnapshot([entry], 10)[0]).toMatchObject({
+      isWarning: false,
+      isOverdue: false,
+      remainingChapters: 15,
+    })
+    expect(engine.computeDebtSnapshot([entry], 21)[0]).toMatchObject({
+      isWarning: true,
+      isOverdue: false,
+      remainingChapters: 4,
+    })
+    expect(engine.computeDebtSnapshot([entry], 25)[0]).toMatchObject({
+      isDue: true,
+      isOverdue: false,
+      remainingChapters: 0,
+    })
+    expect(engine.computeDebtSnapshot([entry], 26)[0]).toMatchObject({
+      isOverdue: true,
+      remainingChapters: -1,
+    })
+    for (const status of ['paid_off', 'abandoned'] as const)
+      expect(engine.computeDebtSnapshot([makeEntry({ status })], 100)[0]).toMatchObject({
+        isDue: false,
+        isOverdue: false,
+        isWarning: false,
+      })
   })
-
-  it('detects payoff keyword candidates in chapter text', () => {
+  it('keeps an unplaced promise unknown', () => {
+    const entry = makeEntry({ plantChapter: 0, softDeadline: 0, dueChapterLimit: 0 })
+    expect(engine.computeDebtSnapshot([entry], 100)[0]).toMatchObject({
+      elapsedChapters: null,
+      deadlineChapter: null,
+      remainingChapters: null,
+      lastProgressChapter: null,
+      isOverdue: false,
+      isWarning: false,
+    })
+  })
+  it('does not turn missing deadlines or chapters into overdue promises', () => {
+    expect(
+      engine.computeDebtSnapshot([makeEntry({ softDeadline: 0, dueChapterLimit: 0 })], 100)[0],
+    ).toMatchObject({ isOverdue: false, isWarning: false, deadlineChapter: null })
+    expect(engine.computeDebtSnapshot([makeEntry()], 0)[0]).toMatchObject({
+      elapsedChapters: null,
+      isOverdue: false,
+    })
+  })
+  it('locates every keyword mention with exact source spans and excludes closed promises', () => {
     const entries = [
       makeEntry({ id: 'p1', clueName: '赤血龙纹鼎' }),
       makeEntry({ id: 'p2', clueName: '断界渊之盟' }),
-      makeEntry({ id: 'p3', clueName: '玄天古卷', status: 'paid_off' }), // 已回收忽略
+      makeEntry({ id: 'p3', clueName: '玄天古卷', status: 'paid_off' }),
     ]
-
-    const text = '只见拍卖师揭开红绸，赫然是那失传已久的赤血龙纹鼎！众人皆惊。'
+    const text = '赤血龙纹鼎并未出现。有人问：“赤血龙纹鼎在哪里？”玄天古卷在台上。'
     const candidates = engine.detectPayoffCandidates(text, entries)
-
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0].entryId).toBe('p1')
-    expect(candidates[0].confidence).toBe(1.0)
+    expect(candidates).toHaveLength(2)
+    for (const candidate of candidates) {
+      expect(candidate.entryId).toBe('p1')
+      expect(candidate.status).toBe('mention')
+      expect(text.slice(candidate.startOffset, candidate.endOffset)).toBe(candidate.snippet)
+      expect(candidate).not.toHaveProperty('confidence')
+    }
   })
-
-  it('computes narrative health score accurately', () => {
-    const healthyEntries = [
-      makeEntry({ id: 'p1', plantChapter: 1, softDeadline: 30, dueChapterLimit: 50 }),
-    ]
-    expect(engine.computeNarrativeHealthScore(healthyEntries, 10)).toBe(100)
-
-    const overdueEntries = [
-      makeEntry({ id: 'p1', plantChapter: 1, softDeadline: 5, dueChapterLimit: 10 }), // at ch 25, overdue by 14
-      makeEntry({
-        id: 'p2',
-        tier: 'power_system',
-        plantChapter: 2,
-        softDeadline: 6,
-        dueChapterLimit: 12,
-      }),
-    ]
-    const score = engine.computeNarrativeHealthScore(overdueEntries, 25)
-    expect(score).toBeLessThan(80)
+  it('does not produce a health grade for empty records or use tier weights', () => {
+    expect(engine.computeDebtSnapshot([], 10)).toEqual([])
+    const [main, side] = engine.computeDebtSnapshot(
+      [makeEntry(), makeEntry({ tier: 'atmosphere' })],
+      30,
+    )
+    expect(main.remainingChapters).toBe(side.remainingChapters)
+    expect(main).not.toHaveProperty('urgencyScore')
   })
 })

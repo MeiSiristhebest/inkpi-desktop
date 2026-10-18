@@ -161,101 +161,52 @@ const SENSORY_DICTIONARY: Record<SenseType, string[]> = {
 export class DescribePaletteEngine {
   private snippets: SensorySnippet[]
   private randomSource: RandomSource
-
   constructor(customSnippets?: SensorySnippet[], random?: RandomSource) {
-    this.snippets =
-      customSnippets && customSnippets.length > 0
-        ? customSnippets
-        : (defaultDataset as SensorySnippet[])
-    this.randomSource = random || defaultRandomSource
+    this.snippets = structuredClone(customSnippets ?? (defaultDataset as SensorySnippet[]))
+    this.randomSource = random ?? defaultRandomSource
   }
-
-  /**
-   * 获取所有语料金句
-   */
-  public getAllSnippets(): SensorySnippet[] {
-    return this.snippets
+  getAllSnippets(): SensorySnippet[] {
+    return structuredClone(this.snippets)
   }
-
-  /**
-   * 倒排索引与多维打分检索
-   */
-  public searchSnippets(
+  searchSnippets(
     query: string,
     options?: { genre?: GenreType; sense?: SenseType; limit?: number },
   ): SensorySnippet[] {
-    const trimmedQuery = query.trim().toLowerCase()
-    const targetGenre = options?.genre || 'all'
-    const targetSense = options?.sense
-    const limit = options?.limit || 50
-
-    // 过滤题材
-    let pool = this.snippets
-    if (targetGenre !== 'all') {
-      pool = pool.filter((s) => s.genre === targetGenre || s.genre === 'all')
-    }
-    if (targetSense) {
-      pool = pool.filter(
-        (s) => s.primarySense === targetSense || s.secondarySenses?.includes(targetSense),
-      )
-    }
-
-    if (!trimmedQuery) {
-      return pool.slice(0, limit)
-    }
-
-    // 针对 query 打分
-    const scored = pool
-      .map((item) => {
-        let score = 0
-        const textLower = item.text.toLowerCase()
-        const categoryLower = item.category.toLowerCase()
-
-        // 关键词命中
-        for (const kw of item.keywords) {
-          if (trimmedQuery.includes(kw.toLowerCase()) || kw.toLowerCase().includes(trimmedQuery)) {
-            score += 30
-          }
-        }
-
-        // 标签命中
-        if (item.tags) {
-          for (const tg of item.tags) {
-            if (
-              trimmedQuery.includes(tg.toLowerCase()) ||
-              tg.toLowerCase().includes(trimmedQuery)
-            ) {
-              score += 20
-            }
-          }
-        }
-
-        // 文本子串包含
-        if (textLower.includes(trimmedQuery)) {
-          score += 25
-        }
-
-        // 分类匹配
-        if (categoryLower.includes(trimmedQuery)) {
-          score += 15
-        }
-
-        return { item, score }
+    const limit = options?.limit ?? 50
+    if (!Number.isSafeInteger(limit) || limit < 0 || limit > 1000)
+      throw new Error('检索数量须为 0 至 1000 的整数。')
+    const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    const filtered = this.snippets.filter(
+      (snippet) =>
+        (!options?.genre ||
+          options.genre === 'all' ||
+          snippet.genre === options.genre ||
+          snippet.genre === 'all') &&
+        (!options?.sense ||
+          snippet.primarySense === options.sense ||
+          snippet.secondarySenses?.includes(options.sense)),
+    )
+    const ranked = filtered
+      .map((snippet, index) => {
+        const fields = [
+          snippet.text,
+          snippet.category,
+          ...snippet.keywords,
+          ...(snippet.tags ?? []),
+        ]
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean)
+        const matches = terms.every((term) =>
+          fields.some((field) => field.includes(term) || term.includes(field)),
+        )
+        const direct = terms.filter((term) => snippet.text.toLowerCase().includes(term)).length
+        return { snippet, index, matches, direct }
       })
-      .filter((entry) => entry.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map((entry) => entry.item)
-
-    return scored.slice(0, limit)
+      .filter((entry) => entry.matches)
+      .sort((a, b) => b.direct - a.direct || a.index - b.index)
+    return structuredClone(ranked.slice(0, limit).map((entry) => entry.snippet))
   }
-
-  /**
-   * 诊断文本的五感雷达分布并生成文学建议
-   */
-  public diagnoseText(text: string): SensoryDiagnosisReport {
-    const cleanText = text.trim()
-    const totalWordCount = cleanText.replace(/\s+/g, '').length
-
+  diagnoseText(text: string): SensoryDiagnosisReport {
     const radar: SensoryRadarScore = {
       sight: 0,
       sound: 0,
@@ -264,153 +215,72 @@ export class DescribePaletteEngine {
       touch: 0,
       metaphor: 0,
     }
-
-    if (totalWordCount === 0) {
-      return {
-        totalWordCount: 0,
-        radar,
-        radarPercentages: radar,
-        dominantSense: null,
-        missingSenses: ['sight', 'sound', 'scent', 'taste', 'touch', 'metaphor'],
-        advice: '输入文本为空，请在上方输入或在编辑器中创作一段正文以启动感官诊断。',
-        suggestedSnippets: this.snippets.slice(0, 3),
-      }
-    }
-
-    // 统计各感官特征词频
-    for (const [senseKey, wordList] of Object.entries(SENSORY_DICTIONARY) as [
-      SenseType,
-      string[],
-    ][]) {
-      let count = 0
-      for (const cue of wordList) {
-        let idx = cleanText.indexOf(cue)
-        while (idx !== -1) {
-          count++
-          idx = cleanText.indexOf(cue, idx + cue.length)
+    const matches: SensoryDiagnosisReport['matches'] = []
+    for (const [sense, cues] of Object.entries(SENSORY_DICTIONARY) as [SenseType, string[]][]) {
+      const candidates: Array<{ sense: SenseType; quote: string; start: number; end: number }> = []
+      for (const cue of [...new Set(cues)].filter(Boolean)) {
+        let start = text.indexOf(cue)
+        while (start >= 0) {
+          candidates.push({ sense, quote: cue, start, end: start + cue.length })
+          start = text.indexOf(cue, start + cue.length)
         }
       }
-      radar[senseKey] = count
-    }
-
-    const totalHits = Object.values(radar).reduce((sum, v) => sum + v, 0)
-    const radarPercentages: SensoryRadarScore = {
-      sight: totalHits > 0 ? Math.round((radar.sight / totalHits) * 100) : 0,
-      sound: totalHits > 0 ? Math.round((radar.sound / totalHits) * 100) : 0,
-      scent: totalHits > 0 ? Math.round((radar.scent / totalHits) * 100) : 0,
-      taste: totalHits > 0 ? Math.round((radar.taste / totalHits) * 100) : 0,
-      touch: totalHits > 0 ? Math.round((radar.touch / totalHits) * 100) : 0,
-      metaphor: totalHits > 0 ? Math.round((radar.metaphor / totalHits) * 100) : 0,
-    }
-
-    // 主感官
-    let maxSense: SenseType | null = null
-    let maxVal = -1
-    for (const [key, val] of Object.entries(radar) as [SenseType, number][]) {
-      if (val > maxVal && val > 0) {
-        maxVal = val
-        maxSense = key
+      const accepted: typeof candidates = []
+      const occupied = new Uint8Array(text.length)
+      for (const candidate of candidates.sort(
+        (a, b) => b.end - b.start - (a.end - a.start) || a.start - b.start,
+      )) {
+        let overlaps = false
+        for (let i = candidate.start; i < candidate.end; i++)
+          if (occupied[i]) {
+            overlaps = true
+            break
+          }
+        if (!overlaps) {
+          accepted.push(candidate)
+          occupied.fill(1, candidate.start, candidate.end)
+        }
       }
+      radar[sense] = accepted.length
+      matches.push(...accepted)
     }
-
-    // 缺失感官（词频为 0，或在总检出 > 5 时百分比低于 8%）
-    const missingSenses: SenseType[] = []
-    const senses: SenseType[] = ['sight', 'sound', 'scent', 'taste', 'touch', 'metaphor']
-    for (const s of senses) {
-      if (radar[s] === 0 || (totalHits >= 5 && radarPercentages[s] < 8)) {
-        missingSenses.push(s)
-      }
-    }
-
-    // 生成专业文学建议
-    let advice = ''
-    if (totalHits === 0) {
-      advice =
-        '当前段落几乎完全缺乏具象五感描写，容易陷入纯心理独白或平铺直叙，建议补充光影（视觉）与环境声（听觉）。'
-    } else if (
-      maxSense === 'sight' &&
-      missingSenses.includes('touch') &&
-      missingSenses.includes('scent')
-    ) {
-      advice =
-        '视觉镜头感非常强烈，但触觉体感与环境气味缺席。适度增添温差、风压、冷汗或血腥焦糊气味，可使场景立体沉浸。'
-    } else if (maxSense === 'sound' && missingSenses.includes('sight')) {
-      advice =
-        '声效渲染逼真，但缺乏直观画面勾勒。建议配合远近光影或色彩对比，形成声画交融的电影质感。'
-    } else if (missingSenses.length <= 1) {
-      advice = '五感维度分布均衡，通感与细节丰富，现场临场感与文学张力极佳。'
-    } else {
-      const missingNames = missingSenses
-        .slice(0, 3)
-        .map(
-          (s) =>
-            ({
-              sight: '视觉',
-              sound: '听觉',
-              scent: '嗅觉',
-              taste: '味觉',
-              touch: '触觉',
-              metaphor: '意象通感',
-            })[s],
-        )
-        .join('、')
-      advice = `当前描写较为偏向单一维度，缺少 ${missingNames} 维度的刺激。建议根据场景氛围引入相应细节修辞。`
-    }
-
-    // 推荐针对缺失感官的修辞金句
-    const suggestedSnippets: SensorySnippet[] = []
-    for (const ms of missingSenses) {
-      const match = this.snippets.find((item) => item.primarySense === ms)
-      if (match && !suggestedSnippets.some((s) => s.id === match.id)) {
-        suggestedSnippets.push(match)
-      }
-      if (suggestedSnippets.length >= 3) break
-    }
-
+    const totalHits = Object.values(radar).reduce((sum, n) => sum + n, 0)
+    const radarPercentages = Object.fromEntries(
+      Object.entries(radar).map(([sense, count]) => [
+        sense,
+        totalHits ? (count / totalHits) * 100 : 0,
+      ]),
+    ) as unknown as SensoryRadarScore
     return {
-      totalWordCount,
+      totalWordCount: Array.from(text.replace(/\s/g, '')).length,
       radar,
       radarPercentages,
-      dominantSense: maxSense,
-      missingSenses,
-      advice,
-      suggestedSnippets,
+      matches: matches.sort((a, b) => a.start - b.start || a.end - b.end),
+      inputStatus: text.trim() ? 'provided' : 'empty',
+      advice: text.trim()
+        ? '词表命中只用于定位，否定、转述和比喻需要结合语境；未命中不等于缺少感官描写。'
+        : '没有正文，尚未进行词项定位。',
     }
   }
-
-  /**
-   * 灵感随机抽卡（通过 RandomSource 保证纯洁性）
-   */
-  public inspireRandom(
+  inspireRandom(
     genre?: GenreType,
     sense?: SenseType,
-    count: number = 3,
+    count = 3,
     random?: RandomSource,
+    query = '',
   ): SensorySnippet[] {
-    const rng = random || this.randomSource
-    let pool = [...this.snippets]
-    if (genre && genre !== 'all') {
-      pool = pool.filter((s) => s.genre === genre || s.genre === 'all')
-    }
-    if (sense) {
-      pool = pool.filter((s) => s.primarySense === sense)
-    }
-
-    if (pool.length <= count) {
-      return pool
-    }
-
-    // 随机采样
+    if (!Number.isSafeInteger(count) || count < 0 || count > 1000)
+      throw new Error('抽取数量须为 0 至 1000 的整数。')
+    const available = this.searchSnippets(query, { genre, sense, limit: 1000 })
     const selected: SensorySnippet[] = []
-    const available = [...pool]
-    for (let i = 0; i < count && available.length > 0; i++) {
-      const randIndex = Math.floor(rng.next() * available.length)
-      selected.push(available[randIndex])
-      available.splice(randIndex, 1)
+    const rng = random ?? this.randomSource
+    while (selected.length < count && available.length) {
+      const value = rng.next()
+      if (!Number.isFinite(value) || value < 0 || value >= 1)
+        throw new Error('随机源须返回 [0,1) 范围内的数值。')
+      selected.push(available.splice(Math.floor(value * available.length), 1)[0])
     }
-
     return selected
   }
 }
-
 export const describePaletteEngine = new DescribePaletteEngine()

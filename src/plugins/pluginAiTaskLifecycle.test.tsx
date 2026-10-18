@@ -5,10 +5,37 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { DesktopPluginHostProvider } from '../core/pluginHostContext'
+import type { ChapterRecord } from '../types'
 import { SubtextMasterView } from './subtext-compiler/components/SubtextMasterView'
 
 const PLUGIN_ROOT = dirname(fileURLToPath(import.meta.url))
-const AI_BUTTON = 'AI 潜台词与微表情深度编译'
+const AI_BUTTON = 'AI 潜台词方案复核'
+const chapter: ChapterRecord = {
+  id: 'chapter-1',
+  projectId: 'p1',
+  volumeId: 'volume-1',
+  title: '第一章',
+  content: '对白正文',
+  wordCount: 4,
+  order: 0,
+  revision: 8,
+  createdAt: 1,
+  updatedAt: 1,
+}
+
+const subtextReview = (interpretation: string) =>
+  JSON.stringify({
+    findings: [
+      {
+        aspect: 'spoken_meaning',
+        observation: '原文台词是“我没事。”',
+        interpretation,
+        recommendation: '',
+        evidence: [{ sourceId: 'spoken:0', start: 0, end: 4, quote: '我没事。' }],
+      },
+    ],
+    insufficientEvidence: ['没有真实读者反馈，不能验证实际阅读效果。'],
+  })
 
 function viewSources(directory: string): string[] {
   const files: string[] = []
@@ -35,7 +62,7 @@ function renderSubtextView(onAiTask: (task: AiTask) => Promise<TaskResult | null
   const view = render(
     <DesktopPluginHostProvider
       projectId="p1"
-      activeChapter={null}
+      activeChapter={chapter}
       onAiTask={onAiTask}
       isAiConnected
     >
@@ -57,10 +84,24 @@ describe('plugin AI task lifecycle (§P1.12)', () => {
   it('gives every view on the task seam a receipt panel and no discarded call', () => {
     expect(seamViews.length).toBeGreaterThanOrEqual(22)
 
+    const unscopedTaskViews = seamViews
+      .filter((file) =>
+        /usePluginAiTask\(\s*(?:'[^']+'|"[^"]+")\s*\)/.test(readFileSync(file, 'utf8')),
+      )
+      .map(relativeToPlugins)
+    expect(unscopedTaskViews).toEqual([])
+
     const unmountedReceipt = seamViews
       .filter((file) => {
         const source = readFileSync(file, 'utf8')
-        return !source.includes('<PluginAiTaskPanel') || !/aiTask\.run\(/.test(source)
+        const taskBinding = source.match(
+          /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*usePluginAiTask\(/,
+        )?.[1]
+        return (
+          !source.includes('<PluginAiTaskPanel') ||
+          !taskBinding ||
+          !new RegExp(`${taskBinding}\\.run\\(`).test(source)
+        )
       })
       .map(relativeToPlugins)
     expect(unmountedReceipt).toEqual([])
@@ -90,15 +131,22 @@ describe('plugin AI task lifecycle (§P1.12)', () => {
       taskId: 'plugin-task-1',
       kind: 'plugin.subtext-compiler.analysis',
       status: 'completed',
-      output: { format: 'text', text: '她攥紧了袖口，却始终没有抬头。' },
+      output: {
+        format: 'text',
+        text: subtextReview('可能在掩饰不适，但现有材料不足以确认隐藏动机。'),
+      },
+      artifactIds: ['artifact-1'],
+      provenance: { provider: 'openrouter', model: 'test-model' },
     })
 
     await waitFor(() =>
-      expect(screen.getByLabelText('AI 任务结果')).toHaveTextContent(
-        '她攥紧了袖口，却始终没有抬头。',
-      ),
+      expect(screen.getByLabelText('AI 任务结果')).toHaveTextContent('可能在掩饰不适'),
     )
     expect(screen.getByText('未写入正文')).toBeInTheDocument()
+    const receipt = screen.getByLabelText('AI 任务来源与保存状态')
+    expect(receipt).toHaveTextContent('来源 chapter-1 · 修订 8')
+    expect(receipt).toHaveTextContent('模型 openrouter / test-model')
+    expect(receipt).toHaveTextContent('结果记录 artifact-1')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -118,7 +166,10 @@ describe('plugin AI task lifecycle (§P1.12)', () => {
         taskId: 'plugin-task-2',
         kind: 'plugin.subtext-compiler.analysis',
         status: 'completed',
-        output: { format: 'text', text: '重试后的潜台词' },
+        output: {
+          format: 'text',
+          text: subtextReview('重试后的潜台词仍是待作者复核的解释。'),
+        },
       }
     })
     renderSubtextView(onAiTask)
@@ -141,5 +192,22 @@ describe('plugin AI task lifecycle (§P1.12)', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent('Plugin task returned no text output')
     expect(screen.queryByLabelText('AI 任务结果')).not.toBeInTheDocument()
+  })
+
+  it('shows cancellation as a cancelled receipt instead of a failure', async () => {
+    const onAiTask = vi.fn(async (): Promise<TaskResult | null> => ({
+      taskId: 'cancelled-task-1',
+      kind: 'plugin.subtext-compiler.analysis',
+      status: 'cancelled',
+      error: { code: 'cancelled', message: '作者取消了这次分析' },
+    }))
+    renderSubtextView(onAiTask)
+
+    fireEvent.click(screen.getByRole('button', { name: AI_BUTTON }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('AI 任务已取消'))
+
+    expect(screen.getByRole('status')).toHaveTextContent('作者取消了这次分析')
+    expect(screen.getByRole('status')).toHaveTextContent('来源 chapter-1 · 修订 8')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

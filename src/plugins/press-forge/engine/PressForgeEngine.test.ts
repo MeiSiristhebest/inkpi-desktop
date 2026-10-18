@@ -19,7 +19,7 @@ describe('PressForgeEngine', () => {
     expect(res.warnings).toHaveLength(0)
   })
 
-  it('detects sensitive words and produces warnings', () => {
+  it('reports only author supplied literal matches and does not predict platform decisions', () => {
     const raw = '主角在暗中调查违禁药品的线索。'
     const res = PressForgeEngine.formatText(raw, {
       presetId: 'jinjiang-clean',
@@ -28,10 +28,12 @@ describe('PressForgeEngine', () => {
       dialogueStyle: 'standard-quotes',
       fixPunctuation: true,
       checkSensitiveWords: true,
+      literalWords: ['违禁药品'],
     })
 
     expect(res.warnings.length).toBeGreaterThan(0)
-    expect(res.warnings[0]).toContain('违禁药品')
+    expect(res.warnings[0]).toContain('关键词命中「违禁药品」')
+    expect(res.warnings[0]).toContain('不代表平台判定')
   })
 
   it('supports bracket dialogue style for light novels', () => {

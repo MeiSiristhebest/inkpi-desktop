@@ -22,6 +22,7 @@ import {
   requireTextResult,
 } from './index'
 import { listCoreInstructionDefinitions } from './instructions/coreInstructions'
+import { createDeterministicTaskCacheKey } from './cache/contextCache'
 
 const document = {
   documentId: 'chapter-1',
@@ -59,6 +60,26 @@ describe('Creative Intelligence Layer', () => {
     expect(tasks[2].effectPolicy).toEqual({ mode: 'read-only' })
     expect(tasks.every((task) => task.input.payload)).toBe(true)
     expect(tasks[0].metadata?.contextFingerprint).toBeTruthy()
+    expect(
+      tasks.map((task) => [task.metadata?.instructionId, task.metadata?.instructionVersion]),
+    ).toEqual([
+      ['creative.continue', '2'],
+      ['creative.rewrite', '4'],
+      ['narrative.continuity.audit', '5'],
+      ['narrative.deep.reason', '1'],
+      ['narrative.project.distill', '2'],
+    ])
+    expect(tasks[2].contextPolicy?.metadata).toMatchObject({
+      instructionId: 'narrative.continuity.audit',
+      instructionVersion: '5',
+    })
+    const previousAuditInstruction = {
+      ...tasks[2],
+      metadata: { ...tasks[2].metadata, instructionVersion: '4' },
+    }
+    expect(createDeterministicTaskCacheKey(previousAuditInstruction)).not.toEqual(
+      createDeterministicTaskCacheKey(tasks[2]),
+    )
   })
 
   it('parses typed vertical-slice results and rejects contract violations', () => {
@@ -89,6 +110,35 @@ describe('Creative Intelligence Layer', () => {
         },
       }),
     ).toHaveLength(1)
+    const verifiedFindings = parseContinuityFindings(
+      {
+        taskId: 't',
+        kind: CREATIVE_TASK_KINDS.continuityAudit,
+        status: 'completed',
+        output: {
+          format: 'structured',
+          data: [
+            {
+              severity: 'error',
+              description: '可核对的引用',
+              evidence: '门后没有人。',
+              blockIds: ['stale-block'],
+            },
+            {
+              severity: 'warning',
+              description: '错误引用',
+              evidence: '正文中不存在的句子',
+              blockIds: ['b2'],
+            },
+          ],
+        },
+      },
+      [document],
+    )
+    expect(verifiedFindings).toMatchObject([
+      { evidence: '门后没有人。', blockIds: ['b2'] },
+      { evidence: undefined, blockIds: undefined },
+    ])
     expect(
       parseContinuityFindings({
         taskId: 't',
@@ -120,9 +170,23 @@ describe('Creative Intelligence Layer', () => {
     const continuityInstruction = listCoreInstructionDefinitions().find(
       (definition) => definition.taskKind === CREATIVE_TASK_KINDS.continuityAudit,
     )
-    expect(continuityInstruction).toMatchObject({ version: '4' })
+    expect(continuityInstruction).toMatchObject({ version: '5' })
     expect(continuityInstruction?.systemInstruction).toContain('top-level JSON array')
     expect(continuityInstruction?.systemInstruction).toContain('never an object wrapper')
+    expect(continuityInstruction?.systemInstruction).toContain(
+      'exact quotation copied from the audited prose',
+    )
+    expect(continuityInstruction?.systemInstruction).toContain(
+      'matching ID in a blockIds array copied from the supplied document context',
+    )
+    expect(continuityInstruction?.systemInstruction).toContain(
+      'The field name is exactly blockIds; never use singular blockId',
+    )
+    const distillationInstruction = listCoreInstructionDefinitions().find(
+      (definition) => definition.taskKind === CREATIVE_TASK_KINDS.distillation,
+    )
+    expect(distillationInstruction).toMatchObject({ version: '2' })
+    expect(distillationInstruction?.systemInstruction).toContain('exact verbatim substring')
     expect(
       parseDeepReasoning({
         taskId: 't',
@@ -142,6 +206,80 @@ describe('Creative Intelligence Layer', () => {
         },
       }).summary,
     ).toBe('摘要')
+    const factsWithSource = parseDistilledFacts(
+      {
+        taskId: 't',
+        kind: CREATIVE_TASK_KINDS.distillation,
+        status: 'completed',
+        output: {
+          format: 'structured',
+          data: {
+            summary: '来源校验',
+            entities: [
+              {
+                kind: 'character',
+                name: '门后的人',
+                sourceDocumentId: document.documentId,
+                evidence: '门后没有人。',
+              },
+              {
+                kind: 'item',
+                name: '虚构宝物',
+                sourceDocumentId: 'unknown-document',
+                evidence: '门后没有人。',
+              },
+              {
+                kind: 'item',
+                name: '改写引用',
+                sourceDocumentId: document.documentId,
+                evidence: '门后似乎没有人。',
+              },
+            ],
+          },
+        },
+      },
+      [document],
+    )
+    expect(factsWithSource.entities[0]).toMatchObject({
+      sourceDocumentId: document.documentId,
+      sourceBlockId: 'b2',
+      sourceRevision: document.revision,
+      evidence: [
+        {
+          documentId: document.documentId,
+          blockId: 'b2',
+          excerpt: '门后没有人。',
+          semanticFrom: 6,
+          semanticTo: 12,
+        },
+      ],
+    })
+    expect(factsWithSource.entities[1].evidence).toBeUndefined()
+    expect(factsWithSource.entities[1].sourceDocumentId).toBeUndefined()
+    expect(factsWithSource.entities[2].evidence).toBeUndefined()
+    const ambiguousSource = parseDistilledFacts(
+      {
+        taskId: 't',
+        kind: CREATIVE_TASK_KINDS.distillation,
+        status: 'completed',
+        output: {
+          format: 'structured',
+          data: {
+            summary: '重复来源 ID',
+            entities: [
+              {
+                kind: 'item',
+                name: '引用来源不唯一',
+                sourceDocumentId: document.documentId,
+                evidence: '门后没有人。',
+              },
+            ],
+          },
+        },
+      },
+      [document, { ...document, revision: document.revision + 1 }],
+    )
+    expect(ambiguousSource.entities[0].evidence).toBeUndefined()
     expect(() => requireTextResult({ taskId: 't', kind: 'x', status: 'failed' })).toThrow()
   })
 

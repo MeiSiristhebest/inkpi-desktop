@@ -18,6 +18,7 @@ export interface PluginRuntimeCatalogEntry {
   readonly runtimeClass: PluginRuntimeClass
   readonly runtimeTarget: PluginRuntimeTarget
   readonly taskKind?: string
+  readonly analysisTaskKind?: string
   readonly toolName?: string
   readonly contextProviderId?: string
 }
@@ -32,21 +33,13 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     runtimeClass: 'pure-local',
     runtimeTarget: 'desktop-local-engine',
   },
-  'archetype-cards': {
-    pluginId: 'archetype-cards',
-    runtimeClass: 'pure-local',
-    runtimeTarget: 'desktop-local-engine',
-  },
+  'archetype-cards': taskEntry('archetype-cards'),
   'author-ops': {
     pluginId: 'author-ops',
     runtimeClass: 'pure-local',
     runtimeTarget: 'desktop-local-engine',
   },
-  'brainstorm-spark': {
-    pluginId: 'brainstorm-spark',
-    runtimeClass: 'pure-local',
-    runtimeTarget: 'desktop-local-engine',
-  },
+  'brainstorm-spark': taskEntry('brainstorm-spark'),
   'chekhov-radar': taskEntry('chekhov-radar'),
   'clue-weaver': taskEntry('clue-weaver'),
   'combat-sandbox': taskEntry('combat-sandbox'),
@@ -101,6 +94,7 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     runtimeClass: 'workflow',
     runtimeTarget: 'runtime-workflow',
     taskKind: 'plugin.multiverse-whatif.workflow',
+    analysisTaskKind: 'plugin.multiverse-whatif.analysis',
   },
   'name-forge': {
     pluginId: 'name-forge',
@@ -141,11 +135,7 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     runtimeTarget: 'extension-tool',
     toolName: 'plugin.scrapbook-recycler.recommend',
   },
-  'shadow-reader': {
-    pluginId: 'shadow-reader',
-    runtimeClass: 'pure-local',
-    runtimeTarget: 'desktop-local-engine',
-  },
+  'shadow-reader': taskEntry('shadow-reader'),
   soundscape: { pluginId: 'soundscape', runtimeClass: 'ui-only', runtimeTarget: 'desktop-ui' },
   'sprint-arena': {
     pluginId: 'sprint-arena',
@@ -157,6 +147,7 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     runtimeClass: 'workflow',
     runtimeTarget: 'runtime-workflow',
     taskKind: 'plugin.storyboard-gen.workflow',
+    analysisTaskKind: 'plugin.storyboard-gen.analysis',
   },
   'sub-plot-braid': taskEntry('sub-plot-braid'),
   'subtext-compiler': taskEntry('subtext-compiler'),

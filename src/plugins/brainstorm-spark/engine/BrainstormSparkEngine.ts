@@ -1,172 +1,107 @@
 import type { DilemmaType, SparkSolution } from '../types'
-
+export interface SparkInput {
+  dilemmaType: DilemmaType
+  coreProblem: string
+  currentSituation: string
+  protagonistGoal: string
+  enemyAdvantage: string
+  knownResources?: string[]
+  constraints?: string[]
+}
 export class BrainstormSparkEngine {
-  /**
-   * 8大叙事逆向破局算子库
-   */
   static readonly OPERATORS = [
     {
       id: 'op_space_swap',
-      name: '空间置换 / 金蝉脱壳',
-      principle: '制造虚假核心目标吸引全部敌方火力，本体借由隐秘空间或镜像偷渡脱身。',
-      twistImpact: 'dramatic' as const,
+      name: '改变地点或顺序',
+      principle: '检查问题是否依赖于当前地点、顺序或时间窗口。',
+      question: '能否换一个已建立的地点、调整行动顺序或等待一个明确窗口？',
     },
     {
       id: 'op_sacrifice_break',
-      name: '断尾求生 / 降维代价',
-      principle: '主动自毁一项重宝、修为境界或关键地盘，以超出常理的代价打破死锁局面。',
-      twistImpact: 'earthshaking' as const,
+      name: '交换与代价',
+      principle: '检查可放弃的目标与不可越过的底线。',
+      question: '角色愿意放弃哪项已经拥有的利益？代价由谁承担，之后是否仍然存在？',
     },
     {
       id: 'op_third_party',
-      name: '引狼入室 / 异数降临',
-      principle:
-        '引入敌我双方均无法控制的第三方毁灭性力量（上古古兽、敌国大军、天劫法则），打乱原有纳什均衡。',
-      twistImpact: 'earthshaking' as const,
+      name: '第三方参与',
+      principle: '使用已有角色的独立目标改变选择范围。',
+      question: '哪位已建立的第三方有自己的介入理由？他能改变哪些条件，同时带来哪些限制？',
     },
     {
       id: 'op_rule_flip',
-      name: '规则倒戈 / 掀桌破局',
-      principle:
-        '利用世界观中早已明示但被众人忽略的底层冷门铁律，将敌方的压倒性优势转变为致命破绽。',
-      twistImpact: 'dramatic' as const,
+      name: '重新检查规则',
+      principle: '只使用作者已明确的规则和例外。',
+      question: '哪条已建立的规则限制了双方？是否存在双方都必须承担的约束或程序？',
     },
     {
       id: 'op_dormant_clue',
-      name: '沉睡伏笔 / 闲笔回响',
-      principle:
-        '调动前文中主角随手赠予或忽视的小物件、微末人情，在生死攸关之际完成意想不到的闭环拯救。',
-      twistImpact: 'subtle' as const,
+      name: '调用已有线索',
+      principle: '检查前文真实出现的物件、关系和信息。',
+      question: '哪条已出现且尚未使用的线索能增加选择？出现位置与可用条件是什么？',
     },
     {
       id: 'op_counter_trap',
-      name: '自污入瓮 / 将计就计',
-      principle: '主角假装中计彻底落败，借敌人胜券在握的狂喜与松懈，在敌方核心腹地引爆终极翻盘点。',
-      twistImpact: 'dramatic' as const,
+      name: '改变对方预期',
+      principle: '区分对方实际知道的事情与角色能控制的信息。',
+      question: '对方根据什么证据行动？角色能改变哪项可观察信息，对方还有什么合理反应？',
     },
     {
       id: 'op_internal_rift',
-      name: '信息差疑冢 / 借刀反噬',
-      principle: '精准散播半真半假的致命利益诱饵，激化反派阵营内部原本压抑的争权矛盾，引发内讧。',
-      twistImpact: 'subtle' as const,
+      name: '分歧与协商',
+      principle: '检查已有参与者的不同利益，允许合作和拒绝。',
+      question: '参与者哪些目标一致、哪些不同？能否提出使其自行选择的交换，而非假设其背叛？',
     },
     {
       id: 'op_conceptual_theft',
-      name: '概念偷渡 / 契约悖论',
-      principle: '在不可违抗的天道誓言或契约字句中寻找逻辑语义漏洞，表面顺从，实质反噬。',
-      twistImpact: 'subtle' as const,
+      name: '澄清承诺边界',
+      principle: '基于实际承诺的原句和双方解释。',
+      question: '承诺的原句要求什么？哪项要求能澄清或重新协商，谁有权接受变更？',
     },
   ]
-
-  /**
-   * 生成结构化分析输入；任务指令由统一 Creative Intelligence runtime 注入。
-   */
-  static buildAnalysisInput(params: {
-    dilemmaType: DilemmaType
-    coreProblem: string
-    currentSituation: string
-    protagonistGoal: string
-    enemyAdvantage: string
-  }): Record<string, unknown> {
+  static buildAnalysisInput(params: SparkInput): Record<string, unknown> {
     return {
       ...params,
-      operators: this.OPERATORS.map(({ id, name, principle, twistImpact }) => ({
-        id,
-        name,
-        principle,
-        twistImpact,
-      })),
-      outputFields: ['operatorId', 'concretePlot', 'twistImpact', 'pros', 'cons'],
+      operators: this.OPERATORS,
+      mode: 'creative_options',
+      missingContext: Object.entries(params)
+        .filter(([, value]) => typeof value === 'string' && !value.trim())
+        .map(([key]) => key),
     }
   }
-
-  /**
-   * 依据困境类型与博弈要素，动态推演纳什均衡打破策略（确定性离线算子引擎）
-   */
-  static generateSolutions(params: {
-    dilemmaType: DilemmaType
-    coreProblem: string
-    currentSituation: string
-    protagonistGoal: string
-    enemyAdvantage: string
-  }): SparkSolution[] {
-    const { dilemmaType, coreProblem, currentSituation, protagonistGoal, enemyAdvantage } = params
-
-    const problem = coreProblem?.trim() || '死局受制'
-    const situation = currentSituation?.trim() || '强敌围困'
-    const goal = protagonistGoal?.trim() || '脱困生还'
-    const advantage = enemyAdvantage?.trim() || '绝对实力碾压'
-
-    return this.OPERATORS.map((op) => {
-      let concretePlot = ''
-      let pros = ''
-      let cons = ''
-
-      switch (op.id) {
-        case 'op_space_swap':
-          concretePlot = `【声东击西转移场域】：针对当前「${situation}」，主角以明面上的假目标佯攻敌方「${advantage}」，暗中以遁术或假身调虎离山，金蝉脱壳实现「${goal}」。`
-          pros = '打破局部视野封锁，产生强烈的视觉拉扯与智斗张力。'
-          cons = '需在上一章节有主角收纳空间秘宝或影分身术式的铺垫，严防机械降神。'
-          break
-
-        case 'op_sacrifice_break':
-          concretePlot = `【以沉重代价换取翻盘空间】：面对「${problem}」，主角在不可抗力下断然自碎本命灵兵/自降一个小境界，强行越阶引动反噬杀阵打破死锁。`
-          pros = '方案要求主角付出明确代价，避免将这次胜利写成无代价翻盘。'
-          cons = '主角付出的代价不可在下章轻易逆转或复原，否则会严重伤害读者代入信誉。'
-          break
-
-        case 'op_third_party':
-          concretePlot = `【引入不可控的第三方变量】：主角不与占据「${advantage}」的敌方正面对轰，而是以自身为饵引动禁地古兽/天道雷劫，将双边死斗升级为三方混乱风暴。`
-          pros = '以极小杠杆撬动大场面崩解，符合弱者抗衡强者的第一性生存哲学。'
-          cons = '第三方的入局必须具备自然地理或规则合理性，后续还需处理遗留的大危机。'
-          break
-
-        case 'op_rule_flip':
-          concretePlot = `【利用底层规则反噬施暴者】：剖析敌人倚仗「${advantage}」的运转逻辑底层缺陷，以微末灵力拨动世界法则触发反向超载，使敌方底牌瞬间变为其催命符。`
-          pros = '极具高智商对决爽感，展现主角对天地世界观法则的深邃洞察。'
-          cons = '世界底层规则必须逻辑自洽闭环，绝不可当场现编现造。'
-          break
-
-        case 'op_dormant_clue':
-          concretePlot = `【激活前文闲笔伏笔闭环】：在「${situation}」即将彻底吞没主角之际，主角此前无心赠予或拾得的微小因果（如旧信物、随手解救的乞儿）于此刻爆发关键连锁反应。`
-          pros = '让老读者拍案叫绝，极大幅度提升长篇小说的厚重感与伏笔回收率。'
-          cons = '必须与「契诃夫雷达/承诺台账」联动，必须在历史章节中真实存在。'
-          break
-
-        case 'op_counter_trap':
-          concretePlot = `【将计就计引敌入瓮】：主角故意顺从敌方布置露出破绽并重伤倒地，诱使反派放下戒备踏入十步必杀禁区，刹那间引爆逆向绝杀陷阱。`
-          pros = '网文经典绝地反杀节奏，憋屈感在瞬间得到极致宣泄兑现。'
-          cons = '反派轻敌必须有充分的心态演变依据，切忌强行给反派降智。'
-          break
-
-        case 'op_internal_rift':
-          concretePlot = `【利益诱饵瓦解敌方阵营】：瞄准敌方阵营中的附庸势力或野心二把手，抛出足以改变其命运的致命机缘，利用「${problem}」中的利益不均挑起敌国内讧。`
-          pros = '生动展现修仙/争霸群像的复杂人心，展现权谋推演魅力。'
-          cons = '需要为副手角色的背叛或动摇预设心理动机伏笔。'
-          break
-
-        case 'op_conceptual_theft':
-          concretePlot = `【利用语义契约逻辑悖论】：面对天道誓约或规则囚笼，主角重新诠释契约条文字面边界，顺从字面要求但彻底颠覆其实质内涵，从逻辑死角突围。`
-          pros = '让人意想不到的巧思智破，兼具惊艳与智斗趣味。'
-          cons = '逻辑语义辨析需严密且符合玄学世界观，切忌耍无赖文字游戏。'
-          break
-      }
-
-      if (dilemmaType === 'dead_end' && op.id === 'op_sacrifice_break') {
-        pros = '★ 针对必死绝境的极致破局：悲壮与破局并存。'
-      } else if (dilemmaType === 'hostage_threat' && op.id === 'op_space_swap') {
-        pros = '★ 针对人质威胁的最佳解法：虚实互换解除人质危机。'
-      }
-
-      return {
-        operatorId: op.id,
-        operatorName: op.name,
-        corePrinciple: op.principle,
-        concretePlot,
-        twistImpact: op.twistImpact,
-        pros,
-        cons,
-      }
-    })
+  static generateSolutions(params: SparkInput): SparkSolution[] {
+    if (!params.coreProblem.trim()) return []
+    const resources = params.knownResources?.filter(Boolean) ?? []
+    const constraints = params.constraints?.filter(Boolean) ?? []
+    return this.OPERATORS.map((op) => ({
+      operatorId: op.id,
+      operatorName: op.name,
+      corePrinciple: op.principle,
+      concretePlot:
+        '针对「' +
+        params.coreProblem +
+        '」，目标「' +
+        (params.protagonistGoal || '未提供') +
+        '」，当前情况「' +
+        (params.currentSituation || '未提供') +
+        '」。' +
+        op.question +
+        (resources.length
+          ? '可核对的已有筹码：' + resources.join('；') + '。'
+          : '已有筹码尚未提供，先补充依据。') +
+        (constraints.length
+          ? '必须满足：' + constraints.join('；') + '。'
+          : '不可改变的条件尚未提供。'),
+      pros: '设计时核对：' + op.principle,
+      cons:
+        '对方条件「' +
+        (params.enemyAdvantage || '未提供') +
+        '」仍然有效。列出所需铺垫、失败分支和后续代价，作者确认后再采用。',
+      twistImpact: 'subtle',
+      status: 'creative_option',
+      requiredSetup: [op.question],
+      knownResources: resources,
+      constraints,
+    }))
   }
 }

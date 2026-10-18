@@ -7,6 +7,8 @@ import type {
 export type { ChamberLockMode, ChamberStatus, IronChamberRecord }
 
 export interface LockProgress {
+  valid: boolean
+  error?: string
   deltaWords: number
   targetWords: number
   elapsedSeconds: number

@@ -132,6 +132,12 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
         workspaceId: projectId,
         taskId,
         timestamp: clock.now(),
+        ...(resolvedActiveChapter
+          ? {
+              documentId: resolvedActiveChapter.id,
+              documentRevision: resolvedActiveChapter.revision ?? 1,
+            }
+          : {}),
       })
       try {
         const safeInput = redactPluginValue(input)
@@ -151,6 +157,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           input: safeInput,
           workspaceId: projectId,
           documentId: resolvedActiveChapterId,
+          documentRevision: resolvedActiveChapter?.revision,
           context,
           metadata: safeMetadata,
         })
@@ -226,6 +233,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           input: safeInput,
           workspaceId: projectId,
           documentId: resolvedActiveChapterId,
+          documentRevision: resolvedActiveChapter?.revision,
           context,
           metadata: safeMetadata,
         })
@@ -308,7 +316,15 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           }
         : {}),
     }
-  }, [onAiTask, onPluginTool, onPluginWorkflow, isAiConnected, projectId, resolvedActiveChapterId])
+  }, [
+    onAiTask,
+    onPluginTool,
+    onPluginWorkflow,
+    isAiConnected,
+    projectId,
+    resolvedActiveChapter,
+    resolvedActiveChapterId,
+  ])
 
   const mutateActiveChapter = useCallback(
     async (patch: ChapterMutationPatch): Promise<ChapterMutationResult> => {
@@ -380,20 +396,27 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       entityId: string,
       mutation: (prev: CodexEntity) => Partial<CodexEntity>,
     ): Promise<void> => {
-      const allEntities = await indexedDbCodexEntityRepository.getAll()
-      const existing = allEntities.find((e) => e.id === entityId)
+      const projectEntities = await indexedDbCodexEntityRepository.getByProject(projectId)
+      const existing = projectEntities.find((entity) => entity.id === entityId)
       if (!existing) {
-        throw new Error(`Codex entity not found: ${entityId}`)
+        throw new Error(`Codex entity not found in project ${projectId}: ${entityId}`)
       }
       const patch = mutation(existing)
+      if (patch.id !== undefined && patch.id !== entityId) {
+        throw new Error(`Codex entity mutation cannot change id: ${entityId}`)
+      }
+      if (patch.projectId !== undefined && patch.projectId !== projectId) {
+        throw new Error(`Codex entity mutation cannot change projectId: ${entityId}`)
+      }
       const merged: CodexEntity = {
         ...existing,
         ...patch,
+        projectId,
         updatedAt: clock.now(),
       }
       await codexApplicationService.saveEntity(merged, 'author-confirmed')
     },
-    [],
+    [projectId],
   )
 
   const contextValue: DesktopPluginHostContextValue = useMemo(

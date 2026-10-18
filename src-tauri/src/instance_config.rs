@@ -153,6 +153,24 @@ impl InstanceConfig {
 }
 
 impl ResolvedInstanceConfig {
+    pub(crate) fn webview_data_directory(&self, current_dir: &Path) -> Option<PathBuf> {
+        if let Some(profile_dir) = &self.profile_dir {
+            return Some(profile_dir.join("webview"));
+        }
+
+        self.state_db.as_ref().map(|state_db| {
+            let absolute_state_db = if state_db.is_absolute() {
+                state_db.clone()
+            } else {
+                current_dir.join(state_db)
+            };
+            absolute_state_db
+                .parent()
+                .unwrap_or(current_dir)
+                .join("webview")
+        })
+    }
+
     pub(crate) fn daemon_args(&self) -> Vec<String> {
         let mut args = vec![
             "daemon".to_string(),
@@ -454,10 +472,57 @@ mod tests {
             ))
         );
         assert_eq!(resolved.instance_id, Some("writer-b".to_string()));
+        assert_eq!(
+            resolved.webview_data_directory(Path::new(r"C:\InkPi\working")),
+            Some(PathBuf::from(
+                r"C:\InkPi\app-data\profiles\writer-b\webview"
+            ))
+        );
         assert!(resolved.daemon_args().contains(&"--state-db".to_string()));
         assert_eq!(
             as_env(&resolved).get("INKPI_PROFILE_DIR"),
             Some(&r"C:\InkPi\app-data\profiles\writer-b".to_string())
+        );
+    }
+
+    #[test]
+    fn explicit_state_db_keeps_webview_storage_beside_the_database() {
+        let args = ["--state-db", r"C:\InkPi\writer-c\state.sqlite"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let config = InstanceConfig::from_args_and_env(&args, |_| None).expect("state-db config");
+        let resolved = config.resolve(None).expect("state-db resolution");
+
+        assert_eq!(
+            resolved.webview_data_directory(Path::new(r"C:\InkPi\working")),
+            Some(PathBuf::from(r"C:\InkPi\writer-c\webview"))
+        );
+    }
+
+    #[test]
+    fn relative_state_db_resolves_webview_storage_from_the_process_directory() {
+        let args = ["--state-db", "state.sqlite"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let config = InstanceConfig::from_args_and_env(&args, |_| None).expect("state-db config");
+        let resolved = config.resolve(None).expect("state-db resolution");
+
+        assert_eq!(
+            resolved.webview_data_directory(Path::new(r"C:\InkPi\working")),
+            Some(PathBuf::from(r"C:\InkPi\working\webview"))
+        );
+    }
+
+    #[test]
+    fn default_single_instance_keeps_tauri_default_webview_storage() {
+        let config = InstanceConfig::from_args_and_env(&[], |_| None).expect("default config");
+        let resolved = config.resolve(None).expect("default resolution");
+
+        assert_eq!(
+            resolved.webview_data_directory(Path::new(r"C:\InkPi\working")),
+            None
         );
     }
 

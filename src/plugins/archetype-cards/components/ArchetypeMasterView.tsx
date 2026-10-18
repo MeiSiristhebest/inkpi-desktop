@@ -1,141 +1,216 @@
-import { useState, useEffect, type FC } from 'react'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { useEffect, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ArchetypeEngine } from '../engine/ArchetypeEngine'
-import type { NarrativeArchetypeRecord, ArchetypeCategory, ChemistryResult } from '../types'
-import { Dna, Shuffle, Users, Swords } from 'lucide-react'
+import type { ArchetypeCategory, NarrativeArchetypeRecord } from '../types'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { indexedDbArchetypeRepository } from '../../../adapters/indexedDbArchetypeRepository'
+import { clipboardWriter } from '../../../adapters/clipboardWriter'
+import { idGenerator } from '../../../adapters/idGenerator'
 import { clock } from '../../../adapters/clock'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select } from '../../../ui/primitives'
+import { semanticTextFromContent } from '../../../domain/content'
 
-export const ArchetypeMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
+export const ArchetypeMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ArchetypeSession key={props.projectId} {...props} />
+)
+const ArchetypeSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+  const host = useOptionalPluginHostContext()
   const [engine] = useState(() => new ArchetypeEngine())
   const [category, setCategory] = useState<ArchetypeCategory>('character_archetype_36')
-  const [drawnCards, setDrawnCards] = useState<NarrativeArchetypeRecord[]>([])
-  const [chemistry, setChemistry] = useState<ChemistryResult | null>(null)
-
+  const [cards, setCards] = useState<NarrativeArchetypeRecord[]>([])
+  const [materials, setMaterials] = useState<NarrativeArchetypeRecord[]>([])
+  const [context, setContext] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const ai = usePluginAiTask('archetype-cards', [projectId, cards, context])
   useEffect(() => {
-    onStats?.({
-      title: '人格原型与母题卡牌',
-      wordCount: 0,
-      updatedAt: clock.now(),
-    })
+    let stale = false
+    indexedDbArchetypeRepository
+      .getAll()
+      .then((all) => {
+        if (!stale) setMaterials(all.filter((c) => c.projectId === projectId))
+      })
+      .catch((cause) => {
+        if (!stale) setError(String(cause))
+      })
+    return () => {
+      stale = true
+    }
+  }, [projectId, attempt])
+  useEffect(() => {
+    onStats?.({ title: '原型创作素材', wordCount: 0, updatedAt: clock.now() })
   }, [onStats])
-
-  const handleDraw = () => {
-    const cards = engine.drawCards(category, 2)
-    setDrawnCards(cards)
-    if (cards.length >= 2) {
-      const chem = ArchetypeEngine.calculateChemistry(cards[0], cards[1])
-      setChemistry(chem)
-    } else {
-      setChemistry(null)
+  const presets = ArchetypeEngine.getPresetArchetypes()
+  const chemistry =
+    cards.length >= 2 ? ArchetypeEngine.calculateChemistry(cards[0], cards[1]) : null
+  const semanticContext = semanticTextFromContent(`archetype-context-${projectId}`, context)
+  const semanticMaterials = cards.map((card) => ({
+    ...card,
+    name: semanticTextFromContent(`${card.id}-name`, card.name),
+    coreDesire: semanticTextFromContent(`${card.id}-desire`, card.coreDesire),
+    fatalFlaw: semanticTextFromContent(`${card.id}-flaw`, card.fatalFlaw),
+    typicalBehaviors: card.typicalBehaviors.map((behavior, index) =>
+      semanticTextFromContent(`${card.id}-behavior-${index}`, behavior),
+    ),
+    conflictPrompt: semanticTextFromContent(`${card.id}-conflict`, card.conflictPrompt),
+  }))
+  const draw = () => {
+    try {
+      setCards(engine.drawCards(category, 2))
+      setNotice(null)
+      setError(null)
+    } catch (cause) {
+      setError(String(cause))
     }
   }
-
+  const save = async (card: NarrativeArchetypeRecord) => {
+    try {
+      const record = { ...card, id: idGenerator.generate('material'), projectId }
+      await indexedDbArchetypeRepository.save(record)
+      setMaterials((current) => [...current, record])
+      setNotice('作者素材已保存。')
+      setError(null)
+    } catch (cause) {
+      setError('保存失败：' + String(cause))
+    }
+  }
+  const copy = async (card: NarrativeArchetypeRecord) => {
+    try {
+      await clipboardWriter.writeText(
+        [
+          card.name,
+          '目标：' + card.coreDesire,
+          '可能限制：' + card.fatalFlaw,
+          card.conflictPrompt,
+        ].join('\n'),
+      )
+      setNotice('素材已复制。')
+    } catch (cause) {
+      setError('复制失败：' + String(cause))
+    }
+  }
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto text-slate-800 dark:text-slate-100">
-      <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Dna className="w-6 h-6 text-indigo-500" />
-            <span>人格原型素材库与叙事母题卡牌 (ArchetypeCards)</span>
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            收录 36 经典戏剧人格原型、MBTI 16 极性张力对与 12
-            大英雄之旅母题，一键抽取注入对手戏戏剧张力
-          </p>
-          <ScoreProvenanceBadge source="rule" detail="按角色在场景里的出现与对立关系计分" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Select size="sm" value={category} onValueChange={(v) => setCategory(v as any)}>
-            <option value="character_archetype_36">36 经典戏剧人格原型卡</option>
-            <option value="narrative_motif_12">12 大英雄之旅叙事母题卡</option>
-          </Select>
-          <button
-            onClick={handleDraw}
-            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
-          >
-            <Shuffle className="w-3.5 h-3.5" /> 随机抽取双卡对垒
-          </button>
-        </div>
-      </div>
-
-      {drawnCards.length === 0 ? (
-        <div className="py-16 border rounded-2xl text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-900 border-dashed border-slate-300 dark:border-slate-800 space-y-2">
-          <Users className="w-8 h-8 mx-auto text-slate-400 opacity-50" />
-          <div>点击右上角「随机抽取双卡对垒」，生成两位极性角色原型并自动测算对手戏冲突火花</div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {drawnCards.map((card, idx) => (
-              <div
-                key={card.id}
-                className="p-5 border rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 space-y-3 shadow-sm relative overflow-hidden"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-indigo-500 font-bold uppercase tracking-wider">
-                    原型卡片 #{idx + 1}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
-                    {card.category}
-                  </span>
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                  {card.name}
-                </h3>
-
-                <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                  <div>
-                    <span className="text-slate-400 font-semibold">核心渴望:</span>{' '}
-                    {card.coreDesire}
-                  </div>
-                  <div>
-                    <span className="text-rose-500 font-semibold">阿喀琉斯之踵:</span>{' '}
-                    {card.fatalFlaw}
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
-                  <div className="text-[11px] text-slate-400 font-semibold">典型行为模式:</div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {card.typicalBehaviors.map((b, bIdx) => (
-                      <span
-                        key={bIdx}
-                        className="px-2 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                      >
-                        {b}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {chemistry && (
-            <div className="p-5 border rounded-2xl bg-slate-900 text-slate-100 border-amber-900/60 space-y-3 shadow-xl">
-              <div className="flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1.5 text-amber-400 text-sm">
-                  <Swords className="w-4 h-4" /> 对手戏化学反应与火花阻抗
-                </span>
-                <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 font-bold text-xs border border-amber-800">
-                  戏剧张力指数: {Math.round(chemistry.tensionScore * 100)}%
-                </span>
-              </div>
-
-              <div className="text-xs text-slate-300">
-                <span className="font-bold text-slate-400">核心伦理冲突:</span>{' '}
-                {chemistry.coreEthicalConflict}
-              </div>
-
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-amber-200 font-serif leading-relaxed">
-                💡 {chemistry.dramaticPrompt}
-              </div>
-            </div>
-          )}
-        </div>
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>人格原型素材库与叙事母题卡牌 (ArchetypeCards)</h2>
+      <p>
+        36 项人物创作素材、16 个可选 MBTI 标签、12 项叙事母题及 8
+        项冲突题目。属于创作参考；标签不能证明人格、冲突程度或行为。
+      </p>
+      <select
+        aria-label="角色原型分类"
+        value={category}
+        onChange={(e) => {
+          setCategory(e.target.value as ArchetypeCategory)
+          setCards([])
+        }}
+      >
+        <option value="character_archetype_36">人物创作素材</option>
+        <option value="mbti_matrix">MBTI 创作标签</option>
+        <option value="narrative_motif_12">叙事母题</option>
+        <option value="conflict_deck">冲突题目</option>
+      </select>
+      <p>
+        本类预设 {presets.filter((c) => c.category === category).length} 项；已保存作者素材{' '}
+        {materials.length} 项。
+      </p>
+      <button onClick={draw}>随机抽取双卡对垒</button>
+      <select
+        aria-label="选择已有作者素材"
+        value=""
+        onChange={(e) => {
+          const card = materials.find((c) => c.id === e.target.value)
+          if (card) setCards((current) => [...current.slice(-1), structuredClone(card)])
+        }}
+      >
+        <option value="">选择已有作者素材</option>
+        {materials.map((c) => (
+          <option value={c.id} key={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      {error && (
+        <p role="alert">
+          {error}
+          <button onClick={() => setAttempt((n) => n + 1)}>重新读取素材</button>
+        </p>
       )}
+      {notice && <p role="status">{notice}</p>}
+      {!cards.length && <p>选择或抽取素材，再按本书人物修改目标与限制。</p>}
+      {cards.map((card, i) => (
+        <article className="border rounded p-3 space-y-2" key={i}>
+          <input
+            aria-label={'素材名 ' + (i + 1)}
+            value={card.name}
+            onChange={(e) =>
+              setCards((current) =>
+                current.map((c, index) => (index === i ? { ...c, name: e.target.value } : c)),
+              )
+            }
+          />
+          <label>
+            具体人物目标
+            <input
+              aria-label={'目标 ' + (i + 1)}
+              value={card.coreDesire}
+              onChange={(e) =>
+                setCards((current) =>
+                  current.map((c, index) =>
+                    index === i ? { ...c, coreDesire: e.target.value } : c,
+                  ),
+                )
+              }
+            />
+          </label>
+          <label>
+            可能限制或缺点
+            <input
+              aria-label={'限制 ' + (i + 1)}
+              value={card.fatalFlaw}
+              onChange={(e) =>
+                setCards((current) =>
+                  current.map((c, index) =>
+                    index === i ? { ...c, fatalFlaw: e.target.value } : c,
+                  ),
+                )
+              }
+            />
+          </label>
+          <p>{card.typicalBehaviors.join('；')}</p>
+          <p>{card.conflictPrompt}</p>
+          <button onClick={() => void save(card)}>保存作者素材</button>
+          <button onClick={() => void copy(card)}>复制素材</button>
+        </article>
+      ))}
+      {chemistry && (
+        <article className="border p-3">
+          <h3>对手戏设计问题</h3>
+          <p>{chemistry.coreEthicalConflict}</p>
+          <p>{chemistry.dramaticPrompt}</p>
+        </article>
+      )}
+      <textarea
+        aria-label="实际场景与人物限制"
+        placeholder="填写实际场景、人物关系、已有行为与不能改变的条件"
+        value={context}
+        onChange={(e) => setContext(e.target.value)}
+      />
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={cards.length < 2 || !semanticContext.trim() || ai.isRunning}
+          onClick={() =>
+            void ai.run({
+              materials: semanticMaterials,
+              actualSceneAndConstraints: semanticContext,
+            })
+          }
+        >
+          AI 对手戏方案复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
     </div>
   )
 }

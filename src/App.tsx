@@ -81,8 +81,14 @@ const ProjectEngine: FC<{
   isConnected: boolean
   isReconnecting: boolean
   onReconnect: () => void
-  onRequestGhost: (chapterId: string, text: string) => Promise<string | null>
+  onRequestGhost: (
+    chapterId: string,
+    text: string,
+    sourceRevision: number,
+    signal?: AbortSignal,
+  ) => Promise<string | null>
   probeModelProvider: import('./hooks/useAiConversation').AiConversation['probeModelProvider']
+  chatgptPlan: import('./hooks/useAiConversation').AiConversation['chatgptPlan']
   onAiTask: (
     task: import('@inkpi/protocol').AiTask,
   ) => Promise<import('@inkpi/protocol').TaskResult | null>
@@ -109,6 +115,9 @@ const ProjectEngine: FC<{
   onHome: () => void
 }> = (props) => {
   const { chapters } = useProjectData()
+  const currentDocumentRevisions = new Map(
+    chapters.map((chapter) => [chapter.id, chapter.revision ?? 1] as const),
+  )
   return (
     <Engine
       projectId={props.projectId}
@@ -118,6 +127,7 @@ const ProjectEngine: FC<{
       onReconnect={props.onReconnect}
       onRequestGhost={props.onRequestGhost}
       onProbeModelProvider={props.probeModelProvider}
+      chatgptPlan={props.chatgptPlan}
       onAiTask={props.onAiTask}
       onHome={props.onHome}
       renderInspector={(state, onClose) => {
@@ -150,12 +160,14 @@ const ProjectEngine: FC<{
                     syncConflict={props.syncConflict}
                     onRetrySync={props.onRetrySync}
                     initialTab={panel}
+                    focusedResultId={state.resultId}
                     onInputChange={props.setAiInput}
                     onSend={() => props.sendAiPrompt(props.aiInput)}
                     onClose={onClose}
                     requestScope={props.requestScope}
                     taskRecovery={props.taskRecovery}
                     results={props.results}
+                    currentDocumentRevisions={currentDocumentRevisions}
                     taskRecoveryLoading={props.taskRecoveryLoading}
                     taskRecoveryError={props.taskRecoveryError}
                     onResumeTask={props.resumeTask}
@@ -266,6 +278,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     syncDomain,
     listArtifacts,
     probeModelProvider,
+    chatgptPlan,
     requestScope,
   } = ai
 
@@ -327,6 +340,8 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
               onImportProject={importProject}
               onCreateDemo={createDemo}
               onExportProject={exportProject}
+              exportError={library.exportError}
+              onDismissExportError={library.dismissExportError}
               onExportManuscript={exportManuscript}
               onUpdateProject={updateProject}
               onDeleteProject={deleteProject}
@@ -360,6 +375,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   onReconnect={reconnect}
                   onRequestGhost={requestGhost}
                   probeModelProvider={probeModelProvider}
+                  chatgptPlan={chatgptPlan}
                   onAiTask={runAiTask}
                   onHome={() => setActiveProjectId(null)}
                   aiMessages={aiMessages}

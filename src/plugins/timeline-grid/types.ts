@@ -1,6 +1,6 @@
 // 时空因果大纲网格 (timeline-grid) 领域模型与类型定义
 
-import type { Provenance } from '../../domain/story/provenance'
+import type { Provenance, SourceEvidence } from '../../domain/story/provenance'
 
 export interface NarrativeThread {
   id: string
@@ -18,7 +18,7 @@ export interface TimelineNode {
   id: string
   projectId: string
   threadId: string // 所属叙事动线 ID
-  chapterOrder: number // X 轴位置（第几章）
+  chapterOrder: number // 作品内从 1 开始的章号；0 表示未指定，不能用于故事时间判断
   eventTitle: string
   summary: string // 供 AI 上下文消费的一句话摘要
   status: NodeStatus
@@ -33,10 +33,22 @@ export interface TimelineNode {
 }
 
 export interface NarrativeConflict {
-  type: 'causal_cycle' | 'chapter_collision' | 'temporal_paradox'
+  type:
+    | 'causal_cycle'
+    | 'chapter_collision'
+    | 'temporal_paradox'
+    | 'missing_prerequisite'
+    | 'invalid_definition'
   nodeIds: string[]
   description: string
   severity: 'error' | 'warning'
+  sources?: Array<{
+    eventTitle: string
+    sourceDocumentId?: string
+    sourceBlockId?: string
+    sourceRevision?: number
+    evidence?: SourceEvidence[]
+  }>
 }
 
 export interface EmotionalCurvePoint {

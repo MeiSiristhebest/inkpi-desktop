@@ -108,8 +108,9 @@ export class GenericAhoCorasick<T = unknown> {
     const matches: ACMatch<T>[] = []
     let curr = this.root
 
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i]
+    let endIndex = 0
+    for (const char of text) {
+      endIndex += char.length
       while (curr !== this.root && !curr.children.has(char)) {
         curr = curr.fail || this.root
       }
@@ -120,8 +121,8 @@ export class GenericAhoCorasick<T = unknown> {
           matches.push({
             keyword: out.keyword,
             payload: out.payload,
-            startIndex: i - out.keyword.length + 1,
-            endIndex: i + 1,
+            startIndex: endIndex - out.keyword.length,
+            endIndex,
           })
         }
       }

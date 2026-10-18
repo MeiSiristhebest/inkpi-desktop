@@ -4,7 +4,7 @@ export type { MultiverseBranchRecord, MultiverseNode }
 
 export interface ButterflyEffectLog {
   chapterIndex: number
-  rippleFactor: number
+  rippleFactor: number | null
   description: string
   affectedCharacters: string[]
 }
@@ -12,8 +12,10 @@ export interface ButterflyEffectLog {
 export interface MultiverseSimulationResult {
   branchId: string
   branchName: string
+  divergencePremise: string
+  suppliedChapterCount?: number
   forkChapterIndex: number
-  divergenceCurve: Array<{ chapter: number; divergencePercent: number }>
+  divergenceCurve: Array<{ chapter: number; divergencePercent: number | null }>
   nodes: MultiverseNode[]
   butterflyEffects: ButterflyEffectLog[]
 }

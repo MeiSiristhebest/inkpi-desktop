@@ -23,6 +23,7 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
 
     scopedBus.emit('POWER_BREACH_DETECTED', {
       projectId,
+      recordId: 'duel-1',
       protagonistName: '楚凌霄',
       enemyName: '黑煞魔尊',
       tierDiff: 3,
@@ -103,19 +104,14 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
     let countA = 0
     let countB = 0
 
-    const unsubA = bus.on('FORESHADOW_PLANTED', () => {
+    const unsubA = bus.on('POV_GUARD_CONFIG_SAVED', () => {
       countA++
     })
-    const unsubB = bus.on('FORESHADOW_PLANTED', () => {
+    const unsubB = bus.on('POV_GUARD_CONFIG_SAVED', () => {
       countB++
     })
 
-    bus.emit('FORESHADOW_PLANTED', {
-      projectId,
-      gunName: '神秘玉佩',
-      plantChapterOrder: 3,
-      category: 'treasure',
-    })
+    bus.emit('POV_GUARD_CONFIG_SAVED', { projectId })
 
     expect(countA).toBe(1)
     expect(countB).toBe(1)
@@ -123,12 +119,7 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
     // Unsubscribe A only
     unsubA()
 
-    bus.emit('FORESHADOW_PLANTED', {
-      projectId,
-      gunName: '残缺阵图',
-      plantChapterOrder: 5,
-      category: 'map',
-    })
+    bus.emit('POV_GUARD_CONFIG_SAVED', { projectId })
 
     expect(countA).toBe(1) // Not incremented
     expect(countB).toBe(2) // Incremented
@@ -136,7 +127,7 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
     unsubB()
   })
 
-  it('TC-BUS-05: Successfully handles all 5 production event payload types with typed payloads', () => {
+  it('TC-BUS-05: Successfully handles all 6 current production event payload types', () => {
     const projectId = 'proj-bus-types'
     const bus = createScopedEventBus(projectId)
 
@@ -148,8 +139,11 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
     bus.on('POWER_BREACH_DETECTED', (p) => {
       captured.power = p
     })
-    bus.on('FORESHADOW_PLANTED', (p) => {
-      captured.foreshadow = p
+    bus.on('COMBAT_DUEL_SAVED', (p) => {
+      captured.combatSaved = p
+    })
+    bus.on('POV_GUARD_CONFIG_SAVED', (p) => {
+      captured.povConfig = p
     })
     bus.on('CODEX_ENTITY_TOUCHED', (p) => {
       captured.codex = p
@@ -167,18 +161,15 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
     })
     bus.emit('POWER_BREACH_DETECTED', {
       projectId,
+      recordId: 'duel-2',
       protagonistName: '主角',
       enemyName: '反派',
       tierDiff: 2,
       riskLevel: 'WARNING',
       diagnostic: '轻微越阶',
     })
-    bus.emit('FORESHADOW_PLANTED', {
-      projectId,
-      gunName: '伏笔道具',
-      plantChapterOrder: 1,
-      category: 'item',
-    })
+    bus.emit('COMBAT_DUEL_SAVED', { projectId, recordId: 'duel-2' })
+    bus.emit('POV_GUARD_CONFIG_SAVED', { projectId })
     bus.emit('CODEX_ENTITY_TOUCHED', {
       projectId,
       entityId: 'ent-1',
@@ -194,7 +185,8 @@ describe('Tier 1: F3 - Decoupled Plugin Event Bus & Tenant Channel Scoping', () 
 
     expect(captured.evaluation.cliffhangerScore).toBe(64)
     expect(captured.power.riskLevel).toBe('WARNING')
-    expect(captured.foreshadow.gunName).toBe('伏笔道具')
+    expect(captured.combatSaved).toEqual({ projectId, recordId: 'duel-2' })
+    expect(captured.povConfig.projectId).toBe(projectId)
     expect(captured.codex.entityName).toBe('设定实体')
     expect(captured.audit.wordCount).toBe(3200)
   })

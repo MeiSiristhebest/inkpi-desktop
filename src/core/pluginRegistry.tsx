@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   createContext,
+  useRef,
   type FC,
   type ReactNode,
 } from 'react'
@@ -81,50 +82,42 @@ export function saveEnabledPluginIds(ids: Set<string>, workspaceId?: string): Pr
   // 返回给调用方等待：新建项目要把工具组合写进这个项目自己的域，写没落地不能说「已创建」。
   return indexedDbSettingsKVRepository
     .set(canonicalScope(workspaceId), CANONICAL_PLUGIN_KEY, next)
-    .then(async () => {
-      const legacyKey = getPluginStorageKey(workspaceId)
-      await localStorageKeyValueStore.remove?.(legacyKey)
-      if (workspaceId) await localStorageKeyValueStore.remove?.(STORAGE_KEY_ENABLED_PLUGINS)
-    })
-    .catch((error) => {
-      console.warn('Failed to persist enabled plugins:', error)
-    })
+    .then(() => removeLegacyPluginIds(workspaceId))
 }
 
 export async function loadEnabledPluginIdsFromIDB(
   workspaceId?: string,
 ): Promise<Set<string> | null> {
-  try {
-    const canonical = await indexedDbSettingsKVRepository.get<unknown>(
-      canonicalScope(workspaceId),
-      CANONICAL_PLUGIN_KEY,
-      null,
-    )
-    const canonicalIds = parsePluginIds(canonical)
-    if (canonicalIds) {
-      await removeLegacyPluginIds(workspaceId)
-      return canonicalIds
-    }
-
-    const legacy = legacyPluginIds(workspaceId)
-    if (!legacy) return null
-
-    await indexedDbSettingsKVRepository.set(
-      canonicalScope(workspaceId),
-      CANONICAL_PLUGIN_KEY,
-      Array.from(legacy),
-    )
+  const canonical = await indexedDbSettingsKVRepository.get<unknown>(
+    canonicalScope(workspaceId),
+    CANONICAL_PLUGIN_KEY,
+    null,
+  )
+  const canonicalIds = parsePluginIds(canonical)
+  if (canonicalIds) {
     await removeLegacyPluginIds(workspaceId)
-    return legacy
-  } catch (error) {
-    console.warn('Failed to load enabled plugins from IndexedDB:', error)
-    return null
+    return canonicalIds
   }
+
+  const legacy = legacyPluginIds(workspaceId)
+  if (!legacy) return null
+
+  await indexedDbSettingsKVRepository.set(
+    canonicalScope(workspaceId),
+    CANONICAL_PLUGIN_KEY,
+    Array.from(legacy),
+  )
+  await removeLegacyPluginIds(workspaceId)
+  return legacy
 }
 
 async function removeLegacyPluginIds(workspaceId?: string): Promise<void> {
-  await localStorageKeyValueStore.remove?.(getPluginStorageKey(workspaceId))
-  if (workspaceId) await localStorageKeyValueStore.remove?.(STORAGE_KEY_ENABLED_PLUGINS)
+  try {
+    await localStorageKeyValueStore.remove?.(getPluginStorageKey(workspaceId))
+    if (workspaceId) await localStorageKeyValueStore.remove?.(STORAGE_KEY_ENABLED_PLUGINS)
+  } catch {
+    // Canonical IndexedDB state remains authoritative when legacy cleanup fails.
+  }
 }
 
 // ── 共享状态（Context，单一来源、可注入）──
@@ -133,10 +126,17 @@ export interface PluginContextValue {
   activePlugins: DesktopPlugin[]
   enabledIds: Set<string>
   workspaceId?: string
+  isLoading: boolean
+  isSaving: boolean
+  persistenceError: string | null
+  loadFailed: boolean
+  dismissPersistenceError: () => void
+  retryLoad: () => void
+  retrySave: () => Promise<void>
   isPluginEnabled: (id: string) => boolean
-  enablePlugin: (id: string) => void
-  disablePlugin: (id: string) => void
-  togglePlugin: (id: string) => void
+  enablePlugin: (id: string) => Promise<void>
+  disablePlugin: (id: string) => Promise<void>
+  togglePlugin: (id: string) => Promise<void>
 }
 
 const PluginContext = createContext<PluginContextValue | null>(null)
@@ -146,18 +146,54 @@ export const PluginProvider: FC<{ workspaceId?: string; children: ReactNode }> =
   children,
 }) => {
   const [enabledIds, setEnabledIds] = useState<Set<string>>(() => defaultPluginIds())
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [persistenceError, setPersistenceError] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [reloadVersion, setReloadVersion] = useState(0)
+  const enabledIdsRef = useRef(enabledIds)
+  const scopeEpochRef = useRef(0)
+  const loadPromiseRef = useRef<Promise<void>>(Promise.resolve())
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const savingCountRef = useRef(0)
+  const loadSucceededRef = useRef(false)
+  const failedMutationRef = useRef<{ id: string; enabled: boolean } | null>(null)
 
   useEffect(() => {
-    setEnabledIds(defaultPluginIds())
+    const epoch = ++scopeEpochRef.current
+    const defaults = defaultPluginIds()
+    enabledIdsRef.current = defaults
+    setEnabledIds(defaults)
+    setIsLoading(true)
+    savingCountRef.current = 0
+    setIsSaving(false)
+    setPersistenceError(null)
+    setLoadFailed(false)
+    loadSucceededRef.current = false
+    failedMutationRef.current = null
     let cancelled = false
-    loadEnabledPluginIdsFromIDB(workspaceId).then((fromIDB) => {
-      if (cancelled || !fromIDB) return
-      setEnabledIds((current) => (setsEqual(current, fromIDB) ? current : fromIDB))
-    })
+    const load = loadEnabledPluginIdsFromIDB(workspaceId)
+      .then((fromIDB) => {
+        if (cancelled || scopeEpochRef.current !== epoch) return
+        const next = fromIDB ?? defaults
+        enabledIdsRef.current = next
+        setEnabledIds(next)
+        loadSucceededRef.current = true
+      })
+      .catch((error: unknown) => {
+        if (cancelled || scopeEpochRef.current !== epoch) return
+        const message = error instanceof Error ? error.message : String(error)
+        setPersistenceError(`插件设置读取失败：${message}`)
+        setLoadFailed(true)
+      })
+      .finally(() => {
+        if (!cancelled && scopeEpochRef.current === epoch) setIsLoading(false)
+      })
+    loadPromiseRef.current = load
     return () => {
       cancelled = true
     }
-  }, [workspaceId])
+  }, [workspaceId, reloadVersion])
 
   // P2.9: 把启用集合投影给命令层，使禁用的插件既不在导航/抽屉里，也不再从命令面板可被呼出。
   useEffect(() => {
@@ -165,44 +201,76 @@ export const PluginProvider: FC<{ workspaceId?: string; children: ReactNode }> =
     return () => projectEnabledPluginIds(null)
   }, [enabledIds])
 
+  const persistPluginChange = useCallback(
+    (id: string, enabled: boolean | 'toggle') => {
+      const epoch = scopeEpochRef.current
+      let targetEnabled: boolean | null = null
+      let persistenceAttempted = false
+      savingCountRef.current += 1
+      setIsSaving(true)
+      const operation = mutationQueueRef.current
+        .catch(() => {})
+        .then(async () => {
+          await loadPromiseRef.current
+          if (scopeEpochRef.current !== epoch) return
+          if (!loadSucceededRef.current) {
+            throw new Error('当前作品的插件设置尚未成功读取，请先重新读取。')
+          }
+          const current = enabledIdsRef.current
+          const nextEnabled = enabled === 'toggle' ? !current.has(id) : enabled
+          targetEnabled = nextEnabled
+          if (current.has(id) === nextEnabled) return
+          const next = new Set(current)
+          if (nextEnabled) next.add(id)
+          else next.delete(id)
+          setPersistenceError(null)
+          persistenceAttempted = true
+          await saveEnabledPluginIds(next, workspaceId)
+          if (scopeEpochRef.current !== epoch) return
+          failedMutationRef.current = null
+          enabledIdsRef.current = next
+          setEnabledIds(next)
+        })
+        .catch((error: unknown) => {
+          if (scopeEpochRef.current === epoch) {
+            if (persistenceAttempted && targetEnabled !== null) {
+              failedMutationRef.current = { id, enabled: targetEnabled }
+            }
+            const message = error instanceof Error ? error.message : String(error)
+            setPersistenceError(`插件设置保存失败：${message}`)
+          }
+          throw error
+        })
+        .finally(() => {
+          if (scopeEpochRef.current === epoch) {
+            savingCountRef.current = Math.max(0, savingCountRef.current - 1)
+            setIsSaving(savingCountRef.current > 0)
+          }
+        })
+      mutationQueueRef.current = operation
+      return operation
+    },
+    [workspaceId],
+  )
+
   const enablePlugin = useCallback(
-    (id: string) => {
-      setEnabledIds((prev) => {
-        if (prev.has(id)) return prev
-        const next = new Set(prev)
-        next.add(id)
-        saveEnabledPluginIds(next, workspaceId)
-        return next
-      })
-    },
-    [workspaceId],
+    (id: string) => persistPluginChange(id, true),
+    [persistPluginChange],
   )
-
   const disablePlugin = useCallback(
-    (id: string) => {
-      setEnabledIds((prev) => {
-        if (!prev.has(id)) return prev
-        const next = new Set(prev)
-        next.delete(id)
-        saveEnabledPluginIds(next, workspaceId)
-        return next
-      })
-    },
-    [workspaceId],
+    (id: string) => persistPluginChange(id, false),
+    [persistPluginChange],
   )
-
   const togglePlugin = useCallback(
-    (id: string) => {
-      setEnabledIds((prev) => {
-        const next = new Set(prev)
-        if (next.has(id)) next.delete(id)
-        else next.add(id)
-        saveEnabledPluginIds(next, workspaceId)
-        return next
-      })
-    },
-    [workspaceId],
+    (id: string) => persistPluginChange(id, 'toggle'),
+    [persistPluginChange],
   )
+  const retrySave = useCallback(() => {
+    const failedMutation = failedMutationRef.current
+    return failedMutation
+      ? persistPluginChange(failedMutation.id, failedMutation.enabled)
+      : Promise.resolve()
+  }, [persistPluginChange])
 
   const isPluginEnabled = useCallback((id: string) => enabledIds.has(id), [enabledIds])
 
@@ -211,6 +279,13 @@ export const PluginProvider: FC<{ workspaceId?: string; children: ReactNode }> =
     activePlugins: ALL_AVAILABLE_PLUGINS.filter((p) => enabledIds.has(p.id)),
     enabledIds,
     workspaceId,
+    isLoading,
+    isSaving,
+    persistenceError,
+    loadFailed,
+    dismissPersistenceError: () => setPersistenceError(null),
+    retryLoad: () => setReloadVersion((version) => version + 1),
+    retrySave,
     isPluginEnabled,
     enablePlugin,
     disablePlugin,
@@ -230,10 +305,4 @@ export function usePluginRegistry(): PluginContextValue {
 
 export function useOptionalPluginRegistry(): PluginContextValue | null {
   return useContext(PluginContext)
-}
-
-function setsEqual(a: Set<string>, b: Set<string>): boolean {
-  if (a.size !== b.size) return false
-  for (const x of a) if (!b.has(x)) return false
-  return true
 }

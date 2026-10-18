@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord, VolumeRecord } from '../types'
 import { db } from '../db/indexedDB'
 import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
@@ -115,6 +115,64 @@ describe('atomic IndexedDB domain writes', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     expect(await new IndexedDbDomainChangeStore().latestRevision(workspaceId)).toBe(1)
     expect(await db.get<ChapterRecord>('chapters', chapterId)).toEqual(first)
+  })
+
+  it('returns a CAS conflict when a newer chapter commits between the read and metadata write', async () => {
+    const workspaceId = 'atomic-domain-cas-race-workspace'
+    const chapterId = 'atomic-domain-cas-race-chapter'
+    const store = new IndexedDbDomainChangeStore()
+    await db.delete('chapters', chapterId)
+    for (const changeSet of await store.list(workspaceId)) {
+      await db.delete('domainChangeSets', changeSet.id)
+    }
+
+    const base: ChapterRecord = {
+      id: chapterId,
+      projectId: workspaceId,
+      volumeId: 'volume-1',
+      title: '并发修改',
+      content: '旧正文',
+      order: 0,
+      status: 'draft',
+      wordCount: 3,
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const latest: ChapterRecord = {
+      ...base,
+      content: '另一个窗口保存的新正文',
+      wordCount: 10,
+      revision: 2,
+      updatedAt: 2,
+    }
+    await indexedDbProjectRepository.saveChapter(base)
+
+    const get = db.get.bind(db)
+    let concurrentWriteCommitted = false
+    const getSpy = vi.spyOn(db, 'get').mockImplementation(async (storeName, key) => {
+      const value = await get(storeName, key)
+      if (!concurrentWriteCommitted && storeName === 'chapters' && key === chapterId) {
+        concurrentWriteCommitted = true
+        await indexedDbProjectRepository.saveChapter(latest)
+      }
+      return value
+    })
+
+    let result
+    try {
+      result = await indexedDbProjectRepository.saveChapterCAS({
+        chapter: { ...base, status: 'review', revision: 2, updatedAt: 3 },
+        expectedRevision: 1,
+      })
+    } finally {
+      getSpy.mockRestore()
+    }
+
+    expect(concurrentWriteCommitted).toBe(true)
+    expect(result).toMatchObject({ success: false, conflict: true, currentRevision: 2 })
+    expect(await db.get<ChapterRecord>('chapters', chapterId)).toEqual(latest)
+    expect(await store.latestRevision(workspaceId)).toBe(2)
   })
 
   it('treats identical concurrent seed writes as an idempotent success', async () => {

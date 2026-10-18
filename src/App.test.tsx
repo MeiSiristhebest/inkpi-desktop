@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 
 const { connectWebSocketSpy } = vi.hoisted(() => ({
@@ -11,11 +11,20 @@ vi.mock('@inkpi/client', () => ({
   },
 }))
 
+vi.mock('motion/react', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+  MotionConfig: ({ children }: any) => <>{children}</>,
+}))
+
 vi.mock('./core/engine', () => ({
-  Engine: ({ isConnected, isReconnecting, onReconnect }: any) => (
+  Engine: ({ isConnected, isReconnecting, onReconnect, renderInspector }: any) => (
     <div data-testid="engine">
       <span data-testid="conn">{isConnected ? 'connected' : 'disconnected'}</span>
       <span data-testid="recon">{isReconnecting ? 'reconnecting' : 'idle'}</span>
+      {renderInspector?.({ surface: 'activity', resultId: 'app-restart-result' }, () => {})}
       <button data-testid="reconnect-btn" onClick={onReconnect}>
         重连
       </button>
@@ -24,7 +33,13 @@ vi.mock('./core/engine', () => ({
 }))
 
 vi.mock('./components/ai/AiAssistantPanel', () => ({
-  AiAssistantPanel: () => <div data-testid="ai-panel">AI Panel</div>,
+  AiAssistantPanel: ({ results = [] }: any) => (
+    <output data-testid="ai-panel-results">{JSON.stringify(results)}</output>
+  ),
+}))
+
+vi.mock('./components/ai/CreativeWorkflowsPanel', () => ({
+  CreativeWorkflowsPanel: () => null,
 }))
 
 vi.mock('./core/projectService', () => ({
@@ -52,6 +67,8 @@ vi.mock('./components/bookshelf/Bookshelf', () => ({
 }))
 
 import { App } from './App'
+import { db } from './db/indexedDB'
+import { IndexedDbArtifactStore, type AiArtifact } from './ai/artifacts/artifactStore'
 import {
   DESKTOP_REQUIRED_RUNTIME_CAPABILITIES,
   RUNTIME_CONTRACT_VERSION,
@@ -63,9 +80,12 @@ import runtimeLock from '../runtime.lock.json'
 describe('App daemon connection', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    connectWebSocketSpy.mockReset()
+    connectWebSocketSpy.mockImplementation(() => new Promise<never>(() => {}))
   })
 
   afterEach(() => {
+    cleanup()
     vi.useRealTimers()
     connectWebSocketSpy.mockClear()
   })
@@ -135,5 +155,43 @@ describe('App daemon connection', () => {
 
     await waitFor(() => expect(screen.getByTestId('conn').textContent).toBe('connected'))
     expect(screen.getByTestId('recon').textContent).toBe('idle')
+  })
+
+  it('restores an IndexedDB artifact through App startup into the Activity Center', async () => {
+    const artifact: AiArtifact = {
+      id: 'app-restart-result',
+      taskId: 'app-restart-result-task',
+      kind: 'narrative.continuity.audit',
+      type: 'creative.audit-report',
+      version: 1,
+      documentId: 'app-restart-chapter',
+      content: { summary: '恢复后的本地结果' },
+      provenance: { sourceRevision: 4 },
+      ownership: { owner: 'desktop', authoritative: true, workspaceId: 'test-proj' },
+      metadata: { title: '恢复结果' },
+      createdAt: 100,
+      updatedAt: 100,
+    }
+    const store = new IndexedDbArtifactStore()
+    await store.save(artifact)
+
+    try {
+      await expect(store.listByWorkspace('test-proj')).resolves.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: artifact.id })]),
+      )
+      connectWebSocketSpy.mockRejectedValue(new Error('offline for test'))
+      render(<App />)
+      await waitFor(() => expect(screen.getByTestId('bookshelf')).toBeInTheDocument())
+      fireEvent.click(screen.getByTestId('open-project'))
+
+      await waitFor(() => expect(screen.getByTestId('conn')).toHaveTextContent('disconnected'))
+      await waitFor(() => {
+        const activityResults = screen.getByTestId('ai-panel-results').textContent ?? ''
+        expect(activityResults).toContain(artifact.id)
+        expect(activityResults).toContain('恢复后的本地结果')
+      })
+    } finally {
+      await db.delete('aiArtifacts', artifact.id)
+    }
   })
 })

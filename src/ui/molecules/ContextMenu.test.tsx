@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 
@@ -126,6 +126,54 @@ describe('ContextMenu primitive', () => {
     expect(screen.getByText('第一章 测灵大典')).toBeInTheDocument()
     // 标题不得进入焦点序列：只有两个条目是按钮
     expect(screen.getAllByRole('menuitem')).toHaveLength(2)
+  })
+
+  it('锚点滚出视口时仍把菜单放在可见区域内', () => {
+    const widthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth')
+    const heightDescriptor = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 900 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+
+    const makeRect = (x: number, y: number, width: number, height: number) =>
+      ({
+        x,
+        y,
+        width,
+        height,
+        top: y,
+        left: x,
+        right: x + width,
+        bottom: y + height,
+        toJSON: () => ({}),
+      }) as DOMRect
+    const anchorRect = makeRect(864, -90, 26, 26)
+    const menuRect = makeRect(572, -64, 318, 630)
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.getAttribute('role') === 'menu') return menuRect
+        if (this.classList.contains('relative')) return anchorRect
+        return makeRect(0, 0, 0, 0)
+      })
+
+    let unmount = () => {}
+    try {
+      const view = render(
+        <div className="relative">
+          <ContextMenu items={makeItems()} onClose={vi.fn()} />
+        </div>,
+      )
+      unmount = view.unmount
+
+      expect(screen.getByRole('menu')).toHaveStyle({ left: '572px', top: '8px' })
+    } finally {
+      unmount()
+      rectSpy.mockRestore()
+      if (widthDescriptor) Object.defineProperty(window, 'innerWidth', widthDescriptor)
+      else Reflect.deleteProperty(window, 'innerWidth')
+      if (heightDescriptor) Object.defineProperty(window, 'innerHeight', heightDescriptor)
+      else Reflect.deleteProperty(window, 'innerHeight')
+    }
   })
 
   it('checked 项渲染为 menuitemradio，键盘导航同样覆盖', () => {

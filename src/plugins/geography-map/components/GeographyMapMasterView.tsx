@@ -21,15 +21,26 @@ import { Select, Tooltip } from '../../../ui/primitives'
 
 const EMPTY_CELLS: GeoMapGridRecord['occupiedCells'] = []
 
-export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const GeographyMapMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <GeographyMapProjectView key={props.projectId} {...props} />
+)
+
+const GeographyMapProjectView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const [mapRecord, setMapRecord] = useState<GeoMapGridRecord | null>(null)
   const [selectedTerrain, setSelectedTerrain] = useState<TerrainType>('mountain')
   const [scale, setScale] = useState<1 | 10>(10)
 
   // 行军测距状态
-  const [startPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [startPos, setStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [targetPos, setTargetPos] = useState<{ x: number; y: number }>({ x: 7, y: 7 })
   const [marchSpeed, setMarchSpeed] = useState<number>(30)
+  const [terrainFactors, setTerrainFactors] = useState<Record<TerrainType, number | null>>({
+    land: 1,
+    city: 1,
+    mountain: 1,
+    water: 1,
+    barrier: null,
+  })
 
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
@@ -38,6 +49,12 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     if (all.length > 0) {
       setMapRecord(all[0])
       setScale(all[0].scaleKmPerCell)
+      if (all[0].travelPlan) {
+        setStartPos(all[0].travelPlan.start)
+        setTargetPos(all[0].travelPlan.target)
+        setMarchSpeed(all[0].travelPlan.speedKmPerDay)
+        setTerrainFactors(all[0].travelPlan.terrainFactors)
+      }
     } else {
       const initial: GeoMapGridRecord = {
         id: idGenerator.generate('geomap'),
@@ -48,9 +65,9 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
         occupiedCells: GeoMapEngine.createInitialGrid(8, 8, 'land'),
         fillColor: '#3b82f6',
         linkedOverlays: {
-          activeCharacterIds: ['主角', '反派少宗主'],
-          foreshadowIds: ['上古剑冢'],
-          timelineEventIds: ['两界大战'],
+          activeCharacterIds: [],
+          foreshadowIds: [],
+          timelineEventIds: [],
         },
         updatedAt: clock.now(),
       }
@@ -59,7 +76,7 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [projectId])
 
   useEffect(() => {
-    void loadMap()
+    void loadMap().catch(() => setSavedSuccessMsg('读取地图失败，请重新打开。'))
   }, [loadMap])
 
   const cells = mapRecord?.occupiedCells ?? EMPTY_CELLS
@@ -69,14 +86,22 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
   }, [cells])
 
   const travelResult = useMemo(() => {
-    return GeoMapEngine.calculateTravelTime({
-      start: startPos,
-      target: targetPos,
-      scaleKmPerCell: scale,
-      speedKmPerDay: marchSpeed,
-      dominantTerrain: selectedTerrain,
-    })
-  }, [startPos, targetPos, scale, marchSpeed, selectedTerrain])
+    try {
+      return GeoMapEngine.planRoute({
+        start: startPos,
+        target: targetPos,
+        scaleKmPerCell: scale,
+        speedKmPerDay: marchSpeed,
+        cells,
+        terrainFactors,
+      })
+    } catch (error) {
+      return {
+        status: 'no-route' as const,
+        reason: error instanceof Error ? error.message : '路线参数无效。',
+      }
+    }
+  }, [startPos, targetPos, scale, marchSpeed, cells, terrainFactors])
 
   const handleCellClick = (x: number, y: number, isShift: boolean = false) => {
     if (!mapRecord) return
@@ -104,11 +129,35 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
     const updated: GeoMapGridRecord = {
       ...mapRecord,
       scaleKmPerCell: scale,
+      travelPlan: { start: startPos, target: targetPos, speedKmPerDay: marchSpeed, terrainFactors },
       updatedAt: clock.now(),
     }
-    await indexedDbGeoMapRepository.save(updated)
-    setSavedSuccessMsg('地理拓扑画板已成功保存！')
-    setTimeout(() => setSavedSuccessMsg(null), 2500)
+    try {
+      GeoMapEngine.calculateTravelTime({
+        start: startPos,
+        target: targetPos,
+        scaleKmPerCell: scale,
+        speedKmPerDay: marchSpeed,
+        terrainFactor: 1,
+      })
+    } catch (error) {
+      setSavedSuccessMsg(error instanceof Error ? error.message : '行程参数无效。')
+      return
+    }
+    if (
+      Object.values(terrainFactors).some(
+        (factor) => factor !== null && (!Number.isFinite(factor) || factor <= 0),
+      )
+    ) {
+      setSavedSuccessMsg('通行耗时系数必须为正数。')
+      return
+    }
+    try {
+      await indexedDbGeoMapRepository.save(updated)
+      setSavedSuccessMsg('地图和行程假设已保存。')
+    } catch {
+      setSavedSuccessMsg('保存地图失败，可以重试。')
+    }
   }
 
   const handleResetMap = () => {
@@ -132,7 +181,10 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             编辑网格地图，估算路线行军时间并检查拓扑连通性。请按故事设定复核距离和耗时。
           </p>
-          <ScoreProvenanceBadge source="rule" detail="在作者标注的地点与路线上做确定性推导" />
+          <ScoreProvenanceBadge
+            source="rule"
+            detail="按已绘网格、作者速度和通行系数计算；不包含休息、补给、气候或真实测量数据"
+          />
         </div>
 
         <div className="flex items-center gap-2">
@@ -294,42 +346,120 @@ export const GeographyMapMasterView: FC<DesktopPluginViewProps> = ({ projectId }
           <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
             <div className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
               <MapPin className="w-4 h-4 text-rose-500" />
-              行军日程精密测算仪 (A-to-B)
+              网格路线与行程估算 (A-to-B)
             </div>
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">移动方式/速度：</span>
-                <Select value={marchSpeed} onValueChange={(v) => setMarchSpeed(Number(v))}>
-                  <option value={30}>凡人步卒/辎重 (30 km/天)</option>
-                  <option value={70}>精锐轻骑快马 (70 km/天)</option>
-                  <option value={300}>筑基修士御剑 (300 km/天)</option>
-                  <option value={2000}>元婴挪移遁法 (2000 km/天)</option>
-                </Select>
+                <label>
+                  作者设定速度（km/天）
+                  <input
+                    aria-label="作者设定速度"
+                    type="number"
+                    min={0.001}
+                    step="any"
+                    value={marchSpeed}
+                    onChange={(event) => setMarchSpeed(Number(event.target.value))}
+                    className="w-20 border rounded p-1 bg-transparent"
+                  />
+                </label>
+              </div>
+              <p>
+                初始速度 30、通行系数 1
+                是可编辑示例；障碍默认不可通行。计算沿相邻网格移动，斜向边长为 √2 格。
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(['start', 'target'] as const).map((end) => (
+                  <Select
+                    key={end}
+                    label={end === 'start' ? '路线起点' : '路线终点'}
+                    value={`${(end === 'start' ? startPos : targetPos).x},${(end === 'start' ? startPos : targetPos).y}`}
+                    onValueChange={(value) => {
+                      const [x, y] = String(value).split(',').map(Number)
+                      ;(end === 'start' ? setStartPos : setTargetPos)({ x, y })
+                    }}
+                    options={cells.map((cell) => ({
+                      value: `${cell.x},${cell.y}`,
+                      label: `(${cell.x},${cell.y})`,
+                    }))}
+                  />
+                ))}
+              </div>
+              <div className="space-y-1">
+                {Object.entries(terrainFactors).map(([terrain, factor]) => (
+                  <label key={terrain} className="flex gap-2 items-center">
+                    {
+                      (
+                        {
+                          land: '平地',
+                          city: '城市',
+                          water: '水域',
+                          mountain: '山地',
+                          barrier: '障碍',
+                        } as Record<string, string>
+                      )[terrain]
+                    }
+                    <input
+                      aria-label={`${terrain}可通行`}
+                      type="checkbox"
+                      checked={factor !== null}
+                      onChange={(event) =>
+                        setTerrainFactors((current) => ({
+                          ...current,
+                          [terrain]: event.target.checked ? 1 : null,
+                        }))
+                      }
+                    />
+                    可通行
+                    <input
+                      aria-label={`${terrain}耗时系数`}
+                      type="number"
+                      min={0.001}
+                      step="any"
+                      disabled={factor === null}
+                      value={factor ?? ''}
+                      onChange={(event) =>
+                        setTerrainFactors((current) => ({
+                          ...current,
+                          [terrain]: Number(event.target.value),
+                        }))
+                      }
+                      className="w-16 border rounded p-1 bg-transparent"
+                    />
+                  </label>
+                ))}
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">直线/网格步长：</span>
-                  <span className="font-semibold">{travelResult.distanceCells} 格</span>
+              {travelResult.status === 'no-route' ? (
+                <p role="status">{travelResult.reason}</p>
+              ) : (
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">直线/网格步长：</span>
+                    <span className="font-semibold">
+                      {travelResult.distanceCells.toFixed(3)} 格
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">折合物理距离：</span>
+                    <span className="font-semibold">{travelResult.distanceKm.toFixed(3)} 公里</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">地形阻尼加权：</span>
+                    <span className="font-semibold">x {travelResult.dampingFactor.toFixed(3)}</span>
+                  </div>
+                  <div className="pt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm font-bold text-blue-600 dark:text-blue-400">
+                    <span>按当前假设的天数：</span>
+                    <span>约 {travelResult.estimatedDays.toFixed(3)} 天</span>
+                  </div>
+                  <p>
+                    路线：{travelResult.route.map((point) => `(${point.x},${point.y})`).join(' → ')}
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">折合物理距离：</span>
-                  <span className="font-semibold">{travelResult.distanceKm} 公里</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">地形阻尼加权：</span>
-                  <span className="font-semibold">x {travelResult.dampingFactor}</span>
-                </div>
-                <div className="pt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm font-bold text-blue-600 dark:text-blue-400">
-                  <span>合理日程天数：</span>
-                  <span>约 {travelResult.estimatedDays} 天</span>
-                </div>
-              </div>
+              )}
 
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                💡
-                测算结果可直接注入大纲时间线与多历法引擎，防止出现“上午还在边关、下午就飞到帝都”的战力/时空硬伤。
+                对照故事中的移动方式、休息与补给复核耗时。改变地形笔刷不会改变未涂改网格的路线成本。
               </p>
             </div>
           </div>

@@ -1,293 +1,329 @@
-import { useState, useEffect, type FC } from 'react'
+import { useEffect, useMemo, useRef, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import { indexedDbVoicePreviewRepository } from '../../../adapters/indexedDbVoicePreviewRepository'
-import { VoicePreviewEngine } from '../engine/VoicePreviewEngine'
 import type { VoiceCastProfileRecord } from '../types'
-import { Volume2, Play, Square, Mic, Sliders, Users, Sparkles } from 'lucide-react'
+import { VoicePreviewEngine } from '../engine/VoicePreviewEngine'
+import { VoicePlaybackController } from '../engine/VoicePlaybackController'
+import { indexedDbVoicePreviewRepository } from '../../../adapters/indexedDbVoicePreviewRepository'
+import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { semanticTextFromContent } from '../../../domain/content'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { Tooltip } from '../../../ui/primitives'
 
-export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
-  const [chapterText, setChapterText] = useState('')
+export const VoicePreviewMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <VoiceSession key={props.projectId} {...props} />
+)
+const VoiceSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+  const host = useOptionalPluginHostContext()
+  const [player] = useState(() => new VoicePlaybackController())
+  const [mode, setMode] = useState<'chapter' | 'manual'>('chapter')
+  const [manualText, setManualText] = useState('')
+  const [namesText, setNamesText] = useState('')
+  const [knownNames, setKnownNames] = useState<string[]>([])
   const [casts, setCasts] = useState<VoiceCastProfileRecord[]>([])
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentLineIndex, setCurrentLineIndex] = useState<number | null>(null)
-
-  const script = VoicePreviewEngine.extractScript(chapterText)
-
-  const loadCasts = async () => {
-    const list = await indexedDbVoicePreviewRepository.getAll(projectId)
-    setCasts(list)
-  }
-
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const [overrides, setOverrides] = useState<{
+    source: string
+    values: Record<number, string>
+  } | null>(null)
+  const [current, setCurrent] = useState<number | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const chapter = host?.projectId === projectId ? host.activeChapter : null
+  const chapterText =
+    mode === 'chapter' && chapter
+      ? semanticTextFromContent(chapter.id, chapter.content ?? '', chapter.revision)
+      : manualText
+  const source = JSON.stringify([projectId, mode, chapter?.id, chapter?.revision, chapterText])
+  const sourceRef = useRef<string | null>(source)
+  sourceRef.current = source
   useEffect(() => {
-    loadCasts().catch(console.error)
-  }, [projectId])
-
+    player.stop()
+    setPlaying(false)
+    setCurrent(null)
+    return () => player.stop()
+  }, [player, source])
+  useEffect(
+    () => () => {
+      sourceRef.current = null
+    },
+    [],
+  )
+  useEffect(() => {
+    let stale = false
+    Promise.all([
+      indexedDbVoicePreviewRepository.getAll(projectId),
+      indexedDbCodexEntityRepository.getAll(),
+    ])
+      .then(([profiles, entities]) => {
+        if (stale) return
+        setCasts(profiles.filter((c) => c.projectId === projectId))
+        setKnownNames(
+          entities
+            .filter((e) => e.projectId === projectId && e.category === 'character')
+            .flatMap((e) => [e.name, ...(e.aliases ?? [])]),
+        )
+        setError(null)
+      })
+      .catch((cause) => {
+        if (!stale) setError(String(cause))
+      })
+    return () => {
+      stale = true
+    }
+  }, [projectId, attempt])
+  useEffect(() => {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined
+    if (!synth) return
+    const update = () => {
+      try {
+        setVoices(typeof synth.getVoices === 'function' ? synth.getVoices() : [])
+      } catch (cause) {
+        setError(String(cause))
+      }
+    }
+    update()
+    synth.addEventListener?.('voiceschanged', update)
+    return () => synth.removeEventListener?.('voiceschanged', update)
+  }, [])
   useEffect(() => {
     onStats?.({
-      title: '角色有声对白试听器',
-      wordCount: chapterText.length,
+      title: '角色对白试听',
+      wordCount: Array.from(chapterText.replace(/\s/gu, '')).length,
       updatedAt: clock.now(),
     })
   }, [chapterText, onStats])
-
-  const handlePlayLine = (text: string, pitch = 1.0, rate = 1.0) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.pitch = pitch
-    utterance.rate = rate
-    utterance.lang = 'zh-CN'
-    window.speechSynthesis.speak(utterance)
-  }
-
-  const handlePlayAll = () => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    window.speechSynthesis.cancel()
-    setIsPlaying(true)
-
-    let current = 0
-    const speakNext = () => {
-      if (current >= script.lines.length) {
-        setIsPlaying(false)
-        setCurrentLineIndex(null)
-        return
-      }
-      const line = script.lines[current]
-      setCurrentLineIndex(line.lineIndex)
-      const utterance = new SpeechSynthesisUtterance(line.dialogueText)
-      utterance.lang = 'zh-CN'
-
-      // 匹配角色配置
-      const profile = casts.find((c) => c.characterName === line.speakerName)
-      utterance.pitch = profile?.pitch || (line.emotion === 'angry' ? 1.2 : 1.0)
-      utterance.rate = profile?.rate || 1.0
-
-      utterance.onend = () => {
-        current++
-        speakNext()
-      }
-      utterance.onerror = () => {
-        setIsPlaying(false)
-        setCurrentLineIndex(null)
-      }
-      window.speechSynthesis.speak(utterance)
-    }
-
-    speakNext()
-  }
-
-  const handleStop = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-    }
-    setIsPlaying(false)
-    setCurrentLineIndex(null)
-  }
-
-  const handleAutoAssignVoices = async () => {
-    for (const speaker of script.characterSpeakers) {
-      const isFemale = /(月|女|雪|儿|妃|姬|师姐|圣女)/.test(speaker)
-      const isElder = /(老|祖|宗主|尊|伯|父)/.test(speaker)
-      const defaults = VoicePreviewEngine.deriveDefaultProfile(
-        speaker,
-        isFemale ? 'female' : 'male',
-        isElder ? 'elder' : 'youth',
+  const script = useMemo(
+    () =>
+      VoicePreviewEngine.extractScript(chapterText, [
+        ...knownNames,
+        ...namesText.split('\n').filter(Boolean),
+      ]),
+    [chapterText, knownNames, namesText],
+  )
+  const lines = script.lines.map((line) => ({
+    ...line,
+    speakerName:
+      overrides?.source === source && overrides.values[line.lineIndex]
+        ? overrides.values[line.lineIndex]
+        : line.speakerName,
+  }))
+  const speakers = [
+    ...new Set(lines.map((l) => l.speakerName).filter((name) => name !== '未归属说话人')),
+  ]
+  const profileFor = (name: string) =>
+    [...casts].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.characterName === name)
+  const play = (selected = lines) => {
+    const scope = source
+    setError(null)
+    try {
+      player.start(
+        selected.map((line) => {
+          const cast = profileFor(line.speakerName)
+          return {
+            lineIndex: line.lineIndex,
+            text: line.dialogueText,
+            pitch: cast?.pitch ?? 1,
+            rate: cast?.rate ?? 1,
+            voiceURI: cast?.voiceURI,
+            language: cast?.language,
+          }
+        }),
+        {
+          onLine: (index) => {
+            if (sourceRef.current === scope) {
+              setPlaying(true)
+              setCurrent(index)
+            }
+          },
+          onComplete: () => {
+            if (sourceRef.current === scope) {
+              setPlaying(false)
+              setCurrent(null)
+            }
+          },
+          onError: (message) => {
+            if (sourceRef.current === scope) {
+              setError(message)
+              setPlaying(false)
+              setCurrent(null)
+            }
+          },
+        },
       )
-
-      const record: VoiceCastProfileRecord = {
+    } catch (cause) {
+      setError(String(cause))
+      setPlaying(false)
+    }
+  }
+  const prepare = () => {
+    const additions = speakers
+      .filter((name) => !profileFor(name))
+      .map((name) => ({
         id: idGenerator.generate('cast'),
         projectId,
-        characterId: `char_${speaker}`,
-        ...defaults,
+        characterId: 'manual-' + encodeURIComponent(name),
+        ...VoicePreviewEngine.deriveDefaultProfile(name, 'neutral', 'unspecified'),
         updatedAt: clock.now(),
-      }
-      await indexedDbVoicePreviewRepository.save(record)
-    }
-    await loadCasts()
+        assignmentSource: 'neutral-default' as const,
+      }))
+    setCasts((current) => [...current, ...additions])
+    setNotice('已准备中性声线配置，调整后请保存。')
   }
-
+  const save = async (cast: VoiceCastProfileRecord) => {
+    setBusy(true)
+    setError(null)
+    try {
+      VoicePreviewEngine.validateProfile(cast)
+      const updated = { ...cast, assignmentSource: 'author' as const, updatedAt: clock.now() }
+      await indexedDbVoicePreviewRepository.save(updated)
+      setCasts((current) => current.map((c) => (c.id === cast.id && c === cast ? updated : c)))
+      setNotice('声线配置已保存；保存期间的后续修改请再次保存。')
+    } catch (cause) {
+      setError('保存失败：' + String(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const edit = (id: string, patch: Partial<VoiceCastProfileRecord>) =>
+    setCasts((current) => current.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto text-slate-800 dark:text-slate-100">
-      <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Volume2 className="w-6 h-6 text-emerald-500" />
-            <span>角色拟真有声对白试听器 (VoicePreview)</span>
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            自动抽取章节对白台本、按角色年龄性格智能分配声线，提供广播剧级拟真连续试听
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>角色拟真有声对白试听器 (VoicePreview)</h2>
+      <p>
+        使用当前系统提供的语音，按作者选择的声线、音调和语速试听。未确定的说话人需人工分配；浏览器语音不提供所称
+        DSP 音色滤波。
+      </p>
+      {!player.isAvailable() && <p>当前环境未提供浏览器语音合成，台本和配置仍可编辑。</p>}
+      {error && (
+        <p role="alert">
+          {error}
+          <button onClick={() => setAttempt((n) => n + 1)}>重新读取配置</button>
+        </p>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      <button onClick={() => setMode('chapter')} disabled={!chapter}>
+        使用当前章节
+      </button>
+      <button onClick={() => setMode('manual')}>使用独立片段</button>
+      {mode === 'chapter' && !chapter && <p>尚未打开章节，可使用独立片段。</p>}
+      <textarea
+        aria-label="章节对白正文输入区"
+        placeholder="粘贴章节正文以提取对白台本"
+        readOnly={mode === 'chapter' && Boolean(chapter)}
+        value={chapterText}
+        onChange={(e) => {
+          setMode('manual')
+          setManualText(e.target.value)
+        }}
+      />
+      <textarea
+        aria-label="说话人名称清单"
+        placeholder="需要按字面识别的角色名，每行一个；已读取本项目人物库"
+        value={namesText}
+        onChange={(e) => setNamesText(e.target.value)}
+      />
+      <button onClick={prepare} disabled={!speakers.length}>
+        准备角色声线配置
+      </button>
+      <button disabled={!player.isAvailable() || !lines.length} onClick={() => play()}>
+        整章对白试听 ({lines.length}句)
+      </button>
+      <button
+        disabled={!playing}
+        onClick={() => {
+          player.stop()
+          setPlaying(false)
+          setCurrent(null)
+        }}
+      >
+        停止播讲
+      </button>
+      <h3>广播剧音轨台本 ({lines.length} 句)</h3>
+      {!lines.length && <p>等待正文：粘贴包含角色对白的章节正文后显示试听内容。</p>}
+      {lines.map((line) => (
+        <article className="border rounded p-3" key={line.lineIndex}>
+          <p>
+            {current === line.lineIndex ? '排队 / 播放中 · ' : ''}
+            {line.speakerName} · 原文位置 {line.sourceStart}–{line.sourceEnd}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleAutoAssignVoices}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs rounded-lg font-medium transition"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>智能推导角色声线</span>
+          <blockquote className="whitespace-pre-wrap">{line.dialogueText}</blockquote>
+          <p>归属依据：{line.attribution || '无明确归属'}；情绪未自动推断。</p>
+          <input
+            aria-label={'分配说话人 ' + line.lineIndex}
+            placeholder="作者分配说话人"
+            value={overrides?.source === source ? (overrides.values[line.lineIndex] ?? '') : ''}
+            onChange={(e) =>
+              setOverrides((previous) => ({
+                source,
+                values: {
+                  ...(previous?.source === source ? previous.values : {}),
+                  [line.lineIndex]: e.target.value,
+                },
+              }))
+            }
+          />
+          <button disabled={!player.isAvailable()} onClick={() => play([line])}>
+            试听第 {line.lineIndex} 句
           </button>
-          {isPlaying ? (
-            <button
-              type="button"
-              onClick={handleStop}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-lg font-medium shadow-sm transition"
-            >
-              <Square className="w-3.5 h-3.5" />
-              <span>停止播讲</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handlePlayAll}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg font-medium shadow-sm transition"
-            >
-              <Play className="w-3.5 h-3.5" />
-              <span>整章广播剧播讲 ({script.totalLines}句)</span>
-            </button>
+        </article>
+      ))}
+      <h3>登场角色声线调音板 ({casts.length})</h3>
+      {casts.map((cast) => (
+        <article key={cast.id} className="border rounded p-3 space-y-2">
+          <strong>{cast.characterName}</strong>
+          {!cast.assignmentSource && (
+            <p>旧配置来源未记录；性别、年龄与滤波标签不用于推断新参数。</p>
           )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 左侧：正文与台本解析 */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-3">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-              章节对白正文输入区:
-            </label>
-            <textarea
-              className="w-full h-48 p-3 text-xs border rounded font-serif bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-800 leading-relaxed"
-              value={chapterText}
-              onChange={(e) => setChapterText(e.target.value)}
-              placeholder="粘贴章节正文以提取对白台本"
+          <select
+            aria-label={'声线 ' + cast.characterName}
+            value={cast.voiceURI ?? ''}
+            onChange={(e) =>
+              edit(cast.id, {
+                voiceURI: e.target.value || undefined,
+                language: voices.find((v) => v.voiceURI === e.target.value)?.lang,
+              })
+            }
+          >
+            <option value="">系统默认语音</option>
+            {voices.map((v) => (
+              <option key={v.voiceURI} value={v.voiceURI}>
+                {v.name} · {v.lang}
+              </option>
+            ))}
+          </select>
+          <label>
+            音调
+            <input
+              aria-label={'音调 ' + cast.characterName}
+              type="number"
+              min={0}
+              max={2}
+              step={0.1}
+              value={cast.pitch}
+              onChange={(e) => edit(cast.id, { pitch: Number(e.target.value) })}
             />
-          </div>
-
-          {/* 实时抽取对白台本音轨 */}
-          <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-3">
-            <p className="text-xs text-slate-500">
-              规则解析：按对话标点和说话动词提取角色与台词，情绪标签由词表匹配。结果可能不完整，请核对原文。
-            </p>
-            <h3 className="text-sm font-bold flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Mic className="w-4 h-4 text-emerald-500" />
-                <span>广播剧音轨台本 ({script.lines.length} 句)</span>
-              </span>
-              <span className="text-xs text-slate-400">
-                解析到角色数: {script.characterSpeakers.length}
-              </span>
-            </h3>
-
-            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-              {script.lines.length === 0 && (
-                <p className="py-8 text-center text-xs text-slate-400">
-                  等待正文：粘贴包含角色对白的章节正文后显示试听内容。
-                </p>
-              )}
-              {script.lines.map((line) => (
-                <div
-                  key={line.lineIndex}
-                  className={`p-3 rounded-lg border text-xs flex items-start justify-between gap-3 transition ${
-                    currentLineIndex === line.lineIndex
-                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400'
-                      : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-emerald-700 dark:text-emerald-300">
-                        {line.speakerName}
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-800 text-slate-600">
-                        情绪: {line.emotion}
-                      </span>
-                    </div>
-                    <p className="text-slate-800 dark:text-slate-200 font-serif">
-                      “{line.dialogueText}”
-                    </p>
-                  </div>
-                  <Tooltip content="单独试听该句">
-                    <button
-                      type="button"
-                      onClick={() => handlePlayLine(line.dialogueText)}
-                      className="p-1.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition"
-                    >
-                      <Play className="w-3.5 h-3.5" />
-                    </button>
-                  </Tooltip>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 右侧：角色配音演员卡配置板 */}
-        <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-4">
-          <h3 className="text-sm font-bold flex items-center gap-2">
-            <Users className="w-4 h-4 text-emerald-500" />
-            <span>登场角色声线调音板 ({casts.length})</span>
-          </h3>
-
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-            {casts.length === 0 ? (
-              <div className="text-xs text-slate-400 py-12 text-center">
-                暂无专属声线配置，点击上方“智能推导角色声线”快速为小说角色生成音色。
-              </div>
-            ) : (
-              casts.map((c) => (
-                <div
-                  key={c.id}
-                  className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs space-y-2"
-                >
-                  <div className="flex items-center justify-between font-bold">
-                    <span>{c.characterName}</span>
-                    <span className="text-[10px] text-slate-400">
-                      {c.gender === 'female' ? '女性' : '男性'} · {c.ageGroup}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1 text-[11px] text-slate-500">
-                    <div className="flex justify-between">
-                      <span>音调 (Pitch):</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">
-                        {c.pitch}x
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>语速 (Rate):</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">
-                        {c.rate}x
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>DSP 滤波模式:</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                        {c.timbreFilter}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handlePlayLine(`${c.characterName}声音测试，请多指教。`, c.pitch, c.rate)
-                      }
-                      className="px-2.5 py-1 text-[10px] bg-slate-200 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white rounded transition flex items-center gap-1"
-                    >
-                      <Sliders className="w-3 h-3" /> 测试此音色
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+          </label>
+          <label>
+            语速
+            <input
+              aria-label={'语速 ' + cast.characterName}
+              type="number"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={cast.rate}
+              onChange={(e) => edit(cast.id, { rate: Number(e.target.value) })}
+            />
+          </label>
+          <button disabled={busy} onClick={() => void save(cast)}>
+            保存此声线
+          </button>
+        </article>
+      ))}
     </div>
   )
 }

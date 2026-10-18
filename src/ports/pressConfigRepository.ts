@@ -21,6 +21,7 @@ export interface PressExportConfigRecord {
   customDialogueStyle: 'standard-quotes' | 'dash' | 'bracket'
   enablePunctuationFix: boolean
   enableSensitiveFilter: boolean
+  literalWords?: string[]
   updatedAt: number
 }
 

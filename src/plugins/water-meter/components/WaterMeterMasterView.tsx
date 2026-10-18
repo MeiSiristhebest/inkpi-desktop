@@ -1,23 +1,26 @@
 import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import type { WaterAuditReport } from '../types'
+import type { WaterBloatItem } from '../types'
 import { waterMeterEngine } from '../engine/WaterMeterEngine'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
-import { Zap, BookOpen, Bot, Scissors, FileText, Sparkles, Droplet } from 'lucide-react'
+import { Zap, BookOpen, Bot, FileText, Sparkles, Droplet } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select, Tooltip } from '../../../ui/primitives'
+import { Select } from '../../../ui/primitives'
 
-export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const WaterMeterMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <WaterMeterWorkspaceView key={props.projectId} {...props} />
+)
+const WaterMeterWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('water-meter')
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
   const [inputText, setInputText] = useState('')
-  const [report, setReport] = useState<WaterAuditReport>(() => waterMeterEngine.auditText(''))
+  const report = useMemo(() => waterMeterEngine.auditText(inputText), [inputText])
+  const aiTask = usePluginAiTask('water-meter', [selectedChapterId, inputText])
 
   useEffect(() => {
     const load = async () => {
@@ -36,7 +39,6 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             defaultChap.revision,
           )
           setInputText(text)
-          setReport(waterMeterEngine.auditText(text))
         }
       } catch (e) {
         console.error('Failed to load chapters in water meter:', e)
@@ -51,18 +53,19 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       const full = chapters
         .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
         .join('\n\n')
-      setInputText(full.slice(0, 15000))
-      setReport(waterMeterEngine.auditText(full.slice(0, 15000)))
+      setInputText(full)
     } else {
       const chap = chapters.find((c) => c.id === chapId)
       const text = chap ? semanticTextFromContent(chap.id, chap.content || '', chap.revision) : ''
       setInputText(text)
-      setReport(waterMeterEngine.auditText(text))
     }
   }
 
   const handleAudit = () => {
-    setReport(waterMeterEngine.auditText(inputText))
+    waterMeterEngine.auditText(
+      inputText,
+      selectedChapterId === 'all' ? undefined : { projectId, chapterId: selectedChapterId },
+    )
   }
 
   // AI 深度叙事密度排查
@@ -71,24 +74,20 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
       chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: semanticTextFromContent(
-        chap?.id ?? selectedChapterId,
-        inputText,
-        chap?.revision ?? 0,
-      ).slice(0, 2500),
+      text: semanticTextFromContent(chap?.id ?? selectedChapterId, inputText, chap?.revision ?? 0),
     }
 
     await aiTask.run(analysisInput)
   }
 
-  const handleApplyClean = () => {
-    let cleaned = inputText
-    for (const item of report.bloatItems) {
-      cleaned = cleaned.replaceAll(item.text, '')
-    }
-    cleaned = cleaned.replace(/\n\s*\n/g, '\n').trim()
-    setInputText(cleaned)
-    setReport(waterMeterEngine.auditText(cleaned))
+  const handleRemoveItem = (item: WaterBloatItem) => {
+    if (
+      typeof item.start !== 'number' ||
+      typeof item.end !== 'number' ||
+      inputText.slice(item.start, item.end) !== item.text
+    )
+      return
+    setInputText(inputText.slice(0, item.start) + inputText.slice(item.end))
   }
 
   return (
@@ -97,15 +96,15 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold tracking-tight">信息熵与水分压缩计</h2>
+            <h2 className="text-base font-semibold tracking-tight">文本统计与词项复核</h2>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-500 font-medium">
-              叙事动能分析 · 假动作套话排查
+              字符统计 · 原文词项定位
             </span>
           </div>
           <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            直连全书真实章节，扫描无意义震惊复读与套话水文，提升单章信息密度
+            查看原文统计和词表命中；是否修改由语境和作者目标决定
           </p>
-          <ScoreProvenanceBadge source="rule" detail="按冗余动词与套话占比计分" />
+          <ScoreProvenanceBadge source="rule" detail="字符频率与词表覆盖率，不是文学质量评分" />
         </div>
 
         <div className="flex items-center gap-2">
@@ -113,6 +112,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             <div className="flex items-center gap-1.5 text-xs text-[var(--ink-text-muted)]">
               <BookOpen className="w-3.5 h-3.5" />
               <Select
+                aria-label="筛选章节"
                 value={selectedChapterId}
                 onValueChange={(v) => handleSelectChapter(v)}
                 size="sm"
@@ -132,7 +132,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             className="px-3 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1 cursor-pointer"
           >
             <Zap className="w-3.5 h-3.5 text-amber-500" />
-            <span>深度脱水体检</span>
+            <span>重新计算文本统计</span>
           </button>
 
           {hostContext?.aiAssistant?.isAvailable && (
@@ -152,70 +152,24 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       {/* 主体滚动区 */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* 指标看板 */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-          <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
-            <span className="text-[11px] text-[var(--ink-text-muted)] block">水分综合评分</span>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span
-                className={`text-xl font-bold ${
-                  report.waterScore > 50
-                    ? 'text-rose-500'
-                    : report.waterScore > 25
-                      ? 'text-amber-500'
-                      : 'text-emerald-500'
-                }`}
-              >
-                {report.waterScore}
-              </span>
-              <span className="text-[10px] text-[var(--ink-text-muted)]">
-                {report.waterLevel === 'flooded'
-                  ? '重度注水'
-                  : report.waterLevel === 'watery'
-                    ? '明显偏水'
-                    : report.waterLevel === 'normal'
-                      ? '平稳正常'
-                      : '精炼高能'}
-              </span>
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div className="p-3 rounded-xl border border-[var(--ink-border)]">
+            <span>非空白字符数</span>
+            <p>{report.totalWordCount}</p>
           </div>
-
-          <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
-            <span className="text-[11px] text-[var(--ink-text-muted)] block">香农信息熵 (0-8)</span>
-            <span className="text-xl font-bold text-blue-400 mt-1 block">
-              {report.entropyScore}
-            </span>
+          <div className="p-3 rounded-xl border border-[var(--ink-border)]">
+            <span>字符频率熵（bit/字符）</span>
+            <p>{report.entropyScore}</p>
           </div>
-
-          <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
-            <span className="text-[11px] text-[var(--ink-text-muted)] block">
-              动作动词密度 (AVR)
-            </span>
-            <span className="text-xl font-bold text-indigo-400 mt-1 block">
-              {(report.actionVerbRatio * 100).toFixed(1)}%
-            </span>
+          <div className="p-3 rounded-xl border border-[var(--ink-border)]">
+            <span>词项覆盖（重叠不重复计算）</span>
+            <p>
+              {report.matchedCharacters} 字符 · {(report.clicheRatio * 100).toFixed(1)}%
+            </p>
           </div>
-
-          <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
-            <span className="text-[11px] text-[var(--ink-text-muted)] block">套话假动作占比</span>
-            <span
-              className={`text-xl font-bold mt-1 block ${
-                report.clicheRatio > 0.05 ? 'text-rose-500' : 'text-emerald-500'
-              }`}
-            >
-              {(report.clicheRatio * 100).toFixed(1)}%
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)]">
-            <span className="text-[11px] text-[var(--ink-text-muted)] block">预估脱水字数</span>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-xl font-bold text-emerald-500">
-                {report.estimatedLeanWordCount}
-              </span>
-              <span className="text-[10px] text-[var(--ink-text-muted)]">
-                (-{report.dehydrationRate}%)
-              </span>
-            </div>
+          <div className="p-3 rounded-xl border border-[var(--ink-border)]">
+            <span>动作词表字符占比</span>
+            <p>{(report.actionVerbRatio * 100).toFixed(1)}%</p>
           </div>
         </div>
 
@@ -228,15 +182,9 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 <FileText className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
                 正文待审段落（当前字数：{report.totalWordCount}）
               </span>
-              <Tooltip content="自动剔除已识别出的所有假动作套话">
-                <button
-                  onClick={handleApplyClean}
-                  className="px-2.5 py-1 rounded bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-emerald-500 text-emerald-500 text-xs font-medium flex items-center gap-1"
-                >
-                  <Scissors className="w-3 h-3" />
-                  一键剔除水词
-                </button>
-              </Tooltip>
+              <span className="text-[11px] text-[var(--ink-text-muted)]">
+                逐处预览修改，不按词表批量删字。
+              </span>
             </div>
 
             <textarea
@@ -251,7 +199,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             <div className="p-3 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-1 text-xs">
               <span className="font-semibold text-[var(--ink-text)] flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                去水提纯优化建议：
+                原文复核：
               </span>
               {report.advice.map((adv, i) => (
                 <p
@@ -270,13 +218,13 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
                 <Droplet className="w-3.5 h-3.5 text-cyan-500" />
-                抓捕到的冗余水词 ({report.bloatItems.length})
+                可定位的词项 ({report.bloatItems.length})
               </span>
             </div>
 
             {report.bloatItems.length === 0 ? (
               <div className="p-8 text-center text-xs text-[var(--ink-text-muted)]">
-                暂未发现明显的灌水套话，正文叙事纯度极高！
+                词表没有命中；这不能判断文本质量或叙事作用。
               </div>
             ) : (
               <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
@@ -295,6 +243,13 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                             : '修饰堆叠'}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(item)}
+                      className="text-xs text-[var(--ink-accent)]"
+                    >
+                      移除该处词项（预览）
+                    </button>
                     <p className="text-[11px] text-[var(--ink-text-muted)] leading-tight">
                       {item.reason}
                     </p>

@@ -2,14 +2,17 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ALL_LAZY_PLUGINS, ALL_PLUGIN_DEFINITIONS } from './pluginDefinitions'
-import { CAPABILITY_REGISTRY, PLUGIN_DRAWER_CAPABILITY_ORDER } from './capabilityRegistry'
+import {
+  CAPABILITY_REGISTRY,
+  isPrimaryNavigationPlugin,
+  PLUGIN_DRAWER_CAPABILITY_ORDER,
+} from './capabilityRegistry'
 import { capabilityFor } from './capabilityIndex'
 
 /**
- * The sidebar and the command palette both gate on the capability registry, and the registry only
- * covered ten plugins, so thirty-four were unreachable. These assertions are what keeps a fourth
- * hand-maintained list from being needed: the population comes off the disk and the per-plugin facts
- * come off the plugin definitions, so a plugin cannot be missing without failing here.
+ * The sidebar has a curated set of permanent routes; other plugin views remain canvas/command
+ * destinations. Deriving these surfaces from the plugin definitions keeps the 44-plugin catalog
+ * complete without treating every shipped view as a permanent navigation item.
  */
 
 const curatedIds = new Set(Object.keys(CAPABILITY_REGISTRY))
@@ -44,9 +47,11 @@ describe('capability coverage', () => {
 
   it('derives surfaces from the views a plugin actually ships', () => {
     for (const definition of ALL_PLUGIN_DEFINITIONS) {
-      if (curatedIds.has(definition.id)) continue
       const surfaces = capabilityFor(definition.id)?.surfaces ?? []
-      expect(surfaces, definition.id).toContain('navigation')
+      expect(surfaces.includes('navigation'), definition.id).toBe(
+        isPrimaryNavigationPlugin(definition.id),
+      )
+      if (curatedIds.has(definition.id)) continue
       expect(surfaces, definition.id).toContain('canvas')
       expect(surfaces, definition.id).toContain('command')
       expect(surfaces.includes('drawer')).toBe(Boolean(definition.drawer))

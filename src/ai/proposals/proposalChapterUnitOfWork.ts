@@ -109,6 +109,11 @@ export class ProposalChapterUnitOfWork {
             if (!currentProposal) {
               throw new Error('Proposal ' + proposalId + ' not found')
             }
+            if (currentProposal.documentId !== chapterId) {
+              throw new Error(
+                `Proposal ${proposalId} targets chapter ${currentProposal.documentId}, not ${chapterId}`,
+              )
+            }
             if (currentLock) {
               throw new Error('Proposal ' + proposalId + ' is locked by another operation')
             }
@@ -245,7 +250,7 @@ export class ProposalChapterUnitOfWork {
     )
 
     // After atomic transaction completes successfully:
-    draftJournal.clear(workspaceId, chapterId)
+    draftJournal.clearIfContentMatches(workspaceId, chapterId, committedChapter.content || '')
     chapterSaveEvents.publish(committedChapter)
     domainChangeEvents.publish(workspaceId, committedWorkspaceRevision)
     if (eventScope) {
@@ -315,6 +320,11 @@ export class ProposalChapterUnitOfWork {
             // 1. Validate Proposal state
             if (!currentProposal) {
               throw new Error('Proposal ' + proposalId + ' not found')
+            }
+            if (currentProposal.documentId !== chapterId) {
+              throw new Error(
+                `Proposal ${proposalId} targets chapter ${currentProposal.documentId}, not ${chapterId}`,
+              )
             }
             if (currentLock) {
               throw new Error('Proposal ' + proposalId + ' is locked by another operation')
@@ -434,7 +444,7 @@ export class ProposalChapterUnitOfWork {
     )
 
     // After atomic transaction completes successfully:
-    draftJournal.clear(workspaceId, chapterId)
+    draftJournal.clearIfContentMatches(workspaceId, chapterId, restoredChapter.content || '')
     chapterSaveEvents.publish(restoredChapter)
     domainChangeEvents.publish(workspaceId, committedWorkspaceRevision)
     if (eventScope) {

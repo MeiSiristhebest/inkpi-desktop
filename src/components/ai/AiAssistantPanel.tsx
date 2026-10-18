@@ -37,10 +37,12 @@ interface AiAssistantPanelProps {
   /** 发送前披露：随指令带出的本地内容，由会话状态机投影，面板只负责如实展示（P3.15） */
   requestScope?: AssistantRequestScope
   initialTab?: 'chat' | 'activity'
+  focusedResultId?: string
   onTabChange?: (tab: 'chat' | 'activity') => void
   taskRecovery?: TaskRecoveryRecord[]
   /** 本工作区的统一 AI 结果，Activity Center 的唯一结果列表来源 */
   results?: StandardAiResult[]
+  currentDocumentRevisions?: ReadonlyMap<string, number>
   taskRecoveryLoading?: boolean
   taskRecoveryError?: string
   onResumeTask?: (taskId: string) => Promise<boolean>
@@ -62,9 +64,11 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   onClose,
   requestScope,
   initialTab = 'chat',
+  focusedResultId,
   onTabChange,
   taskRecovery = [],
   results = [],
+  currentDocumentRevisions,
   taskRecoveryLoading = false,
   taskRecoveryError,
   onResumeTask,
@@ -180,6 +184,8 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           <AiActivityCenter
             recoveryRecords={taskRecovery}
             results={results}
+            focusedResultId={focusedResultId}
+            currentDocumentRevisions={currentDocumentRevisions}
             loading={taskRecoveryLoading}
             error={taskRecoveryError}
             onResume={onResumeTask}

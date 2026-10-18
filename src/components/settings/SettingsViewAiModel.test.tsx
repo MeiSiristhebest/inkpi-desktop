@@ -5,7 +5,23 @@ import { SettingsProvider } from '../../core/settings'
 import { ThemeController } from '../../core/ThemeController'
 import { db } from '../../db/indexedDB'
 
-const defaultProbe = vi.fn(async () => ({ status: 200, latency: 42, modelIds: ['m-1', 'm-2'] }))
+const defaultProbe = vi.fn(async () => ({
+  status: 200,
+  latency: 42,
+  modelIds: ['m-1', 'm-2'],
+  catalogModels: [
+    {
+      id: 'm-1',
+      name: 'Model One',
+      contextTokens: 32000,
+      maxOutputTokens: 4096,
+      promptPricePerToken: '0.00000015',
+      completionPricePerToken: '0.0000006',
+      inputModalities: ['text', 'image'],
+    },
+    { id: 'm-2' },
+  ],
+}))
 
 const renderSettings = (props: {
   open: boolean
@@ -115,6 +131,8 @@ describe('AiTab 添加面板（真实拉取/手动添加 + 目录预填 + 思考
     await waitFor(() => {
       expect(screen.getAllByText('m-1').length).toBeGreaterThan(0)
       expect(screen.getAllByText('m-2').length).toBeGreaterThan(0)
+      expect(screen.getByText(/Model One/)).toBeInTheDocument()
+      expect(screen.getByText(/输入 \$0.15\/1M/)).toBeInTheDocument()
     })
 
     // 在右栏已选卡片内选择思考等级「高」
@@ -130,6 +148,14 @@ describe('AiTab 添加面板（真实拉取/手动添加 + 目录预填 + 思考
       expect(s.aiModel?.supportsThinking).toBe(true)
       expect(s.aiModel?.availableModelIds).toContain('m-1')
       expect(s.savedAiModels?.[0]?.availableModelIds).toContain('m-1')
+      expect(s.aiModel?.availableModelCatalog?.[0]).toMatchObject({
+        id: 'm-1',
+        name: 'Model One',
+        contextTokens: 32000,
+        maxOutputTokens: 4096,
+        promptPricePerToken: '0.00000015',
+      })
+      expect(s.aiModel?.catalogFetchedAt).toBeTruthy()
     })
   })
 })
@@ -163,12 +189,48 @@ describe('AiTab 模型目录', () => {
       const s = readStored()
       expect(s.savedAiModels?.[0]?.availableModelIds).toEqual(['m-1', 'm-2'])
       expect(s.savedAiModels?.[1]?.availableModelIds).toEqual(['m-1', 'm-2'])
+      expect(s.savedAiModels?.[0]?.availableModelCatalog?.[0]?.contextTokens).toBe(32000)
+      expect(s.savedAiModels?.[1]?.availableModelCatalog?.[0]?.promptPricePerToken).toBe(
+        '0.00000015',
+      )
     })
 
     // 更新时间戳写入本地目录状态
     const meta = JSON.parse(localStorage.getItem('inkpi-ai-catalog-meta') || '{}')
     expect(meta.fetchedAt).toBeTruthy()
     expect(meta.fetchedCount).toBe(2)
+  })
+
+  it('成功刷新后不把上一次账户的价格或上下文填入当前响应', async () => {
+    const partialProbe = vi.fn(async () => ({
+      status: 200,
+      latency: 10,
+      modelIds: ['m-1'],
+      catalogModels: [{ id: 'm-1', contextTokens: 32000 }],
+    }))
+    const savedModel = {
+      id: 'deepseek-chat',
+      name: 'DS',
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      availableModelIds: ['m-1'],
+      availableModelCatalog: [
+        { id: 'm-1', contextTokens: 64000, promptPricePerToken: '0.0000009' },
+      ],
+    }
+    localStorage.setItem(
+      'inkpi-settings',
+      JSON.stringify({ aiModel: savedModel, savedAiModels: [savedModel] }),
+    )
+    renderSettings({ open: true, onClose: vi.fn(), probeModelProvider: partialProbe })
+    fireEvent.click(screen.getByText('自定义 AI 模型'))
+    fireEvent.click(screen.getByText('更新模型目录'))
+
+    await waitFor(() =>
+      expect(readStored().savedAiModels[0].availableModelCatalog).toEqual([
+        { id: 'm-1', contextTokens: 32000 },
+      ]),
+    )
   })
 
   it('端点没返回模型列表时不算成功，也不覆盖上一次的列表（P5.2 的探测边界）', async () => {
@@ -182,6 +244,7 @@ describe('AiTab 模型目录', () => {
           provider: 'deepseek',
           baseUrl: 'https://api.deepseek.com/v1',
           availableModelIds: ['old-1'],
+          availableModelCatalog: [{ id: 'old-1', contextTokens: 24000 }],
         },
         savedAiModels: [
           {
@@ -190,6 +253,7 @@ describe('AiTab 模型目录', () => {
             provider: 'deepseek',
             baseUrl: 'https://api.deepseek.com/v1',
             availableModelIds: ['old-1'],
+            availableModelCatalog: [{ id: 'old-1', contextTokens: 24000 }],
           },
           {
             id: 'gpt-4o',
@@ -213,5 +277,8 @@ describe('AiTab 模型目录', () => {
     const s = readStored()
     expect(s.savedAiModels[0].availableModelIds).toEqual(['old-1'])
     expect(s.savedAiModels[1].availableModelIds).toEqual(['old-2'])
+    expect(s.savedAiModels[0].availableModelCatalog).toEqual([
+      { id: 'old-1', contextTokens: 24000 },
+    ])
   })
 })

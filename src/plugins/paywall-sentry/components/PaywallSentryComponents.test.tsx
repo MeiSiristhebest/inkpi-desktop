@@ -1,42 +1,52 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { PaywallSentryMasterView } from './PaywallSentryMasterView'
 import { PaywallSentryDrawer } from './PaywallSentryDrawer'
-import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
-
+import { indexedDbPaywallAuditRepository as repo } from '../../../adapters/indexedDbPaywallAuditRepository'
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
-    getChaptersByProject: vi.fn(),
+    getChaptersByProject: vi.fn().mockResolvedValue([
+      {
+        id: 'c',
+        projectId: 'p',
+        volumeId: 'v',
+        title: '保存章',
+        order: 0,
+        content: '谁？',
+        revision: 3,
+      },
+    ]),
+    getVolumesByProject: vi.fn().mockResolvedValue([{ id: 'v', projectId: 'p', order: 0 }]),
   },
 }))
-
-describe('PaywallSentry Components', () => {
-  const fakeChapters = [
-    {
-      id: 'ch-1',
-      projectId: 'proj-1',
-      title: '踏入仙途',
-      order: 1,
-      content: '陆沉看着远方，轰！突然杀意暴涌！那是……',
-    },
-  ]
-
-  it('renders PaywallSentryMasterView and loads chapters', async () => {
-    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue(
-      fakeChapters as any,
-    )
-    render(<PaywallSentryMasterView projectId="proj-1" />)
-    expect(screen.getByText(/付费卡点与断章势能哨兵/)).toBeInTheDocument()
-    expect(screen.getByTestId('score-provenance')).toHaveTextContent('来源：即时规则')
-    await waitFor(() => {
-      expect(screen.getByText(/踏入仙途/)).toBeInTheDocument()
+vi.mock('../../../adapters/indexedDbPaywallAuditRepository', () => ({
+  indexedDbPaywallAuditRepository: { save: vi.fn().mockResolvedValue(undefined) },
+}))
+describe('PaywallSentry components', () => {
+  it('uses real book position and stores measured counts separately', async () => {
+    render(<PaywallSentryMasterView projectId="p" />)
+    await screen.findByText('第 1 章：保存章')
+    fireEvent.change(screen.getByLabelText('观察人数'), { target: { value: '10' } })
+    fireEvent.change(screen.getByLabelText('付费人数'), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('观察时期与数据来源'), {
+      target: { value: 'synthetic weekly record' },
     })
+    expect(screen.getByText(/实测比例：30.00%/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '保存卡点快照' }))
+    await waitFor(() =>
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chapterId: 'c',
+          chapterOrder: 1,
+          sourceRevision: 3,
+          measurement: { reached: 10, paid: 3, rate: 0.3, source: 'synthetic weekly record' },
+        }),
+      ),
+    )
   })
-
-  it('renders PaywallSentryDrawer for currentText', async () => {
-    render(<PaywallSentryDrawer projectId="proj-1" currentText="天劫降临，九霄雷动，那是……" />)
-    expect(screen.getByText(/付费卡点哨兵 \(PPI\)/)).toBeInTheDocument()
-    expect(screen.getByText(/PPI 规则评分/)).toBeInTheDocument()
-    expect(screen.getByTestId('score-provenance')).toHaveTextContent('来源：即时规则')
+  it('does not show PPI or assumed conversion in the drawer', () => {
+    render(<PaywallSentryDrawer projectId="p" currentText="真相尚未揭开。" />)
+    expect(screen.getByText('真相尚未揭开。')).toBeInTheDocument()
+    expect(screen.queryByText(/PPI/)).not.toBeInTheDocument()
   })
 })

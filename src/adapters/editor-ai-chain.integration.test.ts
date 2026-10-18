@@ -83,7 +83,7 @@ describe('Desktop editor AI chain integration', () => {
       })
       expect(taskResultText(result)).toBe('editor-ai-chain-fixture:continuation')
       await expect(
-        hook.result.current.requestGhost(document.documentId, document.text),
+        hook.result.current.requestGhost(document.documentId, document.text, document.revision),
       ).resolves.toBe('editor-ai-chain-fixture:continuation')
 
       editor.commands.setTextSelection(editor.state.doc.content.size - 1)

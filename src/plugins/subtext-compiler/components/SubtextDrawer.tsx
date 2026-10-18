@@ -1,37 +1,76 @@
-import type { FC } from 'react'
+import { useMemo, useState, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import { SubtextCompilerEngine } from '../engine/SubtextCompilerEngine'
-import { MessageSquareQuote, Layers } from 'lucide-react'
-
-export const SubtextDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
-  // 从正文中提取首个带引号的台词
-  const match = currentText.match(/“([^”]+)”/)
-  const sampleSpoken = match ? match[1] : '我从来没有在乎过你。'
-  const compiled = SubtextCompilerEngine.compile(sampleSpoken, '当前说话者', 'pride')
-
+import { Select } from '../../../ui/primitives'
+export const SubtextDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <SubtextDrawerBody key={props.projectId} {...props} />
+)
+function SubtextDrawerBody({ currentText }: DesktopPluginDrawerProps) {
+  const quotes = useMemo(
+    () =>
+      [...currentText.matchAll(/“([^”]+)”|「([^」]+)」/g)].map((m) => ({
+        id: String(m.index),
+        quote: m[1] ?? m[2],
+        start: m.index! + 1,
+      })),
+    [currentText],
+  )
+  const [choice, setChoice] = useState('')
+  const [speaker, setSpeaker] = useState('')
+  const [goal, setGoal] = useState('')
+  const [meaning, setMeaning] = useState('')
+  const selected = quotes.find((q) => q.id === choice)
+  const compiled =
+    selected && speaker.trim()
+      ? SubtextCompilerEngine.compile(selected.quote, speaker, undefined, {
+          goal,
+          intendedMeaning: meaning,
+        })
+      : null
   return (
-    <div className="p-3 space-y-3 text-xs">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-        <span className="font-bold flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-          <MessageSquareQuote className="w-4 h-4" /> 冰山对白探针
-        </span>
-        <span className="text-[10px] text-slate-400">三轨透视</span>
-      </div>
-
-      <div className="p-2.5 rounded bg-slate-100 dark:bg-slate-800 space-y-2">
-        <div className="text-slate-500 text-[10px]">捕获台词: "{sampleSpoken.slice(0, 30)}..."</div>
-        <div className="p-2 rounded bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 space-y-1">
-          <div className="text-[10px] font-bold text-indigo-600 flex items-center gap-1">
-            <Layers className="w-3 h-3" /> 水下潜台词推测:
-          </div>
-          <div className="font-serif italic text-slate-600 dark:text-slate-300 text-[11px]">
-            "{compiled.subtext}"
-          </div>
-        </div>
-        <div className="text-[10px] text-emerald-600 dark:text-emerald-400">
-          建议微动作: {compiled.beatAction}
-        </div>
-      </div>
+    <div className="p-4 space-y-3 text-xs">
+      <h3>对白潜台词草稿</h3>
+      <p>只列实际引语；说话人和隐藏含义由作者填写。</p>
+      {!quotes.length ? (
+        <p>当前正文没有完整引语，未生成台词或潜台词。</p>
+      ) : (
+        <>
+          <Select
+            aria-label="选择原文对白"
+            value={choice}
+            onValueChange={(value) => {
+              setChoice(value)
+              setSpeaker('')
+              setGoal('')
+              setMeaning('')
+            }}
+          >
+            <option value="">选择实际对白</option>
+            {quotes.map((q) => (
+              <option key={q.id} value={q.id}>
+                [{q.start}] {q.quote}
+              </option>
+            ))}
+          </Select>
+          <input
+            aria-label="说话人"
+            value={speaker}
+            onChange={(e) => setSpeaker(e.target.value)}
+            placeholder="作者确认的说话人"
+          />
+          <input aria-label="说话目标" value={goal} onChange={(e) => setGoal(e.target.value)} />
+          <textarea
+            aria-label="作者隐藏含义"
+            value={meaning}
+            onChange={(e) => setMeaning(e.target.value)}
+          />
+          {compiled && (
+            <p>
+              作者草稿：「{compiled.spoken}」；潜台词：{compiled.subtext || '未知'}
+            </p>
+          )}
+        </>
+      )}
     </div>
   )
 }

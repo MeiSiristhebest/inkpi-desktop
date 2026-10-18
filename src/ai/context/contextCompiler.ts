@@ -15,6 +15,8 @@ export interface CreativeContextInput {
   instruction?: string
   totalTokenBudget?: number
   taskKind?: string
+  activeEntityIds?: string[]
+  activePromiseIds?: string[]
 }
 
 export interface CreativeContext {
@@ -83,6 +85,10 @@ export function compileCreativeContext(input: CreativeContextInput): CreativeCon
       taskKind: input.taskKind,
       deduplicate: true,
       maxItems: budget ? Math.floor(budget.canonicalStoryTokens / 25) : undefined,
+      maxCharacters: budget ? budget.canonicalStoryTokens * CHARS_PER_TOKEN : undefined,
+      currentDocumentId: input.document.documentId,
+      activeEntityIds: input.activeEntityIds,
+      activePromiseIds: input.activePromiseIds,
     }),
     projectRevision: input.projectRevision ?? input.document.revision,
     budget,

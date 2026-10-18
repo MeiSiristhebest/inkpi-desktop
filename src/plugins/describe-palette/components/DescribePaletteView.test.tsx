@@ -1,47 +1,29 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { DescribePaletteView } from './DescribePaletteView'
-import { clipboardWriter } from '../../../adapters/clipboardWriter'
-
-describe('DescribePaletteView — 五感微观修辞调色盘主视口', () => {
-  it('renders heading, tabs and default snippets', () => {
-    render(<DescribePaletteView projectId="p1" />)
-    expect(screen.getByText('五感微观修辞调色盘')).toBeInTheDocument()
-    expect(screen.getByText('全部感官')).toBeInTheDocument()
-    expect(screen.getByText('视觉 (光影)')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText(/搜索金句/)).toBeInTheDocument()
+import { describePaletteEngine } from '../engine/DescribePaletteEngine'
+describe('Description workspace constraints', () => {
+  it('retains a no-match query through random selection', () => {
+    render(<DescribePaletteView projectId="p" />)
+    fireEvent.change(screen.getByLabelText('描写素材检索'), {
+      target: { value: '确实不存在的合成对象9876' },
+    })
+    expect(screen.queryByRole('button', { name: '复制此句' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '按筛选抽取素材' }))
+    expect(screen.queryByRole('button', { name: '复制此句' })).not.toBeInTheDocument()
   })
-
-  it('filters snippets by sensory tab', () => {
-    render(<DescribePaletteView projectId="p1" />)
-    const soundTab = screen.getByText('听觉 (音律)')
-    fireEvent.click(soundTab)
-
-    // 应该展示听觉相关金句（如雷劫、兵刃）
-    const matched = screen.getAllByText(/九天重劫|短兵相接/)
-    expect(matched.length).toBeGreaterThan(0)
+  it('passes actual author filters and query to the bounded sampler', () => {
+    const sample = vi.spyOn(describePaletteEngine, 'inspireRandom')
+    render(<DescribePaletteView projectId="p" />)
+    fireEvent.change(screen.getByLabelText('描写素材检索'), { target: { value: '剑芒' } })
+    fireEvent.click(screen.getByRole('button', { name: '按筛选抽取素材' }))
+    expect(sample).toHaveBeenCalledWith('all', undefined, 3, undefined, '剑芒')
+    sample.mockRestore()
   })
-
-  it('allows expanding sensory diagnostic radar and typing text', () => {
-    render(<DescribePaletteView projectId="p1" />)
-    const diagBtn = screen.getByText('感官雷达诊断')
-    fireEvent.click(diagBtn)
-
-    const textarea = screen.getByPlaceholderText(/残阳如血/)
-    fireEvent.change(textarea, { target: { value: '白色的剑芒刺目而寒冷，雷声轰鸣震耳欲聋。' } })
-
-    expect(screen.getByText('感官雷达透视')).toBeInTheDocument()
-  })
-
-  it('copies snippet to clipboard on click', async () => {
-    const copySpy = vi.spyOn(clipboardWriter, 'writeText').mockResolvedValue()
-    render(<DescribePaletteView projectId="p1" />)
-
-    // 「复制金句」是提示文案，按钮真正的名字是可见的「复制」
-    const copyButtons = screen.getAllByRole('button', { name: '复制' })
-    fireEvent.click(copyButtons[0])
-
-    expect(copySpy).toHaveBeenCalled()
-    copySpy.mockRestore()
+  it('counts Unicode text and shows exact source instead of a quality verdict', () => {
+    render(<DescribePaletteView projectId="p" />)
+    fireEvent.change(screen.getByLabelText('待定位描写正文'), { target: { value: '😀光' } })
+    expect(screen.getByText(/2 个非空白 Unicode 字符/)).toBeInTheDocument()
+    expect(screen.getByText(/视觉词项 \[2, 3\)/)).toBeInTheDocument()
   })
 })

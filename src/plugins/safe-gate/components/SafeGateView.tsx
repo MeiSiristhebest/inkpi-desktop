@@ -25,6 +25,10 @@ import {
 } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Tooltip, Select } from '../../../ui/primitives'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 
 const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsRed as SensitiveWord[]),
@@ -32,27 +36,39 @@ const ALL_WORDS: SensitiveWord[] = [
   ...(seedWordsBlue as SensitiveWord[]),
 ]
 
-export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const SafeGateView: FC<DesktopPluginViewProps> = (props) => (
+  <ProjectSafeGateView key={props.projectId} {...props} />
+)
+const ProjectSafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('safe-gate')
   const [engine] = useState(() => {
     const eng = new SafeGateEngine()
     eng.build(ALL_WORDS, regexRules as RegexRule[])
     return eng
   })
 
-  const [chapters, setChapters] = useState<any[]>([])
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
   const [text, setText] = useState('')
-  const [genre, setGenre] = useState<GenreStyle>('xianxia')
+  const [genre, setGenre] = useState<GenreStyle>('neutral')
   const [filterLevel, setFilterLevel] = useState<'all' | 'red' | 'yellow' | 'blue'>('all')
-  const [scanResult, setScanResult] = useState<SafeGateScanResult>(() => engine.scan('', 'xianxia'))
+  const [error, setError] = useState('')
+  const scanResult: SafeGateScanResult = useMemo(
+    () => engine.scan(text, genre),
+    [engine, text, genre],
+  )
+  const aiTask = usePluginAiTask('safe-gate', [projectId, selectedChapterId, text, genre])
 
   useEffect(() => {
+    let disposed = false
     const load = async () => {
       try {
-        const list = await indexedDbProjectRepository.getChaptersByProject(projectId)
-        list.sort((a, b) => a.order - b.order)
+        const [records, volumes] = await Promise.all([
+          indexedDbProjectRepository.getChaptersByProject(projectId),
+          indexedDbProjectRepository.getVolumesByProject(projectId),
+        ])
+        if (disposed) return
+        const list = projectChapterSequence(projectId, records, volumes)
         setChapters(list)
         if (list.length > 0) {
           const defaultChap = hostContext?.activeChapter
@@ -66,14 +82,16 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           )
           if (chapContent.trim()) {
             setText(chapContent)
-            setScanResult(engine.scan(chapContent, genre))
           }
         }
       } catch (e) {
-        console.error('Failed to load chapters in safe gate:', e)
+        if (!disposed) setError('章节或卷信息读取失败，请重新打开重试。')
       }
     }
     load()
+    return () => {
+      disposed = true
+    }
   }, [projectId, hostContext?.activeChapter?.id])
 
   const handleSelectChapter = (chapId: string) => {
@@ -82,20 +100,14 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
       const allText = chapters
         .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
         .join('\n\n')
-      setText(allText.slice(0, 20000))
-      setScanResult(engine.scan(allText.slice(0, 20000), genre))
+      setText(allText)
     } else {
       const chap = chapters.find((c) => c.id === chapId)
       const chapContent = chap
         ? semanticTextFromContent(chap.id, chap.content || '', chap.revision)
         : ''
       setText(chapContent)
-      setScanResult(engine.scan(chapContent, genre))
     }
-  }
-
-  const handleScan = () => {
-    setScanResult(engine.scan(text, genre))
   }
 
   // AI 全文违规隐晦语境排查
@@ -103,24 +115,31 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
-      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: semanticTextFromContent(`safe-gate-${selectedChapterId}`, text, chap?.revision).slice(
-        0,
-        2500,
-      ),
+      chapter: chap
+        ? {
+            id: chap.id,
+            chapterNumber: chap.chapterNumber,
+            revision: chap.revision,
+            title: chap.title,
+          }
+        : undefined,
+      text: semanticTextFromContent(chap?.id ?? 'manual-scan', text, chap?.revision ?? 0),
       genre,
+      localMatches: scanResult.violations,
+      ruleErrors: scanResult.ruleErrors,
     }
 
     await aiTask.run(analysisInput)
   }
 
-  useEffect(() => {
-    handleScan()
-  }, [text, genre])
-
   // 批量一键平替
   const handleBatchReplace = () => {
     const replaced = engine.applyAllAuto(text, scanResult, genre)
+    setError(
+      replaced === text && scanResult.violations.some((item) => item.suggestions.length > 0)
+        ? '批量替换未执行：规则不完整或词项重叠，请逐项选择。'
+        : '',
+    )
     setText(replaced)
   }
 
@@ -131,7 +150,6 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     const replaced = engine.applyReplacement(text, v, {
       replacement,
       genre: [genre],
-      confidence: 1.0,
     })
     setText(replaced)
   }
@@ -143,6 +161,16 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
+      {error && (
+        <p role="alert" className="p-2 text-xs text-rose-500">
+          {error}
+        </p>
+      )}
+      {scanResult.ruleErrors.map((issue) => (
+        <p role="alert" key={issue.ruleId} className="p-2 text-xs text-rose-500">
+          {issue.ruleId}：{issue.message}
+        </p>
+      ))}
       {/* 顶栏 */}
       <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -165,7 +193,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500">
             <AlertOctagon className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-medium">红线违规：{scanResult.redCount}</span>
+            <span className="text-[11px] font-medium">红色词表：{scanResult.redCount}</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500">
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -189,7 +217,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
           <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
           <button
             onClick={handleBatchReplace}
-            disabled={scanResult.isClean}
+            disabled={!scanResult.complete || scanResult.violations.length === 0}
             className="px-3.5 py-1.5 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-opacity cursor-pointer"
           >
             <Wand2 className="w-3.5 h-3.5" /> 一键文学平替
@@ -204,21 +232,28 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             <div className="flex items-center gap-1.5 text-xs text-[var(--ink-text-muted)] mr-2">
               <BookOpen className="w-3.5 h-3.5" />
               <Select
+                aria-label="筛选章节"
                 value={selectedChapterId}
                 onValueChange={(v) => handleSelectChapter(v)}
                 size="sm"
               >
-                <option value="all">全书章节采样</option>
+                <option value="all">全书保存文本</option>
                 {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
-                    第 {c.order} 章 · {c.title || '无题'}
+                    {c.chapterNumber ? `第 ${c.chapterNumber} 章` : '位置未知'} ·{' '}
+                    {c.title || '无题'}
                   </option>
                 ))}
               </Select>
             </div>
           )}
           <span className="text-[var(--ink-text-muted)]">文风适配：</span>
-          <Select value={genre} onValueChange={(v) => setGenre(v as GenreStyle)} size="sm">
+          <Select
+            aria-label="文风适配"
+            value={genre}
+            onValueChange={(v) => setGenre(v as GenreStyle)}
+            size="sm"
+          >
             <option value="xianxia">仙侠修真 (推荐文言古风)</option>
             <option value="historical">古代历史 (推荐典籍成语)</option>
             <option value="urban">都市异能 (推荐现代委婉)</option>
@@ -314,6 +349,8 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
             <span>审查结果与文学平替方案</span>
             {!text.trim() ? (
               <span className="text-[var(--ink-text-muted)]">等待正文</span>
+            ) : !scanResult.complete ? (
+              <span>部分规则未完成</span>
             ) : scanResult.isClean ? (
               <span className="text-emerald-500 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> 未命中本地词库
@@ -386,7 +423,7 @@ export const SafeGateView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {v.suggestions.map((sug, i) => (
-                        <Tooltip key={i} content={`规则权重 ${Math.round(sug.confidence * 100)}%`}>
+                        <Tooltip key={i} content="词表提供的可选替换；请按当前语境复核">
                           <button
                             onClick={() => handleSingleReplace(v.id, sug.replacement)}
                             className="px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] hover:text-[var(--ink-accent)] text-[11px] font-medium transition-colors flex items-center gap-1"

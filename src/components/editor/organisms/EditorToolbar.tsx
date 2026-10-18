@@ -458,21 +458,43 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       {/* 右侧：语义分组入口；续写建议是唯一的上下文动作，不放入底部状态栏。 */}
       <div
         data-testid="editor-toolbar-actions"
-        className="editor-toolbar-actions flex items-center gap-1 shrink-0 relative"
+        className="editor-toolbar-actions flex items-center gap-1 relative"
       >
         {hasGhostText && (
-          <Tooltip content="采纳续写建议（Tab）">
-            <button
-              type="button"
-              data-testid="editor-toolbar-ghost-action"
-              onClick={() => actions.acceptGhostText()}
-              aria-label="采纳续写建议"
-              className="editor-toolbar-action-button flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="editor-toolbar-label">Tab 采纳续写</span>
-            </button>
-          </Tooltip>
+          <>
+            <Tooltip content="采纳一词（Alt+→ 或 Ctrl+→）">
+              <button
+                type="button"
+                onClick={() => actions.acceptGhostText('word')}
+                aria-label="采纳一词"
+                className="editor-toolbar-action-button px-2 py-1 rounded-lg text-xs text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] cursor-pointer"
+              >
+                一词
+              </button>
+            </Tooltip>
+            <Tooltip content="采纳一行（Alt+↓，以换行符为界）">
+              <button
+                type="button"
+                onClick={() => actions.acceptGhostText('line')}
+                aria-label="采纳一行"
+                className="editor-toolbar-action-button px-2 py-1 rounded-lg text-xs text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] cursor-pointer"
+              >
+                一行
+              </button>
+            </Tooltip>
+            <Tooltip content="采纳全部续写建议（Tab）">
+              <button
+                type="button"
+                data-testid="editor-toolbar-ghost-action"
+                onClick={() => actions.acceptGhostText()}
+                aria-label="采纳续写建议"
+                className="editor-toolbar-action-button flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-[var(--ink-accent)] hover:bg-[var(--ink-accent-soft)] transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="editor-toolbar-label">Tab 采纳续写</span>
+              </button>
+            </Tooltip>
+          </>
         )}
 
         {/* 1. 排版与标点规整 */}
@@ -480,6 +502,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <Tooltip content="排版与标点规范">
             <button
               type="button"
+              aria-label="排版与标点"
               data-testid="editor-toolbar-format-trigger"
               aria-haspopup="menu"
               aria-expanded={activeMenu === 'format'}
@@ -608,6 +631,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <Tooltip content="审校与内容体检">
             <button
               type="button"
+              aria-label="审校与内容体检"
               aria-haspopup="menu"
               aria-expanded={activeMenu === 'proof'}
               onClick={() => toggleMenu('proof')}
@@ -664,6 +688,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <Tooltip content="创作辅助与沉浸工具">
             <button
               type="button"
+              aria-label="创作辅助与专注工具"
               aria-haspopup="menu"
               aria-expanded={activeMenu === 'tools'}
               onClick={() => toggleMenu('tools')}
@@ -764,6 +789,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
         <Tooltip content={shortcutHint('查找替换 / 全文检索', 'findReplace')}>
           <button
             type="button"
+            aria-label="查找与替换"
             className={`editor-toolbar-action-button editor-toolbar-find-trigger flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border border-transparent transition-colors cursor-pointer ${
               showFindReplace
                 ? 'bg-[var(--ink-accent)] text-white shadow-2xs'
@@ -796,6 +822,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <Tooltip content="导出与分享">
             <button
               type="button"
+              aria-label="导出与分享"
               aria-haspopup="menu"
               aria-expanded={activeMenu === 'export'}
               onClick={() => toggleMenu('export')}

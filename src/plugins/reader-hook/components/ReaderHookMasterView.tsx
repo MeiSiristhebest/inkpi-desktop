@@ -1,405 +1,242 @@
-import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, type FC } from 'react'
+import { useEffect, useMemo, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import type { HookAnalysisResult, ReaderHookRecord, HookTemplate } from '../types'
+import type { ReaderHookRecord, ReaderHookType } from '../types'
 import { readerHookEngine } from '../engine/ReaderHookEngine'
 import { indexedDbReaderHookRepository } from '../../../adapters/indexedDbReaderHookRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clipboardWriter } from '../../../adapters/clipboardWriter'
+import { semanticTextFromContent } from '../../../domain/content'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
-import { Anchor, Copy, Check, Plus, Trash2, Sparkles, Zap, BookOpen, Bot } from 'lucide-react'
-import { ScoreProvenanceBadge } from '../../../ui/atoms'
-import { Select, Tooltip } from '../../../ui/primitives'
+import { EndingEvidence } from '../../../components/plugins/EndingEvidence'
+import { Select } from '../../../ui/primitives'
 
-export const ReaderHookMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
-  const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('reader-hook')
-  const [chapters, setChapters] = useState<any[]>([])
-  const [selectedChapterId, setSelectedChapterId] = useState<string>('')
-  const [testText, setTestText] = useState(
-    '玉简上的倒计时只剩最后三息，血色巨眼猛然睁开，虚空瞬间撕裂！',
-  )
-  const [analysis, setAnalysis] = useState<HookAnalysisResult>(() =>
-    readerHookEngine.analyzeEnding(testText),
-  )
-  const [savedHooks, setSavedHooks] = useState<ReaderHookRecord[]>([])
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [newChapterNum, setNewChapterNum] = useState(1)
-
-  const templates = readerHookEngine.getTemplates()
-
-  // 1. 真实读取项目章节并默认拉取当前激活章节末尾
+export const ReaderHookMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ReaderHookWorkspace key={props.projectId} {...props} />
+)
+function ReaderHookWorkspace({ projectId }: DesktopPluginViewProps) {
+  const host = useOptionalPluginHostContext()
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
+  const [selected, setSelected] = useState('')
+  const [text, setText] = useState('')
+  const [intent, setIntent] = useState('')
+  const [kind, setKind] = useState<ReaderHookType>('unclassified')
+  const [saved, setSaved] = useState<ReaderHookRecord[]>([])
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const report = useMemo(() => readerHookEngine.analyzeEnding(text), [text])
+  const ai = usePluginAiTask('reader-hook', [projectId, selected, text, intent, kind])
   useEffect(() => {
-    const loadChapters = async () => {
-      try {
-        const list = await indexedDbProjectRepository.getChaptersByProject(projectId)
-        list.sort((a, b) => a.order - b.order)
-        setChapters(list)
-        if (list.length > 0) {
-          const defaultChap = hostContext?.activeChapter
-            ? list.find((c) => c.id === hostContext.activeChapter?.id) || list[0]
-            : list[0]
-          setSelectedChapterId(defaultChap.id)
-          setNewChapterNum(defaultChap.order || 1)
-          // 抽取章末末尾 350 字
-          const tailText = semanticTextFromContent(
-            defaultChap.id,
-            defaultChap.content || '',
-            defaultChap.revision,
-          )
-            .slice(-350)
-            .trim()
-          setTestText(tailText || defaultChap.title || '')
-          setAnalysis(readerHookEngine.analyzeEnding(tailText || defaultChap.title || ''))
+    let disposed = false
+    Promise.all([
+      indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject(projectId),
+      indexedDbReaderHookRepository.getAll(projectId),
+    ])
+      .then(([all, volumes, records]) => {
+        if (disposed) return
+        const ordered = projectChapterSequence(projectId, all, volumes)
+        setChapters(ordered)
+        setSaved(records.filter((record) => record.projectId === projectId))
+        const chapter = ordered.find((c) => c.id === host?.activeChapter?.id) ?? ordered[0]
+        if (chapter) {
+          setSelected(chapter.id)
+          setText(semanticTextFromContent(chapter.id, chapter.content, chapter.revision))
         }
-      } catch (e) {
-        console.error('Failed to load chapters for reader hook:', e)
-      }
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
     }
-    loadChapters()
-  }, [projectId, hostContext?.activeChapter?.id])
-
-  // 切换选中章节时自动填充末尾文字
-  const handleSelectChapter = (chapId: string) => {
-    setSelectedChapterId(chapId)
-    const chap = chapters.find((c) => c.id === chapId)
-    if (chap) {
-      setNewChapterNum(chap.order || 1)
-      const tailText = semanticTextFromContent(chap.id, chap.content || '', chap.revision)
-        .slice(-350)
-        .trim()
-      setTestText(tailText || '')
-      setAnalysis(readerHookEngine.analyzeEnding(tailText || ''))
-    }
-  }
-
-  const loadSavedHooks = async () => {
-    try {
-      const all = await indexedDbReaderHookRepository.getAll()
-      const filtered = all.filter((h) => !h.projectId || h.projectId === projectId)
-      setSavedHooks(filtered)
-    } catch (e) {
-      console.error('Failed to load reader hooks:', e)
-    }
-  }
-
-  useEffect(() => {
-    loadSavedHooks()
   }, [projectId])
-
-  const handleAudit = () => {
-    setAnalysis(readerHookEngine.analyzeEnding(testText))
-  }
-
-  // 真实 AI 诊断请求通道
-  const handleAiDeepAudit = async () => {
-    if (!testText.trim()) return
-    const chap = chapters.find((c) => c.id === selectedChapterId)
-    const analysisInput = {
-      chapter: { id: chap?.id, order: newChapterNum, title: chap?.title || '未命名' },
-      endingText: semanticTextFromContent(
-        `reader-hook-${selectedChapterId || 'manual'}`,
-        testText,
-        chap?.revision,
-      ),
+  const chapter = chapters.find((c) => c.id === selected)
+  const action = async (operation: () => Promise<void>) => {
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      await operation()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBusy(false)
     }
-
-    await aiTask.run(analysisInput)
   }
-
-  const handleSaveHook = async () => {
-    if (!testText.trim()) return
-    const now = clock.now()
-    const record: ReaderHookRecord = {
-      id: idGenerator.generate('hook'),
-      projectId,
-      chapterNumber: Number(newChapterNum),
-      hookText: testText.trim(),
-      hookType: analysis.hookType,
-      tensionScore: analysis.tensionScore,
-      analysisAdvice: analysis.feedback,
-      createdAt: now,
-      updatedAt: now,
-    }
-    await indexedDbReaderHookRepository.save(record)
-    await loadSavedHooks()
-  }
-
-  const handleDeleteHook = async (id: string) => {
-    await indexedDbReaderHookRepository.delete(id)
-    await loadSavedHooks()
-  }
-
-  const handleCopy = async (id: string, text: string) => {
-    await clipboardWriter.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 1500)
-  }
-
-  const handleApplyTemplate = (tpl: HookTemplate) => {
-    setTestText(tpl.example)
-    setAnalysis(readerHookEngine.analyzeEnding(tpl.example))
-  }
-
+  const save = () =>
+    action(async () => {
+      const now = clock.now()
+      const record: ReaderHookRecord = {
+        id: idGenerator.generate('hook'),
+        projectId,
+        chapterId: chapter?.id,
+        chapterNumber: chapter?.chapterNumber ?? undefined,
+        hookText: text,
+        hookType: kind,
+        authorIntent: intent,
+        sourceRevision: chapter?.revision,
+        observations: report.observations,
+        coverage: report.coverage,
+        createdAt: now,
+        updatedAt: now,
+      }
+      await indexedDbReaderHookRepository.save(record)
+      setSaved((previous) => [...previous, record])
+      setMessage('已保存当前章尾复核记录。')
+    })
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
-      {/* 顶栏 */}
-      <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold tracking-tight">断章钩子与追读率工坊</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">
-              Zeigarnik 效应 · CTI 张力模型
-            </span>
-          </div>
-          <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-            诊断章尾 300 字悬念张力，直连真实章节，掌握网文工业级断章追更技术
+    <div className="h-full overflow-y-auto p-6 space-y-4 text-[var(--ink-text)]">
+      <h2>章尾钩子复核工坊</h2>
+      <p>检查未解问题、人物利害与下一章承接；示例是可选素材。正文初次载入所选保存章节。</p>
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      <Select
+        aria-label="当前章节"
+        value={selected}
+        onValueChange={(id) => {
+          setSelected(id)
+          const c = chapters.find((item) => item.id === id)
+          setText(c ? semanticTextFromContent(c.id, c.content, c.revision) : '')
+          setMessage('')
+        }}
+      >
+        <option value="">手动文本</option>
+        {chapters.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.chapterNumber ? '第 ' + c.chapterNumber + ' 章' : '位置未知'} · {c.title}
+          </option>
+        ))}
+      </Select>
+      <textarea
+        aria-label="待审章节正文"
+        rows={6}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          setMessage('')
+        }}
+        placeholder="粘贴正文或编辑载入的保存章节"
+        className="w-full border rounded p-3"
+      />
+      <textarea
+        aria-label="章尾目标与承接约束"
+        value={intent}
+        onChange={(e) => setIntent(e.target.value)}
+        placeholder="作者目标、仍未回答的问题、下一章需要承接的行动"
+        className="w-full border rounded p-3"
+      />
+      <EndingEvidence report={report} />
+      <Select
+        aria-label="作者选定钩子类别"
+        value={kind}
+        onValueChange={(value) => setKind(value as ReaderHookType)}
+      >
+        <option value="unclassified">尚未分类</option>
+        {readerHookEngine.getTemplates().map((t) => (
+          <option key={t.id} value={t.type}>
+            {t.name}
+          </option>
+        ))}
+      </Select>
+      {host?.aiAssistant?.isAvailable && (
+        <button
+          disabled={ai.isRunning || !text.trim()}
+          onClick={() =>
+            (() => {
+              const nextChapter = chapters[chapters.findIndex((c) => c.id === selected) + 1]
+              return ai.run({
+                chapter: chapter
+                  ? {
+                      id: chapter.id,
+                      chapterNumber: chapter.chapterNumber,
+                      revision: chapter.revision,
+                    }
+                  : { source: 'manual' },
+                endingText: semanticTextFromContent(
+                  chapter?.id ?? 'manual-ending',
+                  text,
+                  chapter?.revision ?? 0,
+                ),
+                authorIntent: semanticTextFromContent('manual-intent', intent, 0),
+                authorSelectedKind: kind,
+                nextChapter: semanticTextFromContent(
+                  nextChapter?.id ?? 'next-chapter',
+                  nextChapter?.content ?? '',
+                  nextChapter?.revision ?? 0,
+                ),
+              })
+            })()
+          }
+        >
+          AI 深度审读
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
+      <button disabled={busy || !text.trim()} onClick={save}>
+        入库本章断章
+      </button>
+      <h3>已保存章尾记录 ({saved.length})</h3>
+      {saved.map((record) => (
+        <article key={record.id} className="border rounded p-3">
+          <p>
+            {record.chapterNumber ? '第 ' + record.chapterNumber + ' 章' : '章节位置未知'} ·{' '}
+            {record.hookType}
           </p>
-          <ScoreProvenanceBadge source="rule" detail="按断章关键词与句长特征计分" />
-        </div>
-
-        {/* 章节快速切换选择器 */}
-        {chapters.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--ink-text-muted)] flex items-center gap-1">
-              <BookOpen className="w-3.5 h-3.5" />
-              当前章节:
-            </span>
-            <Select
-              value={selectedChapterId}
-              onValueChange={(v) => handleSelectChapter(v)}
-              size="sm"
-            >
-              {chapters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  第 {c.order} 章 · {c.title || '无标题'} ({c.wordCount || 0}字)
-                </option>
-              ))}
-            </Select>
-          </div>
-        )}
-      </div>
-
-      {/* 主体左右分区 */}
-      <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* 左侧：测试与诊断区 (7 列) */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[var(--ink-text)] flex items-center gap-1.5">
-                <Anchor className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                章尾 300 字真实张力推演
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleAudit}
-                  className="px-2.5 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-[var(--ink-text)] text-xs font-medium flex items-center gap-1 cursor-pointer"
-                >
-                  <Zap className="w-3 h-3 text-amber-500" />
-                  测算 CTI 张力
-                </button>
-                {hostContext?.aiAssistant?.isAvailable && (
-                  <button
-                    disabled={aiTask.isRunning}
-                    onClick={handleAiDeepAudit}
-                    className="px-2.5 py-1 rounded-md bg-[var(--ink-accent)] text-white text-xs font-medium hover:opacity-90 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Bot className="w-3 h-3" />
-                    AI 深度审读
-                  </button>
-                )}
-                <PluginAiTaskPanel view={aiTask.view} onRetry={aiTask.retry} />
-              </div>
-            </div>
-
-            <textarea
-              rows={5}
-              value={testText}
-              onChange={(e) => setTestText(e.target.value)}
-              placeholder="自动从所选章节末尾同步，亦可手动编辑或修改测试..."
-              className="w-full p-3 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)] resize-none focus:outline-none"
-            />
-
-            {/* 诊断看板 */}
-            <div className="p-3.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold">断章张力指数 (CTI):</span>
-                  <span
-                    className={`text-base font-bold ${
-                      analysis.tensionScore >= 85
-                        ? 'text-rose-500'
-                        : analysis.tensionScore >= 70
-                          ? 'text-amber-500'
-                          : 'text-[var(--ink-text-muted)]'
-                    }`}
-                  >
-                    {analysis.tensionScore} 分
-                  </span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                      analysis.rating === 'god_tier'
-                        ? 'bg-rose-500/20 text-rose-500'
-                        : analysis.rating === 'cliffhanger'
-                          ? 'bg-amber-500/20 text-amber-500'
-                          : 'bg-[var(--ink-bg-canvas)] text-[var(--ink-text-muted)]'
-                    }`}
-                  >
-                    {analysis.rating === 'god_tier'
-                      ? '高悬念断章'
-                      : analysis.rating === 'cliffhanger'
-                        ? '合格断章'
-                        : analysis.rating === 'moderate'
-                          ? '平稳留白'
-                          : '平淡收场'}
-                  </span>
-                </div>
-                <span className="text-[11px] text-[var(--ink-text-muted)]">
-                  分类：{analysis.hookType}
-                </span>
-              </div>
-
-              <p className="text-xs text-[var(--ink-text)]">{analysis.feedback}</p>
-
-              {analysis.detectedKeywords.length > 0 && (
-                <div className="flex items-center gap-1.5 text-[11px] text-[var(--ink-text-muted)] pt-1">
-                  <span>抓取关键词：</span>
-                  {analysis.detectedKeywords.map((kw, i) => (
-                    <span
-                      key={i}
-                      className="px-1.5 py-0.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-amber-500"
-                    >
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="pt-2 border-t border-[var(--ink-border)]/50 text-[11px] text-[var(--ink-text-muted)] space-y-1">
-                <span className="font-medium text-[var(--ink-text)] block">追读改稿建议：</span>
-                {analysis.suggestions.map((sug, i) => (
-                  <p key={i} className="flex items-start gap-1">
-                    <span className="text-[var(--ink-accent)]">•</span>
-                    <span>{sug}</span>
-                  </p>
-                ))}
-              </div>
-            </div>
-
-            {/* 保存到钩子库条 */}
-            <div className="flex items-center gap-2 pt-2 text-xs">
-              <span className="text-[var(--ink-text-muted)]">目标章节号:</span>
-              <input
-                type="number"
-                min="1"
-                value={newChapterNum}
-                onChange={(e) => setNewChapterNum(Number(e.target.value))}
-                className="w-16 px-2 py-1 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)] text-xs text-[var(--ink-text)]"
-              />
-              <button
-                onClick={handleSaveHook}
-                className="px-3 py-1 rounded-md bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:border-[var(--ink-accent)] text-xs font-medium flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
-                入库本章断章
-              </button>
-            </div>
-          </div>
-
-          {/* 已归档钩子列表 */}
-          <div className="p-4 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-3">
-            <h3 className="text-xs font-semibold text-[var(--ink-text)]">
-              全书已入库断章记录 ({savedHooks.length})
-            </h3>
-            {savedHooks.length === 0 ? (
-              <p className="text-xs text-[var(--ink-text-muted)]">
-                暂无入库断章。将满意的断章结语保存以便前后审视。
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {savedHooks.map((h) => (
-                  <div
-                    key={h.id}
-                    className="p-2.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-canvas)] flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-semibold text-[var(--ink-accent)]">
-                          第 {h.chapterNumber || 1} 章
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-500">
-                          {h.hookType}
-                        </span>
-                        <span className="text-[11px] text-[var(--ink-text-muted)]">
-                          CTI: {h.tensionScore} 分
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[var(--ink-text)] truncate">{h.hookText}</p>
-                    </div>
-                    <Tooltip content="删除">
-                      <button
-                        onClick={() => handleDeleteHook(h.id)}
-                        className="text-[var(--ink-text-muted)] hover:text-rose-500 p-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </Tooltip>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 右侧：6 大范式模板库 (5 列) */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink-text)]">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>网文 6 大高张力断章范式</span>
-          </div>
-
-          <div className="space-y-3">
-            {templates.map((tpl) => (
-              <div
-                key={tpl.id}
-                className="p-3.5 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] space-y-2 text-xs hover:border-[var(--ink-accent)]/50 transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[var(--ink-text)]">{tpl.name}</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleApplyTemplate(tpl)}
-                      className="px-2 py-0.5 rounded bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] hover:bg-[var(--ink-bg-hover)] text-[11px] text-[var(--ink-text)]"
-                    >
-                      载入测算
-                    </button>
-                    <Tooltip content="复制例句">
-                      <button
-                        onClick={() => handleCopy(tpl.id, tpl.example)}
-                        className="p-1 rounded text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]"
-                      >
-                        {copiedId === tpl.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-500" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    </Tooltip>
-                  </div>
-                </div>
-                <p className="text-[11px] text-[var(--ink-text-muted)]">{tpl.description}</p>
-                <div className="p-2 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/60 text-[11px] italic text-[var(--ink-text)] leading-relaxed">
-                  “{tpl.example}”
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+          {record.tensionScore !== undefined && (
+            <p>旧公式分数 {record.tensionScore}，尚未验证文学质量或追读效果。</p>
+          )}
+          <p className="whitespace-pre-wrap">{record.hookText}</p>
+          <p>{record.authorIntent}</p>
+          <button
+            disabled={busy}
+            onClick={() =>
+              action(async () => {
+                await indexedDbReaderHookRepository.delete(record.id)
+                setSaved((previous) => previous.filter((item) => item.id !== record.id))
+              })
+            }
+          >
+            删除记录
+          </button>
+        </article>
+      ))}
+      <h3>断章范式灵感</h3>
+      {readerHookEngine.getTemplates().map((t) => (
+        <article key={t.id} className="border rounded p-3">
+          <h4>{t.name}</h4>
+          <p>{t.description}</p>
+          <p>{t.example}</p>
+          <button
+            onClick={() => {
+              setSelected('')
+              setText(t.example)
+              setKind(t.type)
+            }}
+          >
+            载入示例
+          </button>
+          <button
+            disabled={busy}
+            onClick={() =>
+              action(async () => {
+                await clipboardWriter.writeText(t.example)
+                setMessage('已复制例句。')
+              })
+            }
+          >
+            复制例句
+          </button>
+        </article>
+      ))}
     </div>
   )
 }

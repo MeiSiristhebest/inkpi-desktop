@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactNode } from 'react'
+import { Children, isValidElement, useRef, useState, type FocusEvent, type ReactNode } from 'react'
 import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { CheckIcon, ChevronDownIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -158,26 +158,48 @@ function Select({
   id,
   name,
 }: SelectProps) {
+  const [open, setOpen] = useState(false)
+  const focusMovedOutsideRef = useRef(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
   const items = options ?? optionsFromChildren(children)
   const labels: Record<string, ReactNode> = {}
   for (const item of items) labels[item.value] = item.label
   const selected = String(value)
   const effectiveAriaLabel = ariaLabel ?? label
+  const closeWhenFocusLeaves = (event: FocusEvent<HTMLElement>) => {
+    const next = event.relatedTarget
+    if (
+      next instanceof Node &&
+      (triggerRef.current?.contains(next) || popupRef.current?.contains(next))
+    ) {
+      return
+    }
+    focusMovedOutsideRef.current = true
+    setOpen(false)
+  }
 
   return (
     <SelectPrimitive.Root
       id={id}
       name={name}
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) focusMovedOutsideRef.current = false
+        setOpen(nextOpen)
+      }}
       value={selected === '' ? null : selected}
       disabled={disabled}
       items={labels}
       onValueChange={(next) => onValueChange(next ?? '')}
     >
       <SelectPrimitive.Trigger
+        ref={triggerRef}
         data-slot="select-trigger"
         data-value={selected}
         aria-label={effectiveAriaLabel}
         className={cn(TRIGGER, SIZE[size], className)}
+        onBlur={closeWhenFocusLeaves}
       >
         <SelectPrimitive.Value
           placeholder={placeholder}
@@ -193,7 +215,13 @@ function Select({
           sideOffset={4}
           className="isolate z-50 outline-none"
         >
-          <SelectPrimitive.Popup data-slot="select-content" className={POPUP}>
+          <SelectPrimitive.Popup
+            ref={popupRef}
+            data-slot="select-content"
+            className={POPUP}
+            onBlur={closeWhenFocusLeaves}
+            finalFocus={() => !focusMovedOutsideRef.current}
+          >
             <SelectPrimitive.List className="scroll-my-1 p-1 outline-none">
               {renderItems(items)}
             </SelectPrimitive.List>

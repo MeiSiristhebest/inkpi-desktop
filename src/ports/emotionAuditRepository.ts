@@ -12,14 +12,18 @@ export interface EmotionAuditRecord {
   projectId: string
   chapterId: string
   chapterTitle: string
-  chapterOrder: number
+  chapterOrder: number | null
   wordCount: number
-  vector: EmotionVector
-  netPolarity: number // -100 到 +100
-  dominantEmotion: 'tension' | 'catharsis' | 'frustration' | 'anticipation' | 'sorrow' | 'joy'
-  resonanceScore: number // 0 - 100 读者代入共鸣深度
-  warnings: string[]
-  suggestions: string[]
+  vector?: EmotionVector
+  netPolarity?: number // -100 到 +100
+  dominantEmotion?: 'tension' | 'catharsis' | 'frustration' | 'anticipation' | 'sorrow' | 'joy'
+  resonanceScore?: number // 0 - 100 读者代入共鸣深度
+  warnings?: string[]
+  suggestions?: string[]
+  sourceText?: string
+  sourceRevision?: number
+  annotation?: import('../plugins/emotion-curve/types').AuthorEmotionAnnotation
+  matches?: Array<{ type: string; quote: string; start: number; end: number }>
   updatedAt: number
 }
 

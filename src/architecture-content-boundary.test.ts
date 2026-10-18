@@ -55,7 +55,10 @@ const AI_BOUNDARY_ARGUMENTS = new Map<string, number>([
  * a boundary, so match the whole receiver chain instead of losing those 22
  * call sites from the taint audit.
  */
-const AI_BOUNDARY_CHAIN_ARGUMENTS = new Map<string, number>([['aiTask.run', 0]])
+const AI_BOUNDARY_CHAIN_ARGUMENTS = new Map<string, number>([
+  ['aiTask.run', 0],
+  ['ai.run', 0],
+])
 
 const DIRECT_MODEL_METHODS = new Set([
   'complete',

@@ -112,7 +112,8 @@ describe('ClueWeaverEngine', () => {
     expect(adv.mutualKnown).toContain('太上长老非走火入魔乃中毒')
     expect(adv.knownByAOnly).toContain('宗主私通魔教')
     expect(adv.knownByBOnly.length).toBe(0)
-    expect(adv.advantageScore).toBeGreaterThan(0) // 陆沉具有正向情报优势
+    expect(adv.advantageScore).toBeNull()
+    expect(adv.unrecordedPairs).toBe(1)
   })
 
   it('generates 2D cognition matrix grid', () => {
@@ -136,6 +137,6 @@ describe('ClueWeaverEngine', () => {
     expect(grid[0].character.name).toBe('陆沉')
     expect(grid[0].clueStates[0].state).toBe('known')
     expect(grid[1].character.name).toBe('林夕')
-    expect(grid[1].clueStates[0].state).toBe('blind')
+    expect(grid[1].clueStates[0].state).toBe('unrecorded')
   })
 })

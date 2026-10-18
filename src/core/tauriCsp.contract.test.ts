@@ -42,8 +42,7 @@ describe('打包版 CSP（P5.2）', () => {
   })
 
   it('connect-src 只放行本机：渲染进程无法直连提供商端点', () => {
-    // 这条边界决定了设置页的 Provider 探测为什么只能说「无法探测」而不能说「无法访问」：
-    // src/adapters/modelProviderProbe.ts 的 fetch 发生在界面进程里。
+    // Settings calls the Runtime through the daemon client; provider network requests stay in Runtime.
     expect(directiveSources('connect-src')).toEqual([
       "'self'",
       'ipc:',

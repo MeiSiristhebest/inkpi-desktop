@@ -3,6 +3,8 @@ export interface ScrapbookFragmentRecord {
   projectId: string
   sourceChapterId?: string
   sourceChapterTitle?: string
+  sourceOffset?: number
+  sourceRevision?: number
   snippet: string
   wordCount: number
   deletedAt: number

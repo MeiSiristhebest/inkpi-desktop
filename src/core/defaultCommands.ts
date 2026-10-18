@@ -6,7 +6,7 @@ import type { InspectorSurface } from '../types/inspectorState'
 export interface NavigationHandler {
   openView: (tabId: string) => void
   openAssistant: () => void
-  openActivityCenter?: () => void
+  openActivityCenter?: (resultId?: string) => void
   openSettings?: () => void
   openInspector?: (surface: InspectorSurface, pluginId?: string) => void
   openDrawer?: (pluginId: string) => void
@@ -17,6 +17,20 @@ let activeNavigationHandler: NavigationHandler | null = null
 
 export function setNavigationHandler(handler: NavigationHandler | null): void {
   activeNavigationHandler = handler
+}
+
+export function openActivityCenter(resultId?: string): void {
+  if (resultId && activeNavigationHandler?.openActivityCenter) {
+    activeNavigationHandler.openActivityCenter(resultId)
+    return
+  }
+  if (activeNavigationHandler?.openInspector) {
+    activeNavigationHandler.openInspector('activity')
+  } else if (activeNavigationHandler?.openActivityCenter) {
+    activeNavigationHandler.openActivityCenter()
+  } else {
+    activeNavigationHandler?.openAssistant()
+  }
 }
 
 const pluginCapabilityIds = new Set(ALL_PLUGIN_DEFINITIONS.map((definition) => definition.id))
@@ -82,15 +96,7 @@ export function registerDefaultCommands(): () => void {
       title: '打开 AI 任务执行与活动中心',
       keywords: ['activity', 'tasks', 'recovery', '活动中心', '任务', '后台'],
       category: 'intelligence',
-      execute: () => {
-        if (activeNavigationHandler?.openInspector) {
-          activeNavigationHandler.openInspector('activity')
-        } else if (activeNavigationHandler?.openActivityCenter) {
-          activeNavigationHandler.openActivityCenter()
-        } else {
-          activeNavigationHandler?.openAssistant()
-        }
-      },
+      execute: () => openActivityCenter(),
     },
     {
       id: 'cmd-open-settings',

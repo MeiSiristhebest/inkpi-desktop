@@ -16,30 +16,21 @@ export interface ChapterEmotionalScore {
   chapterIndex: number
   suppressionSum: number
   payoffSum: number
-  spr: number // Suppression-to-Payoff Ratio: 压抑/释放比率
-  riskLevel: 'healthy' | 'suppression_heavy' | 'fatigue_slap'
+  spr: number | null
   dominantTags: string[]
+  observations: ExpectationObservation[]
+}
+
+export interface ExpectationObservation {
+  chapterIndex: number
+  category: 'setup-term' | 'outcome-term' | 'ability-term' | 'question-term'
+  quote: string
+  startOffset: number
+  endOffset: number
 }
 
 export interface GoldenThreeDiagnostic {
-  chapter1Status: {
-    passed: boolean
-    coreConflictFound: boolean
-    goldenFingerFound: boolean
-    feedback: string
-  }
-  chapter2Status: {
-    passed: boolean
-    escalationFound: boolean
-    miniPayoffFound: boolean
-    feedback: string
-  }
-  chapter3Status: {
-    passed: boolean
-    majorCrisisFound: boolean
-    longHookFound: boolean
-    feedback: string
-  }
-  overallScore: number
+  observations: ExpectationObservation[]
+  missingChapters: number[]
   advice: string
 }

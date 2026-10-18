@@ -285,6 +285,7 @@ export class ArtifactRuntime {
       options.sourceRevision ??
       readLineageNumber(task, 'sourceRevision') ??
       readNumber(result.provenance, 'sourceRevision') ??
+      task.scope?.document?.revision ??
       task.input.selection?.revision ??
       readContextNumber(task, 'revision')
     const sessionId =

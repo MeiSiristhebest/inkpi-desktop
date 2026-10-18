@@ -5,10 +5,18 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { IndexedDbProposalStore, ProposalLedger, type AiProposal } from '../../../ai/proposals'
 import { reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 
-export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }) => {
+export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = (props) => {
   const host = useOptionalPluginHostContext()
-  const chapterId = host?.activeChapter?.id
+  return (
+    <DiffDrawerSession key={props.projectId + ':' + (host?.activeChapter?.id ?? '')} {...props} />
+  )
+}
+const DiffDrawerSession: FC<DesktopPluginDrawerProps> = ({ currentText, projectId }) => {
+  const host = useOptionalPluginHostContext()
+  const chapterId = host?.projectId === projectId ? host.activeChapter?.id : undefined
   const [ledger] = useState(() => new ProposalLedger({ store: new IndexedDbProposalStore() }))
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const [proposals, setProposals] = useState<AiProposal[] | null>(null)
 
   useEffect(() => {
@@ -22,13 +30,13 @@ export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
       .then(() => {
         if (!stale) setProposals(ledger.list(chapterId))
       })
-      .catch(() => {
-        if (!stale) setProposals([])
+      .catch((cause) => {
+        if (!stale) setError(String(cause))
       })
     return () => {
       stale = true
     }
-  }, [chapterId, ledger])
+  }, [chapterId, ledger, attempt])
 
   return (
     <div className="p-3 space-y-3 text-xs">
@@ -42,9 +50,22 @@ export const DiffReviewerDrawer: FC<DesktopPluginDrawerProps> = ({ currentText }
       </div>
 
       <p className="text-[10px] text-slate-400">
-        已保存稿 {currentText.trim().length} 字（字数按当前章节已落盘的正文算）
+        当前正文 {Array.from(currentText.replace(/\s/gu, '')).length} 字
       </p>
 
+      {error && (
+        <p role="alert">
+          读取失败：{error}
+          <button
+            onClick={() => {
+              setError(null)
+              setAttempt((n) => n + 1)
+            }}
+          >
+            重新读取
+          </button>
+        </p>
+      )}
       {!chapterId ? (
         <div className="p-3 rounded bg-slate-50 dark:bg-slate-800 text-slate-400 text-center">
           还没有打开章节：双栏审校要有正文才谈得上随动。

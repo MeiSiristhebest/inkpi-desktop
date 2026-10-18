@@ -5,9 +5,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const fixtureDirectory = resolve(fileURLToPath(new URL('.', import.meta.url)))
 const inkpiRoot = resolve(fixtureDirectory, '../../../inkpi')
 const serverEntry = pathToFileURL(resolve(inkpiRoot, 'packages/server/dist/index.js')).href
-const { InkPiDaemon } = await import(serverEntry)
+const { InkPiDaemon, createDaemonPersistence } = await import(serverEntry)
 
-const daemon = new InkPiDaemon({ host: '127.0.0.1', port: 0 })
+const persistence = createDaemonPersistence({
+  dbPath: process.env.INKPI_TEST_DAEMON_DB_PATH?.trim() || ':memory:',
+})
+const daemon = new InkPiDaemon({ host: '127.0.0.1', port: 0, context: persistence.context })
 daemon.getTaskRouter().registry.register({
   id: 'desktop-integration-fixture',
   kinds: ['creative.assistant', 'creative.continue', 'plugin.reader-hook.analysis'],
@@ -44,7 +47,11 @@ let stopping = false
 const shutdown = async () => {
   if (stopping) return
   stopping = true
-  await daemon.stop()
+  try {
+    await daemon.stop()
+  } finally {
+    persistence.close()
+  }
   process.exit(0)
 }
 

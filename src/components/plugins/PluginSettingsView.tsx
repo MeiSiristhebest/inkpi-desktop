@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { usePluginRegistry } from '../../core/pluginRegistry'
 import type { DesktopPlugin, DesktopPluginCategory } from '../../types/plugin'
+import { Button } from '../../ui/primitives'
 
 const CATEGORY_META: Record<
   DesktopPluginCategory,
@@ -39,7 +40,18 @@ const CATEGORY_ORDER: DesktopPluginCategory[] = [
 ]
 
 export const PluginSettingsView: FC = () => {
-  const { allPlugins, enabledIds, togglePlugin } = usePluginRegistry()
+  const {
+    allPlugins,
+    enabledIds,
+    togglePlugin,
+    isLoading,
+    isSaving,
+    persistenceError,
+    dismissPersistenceError,
+    loadFailed,
+    retryLoad,
+    retrySave,
+  } = usePluginRegistry()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(allPlugins[0]?.id ?? null)
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({
@@ -108,6 +120,48 @@ export const PluginSettingsView: FC = () => {
         </div>
       </div>
 
+      {persistenceError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 px-4 py-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-500/10 border-b border-rose-500/20"
+        >
+          <span>{persistenceError}</span>
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (loadFailed) {
+                  retryLoad()
+                } else {
+                  void retrySave().catch(() => {})
+                }
+              }}
+              className="underline focus-visible:outline focus-visible:outline-2"
+            >
+              {loadFailed ? '重新读取' : '重试保存'}
+            </button>
+            {!loadFailed && (
+              <button
+                type="button"
+                onClick={dismissPersistenceError}
+                className="underline focus-visible:outline focus-visible:outline-2"
+              >
+                关闭
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {(isLoading || isSaving) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="px-4 py-1.5 text-[11px] text-[var(--ink-text-muted)]"
+        >
+          {isLoading ? '正在读取插件设置…' : '正在保存插件设置…'}
+        </div>
+      )}
+
       {/* 主体区 */}
       <div className="flex-1 flex min-h-0">
         {/* 左侧已安装插件列表 */}
@@ -134,6 +188,8 @@ export const PluginSettingsView: FC = () => {
                     <button
                       type="button"
                       onClick={() => toggleCategory(category)}
+                      aria-expanded={!isCollapsed}
+                      aria-controls={`plugin-category-${category}`}
                       className="flex items-center justify-between w-full px-1 py-1 text-[11px] font-semibold text-[var(--ink-text-muted)] hover:text-[var(--ink-text)] cursor-pointer rounded hover:bg-[var(--ink-bg-hover)]/50 transition-colors"
                     >
                       <div className="flex items-center gap-1.5">
@@ -151,66 +207,78 @@ export const PluginSettingsView: FC = () => {
                     </button>
 
                     {/* 分类内插件卡片 */}
-                    {!isCollapsed && (
-                      <div className="mt-1 ml-3 space-y-2.5 border-l-2 border-[var(--ink-border)] pl-3">
-                        {plugins.map((plugin) => {
-                          const Icon = plugin.icon || Layers
-                          const isEnabled = enabledIds.has(plugin.id)
-                          const isSelected = selectedPluginId === plugin.id
+                    <div
+                      id={`plugin-category-${category}`}
+                      hidden={isCollapsed}
+                      className="mt-1 ml-3 space-y-2.5 border-l-2 border-[var(--ink-border)] pl-3"
+                    >
+                      {plugins.map((plugin) => {
+                        const Icon = plugin.icon || Layers
+                        const isEnabled = enabledIds.has(plugin.id)
+                        const isSelected = selectedPluginId === plugin.id
 
-                          return (
-                            <div
-                              key={plugin.id}
-                              onClick={() => setSelectedPluginId(plugin.id)}
-                              className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-[var(--ink-bg-elevated)] border-[var(--ink-accent)] shadow-2xs'
-                                  : 'bg-[var(--ink-bg-elevated)] border-[var(--ink-border)] hover:border-[var(--ink-border-strong)]'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className="w-8 h-8 rounded-lg bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] flex items-center justify-center shrink-0">
-                                    <Icon className="w-4 h-4" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2 font-medium text-[13px]">
-                                      <span className="truncate">{plugin.name}</span>
-                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] shrink-0">
-                                        v{plugin.version}
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] text-[var(--ink-text-faint)] truncate mt-0.5">
-                                      {plugin.description}
-                                    </p>
-                                  </div>
+                        return (
+                          <div
+                            key={plugin.id}
+                            role="group"
+                            aria-label={`${plugin.name} 插件`}
+                            className={`p-3 rounded-xl border transition-all ${
+                              isSelected
+                                ? 'bg-[var(--ink-bg-elevated)] border-[var(--ink-accent)] shadow-2xs'
+                                : 'bg-[var(--ink-bg-elevated)] border-[var(--ink-border)] hover:border-[var(--ink-border-strong)]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <button
+                                type="button"
+                                aria-pressed={isSelected}
+                                onClick={() => setSelectedPluginId(plugin.id)}
+                                className="flex items-center gap-3 min-w-0 text-left rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ink-accent)]"
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-[var(--ink-accent-soft)] text-[var(--ink-accent)] flex items-center justify-center shrink-0">
+                                  <Icon className="w-4 h-4" aria-hidden="true" />
                                 </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 font-medium text-[13px]">
+                                    <span className="truncate">{plugin.name}</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)] shrink-0">
+                                      v{plugin.version}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-[var(--ink-text-faint)] truncate mt-0.5">
+                                    {plugin.description}
+                                  </p>
+                                </div>
+                              </button>
 
-                                {/* 开关 */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    togglePlugin(plugin.id)
-                                  }}
-                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    isEnabled
-                                      ? 'bg-[var(--ink-accent)]'
-                                      : 'bg-[var(--ink-border-strong)]'
+                              {/* 开关 */}
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={isEnabled}
+                                aria-label={`${plugin.name} 是否启用`}
+                                disabled={isLoading || isSaving || loadFailed}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  void togglePlugin(plugin.id).catch(() => {})
+                                }}
+                                className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline focus-visible:outline-2 disabled:cursor-wait disabled:opacity-60 ${
+                                  isEnabled
+                                    ? 'bg-[var(--ink-accent)]'
+                                    : 'bg-[var(--ink-border-strong)]'
+                                }`}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                    isEnabled ? 'translate-x-4' : 'translate-x-0'
                                   }`}
-                                >
-                                  <span
-                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                                      isEnabled ? 'translate-x-4' : 'translate-x-0'
-                                    }`}
-                                  />
-                                </button>
-                              </div>
+                                />
+                              </button>
                             </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 )
               })}
@@ -259,16 +327,22 @@ export const PluginSettingsView: FC = () => {
             </div>
 
             <div className="pt-3 border-t border-[var(--ink-border)]">
-              <button
-                onClick={() => togglePlugin(effectivePlugin.id)}
-                className={`w-full py-1.5 rounded-xl font-medium text-xs transition-colors shadow-2xs ${
+              <Button
+                type="button"
+                disabled={isLoading || isSaving}
+                isLoading={isSaving}
+                loadingText="正在保存…"
+                size="sm"
+                variant="ghost"
+                onClick={() => void togglePlugin(effectivePlugin.id).catch(() => {})}
+                className={`w-full rounded-xl font-medium text-xs transition-colors shadow-2xs ${
                   enabledIds.has(effectivePlugin.id)
                     ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
                     : 'bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)]'
                 }`}
               >
                 {enabledIds.has(effectivePlugin.id) ? '停用此插件' : '立即启用此插件'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

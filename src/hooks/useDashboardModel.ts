@@ -7,6 +7,7 @@ import { indexedDbCardRecordRepository } from '../adapters/indexedDbCardRecordRe
 import { indexedDbDailyStatsRepository } from '../adapters/indexedDbDailyStatsRepository'
 import { clock } from '../adapters/clock'
 import { computeDashboardModel, type DashboardModel } from '../domain/dashboard'
+import { dailyStatsEvents } from '../ports/dailyStatsEvents'
 
 /**
  * 写作面板数据 hook：从仓储拉取项目/卷/章/伏笔/灵感/进度/日历/角色数据，交给纯函数 computeDashboardModel 聚合。
@@ -23,6 +24,8 @@ export function useDashboardModel(
   const reload = useCallback(() => {
     setRefreshKey((k) => k + 1)
   }, [])
+
+  useEffect(() => dailyStatsEvents.subscribe(projectId, reload), [projectId, reload])
 
   useEffect(() => {
     let alive = true

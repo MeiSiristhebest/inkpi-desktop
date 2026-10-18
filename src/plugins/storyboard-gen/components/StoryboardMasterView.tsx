@@ -1,405 +1,397 @@
-import { useState, useEffect, useRef, type FC } from 'react'
+import { useEffect, useRef, useState, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
-import { indexedDbStoryboardRepository } from '../../../adapters/indexedDbStoryboardRepository'
+import type {
+  CharacterVisualCard,
+  ClimaxStoryboardExtraction,
+  StoryboardSceneRecord,
+} from '../types'
 import { StoryboardEngine } from '../engine/StoryboardEngine'
-import type { StoryboardSceneRecord, ClimaxStoryboardExtraction } from '../types'
-import { Film, Image, Sparkles, Send, Copy, Camera, Check } from 'lucide-react'
+import { indexedDbStoryboardRepository } from '../../../adapters/indexedDbStoryboardRepository'
+import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
+import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
+import { semanticTextFromContent } from '../../../domain/content'
+import { matchesSerializedResult } from '../../../domain/serializedResult'
+import { redactPluginValue } from '../../../core/pluginDataRedaction'
+import { clipboardWriter } from '../../../adapters/clipboardWriter'
+import { blobFileDownloader } from '../../../adapters/blobFileDownloader'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
-import { clipboardWriter } from '../../../adapters/clipboardWriter'
-import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
-import { semanticTextFromContent } from '../../../domain/content'
 
-export const StoryboardMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+export const StoryboardMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <StoryboardSession key={props.projectId} {...props} />
+)
+const StoryboardSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
-  const activeChapter = host?.activeChapter
-  const activeChapterId = activeChapter?.id
-  const activeChapterContent = activeChapter?.content
-  const [chapterId, setChapterId] = useState(activeChapterId ?? '')
-  const [sceneText, setSceneText] = useState(() =>
-    activeChapter ? semanticTextFromContent(activeChapter.id, activeChapter.content) : '',
-  )
-  const draftChapterIdRef = useRef(activeChapterId ?? '')
-  const chapterIdDirtyRef = useRef(false)
-  const sceneTextDirtyRef = useRef(false)
+  const chapter = host?.projectId === projectId ? host.activeChapter : null
+  const [mode, setMode] = useState<'chapter' | 'manual'>(chapter ? 'chapter' : 'manual')
+  const [manualText, setManualText] = useState('')
+  const [manualTitle, setManualTitle] = useState('')
+  const [artStyle, setArtStyle] = useState('')
+  const [sceneGoal, setSceneGoal] = useState('')
+  const [characterName, setCharacterName] = useState('')
+  const [visualFeatures, setVisualFeatures] = useState('')
+  const [characters, setCharacters] = useState<
+    Array<{ id: string; name: string; visualFeatures: string }>
+  >([])
   const [scenes, setScenes] = useState<StoryboardSceneRecord[]>([])
-  const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-
-  useEffect(() => {
-    if (!activeChapterId || activeChapterContent === undefined) return
-    const nextSceneText = semanticTextFromContent(activeChapterId, activeChapterContent)
-    const chapterChanged = draftChapterIdRef.current !== activeChapterId
-    if (chapterChanged) {
-      setChapterId(activeChapterId)
-      setSceneText(nextSceneText)
-      chapterIdDirtyRef.current = false
-      sceneTextDirtyRef.current = false
-    } else {
-      if (!chapterIdDirtyRef.current) setChapterId(activeChapterId)
-      if (!sceneTextDirtyRef.current) setSceneText(nextSceneText)
-    }
-    draftChapterIdRef.current = activeChapterId
-  }, [activeChapterContent, activeChapterId])
-
-  const localExtracted: ClimaxStoryboardExtraction = StoryboardEngine.extractStoryboard(
-    chapterId,
-    activeChapter?.title ?? '当前章节',
-    sceneText,
+  const [workflow, setWorkflow] = useState<{
+    identity: string
+    result: ClimaxStoryboardExtraction
+  } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const [copied, setCopied] = useState<{ identity: string; id: string } | null>(null)
+  const activeChapter = mode === 'chapter' && chapter ? chapter : null
+  const sourceText = activeChapter ? (activeChapter.content ?? '') : manualText
+  const sourceTitle = activeChapter ? activeChapter.title : manualTitle
+  const chapterId = activeChapter?.id ?? 'manual'
+  const text = semanticTextFromContent(
+    activeChapter?.id ?? `storyboard-${projectId}-manual`,
+    sourceText,
+    activeChapter?.revision,
   )
-  const [runtimeExtracted, setRuntimeExtracted] = useState<ClimaxStoryboardExtraction | null>(null)
-  const [isRunning, setIsRunning] = useState(false)
-  const workflowRunRef = useRef(0)
-
+  const title = semanticTextFromContent(
+    activeChapter ? `${activeChapter.id}-title` : `storyboard-${projectId}-title`,
+    sourceTitle,
+    activeChapter?.revision,
+  )
+  const semanticCharacters = characters.map((character) => ({
+    ...character,
+    name: semanticTextFromContent(`${character.id}-name`, character.name),
+    visualFeatures: semanticTextFromContent(
+      `${character.id}-visual-features`,
+      character.visualFeatures,
+    ),
+  }))
+  const context = {
+    characters: semanticCharacters,
+    artStyle: semanticTextFromContent(`storyboard-${projectId}-art-style`, artStyle),
+    sceneGoal: semanticTextFromContent(`storyboard-${projectId}-scene-goal`, sceneGoal),
+  }
+  const identity = JSON.stringify([
+    projectId,
+    chapterId,
+    activeChapter?.revision,
+    sourceText,
+    sourceTitle,
+    characters,
+    artStyle,
+    sceneGoal,
+  ])
+  const identityRef = useRef<string | null>(identity)
+  identityRef.current = identity
+  useEffect(
+    () => () => {
+      identityRef.current = null
+    },
+    [],
+  )
+  const ai = usePluginAiTask('storyboard-gen', identity)
+  const local = StoryboardEngine.extractStoryboard(chapterId, title, text, context)
+  const runtimeInput = { chapterId, chapterTitle: title, chapterText: text, context }
+  const analysisInput = {
+    ...StoryboardEngine.buildAnalysisInput({
+      chapterTitle: title,
+      chapterText: text,
+      artStyle: context.artStyle,
+    }),
+    characters: context.characters,
+    sceneGoal: context.sceneGoal,
+  }
+  const extracted = workflow?.identity === identity ? workflow.result : local
   useEffect(() => {
-    // An active chapter switch invalidates any workflow still resolving for the
-    // previous chapter. The Runtime task may finish, but its result is no
-    // longer valid for this view.
-    workflowRunRef.current += 1
-    setRuntimeExtracted(null)
-  }, [activeChapterContent, activeChapterId])
-
-  useEffect(() => {
+    let stale = false
+    indexedDbStoryboardRepository
+      .getAll(projectId)
+      .then((all) => {
+        if (!stale) {
+          setScenes(all.filter((s) => s.projectId === projectId))
+          setError(null)
+        }
+      })
+      .catch((cause) => {
+        if (!stale) setError(String(cause))
+      })
     return () => {
-      workflowRunRef.current += 1
+      stale = true
     }
-  }, [])
-
-  const handleRunWorkflow = async () => {
-    const runtimeAssistant = host?.aiAssistant
-    if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginWorkflow || isRunning) return
-
-    const runId = workflowRunRef.current + 1
-    workflowRunRef.current = runId
-    setIsRunning(true)
-    setRuntimeExtracted(null)
-    const currentChapterId = activeChapter?.id ?? ''
-    const chapterChangedSinceDraft = draftChapterIdRef.current !== currentChapterId
-    const workflowChapterId = chapterChangedSinceDraft ? currentChapterId : chapterId.trim()
-    const workflowSceneText = chapterChangedSinceDraft
-      ? semanticTextFromContent(currentChapterId, activeChapter?.content ?? '')
-      : sceneText
-    const chapterTitle = activeChapter?.title?.trim() || '当前章节'
-
-    try {
-      const result = await runtimeAssistant.runPluginWorkflow(
-        'storyboard-gen',
-        {
-          chapterId: workflowChapterId,
-          chapterTitle,
-          chapterText: semanticTextFromContent(
-            `storyboard-gen-${workflowChapterId}`,
-            workflowSceneText,
-          ),
-        },
-        { projectId, executionMode: 'explicit', cancellable: true },
-      )
-      if (
-        workflowRunRef.current === runId &&
-        result?.status === 'completed' &&
-        isClimaxStoryboardExtraction(result.result)
-      ) {
-        setRuntimeExtracted(result.result)
-      }
-    } catch (error) {
-      if (workflowRunRef.current === runId) console.error('Storyboard workflow failed:', error)
-    } finally {
-      if (workflowRunRef.current === runId) setIsRunning(false)
-    }
-  }
-
-  const extracted = runtimeExtracted ?? localExtracted
-
-  const loadScenes = async () => {
-    const list = await indexedDbStoryboardRepository.getAll(projectId)
-    setScenes(list)
-  }
-
-  useEffect(() => {
-    loadScenes().catch(console.error)
-  }, [projectId])
-
+  }, [projectId, attempt])
   useEffect(() => {
     onStats?.({
-      title: '角色立绘与分镜生成器',
-      wordCount: sceneText.length,
+      title: '原文分镜草案',
+      wordCount: Array.from(text.replace(/\s/gu, '')).length,
       updatedAt: clock.now(),
     })
-  }, [sceneText, onStats])
-
-  // 纯离线 Canvas 绘制电影 16:9 四格分镜与构图辅助线
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const w = canvas.width
-    const h = canvas.height
-    ctx.clearRect(0, 0, w, h)
-
-    // 背景深色底
-    ctx.fillStyle = '#090d16'
-    ctx.fillRect(0, 0, w, h)
-
-    // 绘制四格布局 (2x2)
-    const cols = 2
-    const rows = 2
-    const pad = 12
-    const cellW = (w - pad * 3) / cols
-    const cellH = (h - pad * 3) / rows
-
-    extracted.frames.forEach((frame, idx) => {
-      const col = idx % cols
-      const row = Math.floor(idx / cols)
-      const x = pad + col * (cellW + pad)
-      const y = pad + row * (cellH + pad)
-
-      // 单格边框
-      ctx.fillStyle = '#161e2e'
-      ctx.fillRect(x, y, cellW, cellH)
-
-      ctx.strokeStyle = idx === 2 ? '#e11d48' : '#3b82f6'
-      ctx.lineWidth = 1.5
-      ctx.strokeRect(x, y, cellW, cellH)
-
-      // 构图引导线 (九宫格 / 对角线)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)'
-      ctx.lineWidth = 1
-      if (frame.compositionGuide === 'rule_of_thirds') {
-        ctx.beginPath()
-        ctx.moveTo(x + cellW / 3, y)
-        ctx.lineTo(x + cellW / 3, y + cellH)
-        ctx.moveTo(x + (cellW * 2) / 3, y)
-        ctx.lineTo(x + (cellW * 2) / 3, y + cellH)
-        ctx.moveTo(x, y + cellH / 3)
-        ctx.lineTo(x + cellW, y + cellH / 3)
-        ctx.moveTo(x, y + (cellH * 2) / 3)
-        ctx.lineTo(x + cellW, y + (cellH * 2) / 3)
-        ctx.stroke()
-      } else if (frame.compositionGuide === 'diagonal_impact') {
-        ctx.beginPath()
-        ctx.moveTo(x, y + cellH)
-        ctx.lineTo(x + cellW, y)
-        ctx.stroke()
+  }, [text, onStats])
+  const run = async () => {
+    if (!text.trim() || busyRef.current) return
+    const scope = identity
+    const expected = local
+    busyRef.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      if (!host?.aiAssistant?.isAvailable || !host.aiAssistant.runPluginWorkflow)
+        throw new Error('Runtime 工作流未连接。')
+      const outcome = await host.aiAssistant.runPluginWorkflow('storyboard-gen', runtimeInput, {
+        projectId,
+        executionMode: 'explicit',
+      })
+      if (identityRef.current !== scope) return
+      if (outcome?.status !== 'completed')
+        throw new Error(outcome?.status === 'failed' ? outcome.error : '工作流尚未完成。')
+      if (!matchesSerializedResult(outcome.result, redactPluginValue(expected)))
+        throw new Error('返回的镜头与当前原文或视觉约束不一致。')
+      setWorkflow({ identity: scope, result: expected })
+      setNotice('Runtime 分镜草案已构建。')
+    } catch (cause) {
+      if (identityRef.current === scope) setError(String(cause))
+    } finally {
+      busyRef.current = false
+      if (identityRef.current !== null) setBusy(false)
+    }
+  }
+  const save = async () => {
+    if (!extracted.frames.length || busyRef.current) return
+    const scope = identity
+    busyRef.current = true
+    setBusy(true)
+    try {
+      const record = {
+        ...StoryboardEngine.createSceneRecord(
+          idGenerator.generate('storyboard'),
+          projectId,
+          chapterId,
+          extracted,
+          clock.now(),
+        ),
+        sourceRevision: mode === 'chapter' ? chapter?.revision : undefined,
       }
-
-      // 镜头标题标签
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 11px sans-serif'
-      ctx.fillText(frame.shotLabel, x + 10, y + 20)
-
-      // 光影色调
-      ctx.fillStyle = '#94a3b8'
-      ctx.font = '10px sans-serif'
-      ctx.fillText(`构图: ${frame.compositionGuide} | 光影: ${frame.lightingMood}`, x + 10, y + 36)
-    })
-  }, [extracted])
-
-  const handleSaveScene = async () => {
-    const record: StoryboardSceneRecord = StoryboardEngine.createSceneRecord(
-      idGenerator.generate('storyboard'),
-      projectId,
-      chapterId,
-      extracted,
-      clock.now(),
-    )
-    await indexedDbStoryboardRepository.save(record)
-    await loadScenes()
+      await indexedDbStoryboardRepository.save(record)
+      setScenes((current) => [...current, record])
+      setNotice(
+        identityRef.current === scope ? '分镜草案已归档。' : '本次草案已归档，后续修改尚未保存。',
+      )
+      setError(null)
+    } catch (cause) {
+      setError('保存失败：' + String(cause))
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
   }
-
-  const handleCopyPrompt = (prompt: string, id: string) => {
-    clipboardWriter.writeText(prompt).catch(() => {})
-    setCopiedPromptId(id)
-    setTimeout(() => setCopiedPromptId(null), 2000)
+  const copy = async (prompt: string, id: string) => {
+    const scope = identity
+    try {
+      await clipboardWriter.writeText(prompt)
+      if (identityRef.current === scope) {
+        setCopied({ identity: scope, id })
+        setError(null)
+      }
+    } catch (cause) {
+      if (identityRef.current === scope) setError('复制失败：' + String(cause))
+    }
   }
-
+  const exportPlan = () => {
+    const body =
+      '# ' +
+      extracted.sceneTitle +
+      '\n\n作者画风：' +
+      (artStyle || '未提供') +
+      '\n作者场景目标：' +
+      (sceneGoal || '未提供') +
+      '\n\n' +
+      extracted.frames
+        .map(
+          (frame) =>
+            '## ' +
+            frame.shotLabel +
+            '\n\n原文位置：' +
+            frame.sourceStart +
+            '–' +
+            frame.sourceEnd +
+            '\n\n' +
+            frame.sourceQuote +
+            '\n\n提示词：\n' +
+            frame.visualPrompt,
+        )
+        .join('\n\n') +
+      '\n\n## 作者角色外观\n' +
+      extracted.suggestedCharacters
+        .map((card) => card.characterName + '：' + (card.visualFeatures || '未提供'))
+        .join('\n')
+    try {
+      blobFileDownloader.downloadBlob(
+        '分镜草案.md',
+        new Blob([body], { type: 'text/markdown;charset=utf-8' }),
+      )
+    } catch (cause) {
+      setError(String(cause))
+    }
+  }
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto text-slate-800 dark:text-slate-100">
-      <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Film className="w-6 h-6 text-rose-500" />
-            <span>角色立绘与分镜生成器 (StoryboardGen)</span>
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            电影视听“起承转合”四格高潮分镜提炼、九宫格/对角线构图导线绘制与角色立绘 Prompt 编译
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            className="px-3 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-            placeholder="对应章节ID"
-            aria-label="对应章节ID"
-            value={chapterId}
-            onChange={(e) => {
-              workflowRunRef.current += 1
-              chapterIdDirtyRef.current = true
-              setChapterId(e.target.value)
-              setRuntimeExtracted(null)
-            }}
-          />
+    <div className="p-6 space-y-4 h-full overflow-y-auto">
+      <h2>角色立绘与分镜生成器 (StoryboardGen)</h2>
+      <p>
+        按实际正文提供最多四个镜头素材，机位属于可选设计；未提供的角色外观和光线保持未知。构图示意不代表已生成图片。
+      </p>
+      <button disabled={!chapter} onClick={() => setMode('chapter')}>
+        使用当前章节
+      </button>
+      <button onClick={() => setMode('manual')}>使用独立场景</button>
+      <p>
+        来源：
+        {mode === 'chapter' && chapter
+          ? chapter.title + ' · 版本 ' + (chapter.revision ?? '未知')
+          : '作者独立场景'}
+      </p>
+      {mode === 'manual' && (
+        <input
+          aria-label="场景标题"
+          placeholder="场景标题"
+          value={manualTitle}
+          onChange={(e) => setManualTitle(e.target.value)}
+        />
+      )}
+      <textarea
+        aria-label="高潮名场面文本描述"
+        placeholder="提供需要制作分镜的真实场景文本"
+        readOnly={mode === 'chapter'}
+        value={text}
+        onChange={(e) => setManualText(e.target.value)}
+      />
+      <input
+        aria-label="作者场景目标"
+        placeholder="需要表达的场景目标"
+        value={sceneGoal}
+        onChange={(e) => setSceneGoal(e.target.value)}
+      />
+      <input
+        aria-label="作者画风"
+        placeholder="作者选择的画风（可留空）"
+        value={artStyle}
+        onChange={(e) => setArtStyle(e.target.value)}
+      />
+      <input
+        aria-label="角色名称"
+        placeholder="角色名称"
+        value={characterName}
+        onChange={(e) => setCharacterName(e.target.value)}
+      />
+      <textarea
+        aria-label="角色外观约束"
+        placeholder="作者明确的发型、服装、姿态等外观约束"
+        value={visualFeatures}
+        onChange={(e) => setVisualFeatures(e.target.value)}
+      />
+      <button
+        disabled={!characterName.trim()}
+        onClick={() => {
+          setCharacters((current) => [
+            ...current,
+            {
+              id: idGenerator.generate('visual-character'),
+              name: characterName.trim(),
+              visualFeatures,
+            },
+          ])
+          setCharacterName('')
+          setVisualFeatures('')
+        }}
+      >
+        加入角色外观约束
+      </button>
+      {characters.map((character) => (
+        <p key={character.id}>
+          {character.name}：{character.visualFeatures || '外观尚未提供'}
           <button
-            type="button"
-            onClick={handleRunWorkflow}
-            disabled={
-              !host?.aiAssistant?.isAvailable || !host.aiAssistant.runPluginWorkflow || isRunning
-            }
-            className="px-3.5 py-1.5 border border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300 text-xs rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => setCharacters((current) => current.filter((c) => c.id !== character.id))}
           >
-            {isRunning ? '运行中…' : '运行 AI 分镜'}
+            移除
           </button>
-          <button
-            type="button"
-            onClick={handleSaveScene}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-lg font-medium shadow-sm transition"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>归档本幕四格分镜</span>
+        </p>
+      ))}
+      {error && (
+        <p role="alert">
+          {error}
+          <button onClick={() => setAttempt((n) => n + 1)}>重新读取档案</button>
+        </p>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      <button
+        disabled={!text.trim() || busy || !host?.aiAssistant?.isAvailable}
+        onClick={() => void run()}
+      >
+        {busy ? '运行中…' : '构建 Runtime 分镜草案'}
+      </button>
+      <button disabled={!extracted.frames.length || busy} onClick={() => void save()}>
+        归档本幕分镜草案
+      </button>
+      <button disabled={!extracted.frames.length} onClick={exportPlan}>
+        导出分镜与角色提示词
+      </button>
+      {host?.aiAssistant?.isAvailable && (
+        <button disabled={!text.trim() || ai.isRunning} onClick={() => void ai.run(analysisInput)}>
+          AI 场景与镜头复核
+        </button>
+      )}
+      <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
+      {!text.trim() && <p>没有场景正文，尚未生成镜头素材。</p>}
+      <p>
+        原文段落覆盖：{extracted.coverage?.suppliedPassages ?? 0} /{' '}
+        {extracted.coverage?.totalPassages ?? 0}
+        ；超过四段时抽取开头、中间和结尾，未检查全部场景意义。
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {extracted.frames.map((frame) => (
+          <article key={frame.id} className="border rounded p-3 space-y-2">
+            <h3>{frame.shotLabel}</h3>
+            <svg viewBox="0 0 160 90" role="img" aria-label="可选构图示意">
+              <rect width="160" height="90" fill="#161e2e" />
+              <path d="M53 0V90M107 0V90M0 30H160M0 60H160" stroke="#94a3b8" opacity=".5" />
+            </svg>
+            <p>
+              原文位置 {frame.sourceStart}–{frame.sourceEnd}
+            </p>
+            <blockquote className="whitespace-pre-wrap">{frame.sourceQuote}</blockquote>
+            <p>光线：{frame.lightingMood || '未提供'}</p>
+            <pre className="whitespace-pre-wrap">{frame.visualPrompt}</pre>
+            <button onClick={() => void copy(frame.visualPrompt, frame.id)}>
+              {copied?.identity === identity && copied.id === frame.id
+                ? '已复制'
+                : '复制镜头提示词'}
+            </button>
+          </article>
+        ))}
+      </div>
+      {extracted.suggestedCharacters.map((character: CharacterVisualCard) => (
+        <article key={character.characterId} className="border p-3">
+          <strong>{character.characterName}</strong>
+          <p>{character.visualFeatures || '外观尚未提供'}</p>
+          <button onClick={() => void copy(character.stableDiffusionPrompt, character.characterId)}>
+            复制立绘 Prompt
           </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 左侧：章节名场面高潮输入与四格 Canvas 离线预演 */}
-        <div className="space-y-4">
-          <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-3">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-              高潮名场面文本描述:
-            </label>
-            <textarea
-              className="w-full h-36 p-3 text-xs border rounded font-serif bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-800 leading-relaxed"
-              aria-label="高潮名场面文本描述"
-              value={sceneText}
-              onChange={(e) => {
-                workflowRunRef.current += 1
-                sceneTextDirtyRef.current = true
-                setSceneText(e.target.value)
-                setRuntimeExtracted(null)
-              }}
-            />
-          </div>
-
-          <div className="border rounded-xl p-5 bg-slate-950 border-slate-800 space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Camera className="w-4 h-4 text-rose-500" />
-                <span>离线 16:9 四格电影构图监视器 (Canvas Viewport)</span>
-              </span>
-              <span className="text-[10px] text-slate-500">九宫格 / 倾斜角导线</span>
-            </h3>
-
-            <div className="flex justify-center">
-              <canvas
-                ref={canvasRef}
-                width={540}
-                height={300}
-                className="rounded-lg shadow-lg border border-slate-800 w-full max-w-full"
-              />
-            </div>
-
-            {scenes.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-                <span className="font-bold text-slate-300">已保存分镜档案 ({scenes.length}): </span>
-                <span className="text-slate-500">{scenes.map((s) => s.sceneTitle).join('、')}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 右侧：四格镜头与角色立绘 Prompt 列表 */}
-        <div className="space-y-4">
-          <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-rose-500" />
-                <span>电影分镜提示词编译器 (Prompt Matrix)</span>
-              </span>
-              <span className="text-xs text-slate-400">起 · 承 · 转 · 合</span>
-            </h3>
-
-            <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-              {extracted.frames.map((f) => (
-                <div
-                  key={f.id}
-                  className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-rose-600 dark:text-rose-400">
-                      {f.shotLabel}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600">
-                      {f.shotType}
-                    </span>
-                  </div>
-                  <p className="text-slate-700 dark:text-slate-300">{f.description}</p>
-                  <div className="p-2 bg-slate-100 dark:bg-slate-950 rounded font-mono text-[10px] text-slate-500 flex justify-between items-center gap-2">
-                    <span className="truncate">{f.visualPrompt}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyPrompt(f.visualPrompt, f.id)}
-                      aria-label={`复制${f.shotLabel}提示词`}
-                      className="text-slate-400 hover:text-rose-500 transition shrink-0"
-                    >
-                      {copiedPromptId === f.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 角色立绘卡生成 */}
-          <div className="border rounded-xl p-5 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-3">
-            <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Image className="w-4 h-4 text-rose-500" />
-              <span>本幕角色立绘卡与外观特征</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {extracted.suggestedCharacters.map((c) => (
-                <div
-                  key={c.characterId}
-                  className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-xs space-y-1.5"
-                >
-                  <div className="font-bold text-slate-800 dark:text-slate-100">
-                    {c.characterName}
-                  </div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    {c.visualFeatures}
-                  </p>
-                  <div className="pt-1 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyPrompt(c.stableDiffusionPrompt, c.characterId)}
-                      aria-label={`复制${c.characterName}立绘 Prompt`}
-                      className="text-[10px] text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
-                    >
-                      <Copy className="w-3 h-3" /> 复制立绘 Prompt
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+        </article>
+      ))}
+      <h3>已保存分镜档案 ({scenes.length})</h3>
+      {scenes.map((scene) => (
+        <details key={scene.id}>
+          <summary>
+            {scene.sceneTitle} ·{' '}
+            {scene.chapterId === 'manual'
+              ? '独立场景'
+              : '章节版本 ' + (scene.sourceRevision ?? '未知')}
+          </summary>
+          {scene.schemaVersion !== 2 && <p>旧模板场景与外观未经本轮验证。</p>}
+          {scene.shotFrames.map((frame) => (
+            <p key={frame.id}>{frame.description}</p>
+          ))}
+        </details>
+      ))}
     </div>
-  )
-}
-
-function isClimaxStoryboardExtraction(value: unknown): value is ClimaxStoryboardExtraction {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const result = value as Partial<ClimaxStoryboardExtraction>
-  return (
-    typeof result.sceneTitle === 'string' &&
-    typeof result.coreConflict === 'string' &&
-    Array.isArray(result.frames) &&
-    Array.isArray(result.suggestedCharacters)
   )
 }

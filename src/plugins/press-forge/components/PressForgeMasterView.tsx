@@ -1,4 +1,7 @@
-import { useState, useEffect, type FC } from 'react'
+import { matchesSerializedResult } from '../../../domain/serializedResult'
+import { chapterSaveEvents } from '../../../ports/chapterSaveEvents'
+import { redactPluginValue } from '../../../core/pluginDataRedaction'
+import { useState, useEffect, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { PressForgeEngine } from '../engine/PressForgeEngine'
 import type { PressFormatOptions, TypesetResult } from '../types'
@@ -12,8 +15,13 @@ import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { semanticTextFromContent } from '../../../domain/content'
 import { Select } from '../../../ui/primitives'
 
-export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const PressForgeMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <PressForgeSession key={props.projectId} {...props} />
+)
+const PressForgeSession: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const host = useOptionalPluginHostContext()
+  const [storageError, setStorageError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const [chapters, setChapters] = useState<any[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [options, setOptions] = useState<PressFormatOptions>(
@@ -24,14 +32,22 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null)
 
   useEffect(() => {
+    let stale = false
     const loadInit = async () => {
       setLoading(true)
       try {
-        const [chs, savedConfig] = await Promise.all([
+        const [chs, savedConfig, volumes] = await Promise.all([
           indexedDbProjectRepository.getChaptersByProject(projectId),
           indexedDbPressConfigRepository.get(projectId),
+          indexedDbProjectRepository.getVolumesByProject?.(projectId) ?? Promise.resolve([]),
         ])
-        chs.sort((a, b) => a.order - b.order)
+        if (stale) return
+        const order = new Map(volumes.map((v) => [v.id, v.order]))
+        chs.sort(
+          (a, b) =>
+            (order.get(a.volumeId) ?? Infinity) - (order.get(b.volumeId) ?? Infinity) ||
+            a.order - b.order,
+        )
         setChapters(chs)
         if (chs.length > 0) {
           setSelectedChapterId(chs[0].id)
@@ -44,14 +60,28 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             dialogueStyle: savedConfig.customDialogueStyle,
             fixPunctuation: savedConfig.enablePunctuationFix,
             checkSensitiveWords: savedConfig.enableSensitiveFilter,
+            literalWords: savedConfig.literalWords ?? [],
           })
         }
+      } catch (cause) {
+        if (!stale) setStorageError(String(cause))
       } finally {
-        setLoading(false)
+        if (!stale) setLoading(false)
       }
     }
-    loadInit()
-  }, [projectId])
+    void loadInit()
+    return () => {
+      stale = true
+    }
+  }, [projectId, attempt])
+  useEffect(
+    () =>
+      chapterSaveEvents.subscribe(({ chapter }) => {
+        if (chapter.projectId === projectId)
+          setChapters((current) => current.map((c) => (c.id === chapter.id ? chapter : c)))
+      }),
+    [projectId],
+  )
 
   const currentChapter = chapters.find((c) => c.id === selectedChapterId)
   const currentChapterText = currentChapter
@@ -62,12 +92,41 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
       )
     : ''
 
-  const localFormattedResult = PressForgeEngine.formatText(currentChapterText, options)
+  let localFormattedResult: TypesetResult
+  let layoutError: string | null = null
+  try {
+    localFormattedResult = PressForgeEngine.formatText(currentChapterText, options)
+  } catch (cause) {
+    localFormattedResult = {
+      formattedText: '',
+      lineCount: 0,
+      characterCount: 0,
+      warnings: [],
+      fixedPunctuationCount: 0,
+    }
+    layoutError = String(cause)
+  }
+  const identity = JSON.stringify([
+    projectId,
+    currentChapter?.id,
+    currentChapter?.revision,
+    currentChapterText,
+    options,
+  ])
+  const identityRef = useRef<string | null>(identity)
+  identityRef.current = identity
+  useEffect(
+    () => () => {
+      identityRef.current = null
+    },
+    [],
+  )
 
-  // §P2.7：AI 深度排版是「付费且慢」的动作，不能由 useEffect(正文) 代发。
+  // §P2.7：Runtime 排版核对是「付费且慢」的动作，不能由 useEffect(正文) 代发。
   // 结果连同产生它的那一份输入一起保存，所以换章节或改预设时无需清理 effect：
   // 旧结果对不上当前输入，预览自然回到本地引擎，而不是继续显示上一份正文的「压制成果」。
   const [aiRun, setAiRun] = useState<{
+    identity: string
     text: string
     options: PressFormatOptions
     result: TypesetResult
@@ -76,16 +135,22 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   const [aiError, setAiError] = useState<string | null>(null)
 
   const aiFormattedResult =
-    aiRun && aiRun.text === currentChapterText && aiRun.options === options ? aiRun.result : null
+    aiRun &&
+    aiRun.identity === identity &&
+    aiRun.text === currentChapterText &&
+    aiRun.options === options
+      ? aiRun.result
+      : null
   const formattedResult = aiFormattedResult ?? localFormattedResult
 
   const handleRunAiTypeset = async () => {
     const runtimeAssistant = host?.aiAssistant
     if (!runtimeAssistant?.isAvailable || !runtimeAssistant.runPluginTool) {
-      setAiError('AI 通道不可用，深度排版没有发出。下方预览仍是本地实时排版结果。')
+      setAiError('Runtime 未连接，当前使用本地排版结果。')
       return
     }
 
+    const requestIdentity = identity
     setAiRunning(true)
     setAiError(null)
     try {
@@ -93,11 +158,15 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         rawContent: currentChapterText,
         options,
       })
-      if (!isTypesetResult(result)) {
+      if (identityRef.current !== requestIdentity) return
+      if (
+        !isTypesetResult(result) ||
+        !matchesSerializedResult(result, redactPluginValue(localFormattedResult))
+      ) {
         setAiError('Runtime 返回的内容不是排版结果，预览保持为本地实时排版。')
         return
       }
-      setAiRun({ text: currentChapterText, options, result })
+      setAiRun({ identity: requestIdentity, text: currentChapterText, options, result })
     } catch (cause) {
       setAiError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -113,30 +182,47 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
   }
 
   const handleSaveDefault = async () => {
-    await indexedDbPressConfigRepository.save({
-      projectId,
-      activePresetId: options.presetId,
-      customIndent: options.indentSpaces,
-      customParagraphSpacing: options.paragraphSpacing,
-      customDialogueStyle: options.dialogueStyle,
-      enablePunctuationFix: options.fixPunctuation,
-      enableSensitiveFilter: options.checkSensitiveWords,
-      updatedAt: clock.now(),
-    })
-    setSavedSuccessMsg('已保存当前排版规范为项目默认预设')
-    setTimeout(() => setSavedSuccessMsg(null), 2500)
+    try {
+      await indexedDbPressConfigRepository.save({
+        projectId,
+        activePresetId: options.presetId,
+        customIndent: options.indentSpaces,
+        customParagraphSpacing: options.paragraphSpacing,
+        customDialogueStyle: options.dialogueStyle,
+        enablePunctuationFix: options.fixPunctuation,
+        enableSensitiveFilter: options.checkSensitiveWords,
+        literalWords: options.literalWords,
+        updatedAt: clock.now(),
+      })
+      setSavedSuccessMsg('已保存当前排版规范为项目默认预设')
+      setStorageError(null)
+    } catch (cause) {
+      setStorageError(String(cause))
+    }
   }
 
   const handleCopy = async () => {
-    await clipboardWriter.writeText(formattedResult.formattedText)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      if (layoutError) throw new Error(layoutError)
+      await clipboardWriter.writeText(formattedResult.formattedText)
+      setCopied(true)
+    } catch (cause) {
+      setCopied(false)
+      setStorageError('复制失败：' + String(cause))
+    }
   }
 
   const handleDownloadTxt = () => {
     const blob = new Blob([formattedResult.formattedText], { type: 'text/plain;charset=utf-8' })
-    const filename = `${currentChapter ? `第${currentChapter.order}章_${currentChapter.title}` : '导出章节'}.txt`
-    blobFileDownloader.downloadBlob(filename, blob)
+    const filename =
+      (currentChapter?.title ?? '导出章节').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 120) +
+      '.txt'
+    try {
+      if (layoutError) throw new Error(layoutError)
+      blobFileDownloader.downloadBlob(filename, blob)
+    } catch (cause) {
+      setStorageError(String(cause))
+    }
   }
 
   return (
@@ -148,7 +234,7 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             排版压制与多平台发布工坊 (Press Forge)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            工业级规整化 AST 格式转换引擎，支持起点、晋江、番茄等平台规范一键正规化与敏感词拦截。
+            按所选缩进、空行和标点格式导出文本；关键词匹配不能代表平台规则或审核结果。
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -167,6 +253,19 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
         </div>
       </div>
 
+      {(storageError || layoutError) && (
+        <p role="alert">
+          {storageError || layoutError}
+          <button
+            onClick={() => {
+              setStorageError(null)
+              setAttempt((n) => n + 1)
+            }}
+          >
+            重新读取
+          </button>
+        </p>
+      )}
       {loading ? (
         <div className="text-center py-12 text-slate-400">正在加载章节与排版引擎...</div>
       ) : (
@@ -178,6 +277,7 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                 选择排版章节
               </label>
               <Select
+                aria-label="排版章节"
                 value={selectedChapterId}
                 onValueChange={(v) => setSelectedChapterId(v)}
                 className="w-full"
@@ -185,7 +285,7 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               >
                 {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
-                    第 {c.order} 章：{c.title}
+                    {c.title}
                   </option>
                 ))}
               </Select>
@@ -221,7 +321,13 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   max={4}
                   value={options.indentSpaces}
                   onChange={(e) =>
-                    setOptions({ ...options, indentSpaces: parseInt(e.target.value) || 0 })
+                    setOptions({
+                      ...options,
+                      indentSpaces: Math.min(
+                        4,
+                        Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                      ),
+                    })
                   }
                   className="w-14 p-1 bg-slate-50 dark:bg-slate-900 border rounded text-center"
                 />
@@ -235,7 +341,13 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   max={3}
                   value={options.paragraphSpacing}
                   onChange={(e) =>
-                    setOptions({ ...options, paragraphSpacing: parseInt(e.target.value) || 0 })
+                    setOptions({
+                      ...options,
+                      paragraphSpacing: Math.min(
+                        3,
+                        Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                      ),
+                    })
                   }
                   className="w-14 p-1 bg-slate-50 dark:bg-slate-900 border rounded text-center"
                 />
@@ -260,10 +372,34 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
                   }
                   className="rounded text-cyan-600"
                 />
-                <span>开启平台违禁敏感词智能排查</span>
+                <span>匹配作者关键词清单</span>
               </label>
             </div>
 
+            <textarea
+              aria-label="作者关键词清单"
+              placeholder="每行一个关键词"
+              value={(options.literalWords ?? []).join('\n')}
+              onChange={(e) =>
+                setOptions({ ...options, literalWords: e.target.value.split('\n').filter(Boolean) })
+              }
+            />
+            <label>
+              对话引号格式
+              <select
+                value={options.dialogueStyle}
+                onChange={(e) =>
+                  setOptions({
+                    ...options,
+                    dialogueStyle: e.target.value as PressFormatOptions['dialogueStyle'],
+                  })
+                }
+              >
+                <option value="standard-quotes">保留现有引号</option>
+                <option value="bracket">中文直角引号</option>
+                <option value="dash">独立对白破折号</option>
+              </select>
+            </label>
             <div className="pt-2 space-y-2">
               <button
                 onClick={handleCopy}
@@ -303,7 +439,7 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
               <div className="flex items-center gap-2 shrink-0">
                 {formattedResult.warnings.length > 0 && (
                   <span className="text-rose-500 font-medium">
-                    {formattedResult.warnings.length} 条敏感词预警
+                    {formattedResult.warnings.length} 条关键词匹配
                   </span>
                 )}
                 <button
@@ -349,6 +485,7 @@ export const PressForgeMasterView: FC<DesktopPluginViewProps> = ({ projectId }) 
             )}
 
             <textarea
+              aria-label="排版预览文本"
               readOnly
               value={formattedResult.formattedText}
               className="w-full flex-1 min-h-[420px] p-4 text-sm font-serif leading-relaxed bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg resize-none focus:outline-none"

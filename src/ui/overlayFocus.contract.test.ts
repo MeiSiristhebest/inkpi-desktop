@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import * as ts from 'typescript'
 
 /**
  * §P4.1 交互契约守卫。
@@ -54,12 +55,67 @@ interface ContractFile {
   source: string
 }
 
+function keydownHandlerSources(path: string, source: string): string[] {
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
+  const handlers: string[] = []
+  const bindingFor = (identifier: ts.Identifier): ts.Node | undefined => {
+    for (let scope: ts.Node | undefined = identifier.parent; scope; scope = scope.parent) {
+      if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue
+      for (const statement of scope.statements) {
+        if (ts.isFunctionDeclaration(statement) && statement.name?.text === identifier.text)
+          return statement
+        if (!ts.isVariableStatement(statement)) continue
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name) && declaration.name.text === identifier.text)
+            return declaration.initializer
+        }
+      }
+    }
+  }
+  const handlerSource = (node: ts.Node, visited = new Set<ts.Node>()): string => {
+    if (visited.has(node)) return ''
+    visited.add(node)
+    if (ts.isIdentifier(node)) {
+      const binding = bindingFor(node)
+      return binding ? handlerSource(binding, visited) : ''
+    }
+    let code = node.getText(file)
+    const visitCalls = (child: ts.Node) => {
+      if (ts.isCallExpression(child) && ts.isIdentifier(child.expression)) {
+        const binding = bindingFor(child.expression)
+        if (binding) code += '\n' + handlerSource(binding, visited)
+      }
+      ts.forEachChild(child, visitCalls)
+    }
+    ts.forEachChild(node, visitCalls)
+    return withoutComments(code)
+  }
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'addEventListener' &&
+      node.arguments.length >= 2 &&
+      ts.isStringLiteral(node.arguments[0]) &&
+      node.arguments[0].text === 'keydown'
+    ) {
+      handlers.push(handlerSource(node.arguments[1]))
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return handlers
+}
+
 function overlayContractViolations(files: ContractFile[]): string[] {
   const violations: string[] = []
   for (const { path, source } of files) {
     const code = withoutComments(source)
     const isTrap =
-      TRAP_PATTERN.test(code) && TAB_KEY_PATTERN.test(code) && MANUAL_FOCUS_PATTERN.test(code)
+      TRAP_PATTERN.test(code) &&
+      keydownHandlerSources(path, code).some(
+        (handler) => TAB_KEY_PATTERN.test(handler) && MANUAL_FOCUS_PATTERN.test(handler),
+      )
     if (isTrap && path !== CONTRACT_OWNER) {
       violations.push(`${path}: 自己实现了一份焦点陷阱（应使用 useOverlayFocus）`)
     }
@@ -129,6 +185,44 @@ describe('§P4.1 全仓只有一份浮层交互契约', () => {
     expect(violations).toEqual([
       'src/components/RogueDialog.tsx: 自己实现了一份焦点陷阱（应使用 useOverlayFocus）',
       'src/components/AnotherPalette.tsx: 业务层手搓了 aria-modal 模态语义（应使用 Modal / Popover）',
+    ])
+  })
+
+  it('does not combine independent editor acceptance, Escape handling and source navigation', () => {
+    expect(
+      overlayContractViolations([
+        {
+          path: 'src/components/Editor.tsx',
+          source: `
+        const accept = (event) => { if (event.key === 'Tab') acceptGhostText(); };
+        const escape = (event) => { if (event.key === 'Escape') closePanel(); };
+        window.addEventListener('keydown', escape);
+        const openSource = () => editor.commands.focus();
+      `,
+        },
+      ]),
+    ).toEqual([])
+  })
+
+  it('detects focus traps in inline listeners and in locally called helpers', () => {
+    expect(
+      overlayContractViolations([
+        {
+          path: 'src/components/InlineTrap.tsx',
+          source: `window.addEventListener('keydown', e => { if (e.key === 'Tab') first.focus(); });`,
+        },
+        {
+          path: 'src/components/HelperTrap.tsx',
+          source: `
+          const moveFocus = () => first.focus();
+          const onKey = e => { if (e.key === 'Tab') moveFocus(); };
+          window.addEventListener('keydown', onKey);
+        `,
+        },
+      ]),
+    ).toEqual([
+      'src/components/InlineTrap.tsx: 自己实现了一份焦点陷阱（应使用 useOverlayFocus）',
+      'src/components/HelperTrap.tsx: 自己实现了一份焦点陷阱（应使用 useOverlayFocus）',
     ])
   })
 })

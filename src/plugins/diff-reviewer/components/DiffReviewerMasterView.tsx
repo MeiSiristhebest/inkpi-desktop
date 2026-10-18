@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { DiffReviewerEngine } from '../engine/DiffReviewerEngine'
-import type { DiffComputeResult, ReviewHunkView, HunkResolution } from '../types'
+import type { ReviewHunkView, HunkResolution } from '../types'
 import { GitCompare, Check, X, Layers, Save } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
@@ -14,10 +14,16 @@ import {
 } from '../../../ai/proposals'
 import { previewChoiceLabel, reviewStatusLabel } from '../../../ai/proposals/proposalVocabulary'
 import { semanticTextFromContent } from '../../../domain/content'
-import { formatByPreset } from '../../../domain/text'
 import { Tooltip } from '../../../ui/primitives'
 
-export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) => {
+export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = (props) => {
+  const host = useOptionalPluginHostContext()
+  return (
+    <DiffReviewerSession key={props.projectId + ':' + (host?.activeChapter?.id ?? '')} {...props} />
+  )
+}
+
+const DiffReviewerSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const host = useOptionalPluginHostContext()
   // §P2.4：没有正文可带的时候就从空白开始。这里以前塞了一段仙侠示例稿，
   // 于是没配置过的作品一打开就被告知本书的原稿长这样。
@@ -40,6 +46,8 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
   const [writebackBusy, setWritebackBusy] = useState(false)
   const [writebackError, setWritebackError] = useState<string | null>(null)
   const proposalSequence = useRef(0)
+  const originalStoredContentRef = useRef<string | null>(null)
+  const [computedScope, setComputedScope] = useState<string | null>(null)
   const semanticSourceText = semanticTextFromContent(
     host?.activeChapter?.id || 'diff-reviewer-source',
     sourceText,
@@ -47,13 +55,32 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
   )
   const semanticProposedText = semanticTextFromContent('diff-reviewer-proposed', proposedText)
 
+  const inputScope = JSON.stringify([
+    projectId,
+    host?.activeChapter?.id,
+    host?.revision,
+    semanticSourceText,
+    semanticProposedText,
+  ])
+  const currentScopeRef = useRef<string | null>(inputScope)
+  currentScopeRef.current = inputScope
+  useEffect(
+    () => () => {
+      currentScopeRef.current = null
+    },
+    [],
+  )
+  const hasCurrentDiff = computedScope === inputScope
+
   useEffect(() => {
     onStats?.({
       title: '双栏审校与合稿器',
-      wordCount: mergedResult.length || sourceText.length,
+      wordCount: Array.from(
+        (hasCurrentDiff ? mergedResult : semanticSourceText).replace(/\s/gu, ''),
+      ).length,
       updatedAt: clock.now(),
     })
-  }, [mergedResult, sourceText, onStats])
+  }, [mergedResult, semanticSourceText, hasCurrentDiff, onStats])
 
   const handleCompute = async () => {
     // 两栏都空的时候不要惊动引擎和 AI：那只会烧一次没有人要求的请求（§P2.7）。
@@ -62,19 +89,21 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
       return
     }
     setComputeNotice('')
-    let diff = DiffReviewerEngine.computeDiff(semanticSourceText, semanticProposedText)
+    const requestScope = inputScope
+    const diff = DiffReviewerEngine.computeDiff(semanticSourceText, semanticProposedText)
     const runtimeAssistant = host?.aiAssistant
     if (runtimeAssistant?.isAvailable && runtimeAssistant.runPluginTool) {
       try {
-        const runtimeResult = await runtimeAssistant.runPluginTool('diff-reviewer', {
+        await runtimeAssistant.runPluginTool('diff-reviewer', {
           oldText: semanticSourceText,
           newText: semanticProposedText,
         })
-        if (isDiffComputeResult(runtimeResult)) diff = runtimeResult
       } catch {
         // Keep the local engine as an offline fallback when the daemon is unavailable.
       }
     }
+    if (currentScopeRef.current !== requestScope) return
+    setComputedScope(requestScope)
     setHunks(diff.hunks)
     setMergedResult(semanticSourceText)
   }
@@ -99,7 +128,8 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
   }
 
   const handleWriteback = async () => {
-    if (!host?.activeChapter || writebackBusy) return
+    if (!host?.activeChapter || host.projectId !== projectId || !hasCurrentDiff || writebackBusy)
+      return
 
     const chapter = host.activeChapter
     const storedBaseline = chapter.content || ''
@@ -109,7 +139,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
       return
     }
 
-    const targetText = mergedResult || semanticSourceText
+    const targetText = mergedResult
     const createdAt = clock.now()
     proposalSequence.current += 1
     const proposal: AiProposal = {
@@ -162,6 +192,7 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
         },
         hashText(baseline),
       )
+      originalStoredContentRef.current = storedBaseline
       setWritebackProposal(proposalLedger.get(receipt.proposalId) || null)
     } catch (error) {
       setWritebackProposal(proposalLedger.get(proposal.id) || null)
@@ -184,7 +215,9 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
           chapterId: host.activeChapter!.id,
           expectedRevision: host.revision,
           type: 'full_replace',
-          content: toStoredChapterContent(patch.text, host.activeChapter?.content || ''),
+          content:
+            originalStoredContentRef.current ??
+            toStoredChapterContent(patch.text, host.activeChapter?.content || ''),
         })
         if (!result.success) {
           throw new Error(result.error || '撤销章节写回失败')
@@ -227,7 +260,9 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
             <Tooltip content="将审阅后的合稿结果记录为 Proposal，并通过 CAS 写回当前正文章节">
               <button
                 onClick={() => void handleWriteback()}
-                disabled={writebackBusy || writebackProposal?.status === 'committed'}
+                disabled={
+                  !hasCurrentDiff || writebackBusy || writebackProposal?.status === 'committed'
+                }
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition shadow-sm"
               >
                 <Save className="w-3.5 h-3.5" />
@@ -248,12 +283,14 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
           )}
           <button
             onClick={applyAll}
+            disabled={!hasCurrentDiff}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition"
           >
             <Check className="w-3.5 h-3.5" /> 全部纳入预览
           </button>
           <button
             onClick={rejectAll}
+            disabled={!hasCurrentDiff}
             className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-semibold flex items-center gap-1 transition"
           >
             <X className="w-3.5 h-3.5" /> 全部排除
@@ -302,7 +339,10 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
         <p className="text-xs text-rose-600 dark:text-rose-400">{writebackError}</p>
       )}
 
-      {hunks.length > 0 && (
+      {computedScope !== null && !hasCurrentDiff && (
+        <p role="status">输入或章节已变化，请重新计算差异。</p>
+      )}
+      {hasCurrentDiff && hunks.length > 0 && (
         <div className="space-y-4">
           <h3 className="font-bold text-sm text-slate-700 dark:text-slate-300">
             差异决策分块 ({hunks.length} 个 Hunk)
@@ -397,22 +437,12 @@ export const DiffReviewerMasterView: FC<DesktopPluginViewProps> = ({ onStats }) 
 }
 
 function toStoredChapterContent(text: string, previousContent: string): string {
-  return /<\s*[a-z][^>]*>/i.test(previousContent) ? formatByPreset(text, 'web-novel') : text
-}
-
-function isDiffComputeResult(value: unknown): value is DiffComputeResult {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const result = value as Partial<DiffComputeResult>
-  return (
-    Array.isArray(result.hunks) &&
-    result.hunks.every(
-      (hunk) =>
-        hunk &&
-        Array.isArray(hunk.lines) &&
-        Array.isArray(hunk.lineChanges) &&
-        typeof hunk.id === 'string',
-    ) &&
-    !!result.stats &&
-    typeof result.stats === 'object'
-  )
+  if (!/<\s*[a-z][^>]*>/i.test(previousContent)) return text
+  return text
+    .split('\n')
+    .map(
+      (line) =>
+        '<p>' + line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>',
+    )
+    .join('')
 }

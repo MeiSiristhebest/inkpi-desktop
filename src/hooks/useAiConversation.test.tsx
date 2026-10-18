@@ -1,6 +1,6 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiTask, TaskStatusSnapshot } from '@inkpi/protocol'
+import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { AiAssistant } from '../ports/aiGateway'
 import type { Clock } from '../ports/clock'
 import type { TaskRecoveryRecord, TaskRecoveryStore } from '../db/taskRecoveryStore'
@@ -12,6 +12,7 @@ import {
   type StoryState,
 } from '../domain/story'
 import { semanticDocumentFromText } from '../domain/content'
+import { hashText } from '../ai/proposals'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { useAiConversation } from './useAiConversation'
@@ -68,6 +69,7 @@ describe('useAiConversation task recovery', () => {
   it('includes the authoritative StoryState in default creative task context', async () => {
     const store = makeStore()
     const storyState = createStoryState(7)
+    const chapterText = '已有内容'
     let submitted: AiTask | undefined
     const runTask = vi.fn(async (task: AiTask) => {
       submitted = task
@@ -80,23 +82,53 @@ describe('useAiConversation task recovery', () => {
     })
     const assistant = makeAssistant(runTask)
     connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const activeWritingContext: ActiveWritingContext = {
+      workspaceId: 'project-1',
+      workspaceRevision: 9,
+      chapter: {
+        id: 'chapter-1',
+        revision: 6,
+        title: '第六章',
+        content: chapterText,
+        wordCount: chapterText.length,
+        semanticDocument: semanticDocumentFromText('chapter-1', chapterText, 6),
+      },
+      dirty: false,
+    }
     const hook = renderHook(() =>
-      useAiConversation('ws://daemon', null, 'project-1', {
-        taskRecoveryStore: store,
-        clock: fixedClock,
-        storyState,
-      }),
+      useAiConversation(
+        'ws://daemon',
+        null,
+        'project-1',
+        {
+          taskRecoveryStore: store,
+          clock: fixedClock,
+          storyState,
+        },
+        activeWritingContext,
+      ),
     )
 
     await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
     await act(async () => {
-      await expect(hook.result.current.requestGhost('chapter-1', '已有内容')).resolves.toBe(
+      await expect(hook.result.current.requestGhost('chapter-1', chapterText, 6)).resolves.toBe(
         '续写结果',
       )
     })
 
     expect(submitted).toMatchObject({
       kind: 'creative.continue',
+      scope: {
+        workspaceId: 'project-1',
+        workspaceRevision: 9,
+        document: { id: 'chapter-1', revision: 6 },
+        selection: {
+          from: chapterText.length,
+          to: chapterText.length,
+          sourceHash: hashText(chapterText),
+        },
+      },
+      metadata: { sourceTextHash: hashText(chapterText) },
       contextPolicy: {
         includeProjectState: true,
         providerIds: expect.arrayContaining(['creative.story']),
@@ -109,6 +141,71 @@ describe('useAiConversation task recovery', () => {
         },
       },
     })
+    hook.unmount()
+  })
+
+  it('aborts an in-flight Ghost Text task when its caller signal is cancelled', async () => {
+    const store = makeStore()
+    let runtimeSignal: AbortSignal | undefined
+    const runTask = vi.fn(
+      (_task: AiTask, options?: Parameters<AiAssistant['runTask']>[1]) =>
+        new Promise<TaskResult>((_resolve, reject) => {
+          runtimeSignal = options?.signal
+          runtimeSignal?.addEventListener(
+            'abort',
+            () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+            { once: true },
+          )
+        }),
+    )
+    const assistant = makeAssistant(runTask)
+    connectToDaemon.mockResolvedValue({ client: assistant, connected: true })
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {
+        taskRecoveryStore: store,
+        clock: fixedClock,
+      }),
+    )
+
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    const controller = new AbortController()
+    let request!: Promise<string | null>
+    await act(async () => {
+      request = hook.result.current.requestGhost('chapter-1', '已有内容', 1, controller.signal)
+      await waitFor(() => expect(runtimeSignal).toBeDefined())
+      controller.abort()
+      await expect(request).resolves.toBeNull()
+    })
+
+    expect(runtimeSignal?.aborted).toBe(true)
+    expect(hook.result.current.taskRecovery).toHaveLength(0)
+    expect(store.save).not.toHaveBeenCalled()
+    hook.unmount()
+  })
+
+  it('does not submit Ghost Text for a chapter that no longer matches the active context', async () => {
+    const runTask = vi.fn(async () => null)
+    connectToDaemon.mockResolvedValue({ client: makeAssistant(runTask), connected: true })
+    const activeWritingContext: ActiveWritingContext = {
+      workspaceId: 'project-1',
+      workspaceRevision: 9,
+      chapter: {
+        id: 'chapter-2',
+        revision: 3,
+        title: '第七章',
+        content: '其他章节',
+        wordCount: 4,
+        semanticDocument: semanticDocumentFromText('chapter-2', '其他章节', 3),
+      },
+      dirty: false,
+    }
+    const hook = renderHook(() =>
+      useAiConversation('ws://daemon', null, 'project-1', {}, activeWritingContext),
+    )
+
+    await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
+    await expect(hook.result.current.requestGhost('chapter-1', '旧章节内容', 2)).resolves.toBeNull()
+    expect(runTask).not.toHaveBeenCalled()
     hook.unmount()
   })
 

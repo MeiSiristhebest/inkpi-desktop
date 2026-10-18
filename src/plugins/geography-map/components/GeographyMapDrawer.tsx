@@ -1,97 +1,105 @@
 import { useState, useEffect, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
 import type { GeoMapGridRecord } from '../types'
+import type { CodexEntity } from '../../living-codex/types'
 import { indexedDbGeoMapRepository } from '../../../adapters/indexedDbGeoMapRepository'
-import { MapPin, Compass, Mountain, Flag } from 'lucide-react'
-import { Tooltip } from '../../../ui/primitives'
+import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
+import { GeoMapEngine } from '../engine/GeoMapEngine'
 
-export const GeographyMapDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
-  const [mapRecord, setMapRecord] = useState<GeoMapGridRecord | null>(null)
-  const [detectedLocation, setDetectedLocation] = useState<string | null>(null)
+export const GeographyMapDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <GeographyMapProjectDrawer key={props.projectId} {...props} />
+)
 
+const GeographyMapProjectDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
+  const [maps, setMaps] = useState<GeoMapGridRecord[]>([])
+  const [locations, setLocations] = useState<CodexEntity[]>([])
+  const [notice, setNotice] = useState('正在读取地图和地点设定…')
   useEffect(() => {
-    const load = async () => {
-      const all = await indexedDbGeoMapRepository.getAll(projectId)
-      if (all.length > 0) setMapRecord(all[0])
+    let disposed = false
+    Promise.all([
+      indexedDbGeoMapRepository.getAll(projectId),
+      indexedDbCodexEntityRepository.getByProject(projectId),
+    ])
+      .then(([records, entities]) => {
+        if (disposed) return
+        setMaps(records.filter((record) => record.projectId === projectId))
+        setLocations(entities.filter((entity) => entity.category === 'location'))
+        setNotice('')
+      })
+      .catch(() => {
+        if (!disposed) setNotice('读取地图或地点设定失败。')
+      })
+    return () => {
+      disposed = true
     }
-    load()
   }, [projectId])
-
-  useEffect(() => {
-    if (!currentText) {
-      setDetectedLocation(null)
-      return
-    }
-    // 文本地名特征自侦测
-    const match = currentText.match(/(黑风寨|青云门|落霞谷|帝都|天元城|万妖荒原|葬剑峰)/)
-    if (match) {
-      setDetectedLocation(match[0])
-    }
-  }, [currentText])
-
-  const cells = mapRecord?.occupiedCells || []
-  const cityCount = cells.filter((c) => c.terrainType === 'city').length
-  const mountainCount = cells.filter((c) => c.terrainType === 'mountain').length
-
+  const mentions = locations.flatMap((location) =>
+    [...new Set([location.name, ...location.aliases])]
+      .filter((name) => name.trim())
+      .flatMap((name) => {
+        const matches = []
+        let from = 0
+        while (currentText && from < currentText.length) {
+          const start = currentText.indexOf(name, from)
+          if (start < 0) break
+          matches.push({ entityId: location.id, name, start, end: start + name.length })
+          from = start + name.length
+        }
+        return matches
+      }),
+  )
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
-      <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-2">
-        <span className="font-semibold text-sm flex items-center gap-1.5 text-blue-500">
-          <Compass className="w-4 h-4" /> 地理拓扑随动感知
-        </span>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">
-          {mapRecord ? `${mapRecord.scaleKmPerCell} km/格` : '未初始化'}
-        </span>
-      </div>
-
-      {detectedLocation && (
-        <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 space-y-1">
-          <div className="font-bold flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5" /> 正文定位到地理风物：
-          </div>
-          <div className="text-[11px] font-semibold">{detectedLocation}</div>
-          <div className="text-[10px] opacity-80">
-            沙盘系统已就绪，行军至临近宗门需 2-4 天，注意防范行军光速吃书。
-          </div>
-        </div>
+    <div className="p-4 space-y-3 text-xs text-[var(--ink-text)]">
+      <h3 className="font-semibold text-sm">地理拓扑随动感知</h3>
+      {notice && <p role="status">{notice}</p>}
+      <p>正文中已登记地点的字面提及（不代表人物当前位置）：</p>
+      {mentions.length === 0 ? (
+        <p>未命中已登记地点，无法确认地理位置。</p>
+      ) : (
+        mentions.map((mention) => (
+          <p key={mention.entityId + ':' + mention.start + ':' + mention.name}>
+            {mention.name}，原文 [{mention.start}, {mention.end})
+          </p>
+        ))
       )}
-
-      {/* 沙盘地貌微缩卡片 */}
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="p-2.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]">
-          <div className="text-[10px] text-[var(--ink-text-muted)] flex items-center justify-center gap-1">
-            <Flag className="w-3 h-3 text-purple-500" /> 城镇/宗门据点
-          </div>
-          <div className="text-base font-bold text-purple-600 mt-1">{cityCount} 处</div>
-        </div>
-        <div className="p-2.5 rounded bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]">
-          <div className="text-[10px] text-[var(--ink-text-muted)] flex items-center justify-center gap-1">
-            <Mountain className="w-3 h-3 text-amber-500" /> 山脉/险地天堑
-          </div>
-          <div className="text-base font-bold text-amber-600 mt-1">{mountainCount} 处</div>
-        </div>
-      </div>
-
-      {/* 8x8 微型沙盘预览 */}
-      <div className="space-y-1.5">
-        <div className="font-semibold text-[11px] text-[var(--ink-text-muted)]">
-          微型地缘网格拓扑预览：
-        </div>
-        <div className="grid grid-cols-8 gap-0.5 p-1.5 bg-[var(--ink-bg-canvas)] rounded border border-[var(--ink-border)]">
-          {cells.map((c) => {
-            let color = 'bg-emerald-500/20'
-            if (c.terrainType === 'mountain') color = 'bg-amber-500/40'
-            if (c.terrainType === 'water') color = 'bg-blue-500/40'
-            if (c.terrainType === 'city') color = 'bg-purple-500/60'
-            if (c.terrainType === 'barrier') color = 'bg-rose-500/60'
-            return (
-              <Tooltip key={`${c.x}-${c.y}`} content={`(${c.x},${c.y}) ${c.terrainType}`}>
-                <div className={`w-full aspect-square rounded-xs ${color}`} />
-              </Tooltip>
-            )
-          })}
-        </div>
-      </div>
+      {maps.map((map) => {
+        let route
+        try {
+          route = map.travelPlan
+            ? GeoMapEngine.planRoute({
+                ...map.travelPlan,
+                cells: map.occupiedCells,
+                scaleKmPerCell: map.scaleKmPerCell,
+              })
+            : null
+        } catch {
+          route = { status: 'no-route' as const, reason: '已保存行程参数无效。' }
+        }
+        return (
+          <section key={map.id} className="border rounded p-2 space-y-1">
+            <h4>
+              已登记地图：
+              {locations.find((location) => location.id === map.locationId)?.name ?? map.locationId}
+            </h4>
+            <p>
+              {map.scaleKmPerCell} km/格，{map.occupiedCells.length} 个已绘单元格。
+            </p>
+            <p>
+              城市格 {map.occupiedCells.filter((cell) => cell.terrainType === 'city').length}
+              ；山地格 {map.occupiedCells.filter((cell) => cell.terrainType === 'mountain').length}
+              。
+            </p>
+            {route?.status === 'ok' ? (
+              <p>
+                按保存假设，路线 {route.distanceKm.toFixed(3)} km，约{' '}
+                {route.estimatedDays.toFixed(3)} 天。
+              </p>
+            ) : (
+              <p>{route?.reason ?? '未保存路线、速度与通行假设，无法估算行程。'}</p>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }

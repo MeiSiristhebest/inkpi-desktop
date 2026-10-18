@@ -4,143 +4,112 @@ import type {
   ClimaxStoryboardExtraction,
   StoryboardSceneRecord,
 } from '../types'
-
-/**
- * StoryboardEngine (角色立绘与分镜生成器引擎)
- *
- * 理论基础：电影视听分镜四格语法（Cinematic 4-Beats Grammar）
- * 1. 起（Establishing Shot 远景/全景）：宏观环境与压迫氛围
- * 2. 承（Medium Shot 中景对峙）：剑拔弩张与动作交锋
- * 3. 转（Dutch / Closeup 特写倾斜）：底牌逆转与绝境异变
- * 4. 合（Impact Wide 广角高潮）：余波席卷与胜负定格
- */
+export interface StoryboardContext {
+  protagonist?: string
+  antagonist?: string
+  sceneGoal?: string
+  artStyle?: string
+  characters?: Array<{ id: string; name: string; visualFeatures?: string }>
+}
 export class StoryboardEngine {
-  /**
-   * 生成统一任务运行时使用的结构化分镜分析输入。
-   */
-  public static buildAnalysisInput(params: {
+  static buildAnalysisInput(params: {
     chapterTitle: string
     chapterText: string
     artStyle?: string
   }): Record<string, unknown> {
     return {
-      chapterTitle: params.chapterTitle,
-      chapterText: params.chapterText.slice(0, 1800),
-      artStyle: params.artStyle || '电影质感高概念概念设计 / 8K虚幻5渲染',
-      shotGrammar: ['establishing_wide', 'medium_confrontation', 'dutch_closeup', 'impact_wide'],
-      outputFields: ['conflictDescription', 'suggestedCharacters', 'frames'],
+      ...params,
+      artStyle: params.artStyle ?? '',
+      mode: 'source-grounded-shot-options',
+      missingAppearance: '未提供的外貌、服饰、光线与场景限制保持未知。',
     }
   }
-
-  public static extractStoryboard(
+  static extractStoryboard(
     chapterId: string,
     chapterTitle: string,
     chapterText: string,
-    context?: { protagonist?: string; antagonist?: string },
+    context?: StoryboardContext,
   ): ClimaxStoryboardExtraction {
-    const rawLines = chapterText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 5)
-
-    // 优先采用上下文显式传入的主角/对手设定，彻底避免无脑 fallback 到“林凡”与“赵家长老”
-    let mainHero = context?.protagonist || ''
-    let opponent = context?.antagonist || ''
-
-    // 尝试从文本中解析人物与动作焦点
-    if (!mainHero || !opponent) {
-      const nameMatches = chapterText.match(
-        /([\u4e00-\u9fa5]{2,4})(?:手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出|拔出|祭出|负手)/g,
-      )
-      if (nameMatches && nameMatches.length > 0) {
-        const extractedNames = Array.from(
-          new Set(
-            nameMatches.map((m) =>
-              m.replace(/(手持|冷笑|暴起|挥剑|喝道|怒吼|一掌|踏出|拔出|祭出|负手)/g, ''),
-            ),
-          ),
-        ).filter((n) => n.length >= 2 && n.length <= 4)
-
-        if (!mainHero && extractedNames.length >= 1) mainHero = extractedNames[0]
-        if (!opponent && extractedNames.length >= 2) opponent = extractedNames[1]
-      }
-    }
-
-    if (!mainHero) mainHero = '主角'
-    if (!opponent) opponent = '强敌对手'
-
-    // 提取关键冲突段落片段作为描述基础
-    const actionSnippet =
-      rawLines.find((l) => /(剑|刀|斩|杀|掌|拳|雷|火|轰)/.test(l)) || rawLines[0] || '双方对峙'
-    const defaultConflict = `围绕「${mainHero}」与「${opponent}」的关键交锋：${actionSnippet.slice(0, 45)}`
-
-    const frames: ShotFrame[] = [
-      {
-        id: `shot_1_${chapterId}`,
-        shotOrder: 1,
-        shotType: 'establishing_wide',
-        shotLabel: '【起】远景全景 · 环境入胜',
-        description: `环境与压迫定场：风云激变。${chapterTitle || '本章'}战局全面铺展，宏大场景见证${mainHero}与${opponent}之决断。`,
-        compositionGuide: 'rule_of_thirds',
-        lightingMood: '雷暴雷光，天昏地暗',
-        visualPrompt: `epic cinematic establishing wide shot, ancient chinese cultivation scene under dramatic sky, ${mainHero} vs ${opponent}, cinematic composition, 8k masterpiece, Unreal Engine 5 render`,
-      },
-      {
-        id: `shot_2_${chapterId}`,
-        shotOrder: 2,
-        shotType: 'medium_confrontation',
-        shotLabel: '【承】中景对峙 · 剑拔弩张',
-        description: `核心交锋：${opponent}挟势威逼，${mainHero}横刀立剑相迎。动荡气机激荡出肉眼可见的狂暴涟漪。`,
-        compositionGuide: 'leading_sightlines',
-        lightingMood: '冷暖光影交割相持',
-        visualPrompt: `cinematic medium confrontation two-shot, ${mainHero} facing fierce ${opponent}, dynamic tension line, photorealistic volumetric lighting, raytracing`,
-      },
-      {
-        id: `shot_3_${chapterId}`,
-        shotOrder: 3,
-        shotType: 'dutch_closeup',
-        shotLabel: '【转】特写倾斜 · 绝命反转',
-        description: `绝命反击特写！${mainHero}眼中异彩骤亮，底牌杀招于毫厘之间逆境爆发，胜负天平轰然逆转！`,
-        compositionGuide: 'diagonal_impact',
-        lightingMood: '神芒破夜爆发',
-        visualPrompt: `extreme dutch angle dramatic closeup shot, ${mainHero} eyes glowing with mystical arcane runes, intense cinematic keyframe, Makoto Shinkai lighting`,
-      },
-      {
-        id: `shot_4_${chapterId}`,
-        shotOrder: 4,
-        shotType: 'impact_wide',
-        shotLabel: '【合】广角高潮 · 余波震撼',
-        description: `余波定格：天地风波席卷平息，高潮落幕。胜者傲然渊渟岳峙，满场震撼动容。`,
-        compositionGuide: 'center_monumental',
-        lightingMood: '破晓辉光破云而降',
-        visualPrompt: `monumental wide angle victory climax frame, smoke and dust clearing, ${mainHero} standing victorious, awe-inspiring scale, cinematic lighting`,
-      },
+    const passages = [...chapterText.matchAll(/[^\r\n]+/g)].flatMap((match) => {
+      const quote = match[0].trim()
+      if (!quote) return []
+      const start = match.index! + match[0].length - match[0].trimStart().length
+      return [{ quote, start, end: start + quote.length }]
+    })
+    const selected =
+      passages.length <= 4
+        ? passages
+        : [
+            ...new Set([
+              0,
+              Math.floor((passages.length - 1) / 3),
+              Math.floor(((passages.length - 1) * 2) / 3),
+              passages.length - 1,
+            ]),
+          ].map((index) => passages[index])
+    const labels = ['可选全景', '可选中景', '可选特写', '可选广角']
+    const shotTypes: ShotFrame['shotType'][] = [
+      'establishing_wide',
+      'medium_confrontation',
+      'dutch_closeup',
+      'impact_wide',
     ]
-
-    const suggestedCharacters: CharacterVisualCard[] = [
-      {
-        characterId: 'c_main',
-        characterName: mainHero,
-        visualFeatures: `${mainHero}：坚毅少年修士，道袍猎猎，神色沉静自若，周身雷芒流转。`,
-        stableDiffusionPrompt: `handsome young cultivator ${mainHero}, flowing robes, sharp confident gaze, holding mystical weapon, concept art, trending on ArtStation`,
-      },
-      {
-        characterId: 'c_rival',
-        characterName: opponent,
-        visualFeatures: `${opponent}：面色阴鸷的中年对手，战袍翻飞，气焰嚣张。`,
-        stableDiffusionPrompt: `fierce rival cultivator ${opponent}, aggressive stance, glowing destructive aura, detailed fantasy illustration`,
-      },
-    ]
-
+    const characters = [...(context?.characters ?? [])]
+    for (const name of [context?.protagonist, context?.antagonist])
+      if (name?.trim() && !characters.some((c) => c.name === name))
+        characters.push({ id: 'author-' + encodeURIComponent(name), name })
+    const cards: CharacterVisualCard[] = chapterText.trim()
+      ? characters
+          .filter((c) => c.name.trim())
+          .map((c) => ({
+            characterId: c.id,
+            characterName: c.name,
+            visualFeatures: c.visualFeatures ?? '',
+            stableDiffusionPrompt:
+              '作者指定角色：' +
+              c.name +
+              (c.visualFeatures ? '；外观约束：' + c.visualFeatures : '；尚未提供外观约束。') +
+              (context?.artStyle ? '；作者画风：' + context.artStyle : ''),
+            source: 'author-record',
+          }))
+      : []
+    const frames: ShotFrame[] = selected.map((passage, index) => ({
+      id: 'shot_' + (index + 1) + '_' + chapterId,
+      shotOrder: index + 1,
+      shotType: shotTypes[index],
+      shotLabel: '镜头草案 ' + (index + 1) + ' · ' + labels[index],
+      description: passage.quote,
+      compositionGuide: 'rule_of_thirds',
+      lightingMood: '',
+      visualPrompt:
+        '以此原文时刻作为分镜素材：' +
+        passage.quote +
+        '\n机位建议：' +
+        labels[index] +
+        '（可调整）。\n已提供角色外观：' +
+        (cards
+          .filter((c) => c.visualFeatures)
+          .map((c) => c.characterName + '：' + c.visualFeatures)
+          .join('；') || '未提供，生成前由作者补充。') +
+        (context?.artStyle ? '\n作者画风：' + context.artStyle : ''),
+      sourceQuote: passage.quote,
+      sourceStart: passage.start,
+      sourceEnd: passage.end,
+      status: 'staging-option',
+    }))
     return {
-      sceneTitle: `${chapterTitle || '第 1 章'} 名场面高潮分镜`,
-      coreConflict: defaultConflict,
+      sceneTitle: (chapterTitle || '未命名场景') + ' · 分镜草案',
+      coreConflict: context?.sceneGoal ?? '',
       frames,
-      suggestedCharacters,
+      suggestedCharacters: cards,
+      coverage: {
+        totalPassages: passages.length,
+        suppliedPassages: selected.length,
+        complete: selected.length === passages.length,
+      },
     }
   }
-
-  public static createSceneRecord(
+  static createSceneRecord(
     id: string,
     projectId: string,
     chapterId: string,
@@ -152,9 +121,11 @@ export class StoryboardEngine {
       projectId,
       chapterId,
       sceneTitle: extracted.sceneTitle,
-      shotFrames: extracted.frames,
-      characterCards: extracted.suggestedCharacters,
+      shotFrames: structuredClone(extracted.frames),
+      characterCards: structuredClone(extracted.suggestedCharacters),
       createdAt,
+      coverage: extracted.coverage,
+      schemaVersion: 2,
     }
   }
 }

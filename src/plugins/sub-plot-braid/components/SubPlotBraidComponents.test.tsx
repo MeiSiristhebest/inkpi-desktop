@@ -16,6 +16,7 @@ vi.mock('../../../adapters/indexedDbSubPlotRepository', () => ({
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
     getChaptersByProject: vi.fn(),
+    getVolumesByProject: vi.fn().mockResolvedValue([]),
   },
 }))
 

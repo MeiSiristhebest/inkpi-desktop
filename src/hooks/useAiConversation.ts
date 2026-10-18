@@ -16,6 +16,7 @@ import type {
   TaskStatusSnapshot,
 } from '@inkpi/protocol'
 import { semanticDocumentFromText } from '../domain/content'
+import { hashText } from '../ai/proposals'
 import type { StoryState } from '../domain/story'
 import {
   createAssistantTask,
@@ -127,6 +128,7 @@ interface ActiveTask {
   operation: ActiveTaskOperation
   identityKey: string
   cancelRequested: boolean
+  trackRecovery: boolean
   latestSnapshot: TaskStatusSnapshot
   promise: Promise<unknown>
 }
@@ -141,7 +143,12 @@ export interface AiConversation {
   setAiInput: (value: string) => void
   aiBusy: boolean
   reconnect: () => void
-  requestGhost: (chapterId: string, text: string) => Promise<string | null>
+  requestGhost: (
+    chapterId: string,
+    text: string,
+    sourceRevision: number,
+    signal?: AbortSignal,
+  ) => Promise<string | null>
   sendAiPrompt: (prompt: string, chapterId?: string) => void
   runAiTask: (task: AiTask) => Promise<TaskResult | null>
   taskRecovery: TaskRecoveryRecord[]
@@ -174,6 +181,7 @@ export interface AiConversation {
   probeModelProvider: (
     params: RuntimeModelProviderProbeParams,
   ) => Promise<RuntimeModelProviderProbeResult>
+  chatgptPlan?: AiAssistant['chatgptPlan']
   domainSyncState: DomainSyncState
   syncConflict?: DomainSyncConflict
   /** 发送前披露：本次请求会随指令带出的本地内容（P3.15） */
@@ -508,7 +516,12 @@ export function useAiConversation(
   }, [executeDomainSync, isConnected, workspaceId])
 
   const runTrackedTask = useCallback(
-    (task: AiTask): Promise<TaskResult | null> => {
+    (
+      task: AiTask,
+      options: { signal?: AbortSignal; trackRecovery?: boolean } = {},
+    ): Promise<TaskResult | null> => {
+      const { signal: externalSignal, trackRecovery = true } = options
+      if (externalSignal?.aborted) return Promise.reject(abortError())
       const identityKey = serializeTaskIdentity(task)
       const existing = activeTasksRef.current.get(task.id)
       if (existing) {
@@ -533,13 +546,20 @@ export function useAiConversation(
         operation: 'task',
         identityKey,
         cancelRequested: false,
+        trackRecovery,
         latestSnapshot: initialTaskSnapshot(task),
         promise: Promise.resolve(null),
       }
+      const abortFromExternalSignal = () => {
+        active.cancelRequested = true
+        controller.abort()
+      }
+      externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true })
+      if (externalSignal?.aborted) abortFromExternalSignal()
       activeTasksRef.current.set(task.id, active)
       const promise = (async (): Promise<TaskResult | null> => {
         let latestSnapshot = active.latestSnapshot
-        trackTaskSnapshot(task, latestSnapshot, projectId)
+        if (trackRecovery) trackTaskSnapshot(task, latestSnapshot, projectId)
 
         try {
           const result = await client.runTask(task, {
@@ -554,20 +574,22 @@ export function useAiConversation(
               assertTaskSnapshotIdentity(task, snapshot)
               latestSnapshot = snapshot
               active.latestSnapshot = snapshot
-              trackTaskSnapshot(task, snapshot, projectId)
+              if (trackRecovery) trackTaskSnapshot(task, snapshot, projectId)
             },
           })
           if (active.cancelRequested || controller.signal.aborted) {
-            trackTaskSnapshot(
-              task,
-              {
-                ...latestSnapshot,
-                status: 'cancelled',
-                finishedAt: clockPort.now(),
-                error: undefined,
-              },
-              projectId,
-            )
+            if (trackRecovery) {
+              trackTaskSnapshot(
+                task,
+                {
+                  ...latestSnapshot,
+                  status: 'cancelled',
+                  finishedAt: clockPort.now(),
+                  error: undefined,
+                },
+                projectId,
+              )
+            }
             throw abortError()
           }
           if (!result) {
@@ -577,7 +599,7 @@ export function useAiConversation(
               finishedAt: clockPort.now(),
               error: errorSnapshot(new Error('Task runtime returned no result'), 'no-result'),
             }
-            trackTaskSnapshot(task, failedSnapshot, projectId)
+            if (trackRecovery) trackTaskSnapshot(task, failedSnapshot, projectId)
             return null
           }
 
@@ -588,7 +610,7 @@ export function useAiConversation(
             finishedAt: latestSnapshot.finishedAt ?? clockPort.now(),
             ...(result.error ? { error: result.error } : {}),
           }
-          if (result.status === 'completed') {
+          if (result.status === 'completed' && trackRecovery) {
             const record = recoveryRecordsRef.current.find(
               (item) => item.projectId === projectId && item.task.id === task.id,
             )
@@ -596,25 +618,28 @@ export function useAiConversation(
               removeRecoveryRecord(task.id, projectId)
               removePersistedRecoveryRecord(record)
             }
-          } else {
+          } else if (trackRecovery) {
             trackTaskSnapshot(task, terminalSnapshot, projectId)
           }
           return result
         } catch (error: unknown) {
           const cancelled =
             active.cancelRequested || controller.signal.aborted || isAbortError(error)
-          trackTaskSnapshot(
-            task,
-            {
-              ...latestSnapshot,
-              status: cancelled ? 'cancelled' : 'failed',
-              finishedAt: clockPort.now(),
-              error: cancelled ? undefined : errorSnapshot(error, 'desktop-task-failed'),
-            },
-            projectId,
-          )
+          if (trackRecovery) {
+            trackTaskSnapshot(
+              task,
+              {
+                ...latestSnapshot,
+                status: cancelled ? 'cancelled' : 'failed',
+                finishedAt: clockPort.now(),
+                error: cancelled ? undefined : errorSnapshot(error, 'desktop-task-failed'),
+              },
+              projectId,
+            )
+          }
           throw error
         } finally {
+          externalSignal?.removeEventListener('abort', abortFromExternalSignal)
           if (activeTasksRef.current.get(task.id) === active) activeTasksRef.current.delete(task.id)
         }
       })()
@@ -631,25 +656,52 @@ export function useAiConversation(
   )
 
   const requestGhost = useCallback(
-    async (chapterId: string, text: string): Promise<string | null> => {
-      if (!clientRef.current || !isConnected || !clientRef.current.runTask) return null
+    async (
+      chapterId: string,
+      text: string,
+      sourceRevision: number,
+      signal?: AbortSignal,
+    ): Promise<string | null> => {
+      if (
+        !clientRef.current ||
+        !isConnected ||
+        !clientRef.current.runTask ||
+        !Number.isSafeInteger(sourceRevision) ||
+        sourceRevision < 0 ||
+        (activeWritingContext?.chapter && activeWritingContext.chapter.id !== chapterId)
+      ) {
+        return null
+      }
       try {
-        const document = semanticDocumentFromText(chapterId, text)
+        const document = semanticDocumentFromText(chapterId, text, sourceRevision)
+        const sourceTextHash = hashText(document.text)
         const task = createContinueTask({
           taskId: idGenerator.generate(`ghost-${chapterId}`),
           workspaceId: workspaceIdRef.current || '',
           workspaceRevision: activeWritingContext?.workspaceRevision ?? 1,
           document,
-          selection: { from: document.text.length, to: document.text.length },
+          selection: {
+            from: document.text.length,
+            to: document.text.length,
+            sourceHash: sourceTextHash,
+          },
           storyState,
-          metadata: { modelId: aiModel?.id },
+          metadata: { modelId: aiModel?.id, sourceTextHash },
         })
-        return taskResultText(await runTrackedTask(task))
+        return taskResultText(await runTrackedTask(task, { signal, trackRecovery: false }))
       } catch {
         return null
       }
     },
-    [activeWritingContext?.workspaceRevision, aiModel?.id, isConnected, runTrackedTask, storyState],
+    [
+      activeWritingContext?.chapter?.id,
+      activeWritingContext?.chapter?.revision,
+      activeWritingContext?.workspaceRevision,
+      aiModel?.id,
+      isConnected,
+      runTrackedTask,
+      storyState,
+    ],
   )
 
   // 发送前的请求范围披露：与 sendAiPrompt 读取同一份章节、选区、StoryState 与消息列表
@@ -862,16 +914,18 @@ export function useAiConversation(
       if (!active || active.cancelRequested) return Promise.resolve(false)
       active.cancelRequested = true
       active.controller.abort()
-      trackTaskSnapshot(
-        active.task,
-        {
-          ...active.latestSnapshot,
-          status: 'cancelled',
-          finishedAt: clockPort.now(),
-          error: undefined,
-        },
-        active.projectId,
-      )
+      if (active.trackRecovery) {
+        trackTaskSnapshot(
+          active.task,
+          {
+            ...active.latestSnapshot,
+            status: 'cancelled',
+            finishedAt: clockPort.now(),
+            error: undefined,
+          },
+          active.projectId,
+        )
+      }
       return Promise.resolve(true)
     },
     [clockPort, trackTaskSnapshot],
@@ -931,6 +985,7 @@ export function useAiConversation(
         operation: 'convenience',
         identityKey,
         cancelRequested: false,
+        trackRecovery: true,
         latestSnapshot: initialTaskSnapshot(task),
         promise: Promise.resolve(null),
       }
@@ -1198,6 +1253,7 @@ export function useAiConversation(
     syncDomain,
     listArtifacts,
     probeModelProvider,
+    chatgptPlan: isConnected && isTauriContext() ? clientRef.current?.chatgptPlan : undefined,
     domainSyncState,
     syncConflict,
     requestScope,

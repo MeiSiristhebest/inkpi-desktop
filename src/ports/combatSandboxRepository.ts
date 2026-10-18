@@ -14,6 +14,23 @@ export interface PowerBreachAlert {
   riskLevel: 'SAFE' | 'WARNING' | 'CRITICAL_COLLAPSE'
   diagnostic: string
   compensatoryFactorsNeeded: string[]
+  /** Missing legacy values mean the old heuristic result has not been reviewed. */
+  status?: 'needs-review' | 'conflict' | 'consistent-with-declared-rules'
+  source?: 'author-constraint-review' | 'resource-budget'
+  violatedConstraintIds?: string[]
+}
+
+export interface CombatConstraint {
+  id: string
+  description: string
+  status: 'satisfied' | 'violated' | 'unknown'
+  rationale: string
+}
+
+export interface CombatResourceBudget {
+  name: string
+  initial: number
+  consumptionByBeat: number[]
 }
 
 export interface CombatDuelRecord {
@@ -30,6 +47,14 @@ export interface CombatDuelRecord {
   stakes: string // 决战赌注/生死危机
   beats: CombatActionBeat[] // 四段博弈
   compensatoryAssets: string[] // 越级补偿要素 (天阶法宝/禁术/阵法)
+  constraints?: CombatConstraint[]
+  resourceBudgets?: CombatResourceBudget[]
+  parameters?: {
+    protagonistTechnique?: string
+    enemyTechnique?: string
+    battlefieldTerrain?: string
+    plotGoal?: string
+  }
   breachAudit: PowerBreachAlert
   updatedAt: number
 }

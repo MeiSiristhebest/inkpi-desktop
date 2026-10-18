@@ -215,10 +215,34 @@ describe('AiActivityCenter Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /查看范围与溯源/ }))
 
     const details = screen.getByTestId('result-details-res-demo-1')
+    expect(details).toHaveTextContent('结果记录: res-demo-1')
     expect(details).toHaveTextContent('任务: task-1')
     expect(details).toHaveTextContent('工作区: ws-1 @r7')
     expect(details).toHaveTextContent('章节: ch-1 @r42')
     expect(details).toHaveTextContent('选区: 10-40')
     expect(details).toHaveTextContent('建议: prop-1')
+  })
+
+  it('marks a persisted result when its source chapter revision has changed', () => {
+    render(
+      <AiActivityCenter
+        recoveryRecords={[]}
+        currentDocumentRevisions={new Map([['ch-1', 43]])}
+        results={[makeResult()]}
+      />,
+    )
+
+    expect(screen.getByTestId('result-source-changed-res-1')).toHaveTextContent(
+      '来源版本已变化：分析 r42，当前 r43',
+    )
+  })
+
+  it('opens and expands the result targeted by a plugin artifact link', () => {
+    render(
+      <AiActivityCenter recoveryRecords={[]} results={[makeResult()]} focusedResultId="res-1" />,
+    )
+
+    expect(screen.getByTestId('activity-result-res-1')).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByTestId('result-details-res-1')).toHaveTextContent('结果记录: res-1')
   })
 })

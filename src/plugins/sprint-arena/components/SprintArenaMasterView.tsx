@@ -5,9 +5,13 @@ import { indexedDbSprintRepository } from '../../../adapters/indexedDbSprintRepo
 import { Flame, Clock, Zap, Trophy, Trash2, CheckCircle2 } from 'lucide-react'
 import { Tooltip } from '../../../ui/primitives'
 
-export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId }) => {
+export const SprintArenaMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <SprintHistory key={props.projectId} {...props} />
+)
+const SprintHistory: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const [records, setRecords] = useState<SprintRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const loadRecords = async () => {
     try {
@@ -18,7 +22,7 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
         .sort((a, b) => b.completedAt - a.completedAt)
       setRecords(filtered)
     } catch (e) {
-      console.error('Failed to load sprint records:', e)
+      setError(String(e))
     } finally {
       setLoading(false)
     }
@@ -32,10 +36,7 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
     const totalWords = records.reduce((sum, r) => sum + r.wordsWritten, 0)
     const totalSeconds = records.reduce((sum, r) => sum + r.durationSeconds, 0)
     const peakWpm = records.reduce((max, r) => Math.max(max, r.peakWpm), 0)
-    const avgWpm =
-      records.length > 0
-        ? Math.round(records.reduce((sum, r) => sum + r.averageWpm, 0) / records.length)
-        : 0
+    const avgWpm = totalSeconds > 0 ? Math.round((totalWords / totalSeconds) * 60) : 0
 
     return {
       totalWords,
@@ -46,24 +47,35 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
   }, [records])
 
   const handleDeleteRecord = async (id: string) => {
-    await indexedDbSprintRepository.delete(id)
-    await loadRecords()
+    try {
+      await indexedDbSprintRepository.delete(id)
+      await loadRecords()
+      setError(null)
+    } catch (cause) {
+      setError(String(cause))
+    }
   }
 
   return (
     <div className="h-full flex flex-col bg-[var(--ink-bg-canvas)] text-[var(--ink-text)] overflow-hidden">
+      {error && (
+        <p role="alert">
+          {error}
+          <button onClick={() => void loadRecords()}>重新读取</button>
+        </p>
+      )}
       {/* 顶栏 */}
       <div className="border-b border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-4 shrink-0 space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold tracking-tight">心流极速码字冲刺擂台</h2>
+              <h2 className="text-base font-semibold tracking-tight">码字冲刺记录</h2>
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-500 font-medium">
-                心流聚焦 · 实时击键心电图
+                正文净增 · 实际经过时间
               </span>
             </div>
             <p className="text-xs text-[var(--ink-text-muted)] mt-0.5">
-              消除卡文与手速焦虑，通过番茄钟、字数擂台与机械键盘声学算法打造极致码字心流
+              字数按非空白 Unicode 字符净增计算；旧记录的计数口径未验证。
             </p>
           </div>
         </div>
@@ -83,15 +95,17 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
           <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] flex items-center justify-between">
             <div>
               <span className="text-[11px] text-[var(--ink-text-muted)] block">历史最高峰值</span>
-              <span className="text-lg font-bold text-amber-500">{stats.peakWpm} WPM</span>
+              <span className="text-lg font-bold text-amber-500">{stats.peakWpm} 字/分钟</span>
             </div>
             <Trophy className="w-6 h-6 text-amber-500 opacity-80" />
           </div>
 
           <div className="p-3 rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] flex items-center justify-between">
             <div>
-              <span className="text-[11px] text-[var(--ink-text-muted)] block">平均爆发手速</span>
-              <span className="text-lg font-bold text-emerald-500">{stats.avgWpm} WPM</span>
+              <span className="text-[11px] text-[var(--ink-text-muted)] block">
+                总净增 / 总时长
+              </span>
+              <span className="text-lg font-bold text-emerald-500">{stats.avgWpm} 字/分钟</span>
             </div>
             <Zap className="w-6 h-6 text-emerald-500 opacity-80" />
           </div>
@@ -110,7 +124,7 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
       <div className="flex-1 overflow-y-auto p-6">
         <div className="flex items-center justify-between text-xs text-[var(--ink-text-muted)] mb-4">
           <span>历史冲刺战绩记录 ({records.length})</span>
-          <span className="text-[11px]">可在写作台右侧抽屉随时开启新的心流冲刺</span>
+          <span className="text-[11px]">可在写作台右侧抽屉随时开启新的码字冲刺</span>
         </div>
 
         {loading ? (
@@ -134,7 +148,8 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />+{r.wordsWritten} 字
                     </span>
                     <span className="text-[10px] text-[var(--ink-text-muted)] block">
-                      时长: {Math.round(r.durationSeconds / 60)} 分钟 ·{' '}
+                      计数口径：{r.metricVersion === 2 ? '非空白字符净增' : '旧记录未验证'} · 时长:{' '}
+                      {Math.round(r.durationSeconds / 60)} 分钟 ·{' '}
                       {new Date(r.completedAt).toLocaleDateString('zh-CN')}
                     </span>
                   </div>
@@ -152,12 +167,14 @@ export const SprintArenaMasterView: FC<DesktopPluginViewProps> = ({ projectId })
                 <div className="flex items-center justify-between text-xs bg-[var(--ink-bg-canvas)] p-2.5 rounded-lg border border-[var(--ink-border)]/50">
                   <div>
                     <span className="text-[10px] text-[var(--ink-text-muted)] block">平均速度</span>
-                    <span className="font-semibold text-emerald-500">{r.averageWpm} WPM</span>
+                    <span className="font-semibold text-emerald-500">{r.averageWpm} 字/分钟</span>
                   </div>
                   <div className="h-6 w-px bg-[var(--ink-border)]" />
                   <div>
-                    <span className="text-[10px] text-[var(--ink-text-muted)] block">极限爆发</span>
-                    <span className="font-semibold text-amber-500">{r.peakWpm} WPM</span>
+                    <span className="text-[10px] text-[var(--ink-text-muted)] block">
+                      最高观察速率
+                    </span>
+                    <span className="font-semibold text-amber-500">{r.peakWpm} 字/分钟</span>
                   </div>
                 </div>
               </div>

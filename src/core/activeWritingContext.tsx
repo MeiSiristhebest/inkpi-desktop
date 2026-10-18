@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   type FC,
   type ReactNode,
 } from 'react'
@@ -19,6 +20,21 @@ export interface SemanticSelection {
   text: string
   sourceHash?: string
 }
+
+export interface SourceNavigationRequest {
+  documentId: string
+  blockId?: string
+  sourceRevision?: number
+  excerpt?: string
+  semanticFrom?: number
+  semanticTo?: number
+}
+
+export type SourceNavigationResult =
+  | { status: 'opened'; highlighted: boolean }
+  | { status: 'not-found' | 'editor-unavailable' | 'save-blocked' }
+
+export type SourceNavigator = (request: SourceNavigationRequest) => Promise<SourceNavigationResult>
 
 export interface ActiveWritingContext {
   workspaceId: string
@@ -41,6 +57,8 @@ export interface ActiveWritingContextValue extends ActiveWritingContext {
   setSelection: (selection?: SemanticSelection) => void
   setDirty: (dirty: boolean) => void
   setWorkspaceRevision: (revision: number) => void
+  navigateToSource: (request: SourceNavigationRequest) => Promise<SourceNavigationResult>
+  registerSourceNavigator: (navigator: SourceNavigator) => () => void
 }
 
 export const ActiveWritingContextState = createContext<ActiveWritingContextValue | null>(null)
@@ -66,6 +84,7 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
   )
   const [selection, setSelection] = useState<SemanticSelection | undefined>(undefined)
   const [dirty, setDirty] = useState<boolean>(false)
+  const sourceNavigatorRef = useRef<SourceNavigator | null>(null)
 
   // 当 workspaceId 切换时，重置章节与选区状态，并获取当前 workspace 最新 durable revision (INV-03, INV-06)
   useEffect(() => {
@@ -136,6 +155,20 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
     setActiveChapterRecord(ch)
   }, [])
 
+  const registerSourceNavigator = useCallback((navigator: SourceNavigator) => {
+    sourceNavigatorRef.current = navigator
+    return () => {
+      if (sourceNavigatorRef.current === navigator) sourceNavigatorRef.current = null
+    }
+  }, [])
+
+  const navigateToSource = useCallback((request: SourceNavigationRequest) => {
+    const navigator = sourceNavigatorRef.current
+    return navigator
+      ? navigator(request)
+      : Promise.resolve<SourceNavigationResult>({ status: 'editor-unavailable' })
+  }, [])
+
   const value: ActiveWritingContextValue = useMemo(
     () => ({
       workspaceId,
@@ -148,6 +181,8 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
       setSelection,
       setDirty,
       setWorkspaceRevision,
+      navigateToSource,
+      registerSourceNavigator,
     }),
     [
       workspaceId,
@@ -158,6 +193,8 @@ export const ActiveWritingContextProvider: FC<ActiveWritingContextProviderProps>
       selection,
       dirty,
       setActiveChapter,
+      navigateToSource,
+      registerSourceNavigator,
     ],
   )
 

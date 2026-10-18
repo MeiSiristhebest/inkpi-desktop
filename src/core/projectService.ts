@@ -196,25 +196,43 @@ export async function createProject(form: NewProjectForm): Promise<ProjectRecord
     ...(form.cover ? { cover: form.cover } : {}),
   }
 
-  await projectRepo.saveProject(project)
+  if (await projectRepo.getProject(project.id)) {
+    throw new Error('项目编号冲突，未覆盖已有作品。请重试创建。')
+  }
 
-  // INV-05: 严格分离 Blank 与 Demo。普通新项目默认生成单卷单空章，不得静默注入“林凡/玄剑宗”示范事实
-  const isDemo = form.starter === 'demo'
-  const volumes = isDemo
-    ? buildSeedVolumes(project.id, idGen, clock)
-    : buildBlankVolumes(project.id, idGen, clock)
-  const chapters = isDemo
-    ? buildSeedChapters(project.id, volumes[0]?.id, idGen, clock)
-    : buildBlankChapters(project.id, volumes[0]?.id, idGen, clock)
+  try {
+    await projectRepo.saveProject(project)
 
-  await Promise.all(volumes.map((v) => projectRepo.saveVolume(v)))
-  await Promise.all(chapters.map((c) => projectRepo.saveChapter(c)))
+    // INV-05: 普通新项目生成空白章节；示范项目才注入样例事实。
+    const isDemo = form.starter === 'demo'
+    const volumes = isDemo
+      ? buildSeedVolumes(project.id, idGen, clock)
+      : buildBlankVolumes(project.id, idGen, clock)
+    const chapters = isDemo
+      ? buildSeedChapters(project.id, volumes[0]?.id, idGen, clock)
+      : buildBlankChapters(project.id, volumes[0]?.id, idGen, clock)
 
-  // 每个项目的工具集合本来就是按 projectId 分域存的，所以「这本书用哪些工具」是项目数据，
-  // 不是全局偏好 —— 写在全局会让下一本书继承上一本的选择。
-  await saveEnabledPluginIds(new Set(pluginIdsFor(form.tooling, form.customPluginIds)), project.id)
+    await Promise.all(volumes.map((volume) => projectRepo.saveVolume(volume)))
+    await Promise.all(chapters.map((chapter) => projectRepo.saveChapter(chapter)))
 
-  return project
+    // 项目工具组合只存入这本书的作用域，不进入全局偏好。
+    await saveEnabledPluginIds(
+      new Set(pluginIdsFor(form.tooling, form.customPluginIds)),
+      project.id,
+    )
+
+    return project
+  } catch (error) {
+    try {
+      await workspaceLifecycleService.purgeWorkspace(project.id)
+    } catch (cleanupError) {
+      const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+      throw new Error(`创建作品失败，部分初始化数据未能自动清理（${project.id}）：${detail}`, {
+        cause: error,
+      })
+    }
+    throw error
+  }
 }
 
 /** 导入项目的结果：成功携带 project，失败携带可读错误（不再以 null 吞掉异常，评审 §4.1） */
@@ -236,8 +254,10 @@ export async function importProject(file: File): Promise<ProjectImportResult> {
   }
 }
 
-export async function updateProject(project: ProjectRecord): Promise<void> {
-  await projectRepo.saveProject({ ...project, updatedAt: clock.now() })
+export async function updateProject(project: ProjectRecord): Promise<ProjectRecord> {
+  const updated = { ...project, updatedAt: clock.now() }
+  await projectRepo.saveProject(updated)
+  return updated
 }
 
 /** 导出项目完整备份（遵循 INV-04）：元数据、卷章正文与 40+ 领域表数据完整归档 */

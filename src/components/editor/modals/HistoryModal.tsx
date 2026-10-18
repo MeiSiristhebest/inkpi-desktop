@@ -24,11 +24,15 @@ import {
 import type { KeyValueStore } from '../../../ports/keyValueStore'
 import type { IdGenerator } from '../../../ports/idGenerator'
 import type { Clock as ClockPort } from '../../../ports/clock'
+import {
+  updateChapterHistorySnapshots,
+  type ChapterHistorySnapshot,
+} from '../../../services/chapterHistorySnapshots'
 import { Tooltip } from '../../../ui/primitives'
 
 interface HistoryModalProps {
   chapter: ChapterRecord
-  onRestore: (content: string) => void
+  onRestore: (content: string) => void | Promise<void>
   onClose: () => void
   /** History store injection for tests; production uses workspace-scoped IndexedDB. */
   kvStore?: KeyValueStore
@@ -36,14 +40,7 @@ interface HistoryModalProps {
   clockPort?: ClockPort
 }
 
-export interface VersionSnapshot {
-  id?: string
-  name?: string
-  timestamp: number
-  wordCount: number
-  content: string
-  kind?: 'auto' | 'milestone'
-}
+export type VersionSnapshot = ChapterHistorySnapshot
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({
   chapter,
@@ -57,31 +54,52 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const [activeDiffIndex, setActiveDiffIndex] = useState<number | null>(0)
   const [newSnapshotName, setNewSnapshotName] = useState('')
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
+  const [isSavingSnapshots, setIsSavingSnapshots] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [operationError, setOperationError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const storageKey = chapterHistoryStorageKey(chapter.projectId, chapter.id)
 
   useEffect(() => {
-    kvStore.get(storageKey).then((saved) => {
-      if (saved) {
-        try {
-          setSnapshots(JSON.parse(saved))
-        } catch {
-          /* ignore */
+    let active = true
+    setIsLoadingHistory(true)
+    setLoadError(null)
+    void kvStore
+      .get(storageKey)
+      .then((saved) => {
+        if (!active) return
+        if (saved !== null) {
+          const parsed: unknown = JSON.parse(saved)
+          if (!Array.isArray(parsed)) throw new Error('Chapter history is not an array')
+          setSnapshots(parsed as VersionSnapshot[])
+        } else {
+          const initial: VersionSnapshot = {
+            id: 'init',
+            name: '初始版本',
+            timestamp: chapter.updatedAt || clockPort.now(),
+            wordCount: chapter.wordCount,
+            content: chapter.content,
+            kind: 'milestone',
+          }
+          setSnapshots([initial])
         }
-      } else {
-        const initial: VersionSnapshot = {
-          id: 'init',
-          name: '初始版本',
-          timestamp: chapter.updatedAt || clockPort.now(),
-          wordCount: chapter.wordCount,
-          content: chapter.content,
-          kind: 'milestone',
-        }
-        setSnapshots([initial])
-      }
-    })
+        setActiveDiffIndex(0)
+      })
+      .catch(() => {
+        if (!active) return
+        setSnapshots([])
+        setLoadError('无法读取历史版本。当前正文未修改，请重试读取。')
+      })
+      .finally(() => {
+        if (active) setIsLoadingHistory(false)
+      })
+    return () => {
+      active = false
+    }
   }, [
     chapter.id,
     chapter.updatedAt,
@@ -90,14 +108,33 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     storageKey,
     kvStore,
     clockPort,
+    loadAttempt,
   ])
 
-  const saveSnapshots = (updated: VersionSnapshot[]) => {
-    setSnapshots(updated)
-    void kvStore.set(storageKey, JSON.stringify(updated))
+  const persistSnapshots = async (
+    update: (current: VersionSnapshot[]) => VersionSnapshot[],
+  ): Promise<VersionSnapshot[] | null> => {
+    if (isLoadingHistory || loadError) return null
+    setIsSavingSnapshots(true)
+    setOperationError(null)
+    try {
+      const updated = await updateChapterHistorySnapshots<VersionSnapshot>(
+        kvStore,
+        storageKey,
+        (current) => update(current.length === 0 ? snapshots : current),
+      )
+      setSnapshots(updated)
+      return updated
+    } catch {
+      setOperationError('历史版本保存失败。当前正文未更改，请重试。')
+      return null
+    } finally {
+      setIsSavingSnapshots(false)
+    }
   }
 
-  const handleCreateSnapshot = () => {
+  const handleCreateSnapshot = async () => {
+    if (isLoadingHistory || loadError || isSavingSnapshots || restoringId) return
     const name =
       newSnapshotName.trim() ||
       `里程碑定稿 ${new Date(clockPort.now()).toLocaleTimeString('zh-CN', {
@@ -112,19 +149,25 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
       content: chapter.content,
       kind: 'milestone',
     }
-    const next = [snap, ...snapshots]
-    saveSnapshots(next)
+    const next = await persistSnapshots((current) => [snap, ...current])
+    if (!next) return
     setNewSnapshotName('')
     setIsCreatingSnapshot(false)
     setActiveDiffIndex(0)
   }
 
-  const handleRevert = (snap: VersionSnapshot) => {
-    onRestore(snap.content)
+  const handleRevert = async (snap: VersionSnapshot) => {
+    if (isLoadingHistory || loadError || isSavingSnapshots || restoringId) return
+    setOperationError(null)
     setRestoringId(snap.id || 'current')
-    setTimeout(() => {
+    try {
+      await onRestore(snap.content)
       onClose()
-    }, 400)
+    } catch {
+      setOperationError('恢复失败。当前正文未更改，请重试。')
+    } finally {
+      setRestoringId(null)
+    }
   }
 
   // P3.12：里程碑与自动检查点分区展示。索引仍指向同一份快照数组，
@@ -139,19 +182,17 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     return { milestones, autos }
   }, [snapshots])
 
-  const handleDeleteMilestone = (target: VersionSnapshot) => {
-    const removedIndex = snapshots.findIndex((snap) => snap.id === target.id)
-    if (removedIndex === -1) return
-    const next = snapshots.filter((_, index) => index !== removedIndex)
-    saveSnapshots(next)
-    setActiveDiffIndex((current) => {
-      if (current === null) return current
-      if (current === removedIndex)
-        return next.length ? Math.min(removedIndex, next.length - 1) : null
-      return current > removedIndex ? current - 1 : current
-    })
+  const handleDeleteMilestone = async (target: VersionSnapshot) => {
+    if (isLoadingHistory || loadError || isSavingSnapshots || restoringId) return
+    const next = await persistSnapshots((current) =>
+      current.filter((snap) => snap.id !== target.id),
+    )
+    if (!next) return
+    setActiveDiffIndex(next.length ? 0 : null)
     setPendingDeleteId((current) => (current === target.id ? null : current))
   }
+
+  const isHistoryBusy = isLoadingHistory || isSavingSnapshots || restoringId !== null
 
   // 行业通用真实 Diff 计算：对比选中的历史快照与当前最新正文
   const diffResult = useMemo(() => {
@@ -183,6 +224,26 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
         </Tooltip>
       </div>
 
+      {(loadError || operationError) && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-center justify-between gap-3 border-b border-rose-500/30 bg-rose-500/10 px-5 py-2 text-xs text-rose-700 dark:text-rose-300"
+        >
+          <span>{loadError || operationError}</span>
+          {loadError && (
+            <button
+              type="button"
+              disabled={isLoadingHistory}
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              className="shrink-0 underline underline-offset-2 disabled:opacity-50"
+            >
+              重试读取
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 机制说明与操作条 */}
       <div className="px-5 py-2.5 bg-[var(--ink-bg-panel)]/40 border-b border-[var(--ink-border)] flex items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 text-[var(--ink-text-muted)]">
@@ -200,12 +261,14 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 value={newSnapshotName}
                 onChange={(e) => setNewSnapshotName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreateSnapshot()}
+                disabled={isHistoryBusy || Boolean(loadError)}
                 placeholder="里程碑名称（如：第一卷重写稿）"
                 autoFocus
                 className="w-52 px-2.5 py-1 text-xs bg-[var(--ink-bg-card)] border border-[var(--ink-border)] rounded-lg focus:outline-none focus:border-[var(--ink-accent)]"
               />
               <button
                 onClick={handleCreateSnapshot}
+                disabled={isHistoryBusy || Boolean(loadError)}
                 className="px-2.5 py-1 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:bg-[var(--ink-accent-hover)] transition-colors cursor-pointer"
               >
                 保存
@@ -219,7 +282,9 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
             </div>
           ) : (
             <button
+              type="button"
               onClick={() => setIsCreatingSnapshot(true)}
+              disabled={isHistoryBusy || Boolean(loadError)}
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] font-medium text-xs transition-colors cursor-pointer shadow-2xs"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -247,7 +312,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
             }}
             pendingDeleteId={pendingDeleteId}
             onArmDelete={setPendingDeleteId}
-            onDelete={handleDeleteMilestone}
+            onDelete={!isHistoryBusy && !loadError ? handleDeleteMilestone : undefined}
+            isBusy={isHistoryBusy || Boolean(loadError)}
           />
           <SnapshotGroup
             title="自动检查点"
@@ -261,6 +327,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               setPendingDeleteId(null)
               setActiveDiffIndex(index)
             }}
+            isBusy={isHistoryBusy || Boolean(loadError)}
           />
         </div>
 
@@ -286,12 +353,14 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                     已被删改
                   </span>
                   <button
+                    type="button"
+                    disabled={isHistoryBusy || Boolean(loadError)}
                     onClick={() => handleRevert(activeSnap)}
                     className="ml-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--ink-accent)] text-white text-xs font-medium hover:bg-[var(--ink-accent-hover)] transition-colors cursor-pointer shadow-2xs"
                   >
                     {restoringId === activeSnap.id ? (
                       <>
-                        <Check className="w-3.5 h-3.5" /> 已恢复
+                        <Check className="w-3.5 h-3.5" /> 正在恢复
                       </>
                     ) : (
                       <>
@@ -348,7 +417,8 @@ interface SnapshotGroupProps {
   onSelect: (index: number) => void
   pendingDeleteId?: string | null
   onArmDelete?: (id: string | null) => void
-  onDelete?: (snap: VersionSnapshot) => void
+  onDelete?: (snap: VersionSnapshot) => void | Promise<void>
+  isBusy?: boolean
 }
 
 const SnapshotGroup: React.FC<SnapshotGroupProps> = ({
@@ -363,6 +433,7 @@ const SnapshotGroup: React.FC<SnapshotGroupProps> = ({
   pendingDeleteId,
   onArmDelete,
   onDelete,
+  isBusy = false,
 }) => (
   <section aria-label={title} className="space-y-2">
     <div className="text-[11px] font-medium text-[var(--ink-text-faint)] px-1 py-0.5 flex items-center justify-between gap-2">
@@ -416,9 +487,10 @@ const SnapshotGroup: React.FC<SnapshotGroupProps> = ({
               (isDeleteArmed ? (
                 <button
                   type="button"
+                  disabled={isBusy}
                   onClick={(e) => {
                     e.stopPropagation()
-                    onDelete(snap)
+                    void onDelete(snap)
                   }}
                   className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 transition-colors cursor-pointer"
                 >
@@ -428,6 +500,7 @@ const SnapshotGroup: React.FC<SnapshotGroupProps> = ({
                 <Tooltip content="删除此里程碑">
                   <button
                     type="button"
+                    disabled={isBusy}
                     aria-label={`删除里程碑 ${snap.name || ''}`.trim()}
                     onClick={(e) => {
                       e.stopPropagation()

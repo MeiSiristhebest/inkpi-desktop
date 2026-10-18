@@ -14,7 +14,7 @@ export interface LiteraryAlternative {
   replacement: string
   genre: GenreStyle[]
   exampleContext?: string
-  confidence: number // 0.0 ~ 1.0，推荐置信度
+  confidence?: number // Legacy uncalibrated metadata; not used to rank alternatives.
 }
 
 export interface SensitiveWord {
@@ -53,4 +53,7 @@ export interface SafeGateScanResult {
   yellowCount: number
   blueCount: number
   isClean: boolean
+  complete: boolean
+  ruleErrors: { ruleId: string; message: string }[]
+  sourceText: string
 }

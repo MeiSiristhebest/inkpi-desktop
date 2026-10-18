@@ -101,7 +101,7 @@ describe('Tier 2: Boundary and Corner Cases', () => {
     await cleanupProject(projectId)
   })
 
-  it('TC-BOUNDARY-01: Keeps empty text analysis finite and side-effect free', () => {
+  it('TC-BOUNDARY-01: Keeps empty text unscored and emits only its zero-count audit', () => {
     const chapterId = `${projectId}::empty-chapter`
     const received: unknown[] = []
     const unsubscribe = createScopedEventBus(projectId).on('CHAPTER_CONTENT_AUDITED', (payload) => {
@@ -114,11 +114,11 @@ describe('Tier 2: Boundary and Corner Cases', () => {
     const semantic = projectContent(chapterId, '')
 
     expect(water.totalWordCount).toBe(0)
-    expect(water.waterScore).toBe(0)
-    expect(rhythm.tensionScore).toBe(0.3)
-    expect(tension).toEqual({ suppressionArea: 0, payoffArea: 0, dynamicSpr: 1 })
+    expect(water).not.toHaveProperty('waterScore')
+    expect(rhythm).not.toHaveProperty('tensionScore')
+    expect(tension).toEqual({ suppressionArea: 0, payoffArea: 0, dynamicSpr: null })
     expect(semantic.text).toBe('')
-    expect(received).toHaveLength(0)
+    expect(received).toEqual([{ projectId, chapterId, wordCount: 0 }])
 
     unsubscribe()
   })
@@ -240,7 +240,12 @@ describe('Tier 2: Boundary and Corner Cases', () => {
     const overflow = graph.resolveContextSlice('楚凌霄', 20)
     const withCapacity = graph.resolveContextSlice('楚凌霄', 200)
 
-    expect(overflow).toEqual({ matchedEntities: [], xmlContext: '', totalEstimatedTokens: 0 })
+    expect(overflow).toEqual({
+      matchedEntities: [],
+      xmlContext: '',
+      totalEstimatedTokens: 0,
+      budgetKind: 'estimated',
+    })
     expect(withCapacity.matchedEntities.map((item) => item.id)).toEqual([entity.id])
     expect(withCapacity.xmlContext).toContain('<living_codex_context>')
     expect(withCapacity.totalEstimatedTokens).toBeLessThanOrEqual(200)
@@ -274,21 +279,23 @@ describe('Tier 2: Boundary and Corner Cases', () => {
     expect(recommendations[0].matchedKeywords).toContain('古刹')
   })
 
-  it('TC-BOUNDARY-07: Uses dictionary tones for characters that disagree with Unicode parity', () => {
-    for (const character of ['锋', '尊', '岳']) {
-      expect(PhoneticsEvaluator.getTone(character)).toBe(PINYIN_TONE_DICTIONARY[character])
-    }
-
-    expect('锋'.charCodeAt(0) % 2).toBe(1)
-    expect(PhoneticsEvaluator.getTonePattern('锋岳')).toBe('平仄')
+  it('TC-BOUNDARY-07: Leaves tone unknown until a reading is supplied', () => {
+    expect(PhoneticsEvaluator.getTone('锋')).toBe('unknown')
     expect(PhoneticsEvaluator.analyzeToneFluctuation('锋岳')).toMatchObject({
-      pattern: '平仄',
+      pattern: '??',
+      isAlternating: null,
+      pingRatio: null,
+      knownToneCount: 0,
+      totalCharacters: 2,
+    })
+    expect(PhoneticsEvaluator.getTonePattern('锋岳', [1, 4])).toBe('平仄')
+    expect(PhoneticsEvaluator.analyzeToneFluctuation('锋岳', [1, 4])).toMatchObject({
       isAlternating: true,
       cadence: 'ze',
     })
   })
 
-  it('TC-BOUNDARY-08: Treats a flat tension curve as a finite degenerate OLS fit', async () => {
+  it('TC-BOUNDARY-08: Leaves fit quality and peak unknown for a flat tension curve', async () => {
     const volumeId = `${projectId}::volume`
     const arc: VolumeArcRecord = {
       id: `${projectId}::arc`,
@@ -321,8 +328,9 @@ describe('Tier 2: Boundary and Corner Cases', () => {
     expect(ols.beta0).toBeCloseTo(0.4, 8)
     expect(ols.beta1).toBeCloseTo(0, 8)
     expect(ols.beta2).toBeCloseTo(0, 8)
-    expect(ols.r2).toBe(1)
-    expect(ols.apexRatio).toBe(-1)
-    expect(fit).toEqual({ r2: 1, apexPositionRatio: 0 })
+    expect(ols.r2).toBeNull()
+    expect(ols.apexRatio).toBeNull()
+    expect(ols.sampleCount).toBe(5)
+    expect(fit).toEqual({ r2: null, apexPositionRatio: null, sampleCount: 5 })
   })
 })

@@ -19,6 +19,9 @@ export interface PovViolation {
   paragraphIndex: number
   characterName: string
   snippet: string
+  startOffset: number
+  endOffset: number
+  status: 'candidate'
   explanation: string
   suggestedFix?: string
 }

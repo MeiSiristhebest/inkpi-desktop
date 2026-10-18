@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, LazyExoticComponent } from 'react'
 
 export type DesktopPluginCategory =
   | 'lore' // 设定与世界书套件
@@ -23,6 +23,8 @@ export interface DesktopPluginViewProps {
 export interface DesktopPluginDrawerProps {
   projectId: string
   currentText: string
+  /** One-based order of the active chapter in the current project; null when no chapter is active. */
+  currentChapterNumber?: number | null
   onOpenDetail?: (entityId: string) => void
 }
 
@@ -61,6 +63,8 @@ export interface DesktopPlugin {
 
   // 2. 写作台 HUD 随动抽屉组件 (可选，在 RichEditor 右侧栏嵌入随动感知)
   drawerSnippetView?: ComponentType<DesktopPluginDrawerProps>
+  /** 创建新的懒加载类型，用于只重试当前抽屉的代码块加载。 */
+  createDrawerSnippetView?: () => LazyExoticComponent<ComponentType<DesktopPluginDrawerProps>>
   /** 这个抽屉属于哪一类能力（§P2.8）。与 drawerSnippetView 成对出现，由注册表声明。 */
   drawerCapability?: PluginDrawerCapability
 

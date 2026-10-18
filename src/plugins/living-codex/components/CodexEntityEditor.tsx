@@ -245,7 +245,12 @@ export const CodexEntityEditor: FC<CodexEntityEditorProps> = ({
 
           {/* 添加新关系 */}
           <div className="flex gap-1.5 pt-1">
-            <Select value={newRelType} onValueChange={(v) => setNewRelType(v)} size="sm">
+            <Select
+              aria-label="关系类型"
+              value={newRelType}
+              onValueChange={(v) => setNewRelType(v)}
+              size="sm"
+            >
               <option value="宿敌">宿敌</option>
               <option value="盟友">盟友</option>
               <option value="师徒">师徒</option>

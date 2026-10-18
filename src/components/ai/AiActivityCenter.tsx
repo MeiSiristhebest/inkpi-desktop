@@ -1,4 +1,4 @@
-import { useState, type FC } from 'react'
+import { useEffect, useRef, useState, type FC } from 'react'
 import {
   Activity,
   Play,
@@ -61,6 +61,10 @@ export interface AiActivityCenterProps {
   error?: string
   /** 本工作区的统一 AI 结果（Result Center 的唯一列表来源） */
   results?: StandardAiResult[]
+  /** 当前工作区文档修订，用于标记引用的旧来源 */
+  currentDocumentRevisions?: ReadonlyMap<string, number>
+  /** 从插件结果打开时，定位并展开对应的持久化结果 */
+  focusedResultId?: string
   /** 交互回调 */
   onResume?: (taskId: string) => Promise<boolean>
   onCancel?: (taskId: string) => Promise<boolean>
@@ -73,6 +77,8 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
   loading = false,
   error,
   results = [],
+  currentDocumentRevisions,
+  focusedResultId,
   onResume,
   onCancel,
   onDismiss,
@@ -81,6 +87,18 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
   const [steerInputs, setSteerInputs] = useState<Record<string, string>>({})
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({})
+  const resultElements = useRef(new Map<string, HTMLDivElement>())
+  const hasFocusedResult = focusedResultId
+    ? results.some((result) => result.id === focusedResultId)
+    : false
+
+  useEffect(() => {
+    if (!focusedResultId || !hasFocusedResult) return
+    setExpandedDetails((current) =>
+      current[focusedResultId] ? current : { ...current, [focusedResultId]: true },
+    )
+    resultElements.current.get(focusedResultId)?.scrollIntoView?.({ block: 'nearest' })
+  }, [focusedResultId, hasFocusedResult])
 
   const toggleDetails = (id: string) => {
     setExpandedDetails((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -297,11 +315,26 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
             {results.map((result) => {
               const isExpanded = Boolean(expandedDetails[result.id])
               const provenance = formatResultProvenance(result)
+              const sourceDocument = result.scope.document
+              const currentDocumentRevision = sourceDocument
+                ? currentDocumentRevisions?.get(sourceDocument.id)
+                : undefined
+              const sourceChanged =
+                sourceDocument !== undefined &&
+                currentDocumentRevision !== undefined &&
+                currentDocumentRevision !== sourceDocument.revision
               return (
                 <div
                   key={result.id}
+                  ref={(element) => {
+                    if (element) resultElements.current.set(result.id, element)
+                    else resultElements.current.delete(result.id)
+                  }}
                   data-testid={`activity-result-${result.id}`}
-                  className="p-2.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-1.5 text-[11px]"
+                  aria-current={focusedResultId === result.id ? 'true' : undefined}
+                  className={`p-2.5 rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-elevated)] space-y-1.5 text-[11px] ${
+                    focusedResultId === result.id ? 'ring-1 ring-[var(--ink-accent)]' : ''
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 font-medium text-[var(--ink-text)]">
@@ -326,6 +359,17 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                       className="text-[var(--ink-text-muted)] leading-relaxed"
                     >
                       {result.summary}
+                    </p>
+                  )}
+
+                  {sourceChanged && sourceDocument && currentDocumentRevision !== undefined && (
+                    <p
+                      role="status"
+                      data-testid={`result-source-changed-${result.id}`}
+                      className="text-[10px] text-amber-600 dark:text-amber-400"
+                    >
+                      来源版本已变化：分析 r{sourceDocument.revision}，当前 r
+                      {currentDocumentRevision}
                     </p>
                   )}
 
@@ -392,6 +436,7 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                       data-testid={`result-details-${result.id}`}
                       className="mt-1.5 p-2 rounded bg-[var(--ink-bg-panel)] font-mono text-[10px] text-[var(--ink-text-muted)] space-y-0.5"
                     >
+                      <div>结果记录: {result.id}</div>
                       <div>任务: {result.taskId}</div>
                       <div>类型: {result.kind}</div>
                       <div>

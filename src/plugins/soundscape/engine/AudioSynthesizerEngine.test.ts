@@ -15,10 +15,10 @@ describe('AudioSynthesizerEngine (机械键盘物理声学合成引擎)', () => 
     expect(vintageParams.resonanceDecay).toBeGreaterThan(0.05)
   })
 
-  it('在无浏览器环境（测试环境）下优雅降级不抛异常', () => {
+  it('在未提供 Web Audio 的环境报告明确错误并允许安全停止', async () => {
     const engine = new AudioSynthesizerEngine()
-    expect(() => engine.triggerKeyPress('blue')).not.toThrow()
-    expect(() => engine.startAmbience('rain')).not.toThrow()
+    await expect(engine.triggerKeyPress('blue')).rejects.toThrow('不支持 Web Audio')
+    await expect(engine.startAmbience('rain')).rejects.toThrow('不支持 Web Audio')
     expect(() => engine.stopAmbience()).not.toThrow()
   })
 })

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 // Button 门面：新增代码的按钮入口。
 //
-// 现存 473 个 raw <button> 刻意不批量迁移：实测它们的皮肤是遗留 `--ink-*` 任意值手写
+// 现存 raw <button> 刻意不批量迁移：实测它们的皮肤是遗留 `--ink-*` 任意值手写
 // 变体（358 种去重后各异的 className 骨架），而下面的 base 会追加 h-8 / justify-center /
 // whitespace-nowrap / active:translate-y-px / [&_svg:not([class*='size-'])]:size-4。
 // cn 只消解同组冲突，这些附加项会直接改像素——所以整批替换是重新设计，不是重构，
@@ -75,7 +75,7 @@ function Button({
     >
       {isLoading ? (
         <>
-          <Spinner className="mr-1.5 size-3.5 shrink-0" />
+          <Spinner decorative className="mr-1.5 size-3.5 shrink-0" />
           {loadingText ?? children}
         </>
       ) : (

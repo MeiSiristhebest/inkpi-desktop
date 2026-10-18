@@ -10,6 +10,7 @@ export interface ChekhovGunRecord {
   plantChapterTitle?: string
   plantSnippet: string
   expectedPayoffChapterOrder?: number
+  reviewAfterChapters?: number // Author reminder interval, not a reader memory model.
   actualFiredChapterOrder?: number
   firedSnippet?: string
   notes?: string

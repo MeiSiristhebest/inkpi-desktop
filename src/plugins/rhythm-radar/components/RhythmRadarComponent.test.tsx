@@ -1,37 +1,44 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { RhythmRadarMasterView } from './RhythmRadarMasterView'
 import { RhythmRadarDrawer } from './RhythmRadarDrawer'
-import { RhythmRadarEngine } from '../engine/RhythmRadarEngine'
-
-describe('RhythmRadar UI Components', () => {
-  it('RhythmRadarMasterView renders correctly', () => {
-    render(<RhythmRadarMasterView projectId="p1" />)
-    expect(screen.getByText(/剧情节奏与断章雷达/)).toBeDefined()
-  })
-
-  it('starts blank and only reports analysis after the author provides text', async () => {
-    const analyze = vi.spyOn(RhythmRadarEngine, 'analyzeChapter')
-    const onStats = vi.fn()
-    render(<RhythmRadarMasterView projectId="p1" onStats={onStats} />)
-
-    const editor = screen.getByPlaceholderText('粘贴章节正文后查看规则分析')
-    expect(editor).toHaveValue('')
-    expect(analyze).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: /归档当前断章雷达评测/ })).toBeDisabled()
+import { indexedDbRhythmRadarRepository as repo } from '../../../adapters/indexedDbRhythmRadarRepository'
+vi.mock('../../../adapters/indexedDbRhythmRadarRepository', () => ({
+  indexedDbRhythmRadarRepository: { save: vi.fn().mockResolvedValue(undefined) },
+}))
+describe('RhythmRadar views', () => {
+  it('requires author selection and preserves the continuation on save', async () => {
+    render(<RhythmRadarMasterView projectId="p" />)
+    const save = screen.getByRole('button', { name: '归档当前断章雷达评测' })
+    expect(save).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('断章预览正文'), {
+      target: { value: '门开了。她走出去。' },
+    })
+    expect(save).toBeDisabled()
+    fireEvent.click(screen.getAllByRole('button', { name: '预览此处断章' })[0])
+    expect(screen.getByText('保留的后续正文')).toBeInTheDocument()
+    fireEvent.click(save)
     await waitFor(() =>
-      expect(onStats).toHaveBeenCalledWith(expect.objectContaining({ wordCount: 0 })),
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'p',
+          sourceText: '门开了。她走出去。',
+          cut: expect.objectContaining({ quote: '门开了。', end: 4, continuation: '她走出去。' }),
+        }),
+      ),
     )
-
-    fireEvent.change(editor, { target: { value: '章节正文，主角在危机中作出选择。' } })
-    expect(analyze).toHaveBeenCalledOnce()
-    expect(screen.getByRole('button', { name: /归档当前断章雷达评测/ })).toBeEnabled()
   })
-
-  it('RhythmRadarDrawer renders correctly', () => {
-    render(<RhythmRadarDrawer projectId="p1" currentText="林凡拔剑怒斩！" />)
-    expect(screen.getByText(/断章张力雷达/)).toBeDefined()
-    expect(screen.getByText(/来源：即时规则/)).toBeInTheDocument()
-    expect(screen.getByText(/不代表真实读者反馈/)).toBeInTheDocument()
+  it('invalidates a selected cut when the source changes', () => {
+    render(<RhythmRadarMasterView projectId="p" />)
+    const editor = screen.getByLabelText('断章预览正文')
+    fireEvent.change(editor, { target: { value: '第一句。下一句。' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '预览此处断章' })[0])
+    fireEvent.change(editor, { target: { value: '新正文。' } })
+    expect(screen.getByRole('button', { name: '归档当前断章雷达评测' })).toBeDisabled()
+  })
+  it('reports actual drawer positions', () => {
+    render(<RhythmRadarDrawer projectId="p" currentText="他说：“等一下。”" />)
+    expect(screen.getByText('断章位置雷达')).toBeInTheDocument()
+    expect(screen.getByText(/不代表读者反馈/)).toBeInTheDocument()
   })
 })

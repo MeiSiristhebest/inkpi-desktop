@@ -54,4 +54,6 @@ export interface CodexSliceResult {
   matchedEntities: CodexEntity[]
   xmlContext: string
   totalEstimatedTokens: number
+  /** Character-based estimate; the provider tokenizer may produce a different count. */
+  budgetKind: 'estimated'
 }

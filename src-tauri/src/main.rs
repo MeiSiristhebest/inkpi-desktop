@@ -9,14 +9,15 @@ use std::process::{Child, Command, Stdio};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::sync::{Mutex, OnceLock};
-use tauri::Manager;
+use tauri::{Manager, WebviewWindowBuilder};
 
 mod credential_broker;
+mod external_browser;
 mod instance_config;
 mod menu;
 mod secret_store;
 
-use instance_config::InstanceConfig;
+use instance_config::{InstanceConfig, ResolvedInstanceConfig};
 
 // 后台管理的 inkpi daemon 子进程（应用退出时回收）
 static DAEMON_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
@@ -76,7 +77,7 @@ fn daemon_log_stdio(path: &std::path::Path) -> Option<(Stdio, Stdio)> {
     Some((Stdio::from(file), Stdio::from(stderr_file)))
 }
 
-fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
+fn resolve_instance_config(app: &tauri::AppHandle) -> Result<ResolvedInstanceConfig, String> {
     let requested_config = InstanceConfig::from_process()?;
     let app_local_data_dir = if requested_config.profile.is_some() {
         Some(
@@ -87,8 +88,13 @@ fn spawn_daemon(app: &tauri::AppHandle) -> Result<(), String> {
     } else {
         None
     };
-    let instance_config = requested_config.resolve(app_local_data_dir.as_deref())?;
+    requested_config.resolve(app_local_data_dir.as_deref())
+}
 
+fn spawn_daemon(
+    app: &tauri::AppHandle,
+    instance_config: &ResolvedInstanceConfig,
+) -> Result<(), String> {
     if let Some(profile_dir) = &instance_config.profile_dir {
         std::fs::create_dir_all(profile_dir).map_err(|error| {
             format!(
@@ -242,6 +248,8 @@ fn main() {
             secret_store::secret_store_has,
             secret_store::secret_store_set,
             secret_store::secret_store_remove,
+            external_browser::open_chatgpt_plan_authorization_url,
+            external_browser::open_chatgpt_plan_usage_settings,
         ])
         // 菜单命令一律以 id 转发给前端，由前端翻译回 editorShortcuts 里的那条 chord，
         // 因此原生侧不复制第二份按键绑定（见 src/menu.rs 顶部注释）。
@@ -255,10 +263,37 @@ fn main() {
             }
         })
         .setup(|app| {
-            spawn_daemon(app.handle()).map_err(|message| {
+            let instance_config = resolve_instance_config(app.handle()).map_err(|message| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
+            })?;
+            spawn_daemon(app.handle(), &instance_config).map_err(|message| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
             })?;
             menu::install(app.handle())?;
+
+            let window_config = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|window| window.label == "main")
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "the main window configuration is missing",
+                    )
+                })?;
+            let mut window_builder =
+                WebviewWindowBuilder::from_config(app.handle(), window_config)?;
+            let current_dir = std::env::current_dir()?;
+            if let Some(data_directory) = instance_config.webview_data_directory(&current_dir) {
+                window_builder = window_builder.data_directory(data_directory);
+            }
+            if let Err(error) = window_builder.build() {
+                kill_daemon();
+                return Err(error.into());
+            }
+
             Ok(())
         })
         .build(tauri::generate_context!())

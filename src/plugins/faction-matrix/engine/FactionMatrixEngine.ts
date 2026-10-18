@@ -5,182 +5,145 @@ import type {
   EventRippleResult,
   FactionStance,
 } from '../types'
-
+const pairKey = (a: string, b: string) => JSON.stringify([a, b].sort())
+const positive = (stance: FactionStance) => stance === 'allied' || stance === 'friendly'
+const negative = (stance: FactionStance) => stance === 'hostile' || stance === 'mortal_enemy'
 export class FactionMatrixEngine {
-  /**
-   * 声望数值映射阶梯
-   */
-  getReputationLevel(score: number): {
-    label: string
-    color: string
-    badgeClass: string
-    desc: string
-  } {
-    const clamped = Math.max(-100, Math.min(100, score))
-    if (clamped <= -70) {
-      return {
-        label: '不死不休',
-        color: '#ef4444',
-        badgeClass: 'bg-rose-500/15 text-rose-500 border-rose-500/30',
-        desc: '发布全宗诛杀令，宗门弟子见之必杀，不可调和。',
-      }
-    }
-    if (clamped <= -30) {
-      return {
-        label: '敌对仇视',
-        color: '#f97316',
-        badgeClass: 'bg-orange-500/15 text-orange-500 border-orange-500/30',
-        desc: '明争暗斗，处处打压排挤，随时可能爆发冲突。',
-      }
-    }
-    if (clamped < 30) {
-      return {
-        label: '中立观望',
-        color: '#94a3b8',
-        badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
-        desc: '无利益瓜葛，公事公办，客套疏离。',
-      }
-    }
-    if (clamped < 70) {
-      return {
-        label: '友好往来',
-        color: '#3b82f6',
-        badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-        desc: '视为主力客卿或亲善友人，愿意共享中阶资源与情报。',
-      }
-    }
+  getReputationLevel(score?: number | null) {
+    const valid = typeof score === 'number' && Number.isFinite(score)
     return {
-      label: '生死同盟',
-      color: '#10b981',
-      badgeClass: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
-      desc: '托付底蕴与未来，同生共死，全宗鼎力支持。',
+      label: valid ? '登记数值' : '未记录',
+      color: '#94a3b8',
+      badgeClass: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
+      desc: valid
+        ? '登记值（来源需复核） ' + score + '；具体关系、行动和影响以作者记录为准。'
+        : '没有作者声望数值，关系不能按中立补全。',
     }
   }
-
-  /**
-   * 模拟事件对全图地缘势力的连锁涟漪影响
-   */
+  validateGraph(factions: FactionNode[], records: FactionDiplomacyRecord[]): string[] {
+    const errors: string[] = []
+    const ids = new Set<string>()
+    for (const faction of factions) {
+      if (!faction.id.trim() || ids.has(faction.id)) errors.push('势力 ID 缺失或重复。')
+      ids.add(faction.id)
+    }
+    const knownProjects = new Set(factions.map((f) => f.projectId).filter(Boolean))
+    if (knownProjects.size > 1) errors.push('势力来自不同作品。')
+    const pairs = new Set<string>()
+    for (const record of records) {
+      if (
+        !ids.has(record.factionAId) ||
+        !ids.has(record.factionBId) ||
+        record.factionAId === record.factionBId
+      )
+        errors.push('关系端点缺失或指向同一势力。')
+      const key = pairKey(record.factionAId, record.factionBId)
+      if (pairs.has(key)) errors.push('同一对势力存在重复关系；先由作者整理当前状态。')
+      pairs.add(key)
+      if (knownProjects.size && !knownProjects.has(record.projectId))
+        errors.push('关系来自其他作品。')
+    }
+    return [...new Set(errors)]
+  }
   simulateEventRipple(
     factions: FactionNode[],
     diplomacies: FactionDiplomacyRecord[],
-    targetFactionId: string,
+    targetId: string,
     directDelta: number,
   ): EventRippleResult {
-    const target = factions.find((f) => f.id === targetFactionId)
-    const directName = target ? target.name : '目标势力'
-
-    const ripples: EventRippleResult['ripples'] = []
-
-    // 找到与 target 具有明确外交关系的势力
-    for (const fac of factions) {
-      if (fac.id === targetFactionId) continue
-
-      // 查找双方外交记录
-      const dip = diplomacies.find(
-        (d) =>
-          (d.factionAId === targetFactionId && d.factionBId === fac.id) ||
-          (d.factionBId === targetFactionId && d.factionAId === fac.id),
-      )
-
-      if (!dip) continue
-
-      let change = 0
-      let reason = ''
-
-      const isAlliedOrFriendly =
-        dip.stance === 'allied' || dip.stance === 'friendly' || dip.stance === 'vassal'
-      const isHostileOrEnemy = dip.stance === 'hostile' || dip.stance === 'mortal_enemy'
-
-      if (directDelta < 0) {
-        // 主角打击了 target 势力
-        if (isAlliedOrFriendly) {
-          change = Math.round(directDelta * 0.5)
-          reason = `与【${directName}】结为同盟/友善，见其受创，对主角心生怨怼。`
-        } else if (isHostileOrEnemy) {
-          change = Math.round(Math.abs(directDelta) * 0.5)
-          reason = `“敌人的敌人即是朋友”！见宿敌【${directName}】遭重创，大快人心。`
-        }
-      } else if (directDelta > 0) {
-        // 主角帮助/讨好了 target 势力
-        if (isAlliedOrFriendly) {
-          change = Math.round(directDelta * 0.3)
-          reason = `与【${directName}】同盟互利，认可主角贡献。`
-        } else if (isHostileOrEnemy) {
-          change = -Math.round(directDelta * 0.4)
-          reason = `见宿敌【${directName}】壮大，对施援者主角忌惮加深。`
-        }
-      }
-
-      if (change !== 0) {
-        const newReputation = Math.max(-100, Math.min(100, fac.protagonistReputation + change))
-        ripples.push({
-          factionId: fac.id,
-          factionName: fac.name,
+    const errors = this.validateGraph(factions, diplomacies)
+    if (errors.length) throw new Error(errors.join(' '))
+    const target = factions.find((f) => f.id === targetId)
+    if (!target || !Number.isFinite(directDelta))
+      throw new Error('选择实际目标并填写有限的直接增减假设。')
+    const ripples: EventRippleResult['ripples'] = factions
+      .filter((f) => f.id !== targetId)
+      .map((faction) => {
+        const relation = diplomacies.find(
+          (record) =>
+            pairKey(record.factionAId, record.factionBId) === pairKey(targetId, faction.id),
+        )
+        const coefficient = relation?.rippleCoefficient
+        if (coefficient === undefined || !relation?.rippleRationale?.trim())
+          return {
+            factionId: faction.id,
+            factionName: faction.name,
+            change: null,
+            newReputation: null,
+            status: 'unknown',
+            reason: relation
+              ? '已记录 ' + relation.stance + '；缺少事件影响系数或其适用理由。'
+              : '尚未记录与目标的关系，影响未知。',
+          }
+        if (!Number.isFinite(coefficient)) throw new Error('事件影响系数必须是有限数值。')
+        const change = directDelta * coefficient
+        if (!Number.isFinite(change)) throw new Error('假设计算超出数值范围。')
+        const baseline = faction.protagonistReputation
+        const newReputation =
+          typeof baseline === 'number' &&
+          Number.isFinite(baseline) &&
+          Number.isFinite(baseline + change)
+            ? baseline + change
+            : null
+        return {
+          factionId: faction.id,
+          factionName: faction.name,
           change,
           newReputation,
-          reason,
-        })
-      }
-    }
-
-    return {
-      directFaction: directName,
-      directChange: directDelta,
-      ripples,
-    }
+          status: 'author_hypothesis',
+          reason:
+            '作者假设：' +
+            relation.rippleRationale +
+            '；增减 = ' +
+            directDelta +
+            ' × ' +
+            coefficient +
+            '。',
+        }
+      })
+    return { directFaction: target.name, directChange: directDelta, ripples }
   }
-
-  /**
-   * 结构平衡理论 (Heider Balance)：排查三元组地缘悖论
-   */
   detectStructuralParadoxes(
     factions: FactionNode[],
     diplomacies: FactionDiplomacyRecord[],
   ): BalanceParadox[] {
-    const paradoxes: BalanceParadox[] = []
-    const getStance = (idA: string, idB: string): FactionStance => {
-      const rec = diplomacies.find(
-        (d) =>
-          (d.factionAId === idA && d.factionBId === idB) ||
-          (d.factionBId === idA && d.factionAId === idB),
-      )
-      return rec ? rec.stance : 'neutral'
-    }
-
-    // 遍历任意三元组 (i, j, k)
-    for (let i = 0; i < factions.length; i++) {
-      for (let j = i + 1; j < factions.length; j++) {
+    const errors = this.validateGraph(factions, diplomacies)
+    if (errors.length) throw new Error(errors.join(' '))
+    const pairs = new Map(
+      diplomacies.map((record) => [pairKey(record.factionAId, record.factionBId), record.stance]),
+    )
+    const candidates: BalanceParadox[] = []
+    for (let i = 0; i < factions.length; i++)
+      for (let j = i + 1; j < factions.length; j++)
         for (let k = j + 1; k < factions.length; k++) {
-          const fA = factions[i]
-          const fB = factions[j]
-          const fC = factions[k]
-
-          const sAB = getStance(fA.id, fB.id)
-          const sBC = getStance(fB.id, fC.id)
-          const sAC = getStance(fA.id, fC.id)
-
-          // 悖论形态 1：A 与 B 同盟，B 与 C 同盟，但 A 与 C 是不死不休
+          const a = factions[i],
+            b = factions[j],
+            c = factions[k]
+          const ab = pairs.get(pairKey(a.id, b.id)),
+            bc = pairs.get(pairKey(b.id, c.id)),
+            ac = pairs.get(pairKey(a.id, c.id))
           if (
-            (sAB === 'allied' || sAB === 'friendly') &&
-            (sBC === 'allied' || sBC === 'friendly') &&
-            sAC === 'mortal_enemy'
-          ) {
-            paradoxes.push({
-              factionA: fA.name,
-              factionB: fB.name,
-              factionC: fC.name,
-              stanceAB: sAB,
-              stanceBC: sBC,
-              stanceAC: sAC,
-              reason: `地缘结构失衡：【${fA.name}】与【${fB.name}】同盟，【${fB.name}】与【${fC.name}】同盟，但【${fA.name}】却与【${fC.name}】生死仇杀。中间人【${fB.name}】面临严峻站队悖论！`,
+            !ab ||
+            !bc ||
+            !ac ||
+            ![ab, bc, ac].every((stance) => positive(stance) || negative(stance))
+          )
+            continue
+          const product = [ab, bc, ac].reduce((n, stance) => n * (positive(stance) ? 1 : -1), 1)
+          if (product < 0)
+            candidates.push({
+              factionA: a.name,
+              factionB: b.name,
+              factionC: c.name,
+              stanceAB: ab,
+              stanceBC: bc,
+              stanceAC: ac,
+              status: 'review_candidate',
+              reason:
+                '三个已登记关系的正负号乘积为负。这是关系张力的复核候选；结盟动机、时期和交易条件未知，不能据此判定矛盾。',
             })
-          }
         }
-      }
-    }
-
-    return paradoxes
+    return candidates
   }
 }
-
 export const factionMatrixEngine = new FactionMatrixEngine()

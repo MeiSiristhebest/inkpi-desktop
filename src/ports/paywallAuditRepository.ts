@@ -3,14 +3,17 @@ export interface PaywallAuditRecord {
   projectId: string
   chapterId: string
   chapterTitle: string
-  chapterOrder: number
+  chapterOrder: number | null
   wordCount: number
-  ppiScore: number // 0 - 100 Paywall Potential Index
-  cliffhangerScore: number // 0 - 100
-  unresolvedDesireScore: number // 0 - 100
-  powerClimaxScore: number // 0 - 100
-  fatigueRiskScore: number // 0 - 100
-  recommendation: 'prime_paywall' | 'acceptable' | 'weak_cut' | 'toxic_drop'
+  ppiScore?: number // 0 - 100 Paywall Potential Index
+  cliffhangerScore?: number // 0 - 100
+  unresolvedDesireScore?: number // 0 - 100
+  powerClimaxScore?: number // 0 - 100
+  fatigueRiskScore?: number // 0 - 100
+  ending?: import('../domain/endingReview').EndingReview
+  sourceRevision?: number
+  measurement?: { reached: number; paid: number; rate: number | null; source: string }
+  recommendation?: 'prime_paywall' | 'acceptable' | 'weak_cut' | 'toxic_drop'
   suggestions: string[]
   updatedAt: number
 }

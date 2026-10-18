@@ -59,6 +59,7 @@ export const SplitViewDrawer: React.FC<SplitViewDrawerProps> = ({
 
           {/* 章节快速切换下拉 */}
           <Select
+            aria-label="对照章节"
             value={selectedChapterId}
             onValueChange={(v) => setSelectedChapterId(v)}
             className="ml-1.5 max-w-[200px] truncate"

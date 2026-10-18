@@ -5,14 +5,27 @@ import { PovGuardEngine } from '../engine/PovGuardEngine'
 import type { PovAnalysisResult } from '../types'
 import { ShieldAlert, AlertTriangle, EyeOff } from 'lucide-react'
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
+import { pluginEventBus } from '../../../core/pluginEventBus'
 import { findPovConfiguration } from '../config'
 
-export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
+export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <PovGuardProjectDrawer key={props.projectId} {...props} />
+)
+
+const PovGuardProjectDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, currentText }) => {
   const [result, setResult] = useState<PovAnalysisResult | null>(null)
   const [notice, setNotice] = useState('等待章节正文。')
+  const [configVersion, setConfigVersion] = useState(0)
+
+  useEffect(() => {
+    return pluginEventBus.scopedBus(projectId).on('POV_GUARD_CONFIG_SAVED', () => {
+      setConfigVersion((version) => version + 1)
+    })
+  }, [projectId])
 
   useEffect(() => {
     let disposed = false
+    setResult(null)
     if (!currentText || currentText.trim().length === 0) {
       setResult(null)
       setNotice('等待章节正文。')
@@ -61,7 +74,7 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
     return () => {
       disposed = true
     }
-  }, [projectId, currentText])
+  }, [projectId, currentText, configVersion])
 
   return (
     <div className="p-3 space-y-3 text-xs">
@@ -92,11 +105,11 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2 text-center">
             <div className="p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-              <div className="text-slate-400 text-[10px]">视角游移 (Head-Hopping)</div>
+              <div className="text-slate-400 text-[10px]">心理叙述候选</div>
               <div className="text-sm font-bold text-amber-600">{result.headHoppingCount} 处</div>
             </div>
             <div className="p-2 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800">
-              <div className="text-slate-400 text-[10px]">全知泄漏 (Omniscience)</div>
+              <div className="text-slate-400 text-[10px]">知情来源待复核</div>
               <div className="text-sm font-bold text-rose-600">{result.leakageCount} 处</div>
             </div>
           </div>
@@ -113,7 +126,7 @@ export const PovGuardDrawer: FC<DesktopPluginDrawerProps> = ({ projectId, curren
                   ) : (
                     <EyeOff className="w-3 h-3" />
                   )}
-                  <span>{v.type === 'head_hopping' ? '越界偷窥心理' : '未解锁情报泄露'}</span>
+                  <span>{v.type === 'head_hopping' ? '心理叙述候选' : '未登记知情来源的词项'}</span>
                 </div>
                 <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300">
                   "{v.snippet}"

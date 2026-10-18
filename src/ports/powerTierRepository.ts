@@ -5,6 +5,8 @@ export interface PowerTierSystem {
   systemName: string
   tiers: string[]
   specialModifiers: string[]
+  /** undefined uses the author-listed linear order; [] explicitly declares no ordering edges. */
+  relations?: { lowerTier: string; higherTier: string }[]
   updatedAt: number
   provenance?: Provenance
 }

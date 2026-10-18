@@ -1,8 +1,13 @@
 import { semanticTextFromContent } from '../../../domain/content'
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { NarrativeLinterEngine } from '../engine/NarrativeLinterEngine'
 import type { LintIssue } from '../types'
+import { indexedDbNarrativeLinterRepository } from '../../../adapters/indexedDbNarrativeLinterRepository'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 import { CheckCircle2, AlertCircle, Wrench, BookOpen, Bot, Zap } from 'lucide-react'
 import { clock } from '../../../adapters/clock'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
@@ -12,23 +17,48 @@ import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel
 import { ScoreProvenanceBadge } from '../../../ui/atoms'
 import { Select } from '../../../ui/primitives'
 
-export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
+export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = (props) => (
+  <ProjectNarrativeLinterView key={props.projectId} {...props} />
+)
+const ProjectNarrativeLinterView: FC<DesktopPluginViewProps> = ({ projectId, onStats }) => {
   const hostContext = useOptionalPluginHostContext()
-  const aiTask = usePluginAiTask('narrative-linter')
   const [engine] = useState(() => new NarrativeLinterEngine())
   const [rules, setRules] = useState(() => NarrativeLinterEngine.getDefaultRules())
-  const [chapters, setChapters] = useState<any[]>([])
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
   const [text, setText] = useState('')
-  const [issues, setIssues] = useState<LintIssue[]>([])
-  const [cleanScore, setCleanScore] = useState(100)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [ignoredIssueKeys, setIgnoredIssueKeys] = useState<string[]>([])
+  const [configLoaded, setConfigLoaded] = useState(false)
+  const summary = useMemo(() => engine.lint(text, rules), [engine, text, rules])
+  const issues = summary.issues
+  const aiTask = usePluginAiTask('narrative-linter', [projectId, text, selectedChapterId, rules])
 
   // 1. 真实读取项目章节内容
   useEffect(() => {
+    let disposed = false
     const loadChapters = async () => {
       try {
-        const all = await indexedDbProjectRepository.getChaptersByProject(projectId)
-        all.sort((a, b) => a.order - b.order)
+        const [records, volumes, config] = await Promise.all([
+          indexedDbProjectRepository.getChaptersByProject(projectId),
+          indexedDbProjectRepository.getVolumesByProject(projectId),
+          indexedDbNarrativeLinterRepository.getConfig(projectId),
+        ])
+        if (disposed) return
+        const all = projectChapterSequence(projectId, records, volumes)
+        if (config) {
+          const defaults = NarrativeLinterEngine.getDefaultRules()
+          setRules(
+            config.rules.map((rule) => ({
+              ...rule,
+              options:
+                rule.options ?? defaults.find((item) => item.ruleId === rule.ruleId)?.options,
+            })),
+          )
+          setIgnoredIssueKeys(config.ignoredIssueKeys)
+        }
+        setConfigLoaded(true)
         setChapters(all)
 
         if (all.length > 0) {
@@ -42,17 +72,15 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
             defaultChap.revision,
           )
           setText(chapText)
-          if (chapText) {
-            const res = engine.lint(chapText, rules)
-            setIssues(res.issues)
-            setCleanScore(res.cleanScore)
-          }
         }
       } catch (e) {
-        console.error('Failed to load chapters for narrative linter:', e)
+        if (!disposed) setError('章节或规则配置读取失败，请重新打开重试。')
       }
     }
     loadChapters()
+    return () => {
+      disposed = true
+    }
   }, [projectId, hostContext?.activeChapter?.id])
 
   const handleSelectChapter = (chapId: string) => {
@@ -61,19 +89,13 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
       const allText = chapters
         .map((c) => semanticTextFromContent(c.id, c.content || '', c.revision))
         .join('\n\n')
-      setText(allText.slice(0, 20000))
-      const res = engine.lint(allText.slice(0, 20000), rules)
-      setIssues(res.issues)
-      setCleanScore(res.cleanScore)
+      setText(allText)
     } else {
       const chap = chapters.find((c) => c.id === chapId)
       const chapText = chap
         ? semanticTextFromContent(chap.id, chap.content || '', chap.revision)
         : ''
       setText(chapText)
-      const res = engine.lint(chapText, rules)
-      setIssues(res.issues)
-      setCleanScore(res.cleanScore)
     }
   }
 
@@ -86,9 +108,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
   }, [text, onStats])
 
   const handleAudit = () => {
-    const res = engine.lint(text, rules)
-    setIssues(res.issues)
-    setCleanScore(res.cleanScore)
+    setText((current) => current)
   }
 
   // 接入 AI 叙事深度体检
@@ -96,12 +116,17 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
     if (!text.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
-      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
-      text: semanticTextFromContent(
-        `narrative-linter-${selectedChapterId}`,
-        text,
-        chap?.revision,
-      ).slice(0, 2500),
+      chapter: chap
+        ? {
+            id: chap.id,
+            chapterNumber: chap.chapterNumber,
+            revision: chap.revision,
+            title: chap.title,
+          }
+        : undefined,
+      text: semanticTextFromContent(chap?.id ?? 'manual-lint', text, chap?.revision ?? 0),
+      rules,
+      localObservations: issues.map(({ sourceText: _source, ...issue }) => issue),
     }
 
     await aiTask.run(analysisInput)
@@ -115,13 +140,33 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
     if (!issue.quickFix) return
     const newText = NarrativeLinterEngine.applyQuickFix(text, issue)
     setText(newText)
-    const res = engine.lint(newText, rules)
-    setIssues(res.issues)
-    setCleanScore(res.cleanScore)
+  }
+  const saveRules = async () => {
+    if (saving || !configLoaded || summary.configErrors.length) return
+    setSaving(true)
+    try {
+      await indexedDbNarrativeLinterRepository.saveConfig({
+        projectId,
+        rules,
+        ignoredIssueKeys,
+        updatedAt: clock.now(),
+      })
+      setError('')
+    } catch {
+      setError('规则保存失败，请重试。当前输入已保留。')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto text-[var(--ink-text)] font-sans">
+      {error && <p role="alert">{error}</p>}
+      {summary.configErrors.map((message) => (
+        <p key={message} role="alert">
+          {message}
+        </p>
+      ))}
       <div className="flex items-center justify-between border-b pb-4 border-[var(--ink-border)]">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
@@ -129,10 +174,9 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
             <span>规则模型门禁 (NarrativeLinter)</span>
           </h2>
           <p className="text-sm text-[var(--ink-text-muted)] mt-1">
-            ESLint
-            风格的网文工业级质量管线，直连真实章节，拦截副词堆叠、窒息长句、百科说教与现代热梗
+            定位词项、句长和长对白；语境、人物声音与文学质量由作者和有出处的审阅另行判断。
           </p>
-          <ScoreProvenanceBadge source="rule" detail="100 减去规则命中数加权" />
+          <ScoreProvenanceBadge source="rule" detail="按作者启用的规则与阈值定位原文" />
         </div>
 
         <div className="flex items-center gap-4">
@@ -143,6 +187,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 检查章节:
               </span>
               <Select
+                aria-label="检查章节"
                 value={selectedChapterId}
                 onValueChange={(v) => handleSelectChapter(v)}
                 size="sm"
@@ -150,7 +195,8 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 <option value="all">全书章节聚合巡检</option>
                 {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
-                    第 {c.order} 章 · {c.title || '无标题'}
+                    {c.chapterNumber ? `第 ${c.chapterNumber} 章` : '位置未知'} ·{' '}
+                    {c.title || '无标题'}
                   </option>
                 ))}
               </Select>
@@ -158,19 +204,8 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
           )}
 
           <div className="text-right">
-            <div className="text-xs text-[var(--ink-text-muted)]">文学清洁度评分</div>
-            <div
-              className={`text-2xl font-black ${
-                cleanScore >= 80
-                  ? 'text-emerald-500'
-                  : cleanScore >= 60
-                    ? 'text-amber-500'
-                    : 'text-rose-500'
-              }`}
-            >
-              {cleanScore}{' '}
-              <span className="text-sm font-normal text-[var(--ink-text-muted)]">/ 100</span>
-            </div>
+            <div className="text-xs text-[var(--ink-text-muted)]">当前规则命中</div>
+            <div className="text-2xl font-bold">{issues.length} 处</div>
           </div>
         </div>
       </div>
@@ -184,7 +219,6 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
             {rules.map((r) => (
               <div
                 key={r.ruleId}
-                onClick={() => toggleRule(r.ruleId)}
                 className={`p-2 rounded-lg cursor-pointer border transition ${
                   r.enabled
                     ? 'bg-[var(--ink-bg-elevated)] border-[var(--ink-accent)] shadow-xs'
@@ -192,15 +226,77 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
                 }`}
               >
                 <div className="font-semibold flex items-center justify-between">
-                  <span>{r.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleRule(r.ruleId)}
+                    aria-pressed={r.enabled}
+                  >
+                    {r.name}
+                  </button>
                   <span className="text-[10px] px-1 py-0.5 rounded bg-[var(--ink-bg-hover)]">
                     {r.severity}
                   </span>
                 </div>
                 <div className="text-[var(--ink-text-muted)] mt-1 text-[11px]">{r.description}</div>
+                {r.ruleId !== 'LINT_ANACHRONISM' ? (
+                  <label className="block mt-1">
+                    {r.name}阈值
+                    <input
+                      aria-label={`${r.name}阈值`}
+                      type="number"
+                      min="1"
+                      className="w-16 ml-1 border bg-[var(--ink-bg-canvas)]"
+                      value={r.customThreshold ?? Number(Object.values(r.options ?? {})[0])}
+                      onChange={(event) =>
+                        setRules((current) =>
+                          current.map((rule) =>
+                            rule.ruleId === r.ruleId
+                              ? { ...rule, customThreshold: Number(event.target.value) }
+                              : rule,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                ) : (
+                  <label className="block mt-1">
+                    作者词表（逗号分隔）
+                    <input
+                      aria-label="作者词表"
+                      className="w-full border bg-[var(--ink-bg-canvas)]"
+                      value={Array.isArray(r.options?.words) ? r.options.words.join(',') : ''}
+                      onChange={(event) =>
+                        setRules((current) =>
+                          current.map((rule) =>
+                            rule.ruleId === r.ruleId
+                              ? {
+                                  ...rule,
+                                  options: {
+                                    words: event.target.value
+                                      .split(/[,，]/)
+                                      .map((word) => word.trim())
+                                      .filter(Boolean),
+                                  },
+                                }
+                              : rule,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                )}
               </div>
             ))}
           </div>
+          <button
+            type="button"
+            disabled={!configLoaded || saving || summary.configErrors.length > 0}
+            aria-busy={saving}
+            onClick={saveRules}
+            className="p-1 border rounded"
+          >
+            保存规则配置
+          </button>
         </div>
 
         <div className="col-span-2 space-y-2 flex flex-col">
@@ -230,6 +326,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
           </div>
 
           <textarea
+            aria-label="待审章节正文"
             className="w-full h-96 p-3 text-xs border rounded-xl font-serif resize-none bg-[var(--ink-bg-canvas)] border-[var(--ink-border)] text-[var(--ink-text)] leading-relaxed focus:outline-none"
             placeholder="自动从所选章节同步，亦可手动编辑或修改测试..."
             value={text}
@@ -245,7 +342,7 @@ export const NarrativeLinterMasterView: FC<DesktopPluginViewProps> = ({ projectI
           <div className="h-96 overflow-y-auto border rounded-xl p-2.5 space-y-2 bg-[var(--ink-bg-panel)] border-[var(--ink-border)] text-xs">
             {issues.length === 0 ? (
               <div className="h-full flex items-center justify-center text-[var(--ink-text-muted)]">
-                暂无违规项，文本通过基础规则信号检测
+                {text.trim() ? '未命中当前启用规则；语境尚未审阅' : '等待正文'}
               </div>
             ) : (
               issues.map((issue) => (

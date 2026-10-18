@@ -27,6 +27,10 @@ import {
 } from '../src/adapters/daemonDomainSyncRemote'
 import { createDaemonSkillRuntime, FIRST_PARTY_SKILL_IDS } from '../src/adapters/daemonSkillRuntime'
 import {
+  assertRuntimeHandshakeResponse,
+  createRuntimeHandshakeRequest,
+} from '../src/core/runtimeContract'
+import {
   ProposalConflictError,
   ProposalLedger,
   RemoteProposalStore,
@@ -239,6 +243,14 @@ describe('Final Freeze: packaged Desktop acceptance', () => {
       try {
         first = await launchPackagedDaemon(sevenZip, installer, stateDbPath, 5_000)
         peer = await launchPackagedDaemon(sevenZip, installer, peerStateDbPath)
+        for (const daemon of [first, peer]) {
+          const handshake = await daemon.client.request(
+            'runtime.handshake',
+            createRuntimeHandshakeRequest({ clientName: 'final-freeze-packaged-acceptance' }),
+          )
+          assertRuntimeHandshakeResponse(handshake)
+        }
+
         const firstSkillRuntime = createDaemonSkillRuntime(first.client)
         const discovered = await firstSkillRuntime.discover()
         expect(discovered.map((skill) => skill.id).sort()).toEqual(

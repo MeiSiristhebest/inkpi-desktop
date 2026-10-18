@@ -12,7 +12,7 @@ describe('SprintArenaMasterView — 心流冲刺擂台主视口', () => {
 
   it('renders header, stat cards, and empty state', async () => {
     render(<SprintArenaMasterView projectId="p1" />)
-    expect(await screen.findByText('心流极速码字冲刺擂台')).toBeInTheDocument()
+    expect(await screen.findByText('码字冲刺记录')).toBeInTheDocument()
     expect(screen.getByText('累计冲刺字数')).toBeInTheDocument()
     expect(screen.getByText('历史最高峰值')).toBeInTheDocument()
   })
@@ -33,7 +33,7 @@ describe('SprintArenaMasterView — 心流冲刺擂台主视口', () => {
 
     await waitFor(() => {
       expect(screen.getByText('+800 字')).toBeInTheDocument()
-      expect(screen.getAllByText('88 WPM').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('88 字/分钟').length).toBeGreaterThan(0)
     })
   })
 })

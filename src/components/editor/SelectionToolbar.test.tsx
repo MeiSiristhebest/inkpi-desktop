@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
-import type { TaskResult } from '@inkpi/protocol'
+import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { db } from '../../db/indexedDB'
 import { IndexedDbProposalStore, ProposalLedger } from '../../ai/proposals'
 import { SelectionToolbar } from './SelectionToolbar'
@@ -135,6 +135,178 @@ describe('SelectionToolbar', () => {
     await waitFor(() =>
       expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('undone'),
     )
+    expect(getContent()).toBe('选中文本')
+  })
+
+  it('sends the author instruction and leaves the body unchanged until acceptance', async () => {
+    await db.put('chapters', {
+      id: 'chapter-instructed',
+      projectId: 'test-workspace',
+      title: '第1章',
+      content: '选中文本',
+      wordCount: 4,
+      order: 0,
+      status: 'draft',
+      createdAt: 0,
+      updatedAt: 0,
+      revision: 1,
+    })
+    const { editor, handlers, getContent } = makeEditor({ from: 0, to: 5 })
+    const onAiTask = vi.fn(async (_task: AiTask): Promise<TaskResult> => ({
+      taskId: 'toolbar-instructed-rewrite',
+      kind: 'creative.rewrite',
+      status: 'completed',
+      output: { format: 'patch', patch: { from: 1, to: 3, text: '压缩' } },
+    }))
+    render(
+      <SelectionToolbar
+        editor={editor}
+        containerRef={containerRef}
+        onAiTask={onAiTask}
+        activeChapterId="chapter-instructed"
+        activeChapterRevision={1}
+        workspaceId="test-workspace"
+      />,
+    )
+    act(() => handlers['selectionUpdate']?.())
+
+    fireEvent.click(screen.getByRole('button', { name: '按要求修改' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '修改要求' }), {
+      target: { value: '压缩句子并降低语气' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '生成建议' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'),
+    )
+    expect(onAiTask.mock.calls[0]?.[0].input.payload).toMatchObject({
+      goal: '压缩句子并降低语气',
+    })
+    expect(getContent()).toBe('选中文本')
+
+    fireEvent.click(screen.getByRole('button', { name: '接受' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('committed'),
+    )
+    expect(getContent()).toBe('选压缩本')
+  })
+
+  it('shows a failed rewrite and retries the same selected range', async () => {
+    const { editor, handlers, getContent } = makeEditor({ from: 0, to: 5 })
+    const onAiTask = vi
+      .fn(async (_task: AiTask): Promise<TaskResult> => ({
+        taskId: 'toolbar-retried-rewrite',
+        kind: 'creative.rewrite',
+        status: 'completed',
+        output: { format: 'patch', patch: { from: 1, to: 3, text: '重试' } },
+      }))
+      .mockRejectedValueOnce(new Error('网络连接失败'))
+    render(
+      <SelectionToolbar
+        editor={editor}
+        containerRef={containerRef}
+        onAiTask={onAiTask}
+        activeChapterId="chapter-retry"
+        activeChapterRevision={1}
+        workspaceId="test-workspace"
+      />,
+    )
+    act(() => handlers['selectionUpdate']?.())
+
+    fireEvent.click(screen.getByText('AI 润色'))
+    expect(await screen.findByTestId('rewrite-task-error')).toHaveTextContent('网络连接失败')
+    const originalSelection = onAiTask.mock.calls[0]?.[0].scope.selection
+    expect(originalSelection).toMatchObject({ from: 0, to: 4 })
+    expect(getContent()).toBe('选中文本')
+
+    editor.state.selection = { from: 1, to: 4 }
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'),
+    )
+
+    expect(onAiTask).toHaveBeenCalledTimes(2)
+    expect(onAiTask.mock.calls[1]?.[0].scope.selection).toEqual(originalSelection)
+    expect(getContent()).toBe('选中文本')
+  })
+
+  it('requires a new rewrite request after the selected source text changes', async () => {
+    const { editor, handlers } = makeEditor({ from: 0, to: 5 })
+    const onAiTask = vi
+      .fn(async (_task: AiTask): Promise<TaskResult> => ({
+        taskId: 'toolbar-stale-rewrite',
+        kind: 'creative.rewrite',
+        status: 'completed',
+        output: { format: 'patch', patch: { from: 1, to: 3, text: '改写' } },
+      }))
+      .mockRejectedValueOnce(new Error('模型暂时不可用'))
+    render(
+      <SelectionToolbar
+        editor={editor}
+        containerRef={containerRef}
+        onAiTask={onAiTask}
+        activeChapterId="chapter-stale-rewrite"
+        activeChapterRevision={1}
+        workspaceId="test-workspace"
+      />,
+    )
+    act(() => handlers['selectionUpdate']?.())
+
+    fireEvent.click(screen.getByText('AI 润色'))
+    expect(await screen.findByTestId('rewrite-task-error')).toHaveTextContent('模型暂时不可用')
+    editor.commands.setContent('<p>已经修改的正文</p>')
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    expect(screen.getByTestId('rewrite-task-error')).toHaveTextContent(
+      '选区内容或章节已变化，请重新选择后生成。',
+    )
+    expect(onAiTask).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a rewrite response that arrives after switching chapters', async () => {
+    let resolveTask: ((result: TaskResult) => void) | undefined
+    const { editor, handlers, getContent } = makeEditor({ from: 0, to: 5 })
+    const onAiTask = vi.fn(
+      () =>
+        new Promise<TaskResult>((resolve) => {
+          resolveTask = resolve
+        }),
+    )
+    const view = render(
+      <SelectionToolbar
+        editor={editor}
+        containerRef={containerRef}
+        onAiTask={onAiTask}
+        activeChapterId="chapter-1"
+        activeChapterRevision={1}
+        workspaceId="test-workspace"
+      />,
+    )
+    act(() => handlers['selectionUpdate']?.())
+    fireEvent.click(screen.getByText('AI 润色'))
+    await waitFor(() => expect(onAiTask).toHaveBeenCalledTimes(1))
+
+    view.rerender(
+      <SelectionToolbar
+        editor={editor}
+        containerRef={containerRef}
+        onAiTask={onAiTask}
+        activeChapterId="chapter-2"
+        activeChapterRevision={1}
+        workspaceId="test-workspace"
+      />,
+    )
+    await act(async () => {
+      resolveTask?.({
+        taskId: 'late-toolbar-rewrite',
+        kind: 'creative.rewrite',
+        status: 'completed',
+        output: { format: 'patch', patch: { from: 1, to: 3, text: '改写' } },
+      })
+    })
+
+    expect(screen.queryByTestId('rewrite-proposal-preview')).not.toBeInTheDocument()
     expect(getContent()).toBe('选中文本')
   })
 

@@ -1,84 +1,71 @@
-import { useState, useEffect, useCallback, type FC } from 'react'
+import { useEffect, useState, type FC } from 'react'
 import type { DesktopPluginDrawerProps } from '../../../types/plugin'
-import type { FactionNode } from '../types'
-import { factionMatrixEngine } from '../engine/FactionMatrixEngine'
 import { indexedDbCodexEntityRepository } from '../../../adapters/indexedDbCodexEntityRepository'
-import { Shield } from 'lucide-react'
-
-export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = ({ projectId }) => {
+import { indexedDbFactionDiplomacyRepository } from '../../../adapters/indexedDbFactionDiplomacyRepository'
+import type { FactionNode, FactionDiplomacyRecord } from '../types'
+import { factionMatrixEngine } from '../engine/FactionMatrixEngine'
+export const FactionMatrixDrawer: FC<DesktopPluginDrawerProps> = (props) => (
+  <FactionDrawerBody key={props.projectId} {...props} />
+)
+function FactionDrawerBody({ projectId, currentText }: DesktopPluginDrawerProps) {
   const [factions, setFactions] = useState<FactionNode[]>([])
-
-  const loadData = useCallback(async () => {
-    try {
-      const allCodex = await indexedDbCodexEntityRepository.getAll()
-      const codexFactions = allCodex
-        .filter((e) => e.projectId === projectId && e.category === 'faction')
-        .map((e) => ({
-          id: e.id,
-          name: e.name,
-          type: 'righteous' as const,
-          powerTier: (e.attributes?.powerTier as string) || '宗门',
-          protagonistReputation: Number(e.attributes?.reputation ?? 10),
-        }))
-
-      setFactions(codexFactions)
-    } catch (e) {
-      console.error('Failed to load drawer factions:', e)
-      setFactions([])
+  const [records, setRecords] = useState<FactionDiplomacyRecord[]>([])
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let disposed = false
+    Promise.all([
+      indexedDbCodexEntityRepository.getAll(),
+      indexedDbFactionDiplomacyRepository.getAll(projectId),
+    ])
+      .then(([entities, relationships]) => {
+        if (disposed) return
+        setFactions(
+          entities
+            .filter((e) => e.projectId === projectId && e.category === 'faction')
+            .map((e) => ({
+              id: e.id,
+              name: e.name,
+              projectId,
+              protagonistReputation:
+                typeof e.attributes?.reputation === 'number' ? e.attributes.reputation : undefined,
+            })),
+        )
+        setRecords(relationships.filter((r) => r.projectId === projectId))
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause))
+      })
+    return () => {
+      disposed = true
     }
   }, [projectId])
-
-  useEffect(() => {
-    void loadData()
-  }, [loadData])
-
   return (
-    <div className="h-full flex flex-col bg-[var(--ink-bg-panel)] text-[var(--ink-text)] overflow-y-auto p-4 space-y-4 text-xs">
-      <div className="flex items-center justify-between border-b border-[var(--ink-border)] pb-3">
-        <div className="flex items-center gap-1.5 font-semibold">
-          <Shield className="w-4 h-4 text-emerald-500" />
-          <span>宗门势力声望</span>
-        </div>
-        <span className="text-[10px] text-[var(--ink-text-muted)]">
-          登记势力: {factions.length}
-        </span>
-      </div>
-
-      <div className="space-y-2">
-        <span className="text-[11px] font-semibold text-[var(--ink-text-muted)] block">
-          主角当前声望天平：
-        </span>
-        <div className="space-y-1.5">
-          {factions.length === 0 && (
-            <p className="text-[11px] text-[var(--ink-text-faint)] leading-snug">
-              设定库里还没有势力条目。声望天平只显示你自己登记的势力，不用示例数据填充。
+    <div className="p-4 space-y-3 text-xs">
+      <h3>势力关系记录</h3>
+      <p>仅对照登记名称和作者记录；提及名称不证明实际参与事件。</p>
+      {error && <p role="alert">{error}</p>}
+      {!factions.length ? (
+        <p>设定库里还没有势力条目。</p>
+      ) : (
+        factions.map((f) => (
+          <section key={f.id}>
+            <h4>{f.name}</h4>
+            <p>
+              {f.name && currentText.includes(f.name)
+                ? '正文名称命中，参与情况需要复核。'
+                : '正文未出现此登记名称，参与情况未知。'}
             </p>
-          )}
-          {factions.map((f) => {
-            const rep = factionMatrixEngine.getReputationLevel(f.protagonistReputation)
-            return (
-              <div
-                key={f.id}
-                className="p-2 rounded-lg bg-[var(--ink-bg-canvas)] border border-[var(--ink-border)]/60 text-[11px] flex items-center justify-between"
-              >
-                <div>
-                  <span className="font-semibold text-[var(--ink-text)] block">{f.name}</span>
-                  <span className="text-[10px] text-[var(--ink-text-muted)]">{rep.desc}</span>
-                </div>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded border font-medium ${rep.badgeClass}`}
-                >
-                  {rep.label} (
-                  {f.protagonistReputation > 0
-                    ? `+${f.protagonistReputation}`
-                    : f.protagonistReputation}
-                  )
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+            <p>{factionMatrixEngine.getReputationLevel(f.protagonistReputation).desc}</p>
+            {records
+              .filter((r) => r.factionAId === f.id || r.factionBId === f.id)
+              .map((r) => (
+                <p key={r.id}>
+                  {r.factionAName} → {r.factionBName}：{r.stance}；{r.notes || '未填写条件和依据。'}
+                </p>
+              ))}
+          </section>
+        ))
+      )}
     </div>
   )
 }

@@ -14,6 +14,23 @@ describe('Bookshelf (InkPi 主页)', () => {
     ).toBeInTheDocument()
   })
 
+  it('显示完整备份失败状态并允许关闭提示', () => {
+    const onDismiss = vi.fn()
+    render(
+      <Bookshelf
+        projects={[]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        exportError="完整备份失败，未生成备份文件。无法读取必要数据。"
+        onDismissExportError={onDismiss}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent('完整备份失败，未生成备份文件。')
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: '关闭' }))
+    expect(onDismiss).toHaveBeenCalledOnce()
+  })
+
   it('渲染项目卡片并点击打开项目', () => {
     const onOpen = vi.fn()
     render(
@@ -89,6 +106,96 @@ describe('Bookshelf (InkPi 主页)', () => {
         customPluginIds: RECOMMENDED_PLUGIN_IDS,
       }),
     )
+  })
+
+  it('shows the shared Button busy state while project creation is pending', async () => {
+    let finishCreation!: () => void
+    const onCreate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCreation = resolve
+        }),
+    )
+    render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
+
+    fireEvent.click(screen.getByText('新建小说项目'))
+    fireEvent.change(screen.getByPlaceholderText('给这本书起个名字，其他信息之后随时可以补'), {
+      target: { value: '忙碌状态作品' },
+    })
+
+    const createButton = screen.getByRole('button', { name: '创建并进入项目' })
+    expect(createButton).toHaveAttribute('data-slot', 'button')
+    fireEvent.click(createButton)
+
+    const busyButton = screen.getByRole('button', { name: '正在创建…' })
+    expect(busyButton).toBeDisabled()
+    expect(busyButton).toHaveAttribute('aria-busy', 'true')
+    fireEvent.click(busyButton)
+    expect(onCreate).toHaveBeenCalledOnce()
+
+    finishCreation()
+    await waitFor(() => expect(onCreate).toHaveBeenCalledOnce())
+  })
+
+  it('创建失败时保留表单并允许重试', async () => {
+    const onCreate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('IndexedDB unavailable'))
+      .mockResolvedValueOnce(undefined)
+    render(<Bookshelf projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreate} />)
+
+    fireEvent.click(screen.getByText('新建小说项目'))
+    const nameInput = screen.getByPlaceholderText('给这本书起个名字，其他信息之后随时可以补')
+    fireEvent.change(nameInput, { target: { value: '故障重试作品' } })
+    fireEvent.click(screen.getByText('创建并进入项目'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '创建失败，表单内容已保留。IndexedDB unavailable',
+    )
+    expect(nameInput).toHaveValue('故障重试作品')
+    fireEvent.click(screen.getByText('创建并进入项目'))
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(2))
+  })
+
+  it('导入时阻止重复提交，失败后显示原因并允许重新选择文件', async () => {
+    let failImport!: () => void
+    const onImportProject = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            failImport = () => reject(new Error('无效 JSON'))
+          }),
+      )
+      .mockResolvedValueOnce(undefined)
+    const { container } = render(
+      <Bookshelf
+        projects={[]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onImportProject={onImportProject}
+      />,
+    )
+    const input = container.querySelector<HTMLInputElement>(
+      'input[accept="application/json,.json"]',
+    )
+    expect(input).not.toBeNull()
+    const file = new File(['{'], 'broken.json', { type: 'application/json' })
+    fireEvent.change(input!, {
+      target: { files: [file] },
+    })
+
+    const busyButton = screen.getByRole('button', { name: '正在导入…' })
+    expect(busyButton).toBeDisabled()
+    fireEvent.click(busyButton)
+    expect(onImportProject).toHaveBeenCalledOnce()
+    failImport()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('导入失败，原文件可重试。无效 JSON')
+    expect(input).toHaveValue('')
+    fireEvent.change(input!, { target: { files: [file] } })
+    await waitFor(() => expect(onImportProject).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })
 
   it('示范样例、题材与工具组合各自是一次真实选择，全部回传给创建流程（§P3.6）', async () => {
@@ -198,7 +305,14 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(onExport).toHaveBeenCalledWith('p1')
 
     // 打开更多操作菜单触发编辑（菜单条目是 menuitem，不是 button）
-    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    const moreActions = screen.getByRole('button', { name: '更多操作' })
+    expect(moreActions).toHaveAttribute('aria-haspopup', 'menu')
+    expect(moreActions).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(moreActions)
+    expect(screen.getByRole('button', { name: '更多操作' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
     fireEvent.click(screen.getByRole('menuitem', { name: '编辑信息' }))
     fireEvent.change(screen.getByDisplayValue('吞天神脉'), { target: { value: '吞天神脉·第二部' } })
     fireEvent.change(screen.getByDisplayValue('东方玄幻'), { target: { value: '仙侠修真' } })
@@ -237,6 +351,47 @@ describe('Bookshelf (InkPi 主页)', () => {
     expect(onDelete).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '永久删除' }))
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith('p1'))
+  })
+
+  it('keeps project editing open while the update is pending and closes after it resolves', async () => {
+    let finishUpdate!: () => void
+    const onUpdate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUpdate = resolve
+        }),
+    )
+    render(
+      <Bookshelf
+        projects={[
+          {
+            id: 'p1',
+            name: '待保存作品',
+            createdAt: 1,
+            updatedAt: Date.now(),
+          },
+        ]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onUpdateProject={onUpdate}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '编辑信息' }))
+    fireEvent.change(screen.getByPlaceholderText('请输入作品名称'), {
+      target: { value: '已提交作品' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存作品信息' }))
+
+    expect(screen.getByRole('button', { name: '正在保存…' })).toBeDisabled()
+    expect(screen.getByPlaceholderText('请输入作品名称')).toHaveValue('已提交作品')
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1', name: '已提交作品' }))
+
+    finishUpdate()
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText('请输入作品名称')).not.toBeInTheDocument(),
+    )
   })
 
   it('已移出作品库只列出隐藏条目，并提供放回与永久删除两个出口', async () => {

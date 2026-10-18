@@ -12,7 +12,11 @@ export interface DialogueLine {
   speakerName: string
   characterId?: string
   dialogueText: string
-  emotion: 'neutral' | 'angry' | 'cold' | 'whisper' | 'excited'
+  emotion: 'unassigned' | 'neutral' | 'angry' | 'cold' | 'whisper' | 'excited'
+  sourceStart?: number
+  sourceEnd?: number
+  attribution?: string
+  attributionStatus?: 'explicit' | 'unattributed' | 'author'
   assignedVoice?: {
     pitch: number
     rate: number

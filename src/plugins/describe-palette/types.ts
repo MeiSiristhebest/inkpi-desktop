@@ -1,10 +1,6 @@
-// describe-palette 五感微观修辞调色盘类型定义
-
 export type SenseType = 'sight' | 'sound' | 'scent' | 'taste' | 'touch' | 'metaphor'
-
 export type GenreType =
   'all' | 'xianxia' | 'fantasy' | 'scifi' | 'urban' | 'wuxia' | 'horror' | 'history'
-
 export interface SensorySnippet {
   id: string
   primarySense: SenseType
@@ -17,7 +13,6 @@ export interface SensorySnippet {
   tags?: string[]
   isCustom?: boolean
 }
-
 export interface SensoryRadarScore {
   sight: number
   sound: number
@@ -26,13 +21,11 @@ export interface SensoryRadarScore {
   touch: number
   metaphor: number
 }
-
 export interface SensoryDiagnosisReport {
   totalWordCount: number
   radar: SensoryRadarScore
   radarPercentages: SensoryRadarScore
-  dominantSense: SenseType | null
-  missingSenses: SenseType[]
+  matches: Array<{ sense: SenseType; quote: string; start: number; end: number }>
+  inputStatus: 'empty' | 'provided'
   advice: string
-  suggestedSnippets: SensorySnippet[]
 }

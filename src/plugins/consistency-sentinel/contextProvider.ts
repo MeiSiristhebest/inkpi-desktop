@@ -4,7 +4,7 @@ import { createProvenance } from '../../domain/story/provenance'
 import { consistencyEngine } from './engine/ConsistencyEngine'
 
 const RULE =
-  'Ordered power tiers require explicit compensating cost for a breach; dead characters do not return without evidence.'
+  'Use only recorded author constraints. Tier ordering does not prove a battle outcome. Verify scene time and abilities before asserting a conflict. A stored death state does not establish when a passage takes place.'
 
 /**
  * INV-05：只有作者确认过的力量体系才是事实。工作区没有记录时，内置修真阶梯只能作为
@@ -19,33 +19,41 @@ export async function provideConsistencyContext(
     const authored = await indexedDbPowerTierRepository.get(request.projectId)
     if (authored) {
       return {
-        id: `consistency:${request.projectId}:tiers:${authored.tiers.join('|')}`,
+        id: `consistency:${request.projectId}:tiers:${authored.updatedAt}`,
         source: 'plugin.consistency-sentinel',
         kind: 'power-system-constraints',
         data: {
           powerSystemDefined: true,
           tiers: [...authored.tiers],
+          relations: authored.relations ?? null,
+          orderMode:
+            authored.relations === undefined
+              ? 'author-listed-linear-order'
+              : 'explicit-partial-order',
+          specialModifiers: [...authored.specialModifiers],
+          validation: consistencyEngine.validatePowerHierarchy(authored),
+          note: authored.provenance
+            ? 'Preserve the stored provenance and its fact level.'
+            : 'This legacy record has no authorship provenance; treat it as an unverified stored constraint.',
           rule: RULE,
         },
         metadata: {
           provenance:
             authored.provenance ??
-            createProvenance({ sourceType: 'author', factLevel: 'canonical-fact' }),
+            createProvenance({ sourceType: 'derived', factLevel: 'hypothesis' }),
         },
         priority: 700,
       }
     }
 
-    const preset = consistencyEngine.getPresetSystems()[0]
     return {
-      id: `consistency:${request.projectId}:preset:${preset.tiers.join('|')}`,
+      id: `consistency:${request.projectId}:undefined`,
       source: 'plugin.consistency-sentinel',
       kind: 'power-system-constraints',
       data: {
         powerSystemDefined: false,
-        candidateTiers: [...preset.tiers],
         rule: RULE,
-        note: 'This workspace has no author-defined power system. The candidate ladder is a generic preset offered for reference only; never treat it as story canon and never report tier violations against it.',
+        note: 'This workspace has no recorded power system. Do not supply a genre ladder or treat a preset as story canon; ask for author constraints before comparing tiers.',
       },
       metadata: {
         provenance: createProvenance({ sourceType: 'derived', factLevel: 'proposal' }),

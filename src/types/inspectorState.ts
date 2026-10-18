@@ -3,6 +3,7 @@ export type InspectorSurface = 'closed' | 'assistant' | 'activity' | 'plugin'
 export interface InspectorState {
   surface: InspectorSurface
   pluginId?: string
+  resultId?: string
 }
 
 /**

@@ -15,9 +15,7 @@ export class AcAutomaton {
    * @param entities 包含主名称与所有别名的实体列表
    */
   public build(entities: Array<{ id: string; name: string; aliases?: string[] }>): void {
-    const fingerprint = entities
-      .map((e) => `${e.id}:${e.name}:${(e.aliases || []).join(',')}`)
-      .join('|')
+    const fingerprint = JSON.stringify(entities.map((e) => [e.id, e.name, e.aliases ?? []]))
 
     if (fingerprint === this.lastFingerprint && this.engine.getPatternCount() > 0) {
       return
@@ -27,9 +25,13 @@ export class AcAutomaton {
     const items: Array<{ keyword: string; payload: { entityId: string } }> = []
 
     for (const ent of entities) {
-      const keys = [ent.name, ...(ent.aliases || [])]
-        .map((k) => (k ? k.trim() : ''))
-        .filter((k) => k.length > 0)
+      const keys = [
+        ...new Set(
+          [ent.name, ...(ent.aliases || [])]
+            .map((k) => (k ? k.trim() : ''))
+            .filter((k) => k.length > 0),
+        ),
+      ]
 
       for (const key of keys) {
         items.push({

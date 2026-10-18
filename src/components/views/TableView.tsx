@@ -169,6 +169,7 @@ export const TableView: React.FC<TableViewProps> = ({ projectId, tabId, tabMeta,
                   <label className="text-xs font-semibold text-[var(--ink-text)]">{col.name}</label>
                   {col.options ? (
                     <Select
+                      aria-label={col.name}
                       value={val}
                       onValueChange={(v) =>
                         setEditingRow({

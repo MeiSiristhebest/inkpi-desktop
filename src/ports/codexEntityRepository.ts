@@ -8,6 +8,7 @@ import type { CodexEntity } from '../plugins/living-codex/types'
  */
 export interface CodexEntityRepository {
   getAll(): Promise<CodexEntity[]>
+  getByProject(projectId: string): Promise<CodexEntity[]>
   save(entity: CodexEntity): Promise<void>
   delete(id: string): Promise<void>
 }

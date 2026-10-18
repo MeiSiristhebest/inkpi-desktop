@@ -18,10 +18,14 @@ export interface StoryTimePoint {
   absoluteDayIndex: number // 统一换算为宇宙标量天数，用于全局绝对排序与天数对账
 }
 
+export type ChronologySequenceRole = 'mainline' | 'nonlinear' | 'unknown'
+
 export interface ChapterChronologyEvent {
   chapterId: string
   chapterOrder: number
   chapterTitle: string
+  /** Missing legacy values mean unknown and are excluded from chronology checks. */
+  sequenceRole?: ChronologySequenceRole
   timePoint: StoryTimePoint
   eventSummary: string
   provenance?: Provenance

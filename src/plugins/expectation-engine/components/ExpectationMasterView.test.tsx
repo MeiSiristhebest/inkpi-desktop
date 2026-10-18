@@ -34,12 +34,13 @@ describe('ExpectationMasterView — 爽点与期待感调度器主视口', () =>
     const toggleBtn = screen.getByText('黄金三章追读体检')
     fireEvent.click(toggleBtn)
 
-    expect(screen.getByText('黄金三章自动化节奏体检')).toBeInTheDocument()
+    expect(screen.getByText('前三章原文定位与期待审阅')).toBeInTheDocument()
     const runBtn = screen.getByText('运行体检')
     fireEvent.click(runBtn)
 
     await waitFor(() => {
-      expect(screen.getByText(/体检综合评分/)).toBeInTheDocument()
+      expect(screen.getByText(/原文定位：0 处/)).toBeInTheDocument()
+      expect(screen.getByText(/缺失章节：1、2、3/)).toBeInTheDocument()
     })
   })
 })

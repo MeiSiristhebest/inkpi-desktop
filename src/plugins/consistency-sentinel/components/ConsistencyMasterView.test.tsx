@@ -17,6 +17,7 @@ describe('ConsistencyMasterView — 战力阶梯与设定巡检哨兵主视口',
     expect(screen.getByText('战力阶梯偏序体系')).toBeInTheDocument()
     // 过去这里会直接渲染 presetTiersData[0]，等于替一本西幻书默认了修真阶梯（INV-05/§P2.4）。
     expect(screen.getByText('未配置：不替本书选流派')).toBeInTheDocument()
+    expect(screen.getByText('作者登记的越阶例外词（命中仍需核对）：')).toBeInTheDocument()
     expect(screen.queryByText(/1\. 练气/)).not.toBeInTheDocument()
     // 还没点巡检时，界面不得预先给出「自洽」的结论（INV-09）。
     expect(screen.queryByText(/未发现越阶或吃书矛盾/)).not.toBeInTheDocument()

@@ -35,7 +35,7 @@ describe('Tooltip 门面', () => {
     expect(trigger).not.toHaveAttribute('aria-describedby')
   })
 
-  it('浮层里的提示不吞掉 Esc：焦点提示关闭后按键仍交给对话框', async () => {
+  it('焦点提示先关闭，下一次 Esc 才关闭外层对话框', async () => {
     const onClose = vi.fn()
     render(
       <Modal onClose={onClose}>
@@ -44,8 +44,15 @@ describe('Tooltip 门面', () => {
         </Tooltip>
       </Modal>,
     )
-    // 对话框的初始聚焦会顺手把提示打开，此前 useDismiss 在这一步 stopPropagation
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeNull(),
+    )
     fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() => expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull())
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
