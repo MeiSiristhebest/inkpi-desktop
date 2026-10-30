@@ -76,6 +76,33 @@ function makeClient(onRegister?: () => Promise<unknown> | unknown): {
   }
 }
 
+describe('ChatGPT plan account RPCs', () => {
+  it('keeps account ownership on model-list and disconnect calls', async () => {
+    const calls: Array<{ method: string; params: unknown }> = []
+    const client: RpcClient = {
+      request: async <T>(method: string, params?: unknown): Promise<T> => {
+        calls.push({ method, params })
+        return {} as T
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const assistant = createDaemonAiAssistant(client)
+
+    await assistant.chatgptPlan?.startSignIn({ accountId: 'account-b', enablePlanUsage: true })
+    await assistant.chatgptPlan?.listModels({ accountId: 'account-b' })
+    await assistant.chatgptPlan?.disconnect({ accountId: 'account-b' })
+
+    expect(calls).toEqual([
+      {
+        method: 'model.chatgpt-plan.sign-in',
+        params: { accountId: 'account-b', enablePlanUsage: true },
+      },
+      { method: 'model.chatgpt-plan.models', params: { accountId: 'account-b' } },
+      { method: 'model.chatgpt-plan.disconnect', params: { accountId: 'account-b' } },
+    ])
+  })
+})
+
 describe('createDaemonAiAssistant instruction registration', () => {
   afterEach(() => {
     setRuntimeModelRoutes([], null)

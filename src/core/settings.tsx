@@ -94,6 +94,8 @@ export interface ModelConfig {
   id: string
   name: string
   provider: ProviderType
+  /** Runtime-owned ChatGPT account selected by this model route. */
+  accountId?: string
   baseUrl?: string
   /** Runtime status read from the native credential store; never persisted as authority. */
   credentialConfigured?: boolean

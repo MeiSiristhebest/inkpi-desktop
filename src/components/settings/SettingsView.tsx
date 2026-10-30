@@ -1220,11 +1220,8 @@ const AiTab: FC<{
         return
       }
     }
-    const updatedList = savedList.filter(
-      (m) => !(m.id === target.id && m.provider === target.provider && m.name === target.name),
-    )
-    const isCurrentActive =
-      settings.aiModel?.id === target.id && settings.aiModel?.provider === target.provider
+    const updatedList = savedList.filter((model) => !isSameModelIdentity(model, target))
+    const isCurrentActive = isSameModelIdentity(settings.aiModel, target)
     update({
       savedAiModels: updatedList,
       aiModel: isCurrentActive ? updatedList[0] || null : settings.aiModel,
@@ -1234,17 +1231,13 @@ const AiTab: FC<{
   // 启用/停用供应商
   const handleToggleEnabled = (target: ModelConfig) => {
     const nowEnabled = target.enabled === false
-    const updatedList = savedList.map((m) =>
-      m.id === target.id && m.provider === target.provider ? { ...m, enabled: nowEnabled } : m,
+    const updatedList = savedList.map((model) =>
+      isSameModelIdentity(model, target) ? { ...model, enabled: nowEnabled } : model,
     )
-    const isActive =
-      settings.aiModel?.id === target.id && settings.aiModel?.provider === target.provider
+    const isActive = isSameModelIdentity(settings.aiModel, target)
     let nextActive = settings.aiModel
     if (isActive && !nowEnabled) {
-      nextActive =
-        updatedList.find(
-          (m) => m.enabled !== false && !(m.id === target.id && m.provider === target.provider),
-        ) || null
+      nextActive = updatedList.find((model) => model.enabled !== false) || null
     }
     update({ savedAiModels: updatedList, aiModel: nextActive })
   }
@@ -1313,17 +1306,20 @@ const AiTab: FC<{
     setCatalogBusy(false)
   }
 
-  const handlePlanUsageStatusChange = (enabled: boolean) => {
-    const hasPlanModels = savedList.some((model) => model.provider === 'openai-chatgpt-plan')
+  const handlePlanUsageStatusChange = (accountId: string, enabled: boolean) => {
+    const hasPlanModels = savedList.some(
+      (model) => model.provider === 'openai-chatgpt-plan' && model.accountId === accountId,
+    )
     if (!hasPlanModels) return
 
     const nextList = savedList.map((model) =>
-      model.provider === 'openai-chatgpt-plan'
+      model.provider === 'openai-chatgpt-plan' && model.accountId === accountId
         ? { ...model, credentialConfigured: enabled }
         : model,
     )
     const nextActive =
-      settings.aiModel?.provider === 'openai-chatgpt-plan'
+      settings.aiModel?.provider === 'openai-chatgpt-plan' &&
+      settings.aiModel.accountId === accountId
         ? { ...settings.aiModel, credentialConfigured: enabled }
         : settings.aiModel
     update({ savedAiModels: nextList, aiModel: nextActive })
@@ -1331,13 +1327,17 @@ const AiTab: FC<{
 
   const handleAddChatGPTModel = (model: OpenAIChatGPTPlanModel) => {
     const existing = savedList.find(
-      (item) => item.provider === 'openai-chatgpt-plan' && item.id === model.id,
+      (item) =>
+        item.provider === 'openai-chatgpt-plan' &&
+        item.id === model.id &&
+        item.accountId === model.accountId,
     )
     const config: ModelConfig = {
       ...existing,
       id: model.id,
       name: model.name,
       provider: 'openai-chatgpt-plan',
+      accountId: model.accountId,
       baseUrl: PROVIDER_META['openai-chatgpt-plan'].defaultBaseUrl,
       credentialConfigured: true,
       enabled: existing?.enabled ?? true,
@@ -1345,11 +1345,18 @@ const AiTab: FC<{
     }
     const nextList = existing
       ? savedList.map((item) =>
-          item.provider === config.provider && item.id === config.id ? config : item,
+          item.provider === config.provider &&
+          item.id === config.id &&
+          item.accountId === config.accountId
+            ? config
+            : item,
         )
       : [...savedList, config]
     const isCurrentModel =
-      settings.aiModel?.provider === config.provider && settings.aiModel?.id === config.id
+      isSameModelIdentity(settings.aiModel, config) ||
+      (settings.aiModel?.provider === config.provider &&
+        settings.aiModel.id === config.id &&
+        !settings.aiModel.accountId)
     update({
       savedAiModels: nextList,
       aiModel: settings.aiModel ? (isCurrentModel ? config : settings.aiModel) : config,
@@ -1360,14 +1367,9 @@ const AiTab: FC<{
   const handleDialogSave = async (draft: ModelConfig) => {
     const { apiKey, ...savedModel } = draft
     const enteredKey = apiKey?.trim()
-    const previousModel = savedList.find(
-      (model) => model.id === savedModel.id && model.provider === savedModel.provider,
-    )
+    const previousModel = savedList.find((model) => isSameModelIdentity(model, savedModel))
     if (enteredKey) await secretStore.set(modelSecretKey(savedModel), enteredKey)
-    if (
-      editingTarget &&
-      (editingTarget.id !== savedModel.id || editingTarget.provider !== savedModel.provider)
-    ) {
+    if (editingTarget && !isSameModelIdentity(editingTarget, savedModel)) {
       try {
         await secretStore.remove(modelSecretKey(editingTarget))
       } catch {
@@ -1381,8 +1383,8 @@ const AiTab: FC<{
     const currentList = [...savedList]
     const existingIndex = currentList.findIndex(
       (m) =>
-        (editingTarget && m.id === editingTarget.id && m.provider === editingTarget.provider) ||
-        (m.id === saved.id && m.provider === saved.provider) ||
+        (editingTarget && isSameModelIdentity(m, editingTarget)) ||
+        isSameModelIdentity(m, saved) ||
         (m.name && m.name === saved.name),
     )
 
@@ -1394,10 +1396,7 @@ const AiTab: FC<{
     }
 
     const isCurrentActive =
-      !settings.aiModel ||
-      (editingTarget &&
-        settings.aiModel.id === editingTarget.id &&
-        settings.aiModel.provider === editingTarget.provider)
+      !settings.aiModel || isSameModelIdentity(settings.aiModel, editingTarget)
 
     update({
       aiModel: isCurrentActive ? saved : settings.aiModel,
@@ -1474,8 +1473,7 @@ const AiTab: FC<{
               {savedList
                 .filter((m) => m.enabled !== false)
                 .map((m, idx) => {
-                  const isActive =
-                    settings.aiModel?.id === m.id && settings.aiModel?.provider === m.provider
+                  const isActive = isSameModelIdentity(settings.aiModel, m)
                   const pMeta = PROVIDER_META[m.provider]
                   return (
                     <button
@@ -1495,6 +1493,7 @@ const AiTab: FC<{
                         </div>
                         <div className="font-mono text-[11px] text-[var(--ink-text-faint)] truncate">
                           {pMeta?.label || m.provider} · {m.id}
+                          {modelOwnerLabel(m)}
                         </div>
                       </div>
                       {isActive ? (
@@ -1517,7 +1516,7 @@ const AiTab: FC<{
       <ChatGPTPlanSettings
         assistant={chatgptPlan}
         onAddModel={handleAddChatGPTModel}
-        onUsageStatusChange={handlePlanUsageStatusChange}
+        onAccountUsageStatusChange={handlePlanUsageStatusChange}
       />
 
       {/* ── 模块 1：AI 服务列表（与图一 100% 对齐）── */}
@@ -1550,8 +1549,7 @@ const AiTab: FC<{
             </div>
           ) : (
             savedList.map((m, idx) => {
-              const isActive =
-                settings.aiModel?.id === m.id && settings.aiModel?.provider === m.provider
+              const isActive = isSameModelIdentity(settings.aiModel, m)
               const isEnabled = m.enabled !== false
               const pMeta = PROVIDER_META[m.provider]
               const cardKey = `${m.provider}_${m.id}_${idx}`
@@ -1599,6 +1597,12 @@ const AiTab: FC<{
                       <span className="font-mono">{host || '默认端点'}</span>
                       <span className="mx-1.5">·</span>
                       <span>{modelCount} 个模型</span>
+                      {m.provider === 'openai-chatgpt-plan' && (
+                        <>
+                          <span className="mx-1.5">·</span>
+                          <span>账号 {m.accountId ?? '未绑定'}</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1654,7 +1658,7 @@ const AiTab: FC<{
                     <Switch
                       checked={isEnabled}
                       onChange={() => handleToggleEnabled(m)}
-                      ariaLabel={`${m.name || m.id} 服务开关`}
+                      ariaLabel={`${m.name || m.id}${modelOwnerLabel(m)} 服务开关`}
                     />
                   </div>
                 </div>
@@ -1687,6 +1691,18 @@ const AiTab: FC<{
       )}
     </div>
   )
+}
+
+function isSameModelIdentity(
+  left: Pick<ModelConfig, 'id' | 'provider' | 'accountId'> | null | undefined,
+  right: Pick<ModelConfig, 'id' | 'provider' | 'accountId'> | null | undefined,
+): boolean {
+  if (!left || !right || left.id !== right.id || left.provider !== right.provider) return false
+  return left.provider !== 'openai-chatgpt-plan' || left.accountId === right.accountId
+}
+
+function modelOwnerLabel(model: ModelConfig): string {
+  return model.provider === 'openai-chatgpt-plan' ? ` · 账号 ${model.accountId ?? '未绑定'}` : ''
 }
 
 const RUNTIME_VIEW: Record<RuntimeReadiness, { label: string; hint: string; dot: string }> = {

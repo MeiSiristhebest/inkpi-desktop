@@ -1,19 +1,14 @@
 import { secretStore } from '../adapters/secretStore'
 import type { AppSettings, ModelConfig } from './settings'
 
-const OPENAI_CHATGPT_PLAN_USAGE_REF = 'inkpi.model.openai-chatgpt-plan.enabled'
-
-export function modelSecretKey(model: Pick<ModelConfig, 'provider' | 'id'>): string {
+export function modelSecretKey(model: Pick<ModelConfig, 'provider' | 'id' | 'accountId'>): string {
   if (model.provider === 'openai-chatgpt-plan') {
-    return 'inkpi.model.openai-chatgpt-plan.account'
+    const accountId = model.accountId?.trim()
+    return accountId
+      ? `inkpi.model.openai-chatgpt-plan.account.${encodeURIComponent(accountId)}`
+      : 'inkpi.model.openai-chatgpt-plan.account'
   }
   return `inkpi.model.${encodeURIComponent(model.provider)}.${encodeURIComponent(model.id)}`
-}
-
-function modelCredentialStatusKey(model: Pick<ModelConfig, 'provider' | 'id'>): string {
-  return model.provider === 'openai-chatgpt-plan'
-    ? OPENAI_CHATGPT_PLAN_USAGE_REF
-    : modelSecretKey(model)
 }
 
 /** Remove credentials before settings cross the local persistence boundary. */
@@ -58,7 +53,7 @@ export async function hydrateModelCredentialStatus(settings: AppSettings): Promi
   const configured = new Set<string>()
   await Promise.all(
     models.map(async (model) => {
-      if (await secretStore.has(modelCredentialStatusKey(model))) {
+      if (await secretStore.has(modelSecretKey(model))) {
         configured.add(modelSecretKey(model))
       }
       return undefined

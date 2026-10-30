@@ -136,11 +136,13 @@ fn resolve_request(line: &str, expected_token: &str) -> CredentialResponse {
         Ok(request) => request,
         Err(_) => return error_response("invalid request"),
     };
-    if !constant_time_eq(&request.token, expected_token) {
-        return error_response("unauthorized");
+    match constant_time_eq(&request.token, expected_token) {
+        true => {}
+        false => return error_response("unauthorized"),
     }
-    if !is_model_credential_ref(&request.credential_ref) {
-        return error_response("invalid credential reference");
+    match is_model_credential_ref(&request.credential_ref) {
+        true => {}
+        false => return error_response("invalid credential reference"),
     }
 
     match request.operation.as_str() {
@@ -153,8 +155,13 @@ fn resolve_request(line: &str, expected_token: &str) -> CredentialResponse {
             Err(_) => error_response("credential store unavailable"),
         },
         "set" => {
-            if !is_chatgpt_plan_credential_ref(&request.credential_ref) {
-                return error_response("credential writes are limited to ChatGPT plan references");
+            match is_chatgpt_plan_credential_ref(&request.credential_ref) {
+                true => {}
+                false => {
+                    return error_response(
+                        "credential writes are limited to ChatGPT plan references",
+                    )
+                }
             }
             let Some(value) = request.value else {
                 return error_response("invalid request");
@@ -171,8 +178,13 @@ fn resolve_request(line: &str, expected_token: &str) -> CredentialResponse {
             }
         }
         "remove" => {
-            if !is_chatgpt_plan_credential_ref(&request.credential_ref) {
-                return error_response("credential writes are limited to ChatGPT plan references");
+            match is_chatgpt_plan_credential_ref(&request.credential_ref) {
+                true => {}
+                false => {
+                    return error_response(
+                        "credential writes are limited to ChatGPT plan references",
+                    )
+                }
             }
             match remove_credential(&request.credential_ref) {
                 Ok(()) => success_response(),
@@ -278,12 +290,20 @@ fn split_utf8(value: &str) -> Vec<&str> {
     for (index, character) in value.char_indices() {
         let end = index + character.len_utf8();
         if end - start > MAX_CREDENTIAL_CHUNK_BYTES {
-            chunks.push(&value[start..index]);
+            chunks.push(
+                value
+                    .get(start..index)
+                    .expect("chunk boundaries come from char_indices"),
+            );
             start = index;
         }
     }
     if start < value.len() {
-        chunks.push(&value[start..]);
+        chunks.push(
+            value
+                .get(start..)
+                .expect("chunk boundaries come from char_indices"),
+        );
     }
     chunks
 }
@@ -331,13 +351,22 @@ fn is_model_credential_ref(credential_ref: &str) -> bool {
 }
 
 fn is_chatgpt_plan_credential_ref(credential_ref: &str) -> bool {
-    matches!(
+    if matches!(
         credential_ref,
         "inkpi.model.openai-chatgpt-plan.account"
+            | "inkpi.model.openai-chatgpt-plan.accounts"
             | "inkpi.model.openai-chatgpt-plan.host"
             | "inkpi.model.openai-chatgpt-plan.pending"
             | "inkpi.model.openai-chatgpt-plan.enabled"
-    )
+    ) {
+        return true;
+    }
+
+    let Some(account_id) = credential_ref.strip_prefix("inkpi.model.openai-chatgpt-plan.account.")
+    else {
+        return false;
+    };
+    account_id.len() == 32 && account_id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn success_response() -> CredentialResponse {
@@ -419,6 +448,15 @@ mod tests {
     fn runtime_writes_are_limited_to_chatgpt_plan_references() {
         assert!(is_chatgpt_plan_credential_ref(
             "inkpi.model.openai-chatgpt-plan.account"
+        ));
+        assert!(is_chatgpt_plan_credential_ref(
+            "inkpi.model.openai-chatgpt-plan.account.0123456789abcdef0123456789abcdef"
+        ));
+        assert!(is_chatgpt_plan_credential_ref(
+            "inkpi.model.openai-chatgpt-plan.accounts"
+        ));
+        assert!(!is_chatgpt_plan_credential_ref(
+            "inkpi.model.openai-chatgpt-plan.account.not-an-id"
         ));
         assert!(is_chatgpt_plan_credential_ref(
             "inkpi.model.openai-chatgpt-plan.enabled"

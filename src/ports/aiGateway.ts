@@ -4,8 +4,10 @@ import type {
   CacheInvalidateResult,
   CacheStatus,
   OpenAIChatGPTPlanConnection,
+  OpenAIChatGPTPlanDisconnectParams,
   OpenAIChatGPTPlanDisconnectResult,
   OpenAIChatGPTPlanModel,
+  OpenAIChatGPTPlanModelsParams,
   OpenAIChatGPTPlanSignInParams,
   OpenAIChatGPTPlanSignInStart,
   OpenAIChatGPTPlanSignInStatus,
@@ -57,8 +59,8 @@ export interface ChatGPTPlanAssistant {
   getStatus(): Promise<OpenAIChatGPTPlanConnection>
   startSignIn(params: OpenAIChatGPTPlanSignInParams): Promise<OpenAIChatGPTPlanSignInStart>
   signInStatus(params: OpenAIChatGPTPlanSignInStatusParams): Promise<OpenAIChatGPTPlanSignInStatus>
-  listModels(): Promise<OpenAIChatGPTPlanModel[]>
-  disconnect(): Promise<OpenAIChatGPTPlanDisconnectResult>
+  listModels(params: OpenAIChatGPTPlanModelsParams): Promise<OpenAIChatGPTPlanModel[]>
+  disconnect(params: OpenAIChatGPTPlanDisconnectParams): Promise<OpenAIChatGPTPlanDisconnectResult>
   openAuthorizationUrl(url: string): Promise<void>
   openUsageSettings(): Promise<void>
 }

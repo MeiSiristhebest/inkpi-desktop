@@ -148,8 +148,8 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
       getStatus: () => client.request('model.chatgpt-plan.status'),
       startSignIn: (params) => client.request('model.chatgpt-plan.sign-in', params),
       signInStatus: (params) => client.request('model.chatgpt-plan.sign-in-status', params),
-      listModels: () => client.request('model.chatgpt-plan.models'),
-      disconnect: () => client.request('model.chatgpt-plan.disconnect'),
+      listModels: (params) => client.request('model.chatgpt-plan.models', params),
+      disconnect: (params) => client.request('model.chatgpt-plan.disconnect', params),
       openAuthorizationUrl: (url) =>
         invoke('open_chatgpt_plan_authorization_url', { url }).then(() => undefined),
       openUsageSettings: () => invoke('open_chatgpt_plan_usage_settings').then(() => undefined),

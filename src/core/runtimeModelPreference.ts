@@ -16,6 +16,8 @@ import { modelSecretKey } from './modelSecrets'
 export interface RuntimeModelPreference {
   providerId: string
   modelId: string
+  routeId?: string
+  required?: boolean
 }
 
 let current: RuntimeModelPreference | undefined
@@ -27,7 +29,13 @@ export function setRuntimeModelPreference(model: ModelConfig | null | undefined)
     current = undefined
     return
   }
-  current = { providerId: model.provider, modelId: model.id }
+  current = {
+    providerId: model.provider,
+    modelId: model.id,
+    ...(model.provider === 'openai-chatgpt-plan'
+      ? { routeId: runtimeModelRouteId(model), required: true }
+      : {}),
+  }
 }
 
 /** 读取当前选定的模型偏好（供 adapter / task 构建器附加到 metadata.modelRoute）。 */
@@ -47,7 +55,9 @@ export function setRuntimeModelRoutes(
   const byKey = new Map<string, ModelConfig>()
   for (const model of [...(models ?? []), ...(activeModel ? [activeModel] : [])]) {
     if (!model.id.trim() || !model.provider || model.enabled === false) continue
-    byKey.set(`${model.provider}\u0000${model.id}`, model)
+    if (model.provider === 'openai-chatgpt-plan' && !model.accountId?.trim()) continue
+    const accountId = model.provider === 'openai-chatgpt-plan' ? model.accountId : ''
+    byKey.set(`${model.provider}\u0000${model.id}\u0000${accountId ?? ''}`, model)
   }
 
   currentRoutes = [...byKey.values()].map((model) => createRuntimeModelRoute(model, activeModel))
@@ -66,7 +76,10 @@ function createRuntimeModelRoute(
   model: ModelConfig,
   activeModel: ModelConfig | null | undefined,
 ): RuntimeModelRouteRegistration {
-  const isActive = activeModel?.id === model.id && activeModel.provider === model.provider
+  const isActive =
+    activeModel?.id === model.id &&
+    activeModel.provider === model.provider &&
+    (model.provider !== 'openai-chatgpt-plan' || activeModel.accountId === model.accountId)
   const contextTokens = positiveNumber(model.contextWindow)
   const maxOutputTokens = positiveNumber(model.maxTokens)
   const baseUrl = model.baseUrl?.trim() || undefined
@@ -97,7 +110,7 @@ function createRuntimeModelRoute(
   }
 
   return {
-    id: `desktop:${encodeURIComponent(provider)}:${encodeURIComponent(model.id.trim())}`,
+    id: runtimeModelRouteId(model),
     model: runtimeModel,
     capabilities: {
       capabilities: ['*'],
@@ -118,6 +131,12 @@ function createRuntimeModelRoute(
     priority: isActive ? 100 : 0,
     fallback: false,
   }
+}
+
+function runtimeModelRouteId(model: Pick<ModelConfig, 'id' | 'provider' | 'accountId'>): string {
+  const base = `desktop:${encodeURIComponent(model.provider)}:${encodeURIComponent(model.id.trim())}`
+  if (model.provider !== 'openai-chatgpt-plan' || !model.accountId?.trim()) return base
+  return `${base}:account:${encodeURIComponent(model.accountId.trim())}`
 }
 
 function positiveNumber(value: number | undefined): number | undefined {

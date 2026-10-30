@@ -26,6 +26,44 @@ describe('runtimeModelPreference — 用户选定模型 → Runtime modelRoute �
     })
   })
 
+  it('isolates identical ChatGPT models by account for route identity and preference', () => {
+    const firstAccount: ModelConfig = {
+      id: 'gpt-5.3-codex',
+      name: 'GPT 5.3 Codex',
+      provider: 'openai-chatgpt-plan',
+      accountId: 'account-a',
+    }
+    const secondAccount: ModelConfig = { ...firstAccount, accountId: 'account-b' }
+
+    setRuntimeModelRoutes([firstAccount, secondAccount], secondAccount)
+    setRuntimeModelPreference(secondAccount)
+
+    expect(getRuntimeModelRoutes()).toMatchObject([
+      {
+        id: 'desktop:openai-chatgpt-plan:gpt-5.3-codex:account:account-a',
+        model: {
+          id: 'gpt-5.3-codex',
+          credentialRef: 'inkpi.model.openai-chatgpt-plan.account.account-a',
+        },
+        priority: 0,
+      },
+      {
+        id: 'desktop:openai-chatgpt-plan:gpt-5.3-codex:account:account-b',
+        model: {
+          id: 'gpt-5.3-codex',
+          credentialRef: 'inkpi.model.openai-chatgpt-plan.account.account-b',
+        },
+        priority: 100,
+      },
+    ])
+    expect(getRuntimeModelPreference()).toEqual({
+      providerId: 'openai-chatgpt-plan',
+      modelId: 'gpt-5.3-codex',
+      routeId: 'desktop:openai-chatgpt-plan:gpt-5.3-codex:account:account-b',
+      required: true,
+    })
+  })
+
   it('null / 缺字段时清除偏好（回退 Runtime 默认路由）', () => {
     setRuntimeModelPreference(null)
     expect(getRuntimeModelPreference()).toBeUndefined()
@@ -62,8 +100,13 @@ describe('runtimeModelPreference — 用户选定模型 → Runtime modelRoute �
       provider: 'deepseek',
       enabled: false,
     }
+    const legacyChatGPTModel: ModelConfig = {
+      id: 'legacy-model',
+      name: 'Legacy model without account ownership',
+      provider: 'openai-chatgpt-plan',
+    }
 
-    setRuntimeModelRoutes([active, disabled], active)
+    setRuntimeModelRoutes([active, disabled, legacyChatGPTModel], active)
 
     expect(getRuntimeModelRoutes()).toMatchObject([
       {

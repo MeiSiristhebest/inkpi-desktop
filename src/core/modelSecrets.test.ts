@@ -49,6 +49,39 @@ describe('model SecretStore boundary', () => {
     expect(JSON.stringify(safe)).not.toContain('secret-value')
   })
 
+  it('uses separate opaque credential references for the same model on different ChatGPT accounts', async () => {
+    const firstAccount = {
+      id: 'gpt-5.3-codex',
+      name: 'GPT 5.3 Codex',
+      provider: 'openai-chatgpt-plan' as const,
+      accountId: 'account-a',
+      apiKey: 'must-not-be-persisted',
+    }
+    const secondAccount = { ...firstAccount, accountId: 'account-b' }
+    const firstRef = modelSecretKey(firstAccount)
+    const secondRef = modelSecretKey(secondAccount)
+    const hasSpy = vi.spyOn(secretStore, 'has').mockResolvedValue(false)
+    const setSpy = vi.spyOn(secretStore, 'set').mockResolvedValue(undefined)
+
+    expect(firstRef).toBe('inkpi.model.openai-chatgpt-plan.account.account-a')
+    expect(secondRef).toBe('inkpi.model.openai-chatgpt-plan.account.account-b')
+    expect(firstRef).not.toBe(secondRef)
+    await persistModelSecrets({
+      ...settings,
+      aiModel: firstAccount,
+      savedAiModels: [secondAccount],
+    })
+    await hydrateModelCredentialStatus({
+      ...settings,
+      aiModel: null,
+      savedAiModels: [firstAccount, secondAccount],
+    })
+
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(hasSpy).toHaveBeenCalledWith(firstRef)
+    expect(hasSpy).toHaveBeenCalledWith(secondRef)
+  })
+
   it('does not remove a stored credential when a redacted settings snapshot is saved', async () => {
     const key = modelSecretKey(settings.aiModel!)
     await secretStore.set(key, 'existing-secret')

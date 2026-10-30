@@ -270,7 +270,7 @@ fn option_value(args: &[String], flags: &[&str]) -> Result<Option<String>, Strin
         }
 
         if let Some((flag, value)) = argument.split_once('=') {
-            if flags.iter().any(|candidate| *candidate == flag) {
+            if flags.contains(&flag) {
                 result = Some(value.to_string());
             }
             index += 1;

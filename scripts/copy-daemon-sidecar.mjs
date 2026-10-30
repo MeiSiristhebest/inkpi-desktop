@@ -8,7 +8,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const src = path.resolve('..', 'inkpi', 'dist-bin', 'inkpi.exe');
+const configuredSource = process.env.INKPI_RUNTIME_BINARY_PATH?.trim();
+const src = configuredSource
+  ? path.resolve(configuredSource)
+  : path.resolve('..', 'inkpi', 'dist-bin', 'inkpi.exe');
 const skillsSrc = path.resolve('..', 'inkpi', 'skills');
 const outDir = path.resolve('src-tauri', 'binaries');
 
