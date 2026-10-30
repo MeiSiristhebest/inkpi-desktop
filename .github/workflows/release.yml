@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing v* release tag to attach the verified installer to
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -82,15 +87,27 @@ jobs:
         working-directory: inkpi-desktop
         run: npx tauri build --target x86_64-pc-windows-msvc
 
+      - name: Verify NSIS Installer
+        shell: pwsh
+        working-directory: inkpi-desktop
+        run: |
+          $installerDir = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
+          $installers = @(Get-ChildItem -Path $installerDir -Filter '*.exe' -File)
+          if ($installers.Count -eq 0) {
+            throw "No NSIS installer found in $installerDir"
+          }
+          $installers | ForEach-Object { Write-Output "Verified installer: $($_.FullName) ($($_.Length) bytes)" }
+
       - name: Upload Desktop Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: inkpi-desktop-${{ matrix.os }}
-          path: inkpi-desktop/src-tauri/target/release/bundle/
+          path: inkpi-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         with:
-          files: inkpi-desktop/src-tauri/target/release/bundle/nsis/*.exe
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          files: inkpi-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
           generate_release_notes: true
