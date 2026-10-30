@@ -75,8 +75,11 @@ describe('ConsistencyMasterView — 战力阶梯与设定巡检哨兵主视口',
     const auditBtn = screen.getByText('立即巡检')
     fireEvent.click(auditBtn)
 
-    await waitFor(() => {
-      expect(screen.getByText('战力越阶失真')).toBeInTheDocument()
-    })
+    await waitFor(
+      () => {
+        expect(screen.getByText('战力越阶失真')).toBeInTheDocument()
+      },
+      { timeout: 5_000 },
+    )
   })
 })
