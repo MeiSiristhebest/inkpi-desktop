@@ -95,9 +95,10 @@ describe('Select 门面', () => {
       </Select>,
     )
     await userEvent.click(screen.getByRole('combobox', { name: '分卷章节' }))
-    expect(await screen.findByText('第一卷')).toBeInTheDocument()
+    const secondChapter = await screen.findByRole('option', { name: '第二章' })
+    expect(screen.getByText('第一卷')).toBeInTheDocument()
     expect(screen.getByText('第二卷')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('option', { name: '第二章' }))
+    await userEvent.click(secondChapter)
     expect(onValueChange).toHaveBeenCalledWith('c2')
   })
 
