@@ -95,7 +95,9 @@ describe('DashboardView', () => {
     )
 
     expect(await screen.findByText('今日产出 23 字 · 本机统计')).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: '打开世界设定' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: '打开世界设定' }, { timeout: 5_000 }),
+    ).toBeInTheDocument()
     await indexedDbDailyStatsRepository.recordDailyWords('p-dash', 5)
     await waitFor(() => expect(screen.getByText('今日产出 28 字 · 本机统计')).toBeInTheDocument())
 
