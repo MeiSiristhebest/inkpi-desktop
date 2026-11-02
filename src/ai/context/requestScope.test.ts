@@ -11,6 +11,7 @@ import {
 import {
   ASSISTANT_HISTORY_TURN_LIMIT,
   formatAssistantRequestScope,
+  projectAssistantConversationHistory,
   projectAssistantRequestScope,
 } from './requestScope'
 
@@ -79,12 +80,34 @@ describe('projectAssistantRequestScope', () => {
     ).toBe(8)
   })
 
-  it('caps disclosed history turns at the slice the send path actually uses', () => {
-    const messages = Array.from({ length: 20 }, (_, index) => ({ role: 'user', text: `${index}` }))
-    const scope = projectAssistantRequestScope({ chapter, historyMessages: messages })
+  it.each([0, 1, 5, 6, 7, 20])(
+    'discloses the retained previous-message count for %i existing messages',
+    (messageCount) => {
+      const messages = Array.from({ length: messageCount }, (_, index) => ({
+        role: 'user',
+        text: `${index}`,
+      }))
+      const scope = projectAssistantRequestScope({ chapter, historyMessages: messages })
 
-    expect(scope.historyTurns).toBe(ASSISTANT_HISTORY_TURN_LIMIT)
-    expect(scope.historyTurns).toBe(messages.slice(-ASSISTANT_HISTORY_TURN_LIMIT).length)
+      expect(scope.historyTurns).toBe(Math.min(messageCount, ASSISTANT_HISTORY_TURN_LIMIT - 1))
+    },
+  )
+
+  it('keeps the current prompt within the total rolling history limit', () => {
+    const previousMessages = Array.from({ length: 20 }, (_, index) => ({
+      role: 'user',
+      text: `${index}`,
+    }))
+    const currentMessage = { role: 'user', text: '本次指令' }
+    const history = projectAssistantConversationHistory(previousMessages, currentMessage)
+    const scope = projectAssistantRequestScope({ chapter, historyMessages: previousMessages })
+
+    expect(history).toHaveLength(ASSISTANT_HISTORY_TURN_LIMIT)
+    expect(history).toEqual([
+      ...previousMessages.slice(-(ASSISTANT_HISTORY_TURN_LIMIT - 1)),
+      currentMessage,
+    ])
+    expect(scope.historyTurns).toBe(history.length - 1)
   })
 
   it('reports no chapter without inventing a title', () => {

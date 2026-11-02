@@ -5,6 +5,7 @@ import { spring, gesture } from '../../motion'
 import type { TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ChapterRecord } from '../../types'
 import { projectContent } from '../../domain/content'
+import type { PreparedReferenceMaterials } from '../../domain/references/referenceMaterials'
 import { clock } from '../../adapters/clock'
 import type { ContinuityAuditTaskInput, DeepReasoningTaskInput } from '../../ai/tasks/taskFactories'
 import type { ContinuityFinding, DeepReasoningResult } from '../../ai/results/taskResults'
@@ -39,6 +40,8 @@ import { DistillationInboxModal } from './DistillationInboxModal'
 import { indexedDbCodexEntityRepository } from '../../adapters/indexedDbCodexEntityRepository'
 import type { CodexEntity } from '../../plugins/living-codex/types'
 import { Select } from '../../ui/primitives'
+import { PluginTaskContextSlot } from '../../core/pluginExtensionSlots'
+import { referenceLibraryService } from '../../services/referenceLibraryService'
 
 interface CreativeWorkflowsPanelProps {
   projectId: string
@@ -72,6 +75,20 @@ interface CreativeWorkflowsPanelProps {
 
 type WorkflowTab = 'audit' | 'reason' | 'distill'
 
+async function prepareTaskReferences(
+  projectId: string,
+  selectedSourceIds: readonly string[],
+  query: string,
+): Promise<PreparedReferenceMaterials | undefined> {
+  const prepared = await referenceLibraryService.prepareForTask(
+    projectId,
+    [...selectedSourceIds],
+    query.slice(0, 8_000),
+    3_200,
+  )
+  return prepared.disclosure.sourceCount > 0 ? prepared : undefined
+}
+
 /** Real UI entry point for the remaining creative vertical slices. */
 export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   projectId,
@@ -85,6 +102,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   chapterMutation,
 }) => {
   const [tab, setTab] = useState<WorkflowTab>('audit')
+  const [selectedReferenceSourceIds, setSelectedReferenceSourceIds] = useState<string[]>([])
   const activeWritingCtx = useOptionalActiveWritingContext()
   const editorChapterId = activeWritingCtx?.chapter?.id
   const userPickedChapterRef = useRef(false)
@@ -157,8 +175,14 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     [chapters],
   )
   const distillationSourceFingerprint = useMemo(
-    () => createDistillationSourceFingerprint(documents),
-    [documents],
+    () =>
+      createDistillationSourceFingerprint(
+        documents,
+        selectedReferenceSourceIds.length
+          ? [...selectedReferenceSourceIds].sort().join('|')
+          : undefined,
+      ),
+    [documents, selectedReferenceSourceIds],
   )
   const distillationTaskId = useMemo(
     () =>
@@ -208,7 +232,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
   }, [auditMarkers, projectId, selectedChapter?.id])
 
   const runAudit = useCallback(
-    async (chapterOverride?: ChapterRecord) => {
+    async (chapterOverride?: ChapterRecord, referenceSourceIds?: string[]) => {
       const chapter = chapterOverride ?? selectedChapter
       if (!chapter || !connected || busy) return
       activeController.current?.abort()
@@ -223,15 +247,25 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       setAuditFindings([])
       try {
         const document = documentForAudit(chapter)
-        const result = await onContinuityAudit(
-          {
-            taskId: idGenerator.generate(`continuity-${chapter.id}`),
-            workspaceId: projectId,
-            document,
-            scope: 'document',
-          },
-          { signal: controller.signal, onProgress: setProgress },
-        )
+        const referenceMaterials =
+          referenceSourceIds === undefined
+            ? undefined
+            : await prepareTaskReferences(
+                projectId,
+                referenceSourceIds,
+                `${chapter.title}\n${document.text.slice(0, 4_000)}\n检查章节连续性`,
+              )
+        const taskInput: ContinuityAuditTaskInput = {
+          taskId: idGenerator.generate(`continuity-${chapter.id}`),
+          workspaceId: projectId,
+          document,
+          scope: 'document',
+        }
+        if (referenceMaterials) taskInput.referenceMaterials = referenceMaterials
+        const result = await onContinuityAudit(taskInput, {
+          signal: controller.signal,
+          onProgress: setProgress,
+        })
         if (token === runToken.current) {
           setAuditDocument(document)
           setAuditFindings(result ?? [])
@@ -244,6 +278,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         if (token === runToken.current) {
           busyRef.current = false
           setBusy(false)
+          if (referenceSourceIds !== undefined) setSelectedReferenceSourceIds([])
           if (activeController.current === controller) activeController.current = null
         }
       }
@@ -285,7 +320,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     }
   }, [connected, projectId, selectedChapterId])
 
-  const runReasoning = async () => {
+  const runReasoning = async (referenceSourceIds: string[] = []) => {
     if (!selectedChapter || !connected || busy) return
     activeController.current?.abort()
     const controller = new AbortController()
@@ -300,15 +335,23 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     setSteering('')
     try {
       const document = documentForChapter(selectedChapter)
-      const result = await onDeepReasoning(
-        {
-          taskId,
-          workspaceId: projectId,
-          document,
-          question: '分析当前章节的关键约束、角色动机和下一步剧情风险。',
-        },
-        { signal: controller.signal, onProgress: setProgress },
+      const question = '分析当前章节的关键约束、角色动机和下一步剧情风险。'
+      const referenceMaterials = await prepareTaskReferences(
+        projectId,
+        referenceSourceIds,
+        `${question}\n${document.text.slice(0, 4_000)}`,
       )
+      const taskInput: DeepReasoningTaskInput = {
+        taskId,
+        workspaceId: projectId,
+        document,
+        question,
+      }
+      if (referenceMaterials) taskInput.referenceMaterials = referenceMaterials
+      const result = await onDeepReasoning(taskInput, {
+        signal: controller.signal,
+        onProgress: setProgress,
+      })
       if (token === runToken.current) setDeepResult(result)
     } catch (cause) {
       if (!controller.signal.aborted && token === runToken.current) {
@@ -318,12 +361,13 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       if (token === runToken.current) {
         busyRef.current = false
         setBusy(false)
+        setSelectedReferenceSourceIds([])
         if (activeController.current === controller) activeController.current = null
       }
     }
   }
 
-  const runSynopsis = async () => {
+  const runSynopsis = async (referenceSourceIds: string[] = []) => {
     if (!selectedChapter || !connected || busy) return
     activeController.current?.abort()
     const controller = new AbortController()
@@ -335,10 +379,16 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
     setProgress(null)
     const chapterId = selectedChapter.id
     try {
+      const referenceMaterials = await prepareTaskReferences(
+        projectId,
+        referenceSourceIds,
+        `概括本章剧情与结尾状态\n${selectedChapter.content.slice(0, 4_000)}`,
+      )
       const result = await generateChapterSynopsis(
         {
           workspaceId: projectId,
           chapter: selectedChapter,
+          referenceMaterials,
           signal: controller.signal,
         },
         {
@@ -357,12 +407,13 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       if (token === runToken.current) {
         busyRef.current = false
         setBusy(false)
+        setSelectedReferenceSourceIds([])
         if (activeController.current === controller) activeController.current = null
       }
     }
   }
 
-  const runDistillation = async () => {
+  const runDistillation = async (referenceSourceIds: string[] = []) => {
     if (documents.length === 0 || !connected || busy) return
     activeController.current?.abort()
     const controller = new AbortController()
@@ -385,35 +436,39 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           distillationSourceFingerprint,
         )
       }
-      const result = await onDistillationWorkflow(
-        {
-          taskId: distillationTaskId,
-          workspaceId: projectId,
-          documents,
-          target: 'project',
-          fields: ['summary', 'entities', 'events', 'promises'],
-        },
-        {
-          chunkSize: 10,
-          checkpoint: distillationCheckpointRef.current,
-          continueOnError: true,
-          signal: controller.signal,
-          saveCheckpoint,
-          onProgress: ({ completedChunks, totalChunks, failedChunks }) => {
-            const finishedChunks = completedChunks + failedChunks.length
-            const isFinished = totalChunks > 0 && finishedChunks >= totalChunks
-            setProgress({
-              taskId: distillationTaskId,
-              kind: 'narrative.project.distill',
-              status: isFinished ? (failedChunks.length ? 'failed' : 'completed') : 'running',
-              progress: totalChunks ? Math.min(1, finishedChunks / totalChunks) : 0,
-              checkpoint: failedChunks.length
-                ? { step: 'retry-failed-chunks', updatedAt: clock.now() }
-                : undefined,
-            })
-          },
-        },
+      const referenceMaterials = await prepareTaskReferences(
+        projectId,
+        referenceSourceIds,
+        `提炼项目中的设定、事件与承诺\n${documents.map((document) => document.text.slice(0, 2_000)).join('\n')}`,
       )
+      const taskInput: ProjectDistillationInput = {
+        taskId: distillationTaskId,
+        workspaceId: projectId,
+        documents,
+        target: 'project',
+        fields: ['summary', 'entities', 'events', 'promises'],
+      }
+      if (referenceMaterials) taskInput.referenceMaterials = referenceMaterials
+      const result = await onDistillationWorkflow(taskInput, {
+        chunkSize: 10,
+        checkpoint: distillationCheckpointRef.current,
+        continueOnError: true,
+        signal: controller.signal,
+        saveCheckpoint,
+        onProgress: ({ completedChunks, totalChunks, failedChunks }) => {
+          const finishedChunks = completedChunks + failedChunks.length
+          const isFinished = totalChunks > 0 && finishedChunks >= totalChunks
+          setProgress({
+            taskId: distillationTaskId,
+            kind: 'narrative.project.distill',
+            status: isFinished ? (failedChunks.length ? 'failed' : 'completed') : 'running',
+            progress: totalChunks ? Math.min(1, finishedChunks / totalChunks) : 0,
+            checkpoint: failedChunks.length
+              ? { step: 'retry-failed-chunks', updatedAt: clock.now() }
+              : undefined,
+          })
+        },
+      })
       if (token === runToken.current && result) {
         setDistillation(result)
         distillationCheckpointRef.current = result.checkpoint
@@ -446,6 +501,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
       if (token === runToken.current) {
         busyRef.current = false
         setBusy(false)
+        setSelectedReferenceSourceIds([])
         if (activeController.current === controller) activeController.current = null
       }
     }
@@ -508,6 +564,15 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
           </span>
         </div>
       </div>
+      <div className="mb-2">
+        <PluginTaskContextSlot
+          projectId={projectId}
+          selectedSourceIds={selectedReferenceSourceIds}
+          onChange={setSelectedReferenceSourceIds}
+          disabled={busy}
+          testId="workflow-reference-picker"
+        />
+      </div>
       <div className="mb-2 grid grid-cols-3 gap-1">
         <TabButton active={tab === 'audit'} onClick={() => setTab('audit')}>
           <Activity className="h-3 w-3" />
@@ -556,13 +621,14 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
         {...gesture.button}
         transition={spring.snappy}
         disabled={!connected || busy || (tab !== 'distill' && !selectedChapter)}
-        onClick={() =>
+        onClick={() => {
+          const referenceSourceIds = [...selectedReferenceSourceIds]
           void (tab === 'audit'
-            ? runAudit()
+            ? runAudit(undefined, referenceSourceIds)
             : tab === 'reason'
-              ? runReasoning()
-              : runDistillation())
-        }
+              ? runReasoning(referenceSourceIds)
+              : runDistillation(referenceSourceIds))
+        }}
         className="flex w-full items-center justify-center gap-1 rounded bg-[var(--ink-accent)] px-2 py-1.5 text-xs text-white disabled:opacity-40"
       >
         {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
@@ -589,7 +655,7 @@ export const CreativeWorkflowsPanel: FC<CreativeWorkflowsPanelProps> = ({
             <button
               type="button"
               data-testid="generate-chapter-synopsis"
-              onClick={() => void runSynopsis()}
+              onClick={() => void runSynopsis([...selectedReferenceSourceIds])}
               disabled={!connected || busy}
               className="rounded border border-[var(--ink-border)] px-2 py-0.5 text-[11px] text-[var(--ink-accent)] disabled:opacity-40"
             >

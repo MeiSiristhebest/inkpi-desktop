@@ -22,7 +22,8 @@ export type ChronologySequenceRole = 'mainline' | 'nonlinear' | 'unknown'
 
 export interface ChapterChronologyEvent {
   chapterId: string
-  chapterOrder: number
+  /** One-based whole-project reading position; null means the chapter is not placeable. */
+  chapterOrder: number | null
   chapterTitle: string
   /** Missing legacy values mean unknown and are excluded from chronology checks. */
   sequenceRole?: ChronologySequenceRole

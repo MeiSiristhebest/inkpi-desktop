@@ -302,7 +302,11 @@ describe('Bookshelf (InkPi 主页)', () => {
     fireEvent.click(
       screen.getByRole('button', { name: '导出完整备份（含设定/时间线/插件/AI 数据）' }),
     )
-    expect(onExport).toHaveBeenCalledWith('p1')
+    expect(screen.getByRole('dialog')).toHaveTextContent('外部参考资料正文默认不包含在备份中')
+    expect(onExport).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('checkbox', { name: '包含已关联参考资料正文' }))
+    fireEvent.click(screen.getByRole('button', { name: '导出完整备份' }))
+    expect(onExport).toHaveBeenCalledWith('p1', { includeLinkedReferenceText: true })
 
     // 打开更多操作菜单触发编辑（菜单条目是 menuitem，不是 button）
     const moreActions = screen.getByRole('button', { name: '更多操作' })
@@ -430,5 +434,26 @@ describe('Bookshelf (InkPi 主页)', () => {
     fireEvent.click(within(section).getByRole('button', { name: '永久删除 收起的书' }))
     fireEvent.click(screen.getByRole('button', { name: '永久删除' }))
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith('p9'))
+  })
+
+  it('opens the external manuscript importer when its service callbacks are available', async () => {
+    render(
+      <Bookshelf
+        projects={[]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onLoadProjectVolumes={vi.fn().mockResolvedValue([])}
+        onImportManuscript={vi.fn().mockResolvedValue({
+          projectId: 'new-project',
+          projectName: '新作品',
+          chapterCount: 1,
+          volumeTitles: ['正文卷'],
+        })}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '导入稿件' }))
+
+    expect(await screen.findByRole('dialog', { name: '导入外部稿件' })).toBeInTheDocument()
   })
 })

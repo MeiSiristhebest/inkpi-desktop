@@ -11,6 +11,7 @@ import { Engine } from './engine'
 import { projectEnabledPluginIds } from './defaultCommands'
 import { db } from '../db/indexedDB'
 import { SettingsProvider } from './settings'
+import { lastActiveChapterKey } from '../lib/resumePointer'
 
 // Engine 默认挂载 RichEditor，后者依赖 useSettings（§12.3：Provider 内才能使用）。
 // rerender 也会落到 Provider 之外，故对 rerender 一并包裹。
@@ -78,6 +79,84 @@ describe('Engine — 主视口路由与多栏布局', () => {
   it('shows the editor view by default for pure writing focus', () => {
     render(<Engine projectId="p1" />)
     expect(screen.getByText('章节目录')).toBeInTheDocument()
+  })
+
+  it('opens the exact chapter selected from the dashboard instead of the saved resume chapter', async () => {
+    const projectId = 'p-dashboard-chapter-target'
+    const volume = {
+      id: 'v-dashboard-chapter-target',
+      projectId,
+      title: '第一卷',
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const resumeChapter = {
+      id: 'c-dashboard-resume',
+      projectId,
+      volumeId: volume.id,
+      title: '第001章 上次章节',
+      content: '<p>主角在上次章节</p>',
+      wordCount: 8,
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const targetChapter = {
+      id: 'c-dashboard-target',
+      projectId,
+      volumeId: volume.id,
+      title: '第002章 热图目标',
+      content: '<p>主角在目标章节</p>',
+      wordCount: 8,
+      order: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const characterCard = {
+      id: 'card-dashboard-character',
+      projectId,
+      tabId: 'char-main',
+      name: '主角',
+      data: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const resumeKey = lastActiveChapterKey(projectId)
+
+    await db.put('volumes', volume)
+    await db.put('chapters', resumeChapter)
+    await db.put('chapters', targetChapter)
+    await db.put('cardRecords', characterCard)
+    localStorage.setItem(resumeKey, resumeChapter.id)
+
+    try {
+      render(<Engine projectId={projectId} />)
+      expect(await screen.findByDisplayValue(resumeChapter.title)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: '打开写作面板' }))
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: `在《${targetChapter.title}》中查看主角的出场位置`,
+        }),
+      )
+      expect(await screen.findByDisplayValue(targetChapter.title)).toBeInTheDocument()
+      await waitFor(() => expect(localStorage.getItem(resumeKey)).toBe(targetChapter.id))
+
+      fireEvent.click(screen.getByRole('button', { name: '打开写作面板' }))
+      fireEvent.click(
+        await screen.findByRole('button', { name: `打开《${resumeChapter.title}》正文` }),
+      )
+      expect(await screen.findByDisplayValue(resumeChapter.title)).toBeInTheDocument()
+      await waitFor(() => expect(localStorage.getItem(resumeKey)).toBe(resumeChapter.id))
+    } finally {
+      cleanup()
+      localStorage.removeItem(resumeKey)
+      await db.delete('cardRecords', characterCard.id)
+      await db.delete('chapters', resumeChapter.id)
+      await db.delete('chapters', targetChapter.id)
+      await db.delete('volumes', volume.id)
+    }
   })
 
   it('opens an enabled plugin from the command palette and returns to the editor', async () => {

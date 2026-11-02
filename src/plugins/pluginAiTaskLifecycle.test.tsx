@@ -144,7 +144,8 @@ describe('plugin AI task lifecycle (§P1.12)', () => {
     )
     expect(screen.getByText('未写入正文')).toBeInTheDocument()
     const receipt = screen.getByLabelText('AI 任务来源与保存状态')
-    expect(receipt).toHaveTextContent('来源 chapter-1 · 修订 8')
+    expect(receipt).toHaveTextContent('来源 手动输入')
+    expect(receipt).not.toHaveTextContent('chapter-1')
     expect(receipt).toHaveTextContent('模型 openrouter / test-model')
     expect(receipt).toHaveTextContent('结果记录 artifact-1')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
@@ -207,7 +208,7 @@ describe('plugin AI task lifecycle (§P1.12)', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('AI 任务已取消'))
 
     expect(screen.getByRole('status')).toHaveTextContent('作者取消了这次分析')
-    expect(screen.getByRole('status')).toHaveTextContent('来源 chapter-1 · 修订 8')
+    expect(screen.getByRole('status')).toHaveTextContent('来源 手动输入')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

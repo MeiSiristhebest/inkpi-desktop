@@ -4,10 +4,20 @@ import type { ActiveWritingContext } from '../../core/activeWritingContext'
 /**
  * 发送前的请求范围披露（P3.15）。
  *
- * 披露必须与实际 payload 同源：滚动历史轮数上限由这里持有，
- * sendAiPrompt 切片与面板文案都引用同一个常量，否则"最近 N 条"会各自漂移。
+ * 披露必须与实际 payload 同源：滚动历史上限由这里持有，
+ * sendAiPrompt 切片与面板文案都引用同一个常量。上限包含本次指令，因此披露的上文最多为上限减一。
  */
 export const ASSISTANT_HISTORY_TURN_LIMIT = 6
+
+/** Keep the current prompt in the bounded history while retaining the newest prior messages. */
+export function projectAssistantConversationHistory<T>(
+  previousMessages: readonly T[],
+  currentMessage: T,
+): T[] {
+  const previousLimit = Math.max(0, ASSISTANT_HISTORY_TURN_LIMIT - 1)
+  const retainedPrevious = previousLimit > 0 ? previousMessages.slice(-previousLimit) : []
+  return [...retainedPrevious, currentMessage]
+}
 
 export interface AssistantRequestScope {
   hasChapter: boolean
@@ -36,7 +46,7 @@ export function projectAssistantRequestScope(
       ? clippedSpan(source.selection.from, source.selection.to, length)
       : 0,
     storyFactCount: countStoryRecords(source.storyState),
-    historyTurns: Math.min(source.historyMessages.length, ASSISTANT_HISTORY_TURN_LIMIT),
+    historyTurns: Math.min(source.historyMessages.length, ASSISTANT_HISTORY_TURN_LIMIT - 1),
   }
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord } from '../../types'
+import type { PreparedReferenceMaterials } from '../../domain/references/referenceMaterials'
 import type { ChapterMutationService } from '../../services/chapterMutationService'
 import { CREATIVE_ARTIFACT_TYPES } from '../artifacts'
 import type { DistillationWorkflowResult, ProjectDistillationInput } from './verticalSlices'
@@ -77,6 +78,51 @@ describe('chapterSynopsisDistillationInput', () => {
 
     expect(repeated).toBe(first)
     expect(edited).not.toBe(first)
+  })
+
+  it('includes selected reference excerpts and gives that run a distinct stable task id', () => {
+    const referenceMaterials: PreparedReferenceMaterials = {
+      excerpts: [
+        {
+          sourceId: 'reference-1',
+          sourceTitle: '城市交通',
+          start: 0,
+          end: 4,
+          text: '都市街道',
+          score: 2,
+          truncated: false,
+        },
+      ],
+      disclosure: {
+        sourceCount: 1,
+        selectedCount: 1,
+        includedCount: 1,
+        omittedCount: 0,
+        includedCharacters: 4,
+        sources: [
+          {
+            sourceId: 'reference-1',
+            title: '城市交通',
+            selected: true,
+            matchedPassages: 1,
+            includedPassages: 1,
+            includedCharacters: 4,
+          },
+        ],
+      },
+    }
+
+    const withoutReferences = chapterSynopsisDistillationInput(chapter, 'proj-1')
+    const withReferences = chapterSynopsisDistillationInput(chapter, 'proj-1', referenceMaterials)
+    const repeatedWithReferences = chapterSynopsisDistillationInput(
+      { ...chapter },
+      'proj-1',
+      referenceMaterials,
+    )
+
+    expect(withReferences.referenceMaterials).toEqual(referenceMaterials)
+    expect(withReferences.taskId).not.toBe(withoutReferences.taskId)
+    expect(repeatedWithReferences.taskId).toBe(withReferences.taskId)
   })
 })
 

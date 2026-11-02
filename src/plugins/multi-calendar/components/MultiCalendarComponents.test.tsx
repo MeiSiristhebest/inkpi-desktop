@@ -15,8 +15,24 @@ vi.mock('../../../core/activeWritingContext', () => ({
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
     getChaptersByProject: vi.fn().mockResolvedValue([
-      { id: 'ch-1', projectId: 'p1', title: '启程出山', order: 1 },
-      { id: 'ch-2', projectId: 'p1', title: '大乱将至', order: 2 },
+      {
+        id: 'ch-1',
+        projectId: 'p1',
+        volumeId: 'vol-1',
+        title: '启程出山',
+        order: 1,
+      },
+      {
+        id: 'ch-2',
+        projectId: 'p1',
+        volumeId: 'vol-1',
+        title: '大乱将至',
+        order: 2,
+      },
+    ]),
+    getVolumesByProject: vi.fn().mockResolvedValue([
+      { id: 'vol-1', projectId: 'p1', title: '第一卷', order: 1 },
+      { id: 'vol-2', projectId: 'p1', title: '第二卷', order: 2 },
     ]),
   },
 }))
@@ -62,6 +78,25 @@ describe('MultiCalendar Components', () => {
     const saveBtn = screen.getByText('保存历法时间线')
     fireEvent.click(saveBtn)
     expect(indexedDbMultiCalendarRepository.save).toHaveBeenCalled()
+  })
+
+  it('labels every calendar number input for assistive technology', async () => {
+    render(<MultiCalendarMasterView projectId="p1" />)
+
+    for (const name of [
+      '一年月数：',
+      '每月天数：',
+      '新历法元年偏移（天）',
+      '源日期年：',
+      '源日期月：',
+      '源日期日：',
+      '事件日期年：',
+      '事件日期月：',
+      '事件日期日：',
+    ]) {
+      expect(screen.getByRole('spinbutton', { name })).toBeInTheDocument()
+    }
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(9)
   })
 
   it('renders MultiCalendarDrawer with temporal detection', async () => {
@@ -120,6 +155,7 @@ describe('MultiCalendar Components', () => {
       {
         id: 'ch-1',
         projectId: 'p1',
+        volumeId: 'vol-1',
         title: '抵达王都',
         order: 1,
         revision: 7,
@@ -176,6 +212,7 @@ describe('MultiCalendar Components', () => {
       {
         id: 'ch-1',
         projectId: 'p1',
+        volumeId: 'vol-1',
         title: '離城',
         order: 1,
         revision: 2,
@@ -184,6 +221,7 @@ describe('MultiCalendar Components', () => {
       {
         id: 'ch-2',
         projectId: 'p1',
+        volumeId: 'vol-1',
         title: '抵达王都',
         order: 2,
         revision: 3,
@@ -266,6 +304,55 @@ describe('MultiCalendar Components', () => {
       }),
     )
     expect(await screen.findByRole('status')).toHaveTextContent('已定位到《離城》的原文。')
+  })
+
+  it('reprojects stored chapter order across volumes before checking chronology', async () => {
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue([
+      { id: 'chapter-1', projectId: 'p1', volumeId: 'vol-1', title: '第一卷起点', order: 1 },
+      { id: 'chapter-2', projectId: 'p1', volumeId: 'vol-1', title: '第一卷终点', order: 2 },
+      { id: 'chapter-3', projectId: 'p1', volumeId: 'vol-2', title: '第二卷起点', order: 1 },
+    ] as any)
+    vi.mocked(indexedDbMultiCalendarRepository.get).mockResolvedValue({
+      ...authoredRecord,
+      chronologyEvents: [
+        {
+          chapterId: 'chapter-2',
+          chapterOrder: 2,
+          chapterTitle: '第一卷终点',
+          sequenceRole: 'mainline',
+          timePoint: {
+            calendarId: 'cal_ancient',
+            year: 100,
+            month: 1,
+            day: 1,
+            absoluteDayIndex: 10000,
+          },
+          eventSummary: '先发生的故事时间',
+          provenance: { evidence: [{ documentId: 'chapter-2', excerpt: '第一卷终点证据' }] },
+        },
+        {
+          chapterId: 'chapter-3',
+          chapterOrder: 1,
+          chapterTitle: '第二卷起点',
+          sequenceRole: 'mainline',
+          timePoint: {
+            calendarId: 'cal_ancient',
+            year: 99,
+            month: 5,
+            day: 1,
+            absoluteDayIndex: 9000,
+          },
+          eventSummary: '后发生的故事时间',
+          provenance: { evidence: [{ documentId: 'chapter-3', excerpt: '第二卷起点证据' }] },
+        },
+      ],
+    } as any)
+
+    render(<MultiCalendarMasterView projectId="p1" />)
+
+    expect(await screen.findByText(/主线顺序与故事时间有 1 处不一致/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '打开第 2 章原文证据' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '打开第 3 章原文证据' })).toBeInTheDocument()
   })
 
   it('drawer reports an unconfigured world rather than falling back to the preset (P2.4)', async () => {

@@ -29,7 +29,7 @@ export function createPluginAnalysisTask(request: PluginAnalysisRequest): AiTask
     ? createTaskScope({
         workspaceId: request.workspaceId,
         workspaceRevision: request.workspaceRevision ?? 1,
-        documentId: request.documentId ?? `plugin-${request.pluginId}`,
+        documentId: request.documentId,
         documentRevision: request.documentRevision ?? 1,
       })
     : undefined
@@ -40,7 +40,7 @@ export function createPluginAnalysisTask(request: PluginAnalysisRequest): AiTask
     scope,
     input: {
       text: typeof analysisInput === 'string' ? analysisInput : undefined,
-      documentId: request.documentId,
+      ...(request.documentId === undefined ? {} : { documentId: request.documentId }),
       payload: {
         pluginId: request.pluginId,
         workspaceId: request.workspaceId,

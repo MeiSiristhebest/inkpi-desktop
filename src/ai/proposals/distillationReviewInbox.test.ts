@@ -67,6 +67,29 @@ describe('DistillationReviewInbox', () => {
     expect(pending.map((item) => item.sourceRevision)).toEqual([2, 5, 6])
   })
 
+  it('stores a selected roleplay scene as a pending proposal without writing canonical events', async () => {
+    const timelineBefore = await db.getByIndex('timelineNodes', 'projectId', workspaceId)
+    const item = await inbox.ingestRoleplayEventCandidate({
+      workspaceId,
+      sessionId: 'session-1',
+      messageId: 'assistant-message-1',
+      name: '夜闯观星台',
+      summary: '守门人让出通路，但要求玩家留下信物。',
+    })
+
+    expect(item).toMatchObject({
+      category: 'event',
+      kind: 'roleplay-scene',
+      name: '夜闯观星台',
+      summary: '守门人让出通路，但要求玩家留下信物。',
+      taskId: 'roleplay:session-1:assistant-message-1',
+      status: 'pending',
+    })
+    expect(inbox.listPending(workspaceId)).toContainEqual(item)
+    expect(await distillationReviewStore.get(workspaceId, item.id)).toEqual(item)
+    expect(await db.getByIndex('timelineNodes', 'projectId', workspaceId)).toEqual(timelineBefore)
+  })
+
   it('accepts an entity proposal: upgrades factLevel to canonical-fact and materializes into StoryState', async () => {
     const [item] = await inbox.ingestDistilledFacts(workspaceId, 'task-distill-2', {
       summary: '新人物提取',

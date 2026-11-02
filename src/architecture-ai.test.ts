@@ -129,7 +129,7 @@ function assertRatchet(rule: string, actual: string[], baseline: readonly string
 
 describe('AI Runtime Phase 0 Desktop architecture guards', () => {
   it('keeps the first-party plugin catalog complete and unique', () => {
-    expect(new Set(FIRST_PARTY_PLUGIN_IDS).size).toBe(44)
+    expect(new Set(FIRST_PARTY_PLUGIN_IDS).size).toBe(49)
     assertFirstPartyPluginCatalog(ALL_AVAILABLE_PLUGINS.map((plugin) => plugin.id))
   })
 

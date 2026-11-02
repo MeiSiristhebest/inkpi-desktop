@@ -123,6 +123,50 @@ describe('projectArtifactToStandardAiResult', () => {
     })
   })
 
+  it('projects only a valid Desktop-prepared context coverage summary', () => {
+    const coverage = {
+      version: 1 as const,
+      documentText: { sourceCharacters: 20, includedCharacters: 10, rangeStart: 10, rangeEnd: 20 },
+      selectionText: {
+        explicitSelection: true,
+        sourceCharacters: 4,
+        includedCharacters: 4,
+        rangeStart: 12,
+        rangeEnd: 16,
+      },
+      semanticBlocks: { count: 2, characters: 20 },
+      neighboringDocuments: { count: 1, characters: 5 },
+      storyState: { attached: true, recordCount: 3 },
+      storyContext: { recordCount: 2, canonicalFactCount: 1, hypothesisCount: 0 },
+      jit: { entityCount: 2, promiseCount: 1 },
+    }
+    const result = projectArtifactToStandardAiResult(
+      artifact({
+        kind: 'creative.assistant',
+        metadata: { desktopPreparedContextCoverage: coverage },
+      }),
+    )
+    expect(result?.provenance.desktopPreparedContextCoverage).toEqual(coverage)
+
+    const malformed = projectArtifactToStandardAiResult(
+      artifact({
+        kind: 'creative.assistant',
+        metadata: {
+          desktopPreparedContextCoverage: {
+            version: 1,
+            documentText: { sourceCharacters: 2, includedCharacters: 3 },
+          },
+        },
+      }),
+    )
+    expect(malformed?.provenance.desktopPreparedContextCoverage).toBeUndefined()
+
+    const pluginMetadata = projectArtifactToStandardAiResult(
+      artifact({ metadata: { desktopPreparedContextCoverage: coverage } }),
+    )
+    expect(pluginMetadata?.provenance.desktopPreparedContextCoverage).toBeUndefined()
+  })
+
   it('leaves model fields absent for a locally produced result', () => {
     const result = projectArtifactToStandardAiResult(artifact({ provenance: {} }))
     expect(result?.provenance.provider).toBeUndefined()

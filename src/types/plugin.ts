@@ -1,4 +1,11 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
+import type { ChapterRecord, ProjectRecord, VolumeRecord } from './index'
+import type { ManuscriptImportPreview } from '../domain/manuscript/importParser'
+import type {
+  ManuscriptImportDestination,
+  ManuscriptImportProgress,
+  ManuscriptImportResult,
+} from '../services/manuscriptImportService'
 
 export type DesktopPluginCategory =
   | 'lore' // 设定与世界书套件
@@ -18,6 +25,40 @@ export type PluginDrawerCapability = 'context-inspector' | 'quick-action' | 'liv
 export interface DesktopPluginViewProps {
   projectId: string
   onStats?: (stats: { title?: string; wordCount: number; updatedAt?: number }) => void
+  onOpenView?: (view: string) => void
+  onOpenChapter?: (chapterId: string) => void
+  onBackToLibrary?: () => void
+}
+
+export interface PluginBookshelfActionProps {
+  projects: ProjectRecord[]
+  onLoadProjectVolumes: (projectId: string) => Promise<VolumeRecord[]>
+  onImportManuscript: (
+    preview: ManuscriptImportPreview,
+    destination: ManuscriptImportDestination,
+    onProgress?: (progress: ManuscriptImportProgress) => void,
+  ) => Promise<ManuscriptImportResult>
+}
+
+export interface PluginDashboardExtensionProps {
+  projectId: string
+  project: ProjectRecord | null
+  volumes: VolumeRecord[]
+  chapters: ChapterRecord[]
+  loading: boolean
+  resumeChapter: ChapterRecord | undefined
+  unresolvedForeshadowsCount: number
+  unusedIdeasCount: number
+  onOpenView: (view: string) => void
+  onOpenChapter: (chapterId: string) => void
+}
+
+export interface PluginTaskContextProps {
+  projectId: string
+  selectedSourceIds: string[]
+  onChange: (sourceIds: string[]) => void
+  disabled?: boolean
+  testId?: string
 }
 
 export interface DesktopPluginDrawerProps {
@@ -67,6 +108,11 @@ export interface DesktopPlugin {
   createDrawerSnippetView?: () => LazyExoticComponent<ComponentType<DesktopPluginDrawerProps>>
   /** 这个抽屉属于哪一类能力（§P2.8）。与 drawerSnippetView 成对出现，由注册表声明。 */
   drawerCapability?: PluginDrawerCapability
+
+  // Generic host extension slots; feature-owned views are loaded by the contributing plugin.
+  bookshelfActionView?: ComponentType<PluginBookshelfActionProps>
+  dashboardExtensionView?: ComponentType<PluginDashboardExtensionProps>
+  taskContextView?: ComponentType<PluginTaskContextProps>
 
   // 3. 结构化上下文贡献者；指令和模型选择由统一任务运行时负责。
   contextProvider?: PluginContextProvider

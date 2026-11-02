@@ -22,9 +22,10 @@ describe('plugin runtime catalog', () => {
     }
   })
 
-  it('keeps the seven plan classes explicit', () => {
+  it('keeps the eight plan classes explicit', () => {
     const allowed: PluginRuntimeClass[] = [
       'pure-local',
+      'shared-ai',
       'ai-task',
       'context-provider',
       'tool',

@@ -86,6 +86,9 @@ export interface RichEditorProps {
     sourceRevision: number,
     signal?: AbortSignal,
   ) => Promise<string | null>
+  /** One-shot chapter target requested by a chapter-specific external navigation. */
+  requestedChapterId?: string
+  onRequestedChapterConsumed?: (chapterId: string) => void
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 可选的长任务快照；未提供时，编辑器追踪自身发起的任务直到 Promise 结束。 */
   taskProgress?: TaskStatusSnapshot | null
@@ -133,6 +136,8 @@ export const RichEditor: FC<RichEditorProps> = ({
   isReconnecting = false,
   onReconnect = () => {},
   onRequestGhost,
+  requestedChapterId,
+  onRequestedChapterConsumed,
   onAiTask,
   taskProgress,
   onHome,
@@ -153,6 +158,8 @@ export const RichEditor: FC<RichEditorProps> = ({
     editorRef,
     onStats,
     onRequestGhost,
+    requestedChapterId,
+    onRequestedChapterConsumed,
   })
   const {
     activeChapter,

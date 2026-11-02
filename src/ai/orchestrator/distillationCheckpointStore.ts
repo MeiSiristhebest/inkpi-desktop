@@ -77,8 +77,10 @@ export const indexedDbDistillationCheckpointStore = new IndexedDbDistillationChe
 /** Stable source identity used to reject a checkpoint from a different project revision. */
 export function createDistillationSourceFingerprint(
   documents: readonly SemanticDocument[],
+  referenceSelectionFingerprint?: string,
 ): string {
-  return hash(stableSerialize(documents))
+  if (!referenceSelectionFingerprint) return hash(stableSerialize(documents))
+  return hash(stableSerialize({ documents, referenceSelectionFingerprint }))
 }
 
 function isPersistedCheckpoint(

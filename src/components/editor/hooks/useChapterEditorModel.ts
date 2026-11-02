@@ -235,6 +235,8 @@ export interface UseChapterEditorModelArgs {
     sourceRevision: number,
     signal?: AbortSignal,
   ) => Promise<string | null>
+  requestedChapterId?: string
+  onRequestedChapterConsumed?: (chapterId: string) => void
   /** Lightweight KV port for editor preferences and workspace pointers.
    *  测试时注入内存实现；生产默认使用 localStorageKeyValueStore。
    */
@@ -392,6 +394,8 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
     editorRef,
     onStats,
     onRequestGhost,
+    requestedChapterId,
+    onRequestedChapterConsumed,
     kvStore = localStorageKeyValueStore,
     historyStore = indexedDbChapterHistoryStore,
   } = args
@@ -444,6 +448,10 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
   const kvStoreRef = useRef(kvStore)
   kvStoreRef.current = kvStore
+  const requestedChapterIdRef = useRef(requestedChapterId)
+  requestedChapterIdRef.current = requestedChapterId
+  const onRequestedChapterConsumedRef = useRef(onRequestedChapterConsumed)
+  onRequestedChapterConsumedRef.current = onRequestedChapterConsumed
   const historyStoreRef = useRef(historyStore)
   historyStoreRef.current = historyStore
 
@@ -687,6 +695,7 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
   )
 
   const loadData = useCallback(async () => {
+    const requestedChapterIdAtLoad = requestedChapterIdRef.current
     const [allVols, allChs] = await Promise.all([
       indexedDbProjectRepository.getVolumesByProject(projectId),
       indexedDbProjectRepository.getChaptersByProject(projectId),
@@ -736,6 +745,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
         activeChapterId: initChs[0]?.id ?? '',
         activeChapter: initChs[0] ?? null,
       })
+      if (requestedChapterIdAtLoad) {
+        onRequestedChapterConsumedRef.current?.(requestedChapterIdAtLoad)
+      }
       return
     }
 
@@ -744,11 +756,18 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
 
     // P0.3 & P1.3: 优先恢复上次阅读/写作的章节，并检测是否存在未经存盘的草稿日记 (Draft WAL Crash Recovery)
     const lastChapterKey = `inkpi_last_active_chapter:${projectId}`
-    let initialChapter = projChs[0] ?? null
-    const savedChapterId = await kvStoreRef.current.get(lastChapterKey)
-    if (savedChapterId) {
-      const found = projChs.find((c) => c.id === savedChapterId)
-      if (found) initialChapter = found
+    const requestedChapter = requestedChapterIdAtLoad
+      ? projChs.find((chapter) => chapter.id === requestedChapterIdAtLoad)
+      : undefined
+    let initialChapter = requestedChapter ?? projChs[0] ?? null
+    if (requestedChapter) {
+      void kvStoreRef.current.set(lastChapterKey, requestedChapter.id)
+    } else {
+      const savedChapterId = await kvStoreRef.current.get(lastChapterKey)
+      if (savedChapterId) {
+        const found = projChs.find((chapter) => chapter.id === savedChapterId)
+        if (found) initialChapter = found
+      }
     }
 
     const draftRecovery = getDraftRecoveryState(projectId, initialChapter)
@@ -761,6 +780,9 @@ export function useChapterEditorModel(args: UseChapterEditorModelArgs): ChapterE
       activeChapter: initialChapter,
       draftRecovery,
     })
+    if (requestedChapterIdAtLoad) {
+      onRequestedChapterConsumedRef.current?.(requestedChapterIdAtLoad)
+    }
   }, [projectId, patch, runPersistence])
 
   useEffect(() => {

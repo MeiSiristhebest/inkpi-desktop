@@ -9,6 +9,15 @@ import { createDomainChangeSet } from '../domain/sync/domainChangeSet'
 import { IndexedDbDomainChangeStore } from '../adapters/indexedDbDomainChangeStore'
 import { PROJECT_DOMAIN_STORES } from './workspaceLifecycleService'
 import type { GoldChapterEvalRecord, GoldOpeningSnapshot } from '../ports/goldChaptersRepository'
+import type { ReferenceSourceRecord } from '../domain/references/referenceMaterials'
+
+describe('WorkspaceLifecycleService global-store boundaries', () => {
+  it('keeps immutable world-pack snapshots out of per-project data and backup loops', () => {
+    expect(STORES).toContain('worldPackSnapshots')
+    expect(PROJECT_DOMAIN_STORES).not.toContain('worldPackSnapshots')
+    expect(AUTHORITATIVE_STORES).not.toContain('worldPackSnapshots')
+  })
+})
 
 describe('WorkspaceLifecycleService', () => {
   let projectRepo: ProjectRepository
@@ -111,7 +120,15 @@ describe('WorkspaceLifecycleService', () => {
     // 权威事实源由各自通道负责（卷章走 projectRepo/ChapterMutationService，领域日志走
     // IndexedDbDomainChangeStore）。通用领域表循环把它们纳进来就是 INV-02 旁路，
     // 而且领域日志的 checksum 在重新命名空间化后必然失效。
-    const coreStores = new Set(['projects', 'volumes', 'chapters', 'pluginSettings', 'settings'])
+    const coreStores = new Set([
+      'projects',
+      'volumes',
+      'chapters',
+      'pluginSettings',
+      'settings',
+      'referenceSources',
+      'worldPackSnapshots',
+    ])
     const authoritativeStores = new Set<string>(AUTHORITATIVE_STORES)
     const portableStores = STORES.filter((store) => !coreStores.has(store)).filter(
       (store) => !authoritativeStores.has(store),
@@ -136,6 +153,150 @@ describe('WorkspaceLifecycleService', () => {
       expect(backup.project.id).toBe('orig-proj')
       expect(backup.volumes[0].id).toBe('orig-vol-1')
       expect(backup.chapters[0].id).toBe('orig-ch-1')
+    }
+  })
+
+  it('backs up and remaps recoverable roleplay sessions with project data', async () => {
+    const session = {
+      id: 'roleplay-backup-session',
+      schemaVersion: 1,
+      projectId: mockProject.id,
+      title: 'The sealed city',
+      scenario: 'A city behind a wall',
+      playerCharacter: 'A traveler',
+      aiCharacter: 'The gatekeeper',
+      stateNotes: 'The gate is locked.',
+      messages: [
+        { id: 'roleplay-backup-message', role: 'user', text: 'I knock.', createdAt: 4000 },
+      ],
+      turnStatus: 'ready',
+      revision: 1,
+      createdAt: 3000,
+      updatedAt: 4000,
+    } as const
+    let importedProjectId: string | undefined
+    let importedSessionId: string | undefined
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    try {
+      await db.put('roleplaySessions', session)
+      const backup = await service.exportWorkspaceBackup(mockProject.id)
+      expect(backup?.domainData.roleplaySessions).toContainEqual(session)
+
+      const result = await service.importWorkspaceAsCopy(backup)
+      expect(result.ok, result.error).toBe(true)
+      importedProjectId = result.workspaceId
+      const imported = await db.getByIndex<{
+        id: string
+        projectId: string
+        title: string
+        messages: Array<{ role: string; text: string }>
+      }>('roleplaySessions', 'projectId', importedProjectId!)
+      expect(imported).toHaveLength(1)
+      expect(imported[0]).toMatchObject({
+        projectId: importedProjectId,
+        title: session.title,
+        messages: [{ role: 'user', text: 'I knock.' }],
+      })
+      importedSessionId = imported[0]!.id
+      expect(importedSessionId).not.toBe(session.id)
+      expect(await db.get('roleplaySessions', session.id)).toEqual(session)
+    } finally {
+      await db.delete('roleplaySessions', session.id)
+      if (importedSessionId) await db.delete('roleplaySessions', importedSessionId)
+      if (importedProjectId) await service.purgeWorkspace(importedProjectId)
+    }
+  })
+
+  it('omits linked reference text by default and includes it only after explicit opt-in', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const referenceLinkKey = 'orig-proj::reference-library-source-ids'
+    const referenceSource: ReferenceSourceRecord = {
+      id: 'reference-backup-source',
+      title: '城市场景资料',
+      originalFileName: 'city.md',
+      format: 'md',
+      text: '完整参考资料正文',
+      tags: ['都市'],
+      contentFingerprint: 'reference-fingerprint',
+      importedAt: 1000,
+      updatedAt: 1000,
+    }
+    await Promise.all([
+      db.put('settingsKV', { key: referenceLinkKey, value: [referenceSource.id] }),
+      db.put('referenceSources', referenceSource),
+    ])
+
+    try {
+      const withoutText = await service.exportWorkspaceBackup('orig-proj')
+      expect(withoutText?.manifest.referenceMaterialsIncluded).toBe(false)
+      expect(withoutText?.manifest.referenceMaterialsCount).toBe(1)
+      expect(withoutText?.referenceSources).toBeUndefined()
+      expect(withoutText?.domainData.settingsKV ?? []).not.toContainEqual(
+        expect.objectContaining({ key: referenceLinkKey }),
+      )
+
+      const withText = await service.exportWorkspaceBackup('orig-proj', {
+        includeLinkedReferenceText: true,
+      })
+      expect(withText?.manifest.referenceMaterialsIncluded).toBe(true)
+      expect(withText?.manifest.referenceMaterialsCount).toBe(1)
+      expect(withText?.referenceSources).toEqual([referenceSource])
+      expect(withText?.domainData.settingsKV).toContainEqual({
+        key: referenceLinkKey,
+        value: [referenceSource.id],
+      })
+    } finally {
+      await Promise.all([
+        db.delete('settingsKV', referenceLinkKey),
+        db.delete('referenceSources', referenceSource.id),
+      ])
+    }
+  })
+
+  it('restores included linked reference text and project association from a full backup', async () => {
+    const service = new WorkspaceLifecycleService(projectRepo, idGen, clock)
+    const referenceLinkKey = 'orig-proj::reference-library-source-ids'
+    const referenceSource: ReferenceSourceRecord = {
+      id: 'reference-import-source',
+      title: '城市轨道资料',
+      originalFileName: 'rail.md',
+      format: 'md',
+      text: '新线路改变通勤结构。',
+      tags: ['都市'],
+      contentFingerprint: 'rail-fingerprint',
+      importedAt: 1000,
+      updatedAt: 1000,
+    }
+    await Promise.all([
+      db.put('settingsKV', { key: referenceLinkKey, value: [referenceSource.id] }),
+      db.put('referenceSources', referenceSource),
+    ])
+    let importedWorkspaceId: string | undefined
+
+    try {
+      const archive = await service.exportWorkspaceBackup('orig-proj', {
+        includeLinkedReferenceText: true,
+      })
+      expect(archive?.referenceSources).toEqual([referenceSource])
+      await db.delete('referenceSources', referenceSource.id)
+
+      const result = await service.importWorkspace(archive)
+      expect(result.ok).toBe(true)
+      importedWorkspaceId = result.workspaceId
+      if (!importedWorkspaceId) throw new Error('Expected an imported workspace ID')
+      await expect(db.get('referenceSources', referenceSource.id)).resolves.toEqual(referenceSource)
+      await expect(
+        db.get('settingsKV', `${importedWorkspaceId}::reference-library-source-ids`),
+      ).resolves.toEqual({
+        key: `${importedWorkspaceId}::reference-library-source-ids`,
+        value: [referenceSource.id],
+      })
+    } finally {
+      if (importedWorkspaceId) await service.purgeWorkspace(importedWorkspaceId)
+      await Promise.all([
+        db.delete('settingsKV', referenceLinkKey),
+        db.delete('referenceSources', referenceSource.id),
+      ])
     }
   })
 

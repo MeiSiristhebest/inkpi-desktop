@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Bold, Italic, Wand2, Anchor, CheckCircle2, Sparkles } from 'lucide-react'
+import { Bold, Italic, Wand2, Anchor, CheckCircle2, Sparkles, BookOpen } from 'lucide-react'
 import { spring, variants, gesture } from '../../motion'
 import { useOptionalPluginHostContext } from '../../core/pluginHostContext'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
@@ -23,6 +23,8 @@ import {
 import { idGenerator } from '../../adapters/idGenerator'
 import type { ProposalSyncRemote } from '../../adapters/daemonDomainSyncRemote'
 import { getProposalSyncRemote, isProposalSyncError, RemoteProposalStore } from '../../ai/proposals'
+import { PluginTaskContextSlot } from '../../core/pluginExtensionSlots'
+import { referenceLibraryService } from '../../services/referenceLibraryService'
 import { proposalStateEvents, type ProposalEventScope } from '../../ports/proposalStateEvents'
 import { Tooltip } from '../../ui/primitives'
 
@@ -95,9 +97,15 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   const [rewriteComposerOpen, setRewriteComposerOpen] = useState(false)
   const [rewriteInstruction, setRewriteInstruction] = useState('')
   const [rewriteError, setRewriteError] = useState<string | null>(null)
+  const [selectedReferenceSourceIds, setSelectedReferenceSourceIds] = useState<string[]>([])
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false)
   const rewriteRequestGenerationRef = useRef(0)
   const rewriteComposerAnchorRef = useRef<RewriteRequestAnchor | null>(null)
-  const lastRewriteRequestRef = useRef<{ anchor: RewriteRequestAnchor; goal: string } | null>(null)
+  const lastRewriteRequestRef = useRef<{
+    anchor: RewriteRequestAnchor
+    goal: string
+    referenceSourceIds: string[]
+  } | null>(null)
   const explicitProposalSyncRemoteRef = useRef(proposalSyncRemote)
   const taskProposalSyncRemoteRef = useRef<ProposalSyncRemote | undefined>(undefined)
   const initialWorkspaceId = normalizeScopeId(workspaceId) ?? normalizeScopeId(host?.projectId)
@@ -122,6 +130,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     setRewriteComposerOpen(false)
     setRewriteInstruction('')
     setRewriteError(null)
+    setSelectedReferenceSourceIds([])
+    setReferencePickerOpen(false)
     rewriteComposerAnchorRef.current = null
     lastRewriteRequestRef.current = null
   }, [activeContext.workspaceId, activeContext.chapterId, activeContext.revision])
@@ -264,7 +274,11 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
   const currentRewriteProposal =
     rewriteProposal?.proposal.documentId === currentDocumentId ? rewriteProposal : null
   if (
-    (!state.show && !currentRewriteProposal && !rewriteComposerOpen && !rewriteError) ||
+    (!state.show &&
+      !currentRewriteProposal &&
+      !rewriteComposerOpen &&
+      !rewriteError &&
+      !referencePickerOpen) ||
     !editor
   ) {
     return null
@@ -325,10 +339,16 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     setRewriteComposerOpen(false)
     setRewriteInstruction('')
     setRewriteError(null)
+    setSelectedReferenceSourceIds([])
+    setReferencePickerOpen(false)
     rewriteComposerAnchorRef.current = null
   }
 
-  const runRewrite = async (goal: string, requestedAnchor: RewriteRequestAnchor | null = null) => {
+  const runRewrite = async (
+    goal: string,
+    requestedAnchor: RewriteRequestAnchor | null = null,
+    requestedReferenceSourceIds?: string[],
+  ) => {
     if (!onAiTask || rewriteBusy) return
     const anchor = requestedAnchor ?? rewriteComposerAnchorRef.current ?? captureRewriteAnchor()
     if (!anchor) {
@@ -341,10 +361,21 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
     }
 
     const requestGeneration = ++rewriteRequestGenerationRef.current
-    lastRewriteRequestRef.current = { anchor, goal }
+    const referenceSourceIds = [...(requestedReferenceSourceIds ?? selectedReferenceSourceIds)]
+    lastRewriteRequestRef.current = { anchor, goal, referenceSourceIds }
     setRewriteBusy(true)
     setRewriteError(null)
     try {
+      const referenceMaterials = await referenceLibraryService.prepareForTask(
+        anchor.context.workspaceId,
+        referenceSourceIds,
+        `${goal}\n${anchor.document.text.slice(anchor.selection.from, anchor.selection.to)}`,
+        3_200,
+      )
+      if (requestGeneration !== rewriteRequestGenerationRef.current) return
+      if (!rewriteAnchorIsCurrent(anchor)) {
+        throw new Error('选区内容或章节已变化，请重新选择后生成。')
+      }
       const result = await onAiTask(
         createRewriteTask({
           taskId: idGenerator.generate(`rewrite-${anchor.context.chapterId || 'selection'}`),
@@ -352,6 +383,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
           document: anchor.document,
           selection: anchor.selection,
           goal,
+          ...(referenceMaterials.disclosure.sourceCount > 0 ? { referenceMaterials } : {}),
           metadata: { source: 'selection-toolbar', sourceHash: anchor.sourceHash },
         }),
       )
@@ -385,7 +417,11 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       if (requestGeneration !== rewriteRequestGenerationRef.current) return
       setRewriteError(error instanceof Error ? error.message : String(error))
     } finally {
-      if (requestGeneration === rewriteRequestGenerationRef.current) setRewriteBusy(false)
+      if (requestGeneration === rewriteRequestGenerationRef.current) {
+        setRewriteBusy(false)
+        setSelectedReferenceSourceIds([])
+        setReferencePickerOpen(false)
+      }
     }
   }
 
@@ -405,7 +441,7 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       setRewriteError('没有可重试的请求，请重新选择文本后生成。')
       return
     }
-    void runRewrite(request.goal, request.anchor)
+    void runRewrite(request.goal, request.anchor, request.referenceSourceIds)
   }
 
   const commitRewrite = async () => {
@@ -591,31 +627,35 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
         event.preventDefault()
       }}
     >
-      {state.show && (
+      {(state.show || referencePickerOpen) && (
         <>
-          <Tooltip content="加粗">
-            <motion.button
-              type="button"
-              {...gesture.iconButton}
-              transition={spring.snappy}
-              onClick={() => editor.chain().focus().toggleBold().run()}
-              className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('bold') ? 'text-[var(--ink-accent)]' : ''}`}
-            >
-              <Bold className="w-3.5 h-3.5" />
-            </motion.button>
-          </Tooltip>
-          <Tooltip content="斜体">
-            <motion.button
-              type="button"
-              {...gesture.iconButton}
-              transition={spring.snappy}
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-              className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('italic') ? 'text-[var(--ink-accent)]' : ''}`}
-            >
-              <Italic className="w-3.5 h-3.5" />
-            </motion.button>
-          </Tooltip>
-          <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />
+          {state.show && (
+            <Tooltip content="加粗">
+              <motion.button
+                type="button"
+                {...gesture.iconButton}
+                transition={spring.snappy}
+                onClick={() => editor.chain().focus().toggleBold().run()}
+                className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('bold') ? 'text-[var(--ink-accent)]' : ''}`}
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </motion.button>
+            </Tooltip>
+          )}
+          {state.show && (
+            <Tooltip content="斜体">
+              <motion.button
+                type="button"
+                {...gesture.iconButton}
+                transition={spring.snappy}
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+                className={`p-1.5 rounded-md hover:bg-[var(--ink-bg-hover)] ${editor.isActive('italic') ? 'text-[var(--ink-accent)]' : ''}`}
+              >
+                <Italic className="w-3.5 h-3.5" />
+              </motion.button>
+            </Tooltip>
+          )}
+          {state.show && <div className="w-px h-4 bg-[var(--ink-border)] mx-0.5" />}
           <Tooltip content="调用 InkPi AI 划词润色">
             <motion.button
               type="button"
@@ -628,6 +668,26 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
               <span>{rewriteBusy ? '处理中…' : 'AI 润色'}</span>
             </motion.button>
           </Tooltip>
+          {initialProjectId && onAiTask && (
+            <Tooltip content="选择本次 AI 任务参考资料（默认不附带）">
+              <motion.button
+                type="button"
+                {...gesture.button}
+                transition={spring.snappy}
+                aria-label="选择本次参考资料"
+                aria-expanded={referencePickerOpen}
+                onClick={() => setReferencePickerOpen((open) => !open)}
+                disabled={rewriteBusy}
+                className="px-2 py-1 rounded-md text-[11px] flex items-center gap-1 text-[var(--ink-text-muted)] hover:bg-[var(--ink-bg-hover)] disabled:opacity-50"
+              >
+                <BookOpen className="h-3 w-3" />
+                <span>
+                  参考资料
+                  {selectedReferenceSourceIds.length ? ` ${selectedReferenceSourceIds.length}` : ''}
+                </span>
+              </motion.button>
+            </Tooltip>
+          )}
           <Tooltip content="先写下语气、篇幅或描写方面的要求">
             <motion.button
               type="button"
@@ -695,6 +755,17 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             </Tooltip>
           )}
         </>
+      )}
+      {referencePickerOpen && initialProjectId && onAiTask && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-2 shadow-[var(--ink-shadow-lg)]">
+          <PluginTaskContextSlot
+            projectId={initialProjectId}
+            selectedSourceIds={selectedReferenceSourceIds}
+            onChange={setSelectedReferenceSourceIds}
+            disabled={rewriteBusy}
+            testId="selection-reference-picker"
+          />
+        </div>
       )}
       {rewriteComposerOpen && (
         <form

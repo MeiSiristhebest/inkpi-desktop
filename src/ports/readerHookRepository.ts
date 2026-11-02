@@ -11,6 +11,7 @@ export interface ReaderHookRecord {
   tensionScore?: number
   authorIntent?: string
   sourceRevision?: number
+  sourceKind?: 'saved-chapter' | 'edited-copy' | 'manual'
   observations?: import('../domain/endingReview').EndingObservation[]
   coverage?: { start: number; end: number; total: number }
   analysisAdvice?: string

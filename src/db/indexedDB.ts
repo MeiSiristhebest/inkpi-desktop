@@ -9,7 +9,7 @@
 // 供上层组件（RichEditor / Engine）调用，不直接参与业务编排。
 
 export const DB_NAME = 'inkpi-studio'
-export const DB_VERSION = 28
+export const DB_VERSION = 31
 
 export const STORES = [
   'projects',
@@ -67,6 +67,12 @@ export const STORES = [
   'domainChangeSets',
   'aiArtifacts',
   'aiProposals',
+  // Global author-managed source texts; project access is controlled through settingsKV links.
+  'referenceSources',
+  // Append-only cross-project snapshots; never canonical project data.
+  'worldPackSnapshots',
+  // Recoverable roleplay chats are project-scoped sandbox data, never canonical story facts.
+  'roleplaySessions',
 ] as const
 export type StoreName = (typeof STORES)[number]
 
@@ -116,6 +122,12 @@ class InkStudioDB {
             if (name === 'codexEntities' && typeof store.createIndex === 'function') {
               store.createIndex('projectId', 'projectId', { unique: false })
               store.createIndex('category', 'category', { unique: false })
+            }
+            if (name === 'worldPackSnapshots' && typeof store.createIndex === 'function') {
+              store.createIndex('sourceProjectId', 'sourceProjectId', { unique: false })
+            }
+            if (name === 'roleplaySessions' && typeof store.createIndex === 'function') {
+              store.createIndex('projectId', 'projectId', { unique: false })
             }
             if (
               (name === 'tableRows' || name === 'cardRecords') &&
@@ -292,6 +304,8 @@ class InkStudioDB {
           ['aiArtifacts', 'taskId'],
           ['aiArtifacts', 'type'],
           ['aiArtifacts', 'workspaceId', 'ownership.workspaceId'],
+          ['worldPackSnapshots', 'sourceProjectId'],
+          ['roleplaySessions', 'projectId'],
         ]
         const upgradeTransaction = request.transaction
         if (upgradeTransaction) {

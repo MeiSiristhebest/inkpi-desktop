@@ -25,6 +25,13 @@ describe('buildChronologyScanInput', () => {
     )
   })
 
+  it('does not invent a whole-book number for a chapter without a volume position', () => {
+    const unplaced = { ...chapter(3, '独立资料'), order: null }
+    const result = buildChronologyScanInput([unplaced])
+
+    expect(result.input['chapter:chapter-3@revision:1:1']).toBe('章节位置未知《第3章》：\n独立资料')
+  })
+
   it('records omitted chapters and per-chapter truncation in the submitted scope', () => {
     const chapters = Array.from({ length: MAX_CHRONOLOGY_SCAN_CHAPTERS + 1 }, (_, index) =>
       chapter(index + 1, '甲'.repeat(index === 0 ? 300 : 20), 7),

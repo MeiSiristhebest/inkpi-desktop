@@ -61,9 +61,15 @@ describe('IndexedDB distillation checkpoint store', () => {
     await expect(store.load(projectId, taskId)).resolves.toBeUndefined()
   })
 
-  it('changes source fingerprints when document content or revision changes', () => {
+  it('changes source fingerprints when document content, revision, or selected references change', () => {
     const original = createDistillationSourceFingerprint(documents('原文'))
     expect(createDistillationSourceFingerprint(documents('新文'))).not.toBe(original)
     expect(createDistillationSourceFingerprint(documents('原文', 2))).not.toBe(original)
+
+    const withReferences = createDistillationSourceFingerprint(documents('原文'), 'ref-a|ref-b')
+    expect(withReferences).not.toBe(original)
+    expect(createDistillationSourceFingerprint(documents('原文'), 'ref-a|ref-b')).toBe(
+      withReferences,
+    )
   })
 })

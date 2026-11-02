@@ -132,7 +132,7 @@ function SceneWorkspace({ projectId }: DesktopPluginViewProps) {
     }
   }
   return (
-    <div className="p-6 space-y-4 h-full overflow-y-auto">
+    <div className="plugin-workspace-page p-6 space-y-4 h-full overflow-y-auto">
       <h2>场景目标与节拍预算</h2>
       <p>模板是可选规划结构。篇幅仅用于预算区间比较；剧情完成由作者标记，情绪值仅是作者注记。</p>
       {error && <p role="alert">{error}</p>}
@@ -340,7 +340,7 @@ function SceneWorkspace({ projectId }: DesktopPluginViewProps) {
           >
             添加空节拍
           </button>
-          <button disabled={saving} onClick={save}>
+          <button data-variant="primary" disabled={saving} onClick={save}>
             保存作者细纲
           </button>
           {host?.aiAssistant?.isAvailable && (

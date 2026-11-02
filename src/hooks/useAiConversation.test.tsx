@@ -1,5 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiTask, TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { AiAssistant } from '../ports/aiGateway'
 import type { Clock } from '../ports/clock'
@@ -14,6 +14,8 @@ import {
 import { semanticDocumentFromText } from '../domain/content'
 import { hashText } from '../ai/proposals'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
+import type { PreparedReferenceMaterials } from '../domain/references/referenceMaterials'
+import { referenceLibraryService } from '../services/referenceLibraryService'
 import { domainChangeEvents } from '../ports/domainChangeEvents'
 import { useAiConversation } from './useAiConversation'
 
@@ -64,6 +66,8 @@ const fixedClock: Clock = { now: () => 100 }
 beforeEach(() => {
   connectToDaemon.mockReset()
 })
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('useAiConversation task recovery', () => {
   it('includes the authoritative StoryState in default creative task context', async () => {
@@ -566,6 +570,39 @@ describe('useAiConversation pre-send request scope', () => {
       dirty: false,
     }
 
+    const preparedReferences: PreparedReferenceMaterials = {
+      excerpts: [
+        {
+          sourceId: 'reference-1',
+          sourceTitle: '断谷地貌',
+          start: 0,
+          end: 7,
+          text: '断谷由冰川切割',
+          score: 2,
+          truncated: false,
+        },
+      ],
+      disclosure: {
+        sourceCount: 1,
+        selectedCount: 1,
+        includedCount: 1,
+        omittedCount: 0,
+        includedCharacters: 7,
+        sources: [
+          {
+            sourceId: 'reference-1',
+            title: '断谷地貌',
+            selected: true,
+            matchedPassages: 1,
+            includedPassages: 1,
+            includedCharacters: 7,
+          },
+        ],
+      },
+    }
+    const prepareReferences = vi
+      .spyOn(referenceLibraryService, 'prepareForTask')
+      .mockResolvedValue(preparedReferences)
     const submitted: AiTask[] = []
     const runTask = vi.fn(async (task: AiTask) => {
       submitted.push(task)
@@ -590,9 +627,23 @@ describe('useAiConversation pre-send request scope', () => {
     await waitFor(() => expect(hook.result.current.isConnected).toBe(true))
 
     await act(async () => {
-      hook.result.current.sendAiPrompt('先润色这一段')
+      hook.result.current.sendAiPrompt('先润色这一段', undefined, ['reference-1'])
     })
     await waitFor(() => expect(hook.result.current.aiMessages).toHaveLength(2))
+    await waitFor(() =>
+      expect(hook.result.current.aiMessages[0]?.desktopPreparedContextCoverage).toBeDefined(),
+    )
+    expect(submitted[0].metadata?.desktopPreparedContextCoverage).toBeDefined()
+    expect(prepareReferences).toHaveBeenCalledWith(
+      'project-1',
+      ['reference-1'],
+      expect.stringContaining(chapterText),
+      3_200,
+    )
+    const firstPayload = submitted[0].input.payload as Record<string, unknown>
+    const firstContext = firstPayload.context as Record<string, unknown>
+    expect(firstContext.referenceMaterials).toMatchObject({ excerpts: preparedReferences.excerpts })
+    expect(firstPayload).not.toHaveProperty('authorSelectedReferenceExcerpts')
 
     const promised = hook.result.current.requestScope
     expect(promised.hasChapter).toBe(true)
@@ -617,6 +668,7 @@ describe('useAiConversation pre-send request scope', () => {
     // 最后一条历史就是本次指令，其余正是披露里的"上文 N 条"
     expect(history).toHaveLength(promised.historyTurns + 1)
     expect(history.at(-1)).toMatchObject({ role: 'user', text: '继续' })
+    expect(history.every((message) => !('desktopPreparedContextCoverage' in message))).toBe(true)
     hook.unmount()
   })
 })

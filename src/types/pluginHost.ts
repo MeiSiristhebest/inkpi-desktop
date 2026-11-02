@@ -24,11 +24,18 @@ export interface ChapterMutationResult {
 export type PluginWorkflowStatus = 'running' | 'completed' | 'failed' | 'cancelled'
 
 /** Public, redacted provenance that may be rendered by plugin UIs. */
+export type PluginWorkflowSource =
+  | { kind: 'workspace' }
+  | { kind: 'manual' }
+  | { kind: 'saved-chapter'; documentId: string }
+  | { kind: 'edited-copy'; documentId?: string }
+
 export interface PluginWorkflowProvenance {
   pluginId: string
   workspaceId: string
   taskId: string
   timestamp: number
+  sourceKind?: PluginWorkflowSource['kind']
   documentId?: string
   documentRevision?: number
   artifactId?: string
@@ -106,17 +113,20 @@ export interface DesktopPluginHostContextValue {
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,
+      source?: PluginWorkflowSource,
     ) => Promise<string | null>
     runPluginAnalysis?: (
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,
+      source?: PluginWorkflowSource,
     ) => Promise<PluginAnalysisResult | null>
-    /** Typed workflow seam for callers that need terminal status and provenance. */
+    /** Typed workflow seam for callers that need terminal status and explicit source provenance. */
     runPluginOutcome?: (
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,
+      source?: PluginWorkflowSource,
     ) => Promise<PluginWorkflowOutcome<string> | null>
     runPluginTool?: (pluginId: string, input: Record<string, unknown>) => Promise<unknown | null>
     runPluginWorkflow?: (

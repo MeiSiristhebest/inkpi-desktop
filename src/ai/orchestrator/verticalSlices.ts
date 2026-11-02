@@ -1,4 +1,5 @@
 import type { SemanticDocument } from '../../domain/content'
+import type { PreparedReferenceMaterials } from '../../domain/references/referenceMaterials'
 import type { StoryState } from '../../domain/story'
 import { CreativeIntelligence, type RunTaskOptions } from './creativeIntelligence'
 import type { ContinuityAuditTaskInput, DistillationTaskInput } from '../tasks/taskFactories'
@@ -202,6 +203,7 @@ export interface ProjectDistillationInput {
   storyState?: StoryState
   instruction?: string
   metadata?: Record<string, unknown>
+  referenceMaterials?: PreparedReferenceMaterials
 }
 
 export interface DistillationWorkflowOptions extends Omit<RunTaskOptions, 'onProgress'> {
@@ -277,6 +279,7 @@ export class ProjectDistillationWorkflow {
             fields: input.fields,
             storyState: input.storyState,
             instruction: input.instruction,
+            referenceMaterials: input.referenceMaterials,
             metadata: {
               ...input.metadata,
               distillationChunk: index,

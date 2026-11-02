@@ -6,6 +6,7 @@ import type {
   TaskSelection,
 } from '@inkpi/protocol'
 import type { SemanticDocument } from '../../domain/content'
+import type { PreparedReferenceMaterials } from '../../domain/references/referenceMaterials'
 import type { StoryState } from '../../domain/story'
 import { compileCreativeContext, type CreativeContext } from '../context/contextCompiler'
 import { buildJitQuery } from '../context/jitQueryBuilder'
@@ -34,6 +35,7 @@ export interface CreativeTaskBaseInput {
   neighboringDocuments?: SemanticDocument[]
   storyState?: StoryState
   instruction?: string
+  referenceMaterials?: PreparedReferenceMaterials
   metadata?: Record<string, unknown>
 }
 
@@ -46,6 +48,14 @@ export interface AssistantTaskInput extends CreativeTaskBaseInput {
   question: string
   conversationHistory?: Array<{ role: 'user' | 'assistant'; text: string }>
 }
+
+export type RoleplayTaskInput = Omit<
+  AssistantTaskInput,
+  'storyState' | 'neighboringDocuments' | 'referenceMaterials' | 'instruction'
+>
+
+const ROLEPLAY_SANDBOX_INSTRUCTION =
+  'Continue a fictional tabletop roleplay inside this isolated sandbox. Treat the supplied scenario and notes as fictional. Do not claim to change the author’s project, chapters, or canonical world data. Return only the next roleplay response; any idea the author wishes to keep must go through proposal review.'
 
 export interface RewriteTaskInput extends CreativeTaskBaseInput {
   goal: string
@@ -126,6 +136,31 @@ export function createAssistantTask(input: AssistantTaskInput): AiTask {
       ...(input.conversationHistory ? { conversationHistory: input.conversationHistory } : {}),
     },
   })
+}
+
+/** Builds roleplay context from the sandbox document and transcript only, never project canon. */
+export function createRoleplayTask(input: RoleplayTaskInput): AiTask {
+  const taskInput: AssistantTaskInput = {
+    taskId: input.taskId,
+    workspaceId: input.workspaceId,
+    document: input.document,
+    question: input.question,
+    metadata: { ...(input.metadata ?? {}), roleplaySandbox: true },
+    instruction: ROLEPLAY_SANDBOX_INSTRUCTION,
+  }
+  if (input.workspaceRevision !== undefined) taskInput.workspaceRevision = input.workspaceRevision
+  if (input.selection) taskInput.selection = input.selection
+  if (input.conversationHistory) taskInput.conversationHistory = input.conversationHistory
+  const task = createAssistantTask(taskInput)
+  return {
+    ...task,
+    contextPolicy: {
+      ...task.contextPolicy,
+      providerIds: ['creative.conversation-history'],
+      includeSelection: false,
+      includeProjectState: false,
+    },
+  }
 }
 
 export function createRewriteTask(input: RewriteTaskInput): AiTask {
@@ -270,6 +305,7 @@ function createCreativeTask(
       providerIds: [
         'creative.document',
         'creative.story',
+        'creative.references',
         'creative.conversation-history',
         'retrieval.jit',
       ],
@@ -295,6 +331,7 @@ function createCreativeTask(
       instructionVersion: instruction.version,
       contextFingerprint: context.fingerprint,
       workspaceId: input.workspaceId,
+      desktopPreparedContextCoverage: context.coverage,
     },
   }
 }

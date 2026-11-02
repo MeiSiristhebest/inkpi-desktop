@@ -144,6 +144,8 @@ describe('project index upgrade on an existing library', () => {
     expect(await db.getAll('formData')).toHaveLength(2)
     expect(await db.getAll('domainChangeSets')).toHaveLength(3)
     expect(await db.getAll('aiArtifacts')).toHaveLength(2)
+    expect(await db.getAll('worldPackSnapshots')).toEqual([])
+    expect(await db.getAll('roleplaySessions')).toEqual([])
 
     const raw = await openRaw(DB_VERSION)
     try {
@@ -153,6 +155,8 @@ describe('project index upgrade on an existing library', () => {
       expect(indexNamesOf(raw, 'aiArtifacts')).toEqual(
         expect.arrayContaining(['taskId', 'type', 'workspaceId']),
       )
+      expect(indexNamesOf(raw, 'worldPackSnapshots')).toContain('sourceProjectId')
+      expect(indexNamesOf(raw, 'roleplaySessions')).toContain('projectId')
     } finally {
       raw.close()
     }

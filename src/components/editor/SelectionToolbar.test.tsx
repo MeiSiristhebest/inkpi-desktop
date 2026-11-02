@@ -1,8 +1,13 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { db } from '../../db/indexedDB'
 import { IndexedDbProposalStore, ProposalLedger } from '../../ai/proposals'
+import type {
+  PreparedReferenceMaterials,
+  ReferenceSourceRecord,
+} from '../../domain/references/referenceMaterials'
+import { referenceLibraryService } from '../../services/referenceLibraryService'
 import { SelectionToolbar } from './SelectionToolbar'
 
 // 用可受控的假编辑器验证：空选区不渲染、有选区才渲染，且全程不抛错（不依赖 tippy/portal）
@@ -43,6 +48,8 @@ const containerRef: any = {
     scrollTop: 0,
   },
 }
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('SelectionToolbar', () => {
   it('空选区时不渲染任何工具按钮（返回 null，避免 DOM 冲突）', () => {
@@ -152,6 +159,54 @@ describe('SelectionToolbar', () => {
       revision: 1,
     })
     const { editor, handlers, getContent } = makeEditor({ from: 0, to: 5 })
+    const source: ReferenceSourceRecord = {
+      id: 'reference-railway',
+      title: '城市轨道资料',
+      originalFileName: 'railway.md',
+      format: 'md',
+      text: '轨道线路连接城郊。',
+      tags: ['都市'],
+      contentFingerprint: 'railway-fingerprint',
+      importedAt: 1,
+      updatedAt: 1,
+    }
+    const excerptText = '轨道线路连接城郊'
+    const preparedReferences: PreparedReferenceMaterials = {
+      excerpts: [
+        {
+          sourceId: source.id,
+          sourceTitle: source.title,
+          start: 0,
+          end: excerptText.length,
+          text: excerptText,
+          score: 2,
+          truncated: false,
+        },
+      ],
+      disclosure: {
+        sourceCount: 1,
+        selectedCount: 1,
+        includedCount: 1,
+        omittedCount: 0,
+        includedCharacters: excerptText.length,
+        sources: [
+          {
+            sourceId: source.id,
+            title: source.title,
+            selected: true,
+            matchedPassages: 1,
+            includedPassages: 1,
+            includedCharacters: excerptText.length,
+          },
+        ],
+      },
+    }
+    vi.spyOn(referenceLibraryService, 'listProjectSources').mockResolvedValue([
+      { source, attached: true },
+    ])
+    const prepareReferences = vi
+      .spyOn(referenceLibraryService, 'prepareForTask')
+      .mockResolvedValue(preparedReferences)
     const onAiTask = vi.fn(async (_task: AiTask): Promise<TaskResult> => ({
       taskId: 'toolbar-instructed-rewrite',
       kind: 'creative.rewrite',
@@ -170,6 +225,11 @@ describe('SelectionToolbar', () => {
     )
     act(() => handlers['selectionUpdate']?.())
 
+    fireEvent.click(screen.getByRole('button', { name: '选择本次参考资料' }))
+    fireEvent.click(await screen.findByRole('button', { name: /本次 AI 参考资料/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: '选择参考资料 城市轨道资料' }))
+    act(() => handlers['blur']?.())
+    expect(screen.getByRole('button', { name: 'AI 润色' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '按要求修改' }))
     fireEvent.change(screen.getByRole('textbox', { name: '修改要求' }), {
       target: { value: '压缩句子并降低语气' },
@@ -179,9 +239,19 @@ describe('SelectionToolbar', () => {
     await waitFor(() =>
       expect(screen.getByTestId('rewrite-proposal-preview')).toHaveTextContent('pending'),
     )
-    expect(onAiTask.mock.calls[0]?.[0].input.payload).toMatchObject({
-      goal: '压缩句子并降低语气',
-    })
+    expect(prepareReferences).toHaveBeenCalledWith(
+      'test-workspace',
+      [source.id],
+      expect.stringContaining('压缩句子并降低语气'),
+      3_200,
+    )
+    const task = onAiTask.mock.calls[0]?.[0]
+    const payload = task?.input.payload as Record<string, unknown>
+    const context = payload.context as Record<string, unknown>
+    expect(payload).toMatchObject({ goal: '压缩句子并降低语气' })
+    expect(context.referenceMaterials).toMatchObject({ excerpts: preparedReferences.excerpts })
+    expect(task?.contextPolicy?.providerIds).toContain('creative.references')
+    await waitFor(() => expect(screen.queryByTestId('selection-reference-picker')).toBeNull())
     expect(getContent()).toBe('选中文本')
 
     fireEvent.click(screen.getByRole('button', { name: '接受' }))
@@ -482,7 +552,7 @@ describe('SelectionToolbar', () => {
       getText: () => 'Hello world',
       getHTML: () => rawHtml,
       commands: {
-        insertContentAt: ({ from, to }: { from: number; to: number }, text: string) => {
+        insertContentAt: (_range: { from: number; to: number }, text: string) => {
           rawHtml = `<p>Hello <strong>${text}</strong></p>`
         },
         setContent: setContentSpy,

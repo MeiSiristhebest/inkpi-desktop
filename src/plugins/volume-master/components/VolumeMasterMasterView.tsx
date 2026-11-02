@@ -163,7 +163,7 @@ function VolumeWorkspace({ projectId }: DesktopPluginViewProps) {
     }
   }
   return (
-    <div className="p-6 space-y-4 h-full overflow-y-auto">
+    <div className="plugin-workspace-page p-6 space-y-4 h-full overflow-y-auto">
       <h2>分卷目标与实际篇幅</h2>
       <p>
         统计保存正文的非空白 Unicode
@@ -277,7 +277,7 @@ function VolumeWorkspace({ projectId }: DesktopPluginViewProps) {
           onChange={(e) => setDraft((previous) => ({ ...previous, isCompleted: e.target.checked }))}
         />
       </label>
-      <button disabled={busy || !volume} onClick={save}>
+      <button data-variant="primary" disabled={busy || !volume} onClick={save}>
         保存分卷规划
       </button>
       {host?.aiAssistant?.isAvailable && (

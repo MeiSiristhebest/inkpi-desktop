@@ -1,6 +1,25 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { referenceLibraryService } from '../../services/referenceLibraryService'
+import type { DesktopPreparedContextCoverage } from '../../types/aiContextCoverage'
 import { AiAssistantPanel } from './AiAssistantPanel'
+
+const desktopPreparedCoverage: DesktopPreparedContextCoverage = {
+  version: 1,
+  documentText: { sourceCharacters: 100, includedCharacters: 50, rangeStart: 50, rangeEnd: 100 },
+  selectionText: {
+    explicitSelection: true,
+    sourceCharacters: 8,
+    includedCharacters: 8,
+    rangeStart: 60,
+    rangeEnd: 68,
+  },
+  semanticBlocks: { count: 1, characters: 100 },
+  neighboringDocuments: { count: 0, characters: 0 },
+  storyState: { attached: false, recordCount: 0 },
+  storyContext: { recordCount: 0, canonicalFactCount: 0, hypothesisCount: 0 },
+  jit: { entityCount: 0, promiseCount: 0 },
+}
 
 describe('AiAssistantPanel Component', () => {
   it('should render empty state when no messages provided', () => {
@@ -71,6 +90,71 @@ describe('AiAssistantPanel Component', () => {
     const closeBtn = screen.getByRole('button', { name: '收起' })
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('shows prepared context coverage on the sent user message, not as a provider receipt', () => {
+    render(
+      <AiAssistantPanel
+        messages={[
+          {
+            role: 'user',
+            text: '请分析这一章',
+            desktopPreparedContextCoverage: desktopPreparedCoverage,
+          },
+        ]}
+        input=""
+        busy={false}
+        connected={true}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    const disclosure = screen.getByTestId('chat-context-coverage-0')
+    expect(disclosure).toHaveTextContent('Desktop 预备上下文（不是最终 Runtime/Provider 请求）')
+    expect(disclosure).toHaveTextContent('正文片段：50/100 个 UTF-16 字符')
+    expect(disclosure).toHaveTextContent('最终请求由 Runtime 与 Provider 在执行阶段组装')
+  })
+
+  it('requires per-task reference selection and clears it after sending', async () => {
+    const source = {
+      id: 'ref-urban',
+      title: '都市交通资料',
+      originalFileName: 'urban.md',
+      format: 'md' as const,
+      text: '北京地铁线路资料',
+      tags: ['都市'],
+      contentFingerprint: 'fingerprint',
+      importedAt: 1,
+      updatedAt: 1,
+    }
+    const listSources = vi
+      .spyOn(referenceLibraryService, 'listProjectSources')
+      .mockResolvedValue([{ source, attached: true }])
+    const onSend = vi.fn()
+    render(
+      <AiAssistantPanel
+        messages={[]}
+        input="分析都市交通"
+        busy={false}
+        connected={true}
+        projectId="project-1"
+        onInputChange={vi.fn()}
+        onSend={onSend}
+        onClose={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /本次 AI 参考资料/ }))
+    const checkbox = await screen.findByRole('checkbox', { name: '选择参考资料 都市交通资料' })
+    expect(checkbox).not.toBeChecked()
+    fireEvent.click(checkbox)
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+
+    expect(onSend).toHaveBeenCalledWith([source.id])
+    expect(checkbox).not.toBeChecked()
+    listSources.mockRestore()
   })
 
   it('should show thinking spinner when busy and show offline placeholder when disconnected', () => {

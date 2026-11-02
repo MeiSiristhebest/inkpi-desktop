@@ -18,6 +18,7 @@ export const FIRST_PARTY_PLUGIN_IDS = [
   'gold-chapters-eval',
   'iron-chamber',
   'living-codex',
+  'manuscript-import',
   'memory-palace',
   'multi-calendar',
   'multiverse-whatif',
@@ -26,11 +27,14 @@ export const FIRST_PARTY_PLUGIN_IDS = [
   'paywall-sentry',
   'pov-guard',
   'press-forge',
+  'project-compass',
   'promise-ledger',
   'reader-hook',
   'reader-simulator',
+  'reference-library',
   'rhythm-metronome',
   'rhythm-radar',
+  'roleplay-sandbox',
   'safe-gate',
   'scene-beats',
   'scrapbook-recycler',
@@ -44,6 +48,7 @@ export const FIRST_PARTY_PLUGIN_IDS = [
   'voice-preview',
   'volume-master',
   'water-meter',
+  'world-pack-library',
 ] as const
 
 export type FirstPartyPluginId = (typeof FIRST_PARTY_PLUGIN_IDS)[number]

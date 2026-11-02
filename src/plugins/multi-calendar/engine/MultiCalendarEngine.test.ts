@@ -105,6 +105,29 @@ describe('MultiCalendarEngine', () => {
     expect(report.diagnostic).toContain('无法判断')
   })
 
+  it('excludes mainline events whose whole-book chapter position is unknown', () => {
+    const base = {
+      timePoint: {
+        calendarId: 'cal_ancient',
+        year: 100,
+        month: 1,
+        day: 1,
+        absoluteDayIndex: 10000,
+      },
+      eventSummary: '事件',
+      sequenceRole: 'mainline' as const,
+    }
+    const report = MultiCalendarEngine.validateChronology([
+      { ...base, chapterId: 'ch1', chapterOrder: 1, chapterTitle: '已定位' },
+      { ...base, chapterId: 'orphan', chapterOrder: null, chapterTitle: '未定位' },
+    ])
+
+    expect(report.status).toBe('insufficient-data')
+    expect(report.checkedEventCount).toBe(1)
+    expect(report.excludedEventCount).toBe(1)
+    expect(report.diagnostic).toContain('章节位置未知')
+  })
+
   it('ignores marked nonlinear events when comparing mainline dates', () => {
     const base = {
       timePoint: {

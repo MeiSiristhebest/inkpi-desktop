@@ -1,7 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChapterRecord } from '../../types'
+import type {
+  PreparedReferenceMaterials,
+  ReferenceSourceRecord,
+} from '../../domain/references/referenceMaterials'
+import { referenceLibraryService } from '../../services/referenceLibraryService'
 import { chapterSaveEvents } from '../../ports/chapterSaveEvents'
 import { ActiveWritingContextProvider } from '../../core/activeWritingContext'
 import type { ContinuityAuditTaskInput } from '../../ai/tasks/taskFactories'
@@ -12,6 +17,8 @@ import type {
   ProjectDistillationInput,
 } from '../../ai/orchestrator/verticalSlices'
 import { CreativeWorkflowsPanel } from './CreativeWorkflowsPanel'
+
+afterEach(() => vi.restoreAllMocks())
 
 const chapter: ChapterRecord = {
   id: 'chapter-1',
@@ -86,6 +93,81 @@ describe('CreativeWorkflowsPanel', () => {
     )
     expect(screen.getByTestId('continuity-diagnostic-location')).toHaveTextContent('编辑器位置')
     expect(audit).toHaveBeenCalledOnce()
+  })
+
+  it('uses only per-run selected references for a manual workflow task', async () => {
+    const source: ReferenceSourceRecord = {
+      id: 'reference-urban',
+      title: '都市交通',
+      originalFileName: 'urban.md',
+      format: 'md',
+      text: '北京地铁改变城市通勤。',
+      tags: ['都市'],
+      contentFingerprint: 'fingerprint',
+      importedAt: 1,
+      updatedAt: 1,
+    }
+    const preparedReferences: PreparedReferenceMaterials = {
+      excerpts: [
+        {
+          sourceId: source.id,
+          sourceTitle: source.title,
+          start: 0,
+          end: source.text.length,
+          text: source.text,
+          score: 2,
+          truncated: false,
+        },
+      ],
+      disclosure: {
+        sourceCount: 1,
+        selectedCount: 1,
+        includedCount: 1,
+        omittedCount: 0,
+        includedCharacters: source.text.length,
+        sources: [
+          {
+            sourceId: source.id,
+            title: source.title,
+            selected: true,
+            matchedPassages: 1,
+            includedPassages: 1,
+            includedCharacters: source.text.length,
+          },
+        ],
+      },
+    }
+    vi.spyOn(referenceLibraryService, 'listProjectSources').mockResolvedValue([
+      { source, attached: true },
+    ])
+    const prepareReferences = vi
+      .spyOn(referenceLibraryService, 'prepareForTask')
+      .mockResolvedValue(preparedReferences)
+    const audit = vi.fn(async (_input: ContinuityAuditTaskInput) => [] as ContinuityFinding[])
+    render(
+      <CreativeWorkflowsPanel
+        projectId="project-1"
+        chapters={[chapter]}
+        connected
+        onContinuityAudit={audit}
+        onDeepReasoning={vi.fn()}
+        onDistillationWorkflow={vi.fn()}
+        onSteerTask={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /本次 AI 参考资料/ }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: '选择参考资料 都市交通' }))
+    fireEvent.click(screen.getByRole('button', { name: '审计当前章节' }))
+
+    await waitFor(() => expect(audit).toHaveBeenCalledOnce())
+    expect(prepareReferences).toHaveBeenCalledWith(
+      'project-1',
+      [source.id],
+      expect.stringContaining('检查章节连续性'),
+      3_200,
+    )
+    expect(audit.mock.calls[0][0].referenceMaterials).toEqual(preparedReferences)
   })
 
   it('explains the scope and result handling for each writing workflow', () => {

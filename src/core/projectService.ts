@@ -1,4 +1,4 @@
-import type { ProjectRecord } from '../types'
+import type { ProjectRecord, VolumeRecord } from '../types'
 import type { ProjectRepository } from '../ports/projectRepository'
 import type { FileDownloader } from '../ports/fileDownloader'
 import type { IdGenerator } from '../ports/idGenerator'
@@ -20,7 +20,10 @@ import {
   type NewProjectForm,
 } from '../domain/project/projectDefaults'
 import { saveEnabledPluginIds } from './pluginRegistry'
-import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
+import {
+  workspaceLifecycleService,
+  type ExportWorkspaceBackupOptions,
+} from '../services/workspaceLifecycleService'
 import { resolveResumeChapterTitle } from '../lib/resumePointer'
 
 // ─────────────────────────────────────────────────────────────
@@ -176,6 +179,10 @@ export async function getProject(id: string): Promise<ProjectRecord | undefined>
   return projectRepo.getProject(id)
 }
 
+export async function loadProjectVolumes(projectId: string): Promise<VolumeRecord[]> {
+  return projectRepo.getVolumesByProject(projectId)
+}
+
 /**
  * 新建一本作品（§P3.6）。表单上的每个选择都在这里落地：
  * 封面进记录、工具组合进这本书自己的插件开关、从哪里开始决定种子路径。
@@ -261,8 +268,11 @@ export async function updateProject(project: ProjectRecord): Promise<ProjectReco
 }
 
 /** 导出项目完整备份（遵循 INV-04）：元数据、卷章正文与 40+ 领域表数据完整归档 */
-export async function exportProject(projectId: string): Promise<void> {
-  const archive = await workspaceLifecycleService.exportWorkspaceBackup(projectId)
+export async function exportProject(
+  projectId: string,
+  options: ExportWorkspaceBackupOptions = {},
+): Promise<void> {
+  const archive = await workspaceLifecycleService.exportWorkspaceBackup(projectId, options)
   if (!archive) return
 
   const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' })

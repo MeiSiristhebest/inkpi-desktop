@@ -23,7 +23,7 @@ interface BoundaryExpectation {
 
 /**
  * Phase 20 decision record. Every non-local AI boundary must have a concrete
- * task, tool, or workflow invocation in the plugin implementation.
+ * task, tool, workflow, or explicitly shared host-AI invocation in the plugin implementation.
  */
 const EXPECTED_BOUNDARIES = {
   'aftermath-sync': {
@@ -116,6 +116,11 @@ const EXPECTED_BOUNDARIES = {
     runtimeTarget: 'story-context-compiler',
     disposition: 'migrated-to-runtime',
   },
+  'manuscript-import': {
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+    disposition: 'desktop-local-by-design',
+  },
   'memory-palace': {
     runtimeClass: 'tool',
     runtimeTarget: 'extension-tool',
@@ -156,6 +161,11 @@ const EXPECTED_BOUNDARIES = {
     runtimeTarget: 'extension-tool',
     disposition: 'migrated-to-runtime',
   },
+  'project-compass': {
+    runtimeClass: 'ui-only',
+    runtimeTarget: 'desktop-ui',
+    disposition: 'desktop-local-by-design',
+  },
   'promise-ledger': {
     runtimeClass: 'ai-task',
     runtimeTarget: 'creative-task',
@@ -171,6 +181,11 @@ const EXPECTED_BOUNDARIES = {
     runtimeTarget: 'creative-task',
     disposition: 'migrated-to-runtime',
   },
+  'reference-library': {
+    runtimeClass: 'ui-only',
+    runtimeTarget: 'desktop-ui',
+    disposition: 'desktop-local-by-design',
+  },
   'rhythm-metronome': {
     runtimeClass: 'pure-local',
     runtimeTarget: 'desktop-local-engine',
@@ -180,6 +195,11 @@ const EXPECTED_BOUNDARIES = {
     runtimeClass: 'pure-local',
     runtimeTarget: 'desktop-local-engine',
     disposition: 'desktop-local-by-design',
+  },
+  'roleplay-sandbox': {
+    runtimeClass: 'shared-ai',
+    runtimeTarget: 'creative-task',
+    disposition: 'migrated-to-runtime',
   },
   'safe-gate': {
     runtimeClass: 'ai-task',
@@ -246,6 +266,11 @@ const EXPECTED_BOUNDARIES = {
     runtimeTarget: 'creative-task',
     disposition: 'migrated-to-runtime',
   },
+  'world-pack-library': {
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+    disposition: 'desktop-local-by-design',
+  },
 } satisfies Record<FirstPartyPluginId, BoundaryExpectation>
 
 const SRC_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -290,6 +315,7 @@ const RUNTIME_BOUNDARY_ID_PATTERNS: readonly RegExp[] = [
 ]
 const RUNTIME_BOUNDARY_CALL =
   /\b(?:runPluginTask|runPluginTool|runPluginWorkflow|usePluginAiTask)\s*\(/g
+const SHARED_AI_TASK_CALL = /\baiAssistant\.runTask\s*\(/g
 
 function pluginEvidence(pluginId: FirstPartyPluginId) {
   const directory = join(PLUGIN_ROOT, pluginId)
@@ -299,6 +325,7 @@ function pluginEvidence(pluginId: FirstPartyPluginId) {
     [...source.matchAll(pattern)].map((match) => match[1]),
   )
   const runtimeInvocationCount = [...source.matchAll(RUNTIME_BOUNDARY_CALL)].length
+  const sharedAiTaskInvocationCount = [...source.matchAll(SHARED_AI_TASK_CALL)].length
 
   return {
     directory,
@@ -306,6 +333,7 @@ function pluginEvidence(pluginId: FirstPartyPluginId) {
     source,
     runtimeInvocations: [...new Set(runtimeInvocations)],
     runtimeInvocationCount,
+    sharedAiTaskInvocationCount,
     hasContextProviderFile: existsSync(join(directory, 'contextProvider.ts')),
   }
 }
@@ -330,6 +358,10 @@ function expectedRuntimeInvocation(pluginId: FirstPartyPluginId): boolean {
   return ['ai-task', 'hybrid', 'tool', 'workflow'].includes(
     EXPECTED_BOUNDARIES[pluginId].runtimeClass,
   )
+}
+
+function expectedSharedAiTaskInvocationCount(pluginId: FirstPartyPluginId): number {
+  return EXPECTED_BOUNDARIES[pluginId].runtimeClass === 'shared-ai' ? 1 : 0
 }
 
 function expectedRuntimeInvocationCount(pluginId: FirstPartyPluginId): number {
@@ -403,13 +435,13 @@ function collectLegacyViolations(): string[] {
 }
 
 describe('Phase 20 first-party plugin migration matrix', () => {
-  it('uses the actual 44 plugin directories, static definitions, and lazy registry as one universe', () => {
+  it('uses the actual 49 plugin directories, static definitions, and lazy registry as one universe', () => {
     const directoryIds = readdirSync(PLUGIN_ROOT)
       .filter((name) => statSync(join(PLUGIN_ROOT, name)).isDirectory())
       .sort()
 
-    expect(FIRST_PARTY_PLUGIN_IDS).toHaveLength(44)
-    expect(new Set(FIRST_PARTY_PLUGIN_IDS).size).toBe(44)
+    expect(FIRST_PARTY_PLUGIN_IDS).toHaveLength(49)
+    expect(new Set(FIRST_PARTY_PLUGIN_IDS).size).toBe(49)
     expect(directoryIds).toEqual([...FIRST_PARTY_PLUGIN_IDS].sort())
     expect(definitionIds).toEqual(new Set(FIRST_PARTY_PLUGIN_IDS))
     expect(availablePluginIds).toEqual(new Set(FIRST_PARTY_PLUGIN_IDS))
@@ -439,6 +471,7 @@ describe('Phase 20 first-party plugin migration matrix', () => {
       expectedRuntimeInvocation(pluginId) ? [pluginId] : [],
     )
     expect(evidence.runtimeInvocationCount).toBe(expectedRuntimeInvocationCount(pluginId))
+    expect(evidence.sharedAiTaskInvocationCount).toBe(expectedSharedAiTaskInvocationCount(pluginId))
     expect(evidence.hasContextProviderFile).toBe(expectedContextProvider(pluginId))
     expect(Boolean(definition?.contextProvider)).toBe(expectedContextProvider(pluginId))
 

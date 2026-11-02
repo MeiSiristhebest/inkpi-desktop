@@ -2,7 +2,25 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { AiActivityCenter } from './AiActivityCenter'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
+import type { DesktopPreparedContextCoverage } from '../../types/aiContextCoverage'
 import type { StandardAiResult } from '../../types/aiResultLifecycle'
+
+const preparedContextCoverage: DesktopPreparedContextCoverage = {
+  version: 1,
+  documentText: { sourceCharacters: 100, includedCharacters: 60, rangeStart: 40, rangeEnd: 100 },
+  selectionText: {
+    explicitSelection: true,
+    sourceCharacters: 8,
+    includedCharacters: 8,
+    rangeStart: 50,
+    rangeEnd: 58,
+  },
+  semanticBlocks: { count: 3, characters: 100 },
+  neighboringDocuments: { count: 2, characters: 40 },
+  storyState: { attached: true, recordCount: 5 },
+  storyContext: { recordCount: 3, canonicalFactCount: 2, hypothesisCount: 1 },
+  jit: { entityCount: 2, promiseCount: 1 },
+}
 
 function makeResult(overrides: Partial<StandardAiResult> = {}): StandardAiResult {
   return {
@@ -92,6 +110,26 @@ describe('AiActivityCenter Component', () => {
     const dismissBtn = screen.getByRole('button', { name: '忽略/移除' })
     await fireEvent.click(dismissBtn)
     expect(onDismiss).toHaveBeenCalledWith('task-1')
+  })
+
+  it('shows Desktop-prepared coverage on an active creative task without claiming provider receipt', () => {
+    const record: TaskRecoveryRecord = {
+      ...mockInterruptedRecord,
+      task: {
+        ...mockInterruptedRecord.task,
+        metadata: { desktopPreparedContextCoverage: preparedContextCoverage },
+      },
+    }
+
+    render(<AiActivityCenter recoveryRecords={[record]} />)
+
+    const disclosure = screen.getByTestId('activity-context-coverage-task-1')
+    expect(disclosure).toHaveTextContent('Desktop 预备上下文（不是最终 Runtime/Provider 请求）')
+    expect(disclosure).toHaveTextContent('正文片段：60/100 个 UTF-16 字符')
+    expect(disclosure).toHaveTextContent('用户选区文本：8/8 个 UTF-16 字符')
+    expect(disclosure).toHaveTextContent('语义块：3 个 / 100 个 UTF-16 字符')
+    expect(disclosure).toHaveTextContent('原始 StoryState 5 条')
+    expect(disclosure).toHaveTextContent('最终请求由 Runtime 与 Provider 在执行阶段组装')
   })
 
   it('renders waiting-user task with steering input and handles steering submission', () => {
@@ -188,6 +226,7 @@ describe('AiActivityCenter Component', () => {
               outputTokens: 210,
               sourceRevision: 42,
               contextSourcesCount: 3,
+              desktopPreparedContextCoverage: preparedContextCoverage,
               cacheHit: false,
               timestamp: 1000,
             },
@@ -221,6 +260,12 @@ describe('AiActivityCenter Component', () => {
     expect(details).toHaveTextContent('章节: ch-1 @r42')
     expect(details).toHaveTextContent('选区: 10-40')
     expect(details).toHaveTextContent('建议: prop-1')
+    expect(screen.getByTestId('result-context-coverage-res-demo-1')).toHaveTextContent(
+      'Desktop 预备上下文（不是最终 Runtime/Provider 请求）',
+    )
+    expect(screen.getByTestId('result-context-coverage-res-demo-1')).toHaveTextContent(
+      'JIT 实体 2 个、伏笔 1 个',
+    )
   })
 
   it('marks a persisted result when its source chapter revision has changed', () => {

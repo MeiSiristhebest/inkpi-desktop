@@ -1,14 +1,23 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react'
 import { motion } from 'motion/react'
 import { BookPlus, FileDown, Sparkles, ArchiveRestore, Trash2 } from 'lucide-react'
-import type { ProjectRecord } from '../../types'
+import type { ProjectRecord, VolumeRecord } from '../../types'
+import type { ManuscriptImportPreview } from '../../domain/manuscript/importParser'
+import type {
+  ManuscriptImportDestination,
+  ManuscriptImportProgress,
+  ManuscriptImportResult,
+} from '../../services/manuscriptImportService'
 import type { NewProjectForm } from '../../domain/project/projectDefaults'
+import type { ExportWorkspaceBackupOptions } from '../../services/workspaceLifecycleService'
+import { Modal } from '../../ui/molecules/Modal'
 import { loadStatsForProjects, type ProjectStats } from '../../core/projectService'
 import { spring, gesture } from '../../motion'
 import { CreateProjectPanel } from './organisms/CreateProjectPanel'
 import { ProjectCard } from './organisms/ProjectCard'
 import { ProjectDeleteDialog } from './organisms/ProjectDeleteDialog'
 import { ProjectArchiveDialog } from './organisms/ProjectArchiveDialog'
+import { PluginBookshelfActionSlot } from '../../core/pluginExtensionSlots'
 import type { ProjectEditFormValues } from './organisms/ProjectEditForm'
 import { Tooltip } from '../../ui/primitives'
 
@@ -19,10 +28,16 @@ interface BookshelfProps {
   onOpenProject: (id: string) => void
   onCreateProject: (form: NewProjectForm) => void | Promise<void>
   onImportProject?: (file: File) => void | Promise<void>
+  onLoadProjectVolumes?: (projectId: string) => Promise<VolumeRecord[]>
+  onImportManuscript?: (
+    preview: ManuscriptImportPreview,
+    destination: ManuscriptImportDestination,
+    onProgress?: (progress: ManuscriptImportProgress) => void,
+  ) => Promise<ManuscriptImportResult>
   /** 一键创建自带种子内容的示范项目，便于首次体验 */
   onCreateDemo?: () => void
   /** 导出项目完整备份（含设定/时间线/插件/AI 数据） */
-  onExportProject?: (id: string) => void
+  onExportProject?: (id: string, options?: ExportWorkspaceBackupOptions) => void
   exportError?: string | null
   onDismissExportError?: () => void
   /** 导出纯正文，不含任何中间状态 */
@@ -51,6 +66,8 @@ export const Bookshelf = ({
   onOpenProject,
   onCreateProject,
   onImportProject,
+  onLoadProjectVolumes,
+  onImportManuscript,
   onExportProject,
   exportError,
   onDismissExportError,
@@ -68,6 +85,8 @@ export const Bookshelf = ({
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [backupProject, setBackupProject] = useState<ProjectRecord | null>(null)
+  const [includeReferenceText, setIncludeReferenceText] = useState(false)
 
   const importInputRef = useRef<HTMLInputElement>(null)
 
@@ -181,6 +200,14 @@ export const Bookshelf = ({
               onChange={(event) => void handleImport(event)}
             />
 
+            {onImportManuscript && onLoadProjectVolumes && (
+              <PluginBookshelfActionSlot
+                projects={projects}
+                onLoadProjectVolumes={onLoadProjectVolumes}
+                onImportManuscript={onImportManuscript}
+              />
+            )}
+
             <motion.button
               type="button"
               onClick={() => setCreating(true)}
@@ -248,7 +275,10 @@ export const Bookshelf = ({
                 onToggleMenu={() => setActiveMenuId(activeMenuId === p.id ? null : p.id)}
                 onCloseMenu={() => setActiveMenuId(null)}
                 onStartEdit={() => setEditingId(p.id)}
-                onExport={() => onExportProject?.(p.id)}
+                onExport={() => {
+                  setIncludeReferenceText(false)
+                  setBackupProject(p)
+                }}
                 onExportManuscript={() => onExportManuscript?.(p.id)}
                 onRemoveFromLibrary={() => setArchivingProject(p)}
                 onDelete={() => setDeletingProject(p)}
@@ -307,6 +337,58 @@ export const Bookshelf = ({
           </section>
         )}
       </div>
+
+      {backupProject && (
+        <Modal
+          title={`导出《${backupProject.name}》的完整备份`}
+          onClose={() => setBackupProject(null)}
+          widthClass="max-w-md"
+        >
+          <div className="space-y-4 p-5">
+            <p className="text-xs leading-relaxed text-[var(--ink-text-muted)]">
+              完整备份包含作品正文、设定、时间线、插件和 AI
+              数据。外部参考资料正文默认不包含在备份中。
+            </p>
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--ink-border)] p-3 text-xs">
+              <input
+                type="checkbox"
+                aria-label="包含已关联参考资料正文"
+                checked={includeReferenceText}
+                onChange={(event) => setIncludeReferenceText(event.target.checked)}
+                className="mt-0.5 accent-[var(--ink-accent)]"
+              />
+              <span>
+                <span className="font-medium text-[var(--ink-text)]">包含已关联参考资料正文</span>
+                <span className="mt-1 block text-[10px] leading-relaxed text-[var(--ink-text-faint)]">
+                  勾选后，当前作品关联的资料全文会写入备份文件。请确认你有权导出和分享这些内容。
+                </span>
+              </span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBackupProject(null)}
+                className="rounded-lg border border-[var(--ink-border)] px-3 py-2 text-xs text-[var(--ink-text-muted)]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={!onExportProject}
+                onClick={() => {
+                  onExportProject?.(backupProject.id, {
+                    includeLinkedReferenceText: includeReferenceText,
+                  })
+                  setBackupProject(null)
+                }}
+                className="rounded-lg bg-[var(--ink-accent)] px-3 py-2 text-xs text-white disabled:opacity-40"
+              >
+                导出完整备份
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <ProjectDeleteDialog
         project={deletingProject}

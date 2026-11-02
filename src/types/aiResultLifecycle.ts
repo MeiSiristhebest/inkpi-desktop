@@ -1,4 +1,5 @@
-import type { TaskScope } from '../types/taskScope'
+import type { DesktopPreparedContextCoverage } from './aiContextCoverage'
+import type { TaskScope } from './taskScope'
 
 /**
  * 统一 AI 产物/建议生命周期状态 (P1.12, INV-07, INV-08)
@@ -35,6 +36,8 @@ export interface AiResultProvenance {
   /** Revision the analysed text was read at; absent when the producer did not record one. */
   sourceRevision?: number
   contextSourcesCount?: number
+  /** Desktop-prepared coverage only; it is not a receipt of the final Runtime/provider request. */
+  desktopPreparedContextCoverage?: DesktopPreparedContextCoverage
   cacheHit?: boolean
   timestamp: number
 }

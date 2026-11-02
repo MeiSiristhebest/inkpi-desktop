@@ -234,7 +234,7 @@ const StoryboardSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =
     }
   }
   return (
-    <div className="p-6 space-y-4 h-full overflow-y-auto">
+    <div className="plugin-workspace-page p-6 space-y-4 h-full overflow-y-auto">
       <h2>角色立绘与分镜生成器 (StoryboardGen)</h2>
       <p>
         按实际正文提供最多四个镜头素材，机位属于可选设计；未提供的角色外观和光线保持未知。构图示意不代表已生成图片。
@@ -323,6 +323,7 @@ const StoryboardSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =
       )}
       {notice && <p role="status">{notice}</p>}
       <button
+        data-variant="primary"
         disabled={!text.trim() || busy || !host?.aiAssistant?.isAvailable}
         onClick={() => void run()}
       >

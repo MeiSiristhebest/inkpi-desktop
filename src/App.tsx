@@ -96,7 +96,7 @@ const ProjectEngine: FC<{
   aiInput: string
   setAiInput: (value: string) => void
   aiBusy: boolean
-  sendAiPrompt: (prompt: string) => void
+  sendAiPrompt: import('./hooks/useAiConversation').AiConversation['sendAiPrompt']
   requestScope: import('./ai/context/requestScope').AssistantRequestScope
   runContinuityAudit: import('./hooks/useAiConversation').AiConversation['runContinuityAudit']
   runDeepReasoning: import('./hooks/useAiConversation').AiConversation['runDeepReasoning']
@@ -156,13 +156,16 @@ const ProjectEngine: FC<{
                     input={props.aiInput}
                     busy={props.aiBusy}
                     connected={props.isConnected}
+                    projectId={props.projectId}
                     domainSyncState={props.domainSyncState}
                     syncConflict={props.syncConflict}
                     onRetrySync={props.onRetrySync}
                     initialTab={panel}
                     focusedResultId={state.resultId}
                     onInputChange={props.setAiInput}
-                    onSend={() => props.sendAiPrompt(props.aiInput)}
+                    onSend={(referenceSourceIds) =>
+                      props.sendAiPrompt(props.aiInput, undefined, referenceSourceIds)
+                    }
                     onClose={onClose}
                     requestScope={props.requestScope}
                     taskRecovery={props.taskRecovery}
@@ -338,6 +341,8 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
               onOpenProject={setActiveProjectId}
               onCreateProject={createProject}
               onImportProject={importProject}
+              onLoadProjectVolumes={library.loadProjectVolumes}
+              onImportManuscript={library.importManuscript}
               onCreateDemo={createDemo}
               onExportProject={exportProject}
               exportError={library.exportError}

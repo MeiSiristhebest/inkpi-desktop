@@ -58,7 +58,7 @@ const GoldChaptersWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId, onSt
             .join('\n\n')
           setChaptersText(firstThree)
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) setSaveError('读取评价或卷章档案失败，请重新打开重试。')
       }
     }
@@ -135,7 +135,7 @@ const GoldChaptersWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId, onSt
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto text-slate-800 dark:text-slate-100 font-sans">
+    <div className="plugin-workspace-page p-6 space-y-6 max-w-5xl mx-auto text-slate-800 dark:text-slate-100 font-sans">
       <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
@@ -187,7 +187,7 @@ const GoldChaptersWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId, onSt
             onClick={handleSave}
             disabled={!chaptersText.trim() || saving}
             aria-busy={saving}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            className="px-4 py-2 bg-[var(--ink-accent)] hover:bg-[var(--ink-accent-hover)] text-white rounded text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
           >
             <Send className="w-4 h-4" /> {saving ? '保存中…' : '保存文本线索快照'}
           </button>

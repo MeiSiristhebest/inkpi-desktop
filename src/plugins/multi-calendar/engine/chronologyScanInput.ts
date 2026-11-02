@@ -6,7 +6,7 @@ export const MAX_CHRONOLOGY_SCAN_CHARACTERS_PER_CHAPTER = 250
 export interface ChronologyScanChapter {
   id: string
   revision?: number
-  order: number
+  order: number | null
   title: string
   content?: string
 }
@@ -66,7 +66,8 @@ export function buildChronologyScanInput(chapters: readonly ChronologyScanChapte
 
   samples.forEach((chapter, index) => {
     const sourceKey = `chapter:${chapter.id}@revision:${chapter.revision}:${index + 1}`
-    input[sourceKey] = `第 ${chapter.order} 章《${chapter.title}》：\n${chapter.excerpt}`
+    const chapterPosition = chapter.order === null ? '章节位置未知' : `第 ${chapter.order} 章`
+    input[sourceKey] = `${chapterPosition}《${chapter.title}》：\n${chapter.excerpt}`
   })
 
   const omissions = [

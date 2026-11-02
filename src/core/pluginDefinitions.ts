@@ -1,5 +1,12 @@
 import { lazy, type ComponentType } from 'react'
-import type { DesktopPlugin, DesktopPluginCategory, PluginDrawerCapability } from '../types/plugin'
+import type {
+  DesktopPlugin,
+  DesktopPluginCategory,
+  PluginBookshelfActionProps,
+  PluginDashboardExtensionProps,
+  PluginDrawerCapability,
+  PluginTaskContextProps,
+} from '../types/plugin'
 import { provideLivingCodexContext } from '../plugins/living-codex/contextProvider'
 import { provideConsistencyContext } from '../plugins/consistency-sentinel/contextProvider'
 import {
@@ -17,6 +24,7 @@ import {
   GitBranch,
   Droplet,
   BookMarked,
+  Compass,
   MessageSquare,
   Users,
   DollarSign,
@@ -57,6 +65,11 @@ export interface PluginStaticDefinition {
   tags?: string[]
   enabledByDefault?: boolean
   loadMainView: () => Promise<{ default: ComponentType<any> }>
+  loadBookshelfActionView?: () => Promise<{ default: ComponentType<PluginBookshelfActionProps> }>
+  loadDashboardExtensionView?: () => Promise<{
+    default: ComponentType<PluginDashboardExtensionProps>
+  }>
+  loadTaskContextView?: () => Promise<{ default: ComponentType<PluginTaskContextProps> }>
   /**
    * 抽屉不是「每个插件一个抽屉」（§P2.8）：带抽屉的插件必须说明这个抽屉属于三类能力里的哪一类。
    * kind 与 load 成对出现，好让「注册了一个没有类别的抽屉」在类型上就无法表达。
@@ -167,10 +180,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'name-forge',
     name: '起名姬',
-    description: 'CFG 与平仄声韵采样的东方仙侠与西幻命名工坊',
+    description: '按风格与指定词项提供命名候选；不评测真实读音或平仄',
     version: '1.0.0',
     category: 'craft',
-    tags: ['起名', '音律', '平仄', '宗门'],
+    tags: ['起名', '风格候选', '词项复核', '宗门'],
     enabledByDefault: false,
     icon: Sparkles,
     loadMainView: () => import('../plugins/name-forge').then((m) => ({ default: m.NameForgeView })),
@@ -319,10 +332,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'faction-matrix',
     name: '势力外交盘',
-    description: '门派好感度五段演化、势力声望与结盟反目动态网',
+    description: '登记势力关系与作者判断并展示关系网络；不预测好感度或结盟变化',
     version: '1.0.0',
     category: 'lore',
-    tags: ['门派', '好感度', '外交', '天下大势'],
+    tags: ['门派', '作者记录', '外交关系', '关系网络'],
     enabledByDefault: false,
     icon: Users,
     loadMainView: () =>
@@ -405,7 +418,7 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'reader-simulator',
     name: '虚拟读者群',
-    description: '5 类挑剔网文受众群画像、阅读耐受度与吐槽预演',
+    description: '4 个假设读者画像的可选 AI 复核与本地词项定位；不测耐受度或真实读者反应',
     version: '1.0.0',
     category: 'review',
     tags: ['读者视角', '吐槽', '毒点排查', '用户画像'],
@@ -473,10 +486,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'combat-sandbox',
     name: '战力推演沙盘',
-    description: '境界压制战力计算器、越级胜率与爆种崩坏预警',
+    description: '按作者输入记录角色能力与约束并核对资源；不计算胜率或自动判断胜负',
     version: '1.0.0',
     category: 'review',
-    tags: ['战力', '越级战斗', '数值平衡', '胜率推演'],
+    tags: ['战力记录', '作者约束', '资源核对', '战斗复核'],
     enabledByDefault: false,
     icon: Swords,
     loadMainView: () =>
@@ -708,10 +721,10 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
   {
     id: 'storyboard-gen',
     name: '动漫分镜工坊',
-    description: '高潮场景 9 宫格动漫分镜生成与景别机位编排',
+    description: '按正文片段生成至多 4 个镜头草案；固定景别候选不代表自动理解场景',
     version: '1.0.0',
     category: 'craft',
-    tags: ['分镜', '画面感', '九宫格', '景别机位'],
+    tags: ['分镜草案', '文本片段', '镜头候选', '景别复核'],
     enabledByDefault: false,
     icon: Film,
     loadMainView: () =>
@@ -806,6 +819,78 @@ export const ALL_PLUGIN_DEFINITIONS: PluginStaticDefinition[] = [
         import('../plugins/sub-plot-braid').then((m) => ({ default: m.SubPlotBraidDrawer })),
     },
   },
+  {
+    id: 'manuscript-import',
+    name: '稿件导入',
+    description: '预览并选择 TXT、Markdown 或 DOCX 稿件中的章节后导入作品',
+    version: '1.0.0',
+    enabledByDefault: false,
+    category: 'tools',
+    tags: ['稿件', '导入', 'TXT', 'Markdown', 'DOCX'],
+    icon: BookOpen,
+    loadMainView: () =>
+      import('../plugins/manuscript-import').then((m) => ({
+        default: m.ManuscriptImportMasterView,
+      })),
+    loadBookshelfActionView: () =>
+      import('../plugins/manuscript-import').then((m) => ({
+        default: m.ManuscriptImportBookshelfAction,
+      })),
+  },
+  {
+    id: 'project-compass',
+    name: '项目罗盘',
+    description: '项目起步建议、章节总览与 Dashboard 下一步行动',
+    version: '1.0.0',
+    enabledByDefault: false,
+    category: 'tools',
+    tags: ['项目起步', '章节总览', '项目导航'],
+    icon: Compass,
+    loadMainView: () =>
+      import('../plugins/project-compass').then((m) => ({ default: m.ProjectCompassMasterView })),
+    loadDashboardExtensionView: () =>
+      import('../plugins/project-compass').then((m) => ({
+        default: m.ProjectCompassDashboardExtension,
+      })),
+  },
+  {
+    id: 'reference-library',
+    name: '参考资料库',
+    description: '管理关联到作品的资料，并为每次 AI 任务显式选择参考摘录',
+    version: '1.0.0',
+    enabledByDefault: false,
+    category: 'tools',
+    tags: ['参考资料', '本地检索', '任务上下文'],
+    icon: BookMarked,
+    loadMainView: () =>
+      import('../plugins/reference-library').then((m) => ({ default: m.ReferenceLibraryView })),
+    loadTaskContextView: () =>
+      import('../plugins/reference-library').then((m) => ({ default: m.ReferenceMaterialPicker })),
+  },
+  {
+    id: 'world-pack-library',
+    name: '世界设定包',
+    description: '创建不可变世界设定快照，比较差异并明确采用可安全新增的内容',
+    version: '1.0.0',
+    enabledByDefault: false,
+    category: 'lore',
+    tags: ['世界设定', '快照', '跨作品'],
+    icon: GitCompare,
+    loadMainView: () =>
+      import('../plugins/world-pack-library').then((m) => ({ default: m.WorldPackLibraryView })),
+  },
+  {
+    id: 'roleplay-sandbox',
+    name: 'AI 跑团沙盒',
+    description: '可恢复的项目内角色扮演；剧情只能经提案审查后进入正史',
+    version: '1.0.0',
+    enabledByDefault: false,
+    category: 'tools',
+    tags: ['角色扮演', '沙盒', '提案审查'],
+    icon: Users,
+    loadMainView: () =>
+      import('../plugins/roleplay-sandbox').then((m) => ({ default: m.RoleplaySandboxView })),
+  },
 ]
 
 /**
@@ -816,6 +901,13 @@ export function materializeLazyPlugin(def: PluginStaticDefinition): DesktopPlugi
   const drawerDefinition = def.drawer
   const createLazyDrawer = drawerDefinition ? () => lazy(drawerDefinition.load) : undefined
   const LazyDrawer = createLazyDrawer?.()
+  const LazyBookshelfActionView = def.loadBookshelfActionView
+    ? lazy(def.loadBookshelfActionView)
+    : undefined
+  const LazyDashboardExtensionView = def.loadDashboardExtensionView
+    ? lazy(def.loadDashboardExtensionView)
+    : undefined
+  const LazyTaskContextView = def.loadTaskContextView ? lazy(def.loadTaskContextView) : undefined
 
   return {
     id: def.id,
@@ -831,6 +923,9 @@ export function materializeLazyPlugin(def: PluginStaticDefinition): DesktopPlugi
     drawerSnippetView: LazyDrawer,
     createDrawerSnippetView: createLazyDrawer,
     drawerCapability: def.drawer?.kind,
+    bookshelfActionView: LazyBookshelfActionView,
+    dashboardExtensionView: LazyDashboardExtensionView,
+    taskContextView: LazyTaskContextView,
     contextProvider: def.contextProvider,
   }
 }

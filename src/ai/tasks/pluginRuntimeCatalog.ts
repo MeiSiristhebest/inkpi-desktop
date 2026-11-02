@@ -2,7 +2,14 @@ import { isFirstPartyPluginId, type FirstPartyPluginId } from './pluginCatalog'
 
 /** Phase 20 runtime boundary classes. */
 export type PluginRuntimeClass =
-  'pure-local' | 'ai-task' | 'context-provider' | 'tool' | 'workflow' | 'ui-only' | 'hybrid'
+  | 'pure-local'
+  | 'shared-ai' // Uses the shared assistant task contract, not a plugin-specific task kind.
+  | 'ai-task'
+  | 'context-provider'
+  | 'tool'
+  | 'workflow'
+  | 'ui-only'
+  | 'hybrid'
 
 export type PluginRuntimeTarget =
   | 'desktop-local-engine'
@@ -82,6 +89,11 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     runtimeTarget: 'story-context-compiler',
     contextProviderId: 'story.context.living-codex',
   },
+  'manuscript-import': {
+    pluginId: 'manuscript-import',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
   'memory-palace': {
     pluginId: 'memory-palace',
     runtimeClass: 'tool',
@@ -114,9 +126,19 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     runtimeTarget: 'extension-tool',
     toolName: 'plugin.press-forge.format',
   },
+  'project-compass': {
+    pluginId: 'project-compass',
+    runtimeClass: 'ui-only',
+    runtimeTarget: 'desktop-ui',
+  },
   'promise-ledger': taskEntry('promise-ledger'),
   'reader-hook': taskEntry('reader-hook'),
   'reader-simulator': taskEntry('reader-simulator'),
+  'reference-library': {
+    pluginId: 'reference-library',
+    runtimeClass: 'ui-only',
+    runtimeTarget: 'desktop-ui',
+  },
   'rhythm-metronome': {
     pluginId: 'rhythm-metronome',
     runtimeClass: 'pure-local',
@@ -126,6 +148,11 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
     pluginId: 'rhythm-radar',
     runtimeClass: 'pure-local',
     runtimeTarget: 'desktop-local-engine',
+  },
+  'roleplay-sandbox': {
+    pluginId: 'roleplay-sandbox',
+    runtimeClass: 'shared-ai',
+    runtimeTarget: 'creative-task',
   },
   'safe-gate': taskEntry('safe-gate'),
   'scene-beats': taskEntry('scene-beats'),
@@ -159,6 +186,11 @@ export const PLUGIN_RUNTIME_CATALOG: Record<FirstPartyPluginId, PluginRuntimeCat
   },
   'volume-master': taskEntry('volume-master'),
   'water-meter': taskEntry('water-meter'),
+  'world-pack-library': {
+    pluginId: 'world-pack-library',
+    runtimeClass: 'pure-local',
+    runtimeTarget: 'desktop-local-engine',
+  },
 }
 
 export function getPluginRuntimeEntry(pluginId: string): PluginRuntimeCatalogEntry | undefined {

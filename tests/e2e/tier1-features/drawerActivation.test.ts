@@ -38,9 +38,9 @@ describe('Tier 1: F2 - Drawer Dock Activation & WriterDesk Consolidation', () =>
   })
 
   it('TC-DRAWER-03: Verifies plugin registry drawer availability across the full catalog', () => {
-    expect(ALL_AVAILABLE_PLUGINS.length).toBe(44)
+    expect(ALL_AVAILABLE_PLUGINS.length).toBe(49)
 
-    // Exactly 43 of 44 plugins declare drawerSnippetView (all except timeline-grid)
+    // Exactly 43 of 49 plugins declare drawerSnippetView; the five new host extensions have none.
     const pluginsWithDrawers = ALL_AVAILABLE_PLUGINS.filter((p) => Boolean(p.drawerSnippetView))
     expect(pluginsWithDrawers.length).toBe(43)
 

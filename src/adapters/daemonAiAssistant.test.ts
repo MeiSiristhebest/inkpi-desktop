@@ -7,6 +7,12 @@ import type {
 } from '@inkpi/protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listCoreInstructionDefinitions } from '../ai/instructions/coreInstructions'
+import { createAssistantTask } from '../ai/tasks/taskFactories'
+import { semanticDocumentFromText } from '../domain/content'
+import {
+  prepareReferenceMaterials,
+  type ReferenceSourceRecord,
+} from '../domain/references/referenceMaterials'
 import type { RpcClient } from '../ports/aiGateway'
 import { listPluginInstructionDefinitions } from '../ai/instructions/pluginInstructions'
 import { createDaemonAiAssistant } from './daemonAiAssistant'
@@ -36,6 +42,7 @@ function makeClient(onRegister?: () => Promise<unknown> | unknown): {
   registerCalls: number
 } {
   const calls: Array<{ method: string; params: unknown }> = []
+  const submittedTasks = new Map<string, AiTask>()
   let registerCalls = 0
   const client: RpcClient = {
     request: async <T>(method: string, params?: unknown): Promise<T> => {
@@ -52,15 +59,18 @@ function makeClient(onRegister?: () => Promise<unknown> | unknown): {
         return ((await onRegister?.()) ?? { success: true }) as T
       }
       if (method === 'task.submit') {
-        return { taskId: (params as { task: AiTask }).task.id, status: 'queued' } as T
+        const submitted = (params as { task: AiTask }).task
+        submittedTasks.set(submitted.id, submitted)
+        return { taskId: submitted.id, status: 'queued' } as T
       }
       if (method === 'task.status') {
         const input = (params as { taskId: string }).taskId
+        const submitted = submittedTasks.get(input) ?? task(input)
         return {
           taskId: input,
-          kind: 'plugin.demo.analysis',
+          kind: submitted.kind,
           status: 'completed',
-          result: completedResult(task(input)),
+          result: completedResult(submitted),
         } as T
       }
       throw new Error(`Unexpected RPC method: ${method}`)
@@ -185,6 +195,47 @@ describe('createDaemonAiAssistant instruction registration', () => {
           typeof instruction.systemInstruction === 'string',
       ),
     ).toBe(true)
+  })
+
+  it('forwards explicitly selected reference excerpts unchanged through task.submit', async () => {
+    const source: ReferenceSourceRecord = {
+      id: 'reference-transport',
+      title: '都市交通资料',
+      originalFileName: 'urban.md',
+      format: 'md',
+      text: '北京地铁连接城市社区，通勤线路影响居民日常生活。',
+      tags: ['都市'],
+      contentFingerprint: 'transport-fingerprint',
+      importedAt: 1,
+      updatedAt: 1,
+    }
+    const referenceMaterials = prepareReferenceMaterials([source], [source.id], '北京地铁通勤', 400)
+    const input = createAssistantTask({
+      taskId: 'reference-transport-task',
+      workspaceId: 'workspace-reference',
+      document: semanticDocumentFromText('chapter-reference', '主人公走进车站。', 1),
+      question: '分析这段都市通勤描写',
+      referenceMaterials,
+    })
+    const harness = makeClient()
+    const assistant = createDaemonAiAssistant(harness.client)
+
+    await expect(assistant.runTask(input, { pollIntervalMs: 0 })).resolves.toMatchObject({
+      taskId: input.id,
+      status: 'completed',
+    })
+
+    const submission = harness.calls.find((call) => call.method === 'task.submit')
+    if (!submission) throw new Error('Expected the Desktop gateway to submit the task')
+    const submitted = (submission.params as { task: AiTask }).task
+    expect(submitted.input).toEqual(input.input)
+    expect(submitted.contextPolicy?.providerIds).toContain('creative.references')
+    expect(submitted.metadata?.desktopPreparedContextCoverage).toMatchObject({
+      referenceMaterials: { selectedCount: 1, includedCount: 1 },
+    })
+    expect(JSON.stringify(submitted.metadata?.desktopPreparedContextCoverage)).not.toContain(
+      source.text,
+    )
   })
 
   it('shares one in-flight registration when first tasks start concurrently', async () => {

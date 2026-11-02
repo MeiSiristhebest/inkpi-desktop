@@ -205,17 +205,21 @@ function SubtextWorkspace({ projectId }: DesktopPluginViewProps) {
         <button
           disabled={ai.isRunning || !compiled}
           onClick={() =>
-            ai.run({
-              speaker,
-              spoken: semanticTextFromContent('manual-spoken', spoken, 0),
-              authorEmotion: emotion || null,
-              authorGoal: goal,
-              intendedMeaning: meaning,
-              relationship,
-              whyHidden,
-              authorAction: action,
-              surroundingText: semanticTextFromContent('manual-context', context, 0),
-            })
+            ai.run(
+              {
+                speaker,
+                spoken: semanticTextFromContent('manual-spoken', spoken, 0),
+                authorEmotion: emotion || null,
+                authorGoal: goal,
+                intendedMeaning: meaning,
+                relationship,
+                whyHidden,
+                authorAction: action,
+                surroundingText: semanticTextFromContent('manual-context', context, 0),
+              },
+              undefined,
+              { kind: 'manual' },
+            )
           }
         >
           AI 潜台词方案复核

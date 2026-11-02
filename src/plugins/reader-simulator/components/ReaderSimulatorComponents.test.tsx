@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ReaderSimulatorMasterView } from './ReaderSimulatorMasterView'
 import { ReaderSimulatorDrawer } from './ReaderSimulatorDrawer'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
@@ -11,11 +12,16 @@ vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
       {
         id: 'chap-1',
         projectId: 'proj-1',
+        volumeId: 'volume-1',
         title: '第一章 圣母降临与压级屈辱',
         content: '主角跪在地上求饶，被反派各种嘲讽。他原谅了他。自断经脉，沦为废人。',
         order: 1,
         revision: 7,
       },
+    ]),
+    getVolumesByProject: vi.fn().mockResolvedValue([
+      { id: 'volume-1', projectId: 'proj-1', title: '第一卷', order: 1 },
+      { id: 'volume-2', projectId: 'proj-1', title: '第二卷', order: 2 },
     ]),
   },
 }))
@@ -65,6 +71,48 @@ describe('ReaderSimulator Components', () => {
     )
     expect(screen.getByRole('region', { name: '已保存的复核快照' })).toHaveTextContent(
       '第一章 圣母降临与压级屈辱',
+    )
+  })
+
+  it('uses whole-project chapter numbers across volumes in saved review snapshots', async () => {
+    vi.mocked(indexedDbProjectRepository.getChaptersByProject).mockResolvedValue([
+      {
+        id: 'chap-1',
+        projectId: 'proj-1',
+        volumeId: 'volume-1',
+        title: '第一卷第一章',
+        content: '角色跪下。',
+        order: 0,
+        revision: 2,
+      },
+      {
+        id: 'chap-2',
+        projectId: 'proj-1',
+        volumeId: 'volume-1',
+        title: '第一卷第二章',
+        content: '其他内容。',
+        order: 1,
+        revision: 3,
+      },
+      {
+        id: 'chap-3',
+        projectId: 'proj-1',
+        volumeId: 'volume-2',
+        title: '第二卷第一章',
+        content: '角色跪下。',
+        order: 0,
+        revision: 4,
+      },
+    ] as any)
+    render(<ReaderSimulatorMasterView projectId="proj-1" />)
+
+    await userEvent.click(await screen.findByRole('combobox', { name: '预演章节' }))
+    await userEvent.click(await screen.findByRole('option', { name: '第 3 章：第二卷第一章' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存复核问题' }))
+
+    await waitFor(() => expect(indexedDbReaderSimulationRepository.save).toHaveBeenCalled())
+    expect(indexedDbReaderSimulationRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ chapterId: 'chap-3', chapterOrder: 3 }),
     )
   })
 

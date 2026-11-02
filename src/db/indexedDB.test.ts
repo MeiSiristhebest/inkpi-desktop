@@ -107,6 +107,25 @@ describe('indexedDB entity storage', () => {
     expect(await db.getAll('volumes')).toHaveLength(1)
     expect(await db.getAll('chapters')).toHaveLength(1)
   })
+
+  it('persists global reference source records outside project domain stores', async () => {
+    const source = {
+      id: 'reference-source-db-test',
+      title: 'Local reference',
+      originalFileName: 'reference.txt',
+      format: 'txt',
+      text: 'local-only content',
+      tags: [],
+      contentFingerprint: 'test',
+      importedAt: 1,
+      updatedAt: 1,
+    }
+    await db.put('referenceSources', source)
+
+    expect(await db.get('referenceSources', source.id)).toEqual(source)
+
+    await db.delete('referenceSources', source.id)
+  })
 })
 
 // 错误韧性：覆盖 openDB / getAll / get / put / delete 的 onerror reject 分支。

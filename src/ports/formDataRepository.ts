@@ -3,5 +3,10 @@
  */
 export interface FormDataRepository {
   getFormData(projectId: string, tabId: string): Promise<Record<string, any>>
-  saveFormData(projectId: string, tabId: string, data: Record<string, any>): Promise<void>
+  saveFormData(
+    projectId: string,
+    tabId: string,
+    data: Record<string, unknown>,
+    expectedCurrentData?: Record<string, unknown>,
+  ): Promise<void>
 }

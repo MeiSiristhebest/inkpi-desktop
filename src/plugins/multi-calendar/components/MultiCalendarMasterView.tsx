@@ -12,7 +12,10 @@ import type {
 } from '../types'
 import { indexedDbMultiCalendarRepository } from '../../../adapters/indexedDbMultiCalendarRepository'
 import { indexedDbProjectRepository } from '../../../adapters/indexedDbProjectRepository'
-import type { ChapterRecord } from '../../../types'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
 import { clock } from '../../../adapters/clock'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { createProvenance } from '../../../domain/story/provenance'
@@ -59,7 +62,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   const [calendarError, setCalendarError] = useState('')
 
   // 章节时间登记表单
-  const [chapters, setChapters] = useState<ChapterRecord[]>([])
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
   const chronologyScan = useMemo(() => buildChronologyScanInput(chapters), [chapters])
   const aiTask = usePluginAiTask('multi-calendar', [projectId, chronologyScan.input])
   const [eventChapterId, setEventChapterId] = useState<string>('')
@@ -76,21 +79,32 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   )
 
   const loadData = useCallback(async () => {
-    const [existing, allChapters] = await Promise.all([
+    const [existing, allChapters, volumes] = await Promise.all([
       indexedDbMultiCalendarRepository.get(projectId),
       indexedDbProjectRepository.getChaptersByProject(projectId),
+      indexedDbProjectRepository.getVolumesByProject(projectId),
     ])
 
-    allChapters.sort((a, b) => a.order - b.order)
-    setChapters(allChapters)
-    if (allChapters.length > 0 && !eventChapterId) {
-      setEventChapterId(allChapters[0].id)
+    const positionedChapters = projectChapterSequence(projectId, allChapters, volumes)
+    const chaptersById = new Map(positionedChapters.map((chapter) => [chapter.id, chapter]))
+    setChapters(positionedChapters)
+    if (positionedChapters.length > 0 && !eventChapterId) {
+      setEventChapterId(positionedChapters[0].id)
     }
 
     if (existing) {
       setRecord(existing)
       setCalendars(existing.calendars)
-      setEvents(existing.chronologyEvents)
+      setEvents(
+        existing.chronologyEvents.map((event) => {
+          const chapter = chaptersById.get(event.chapterId)
+          return {
+            ...event,
+            chapterOrder: chapter?.chapterNumber ?? null,
+            ...(chapter ? { chapterTitle: chapter.title } : {}),
+          }
+        }),
+      )
     }
   }, [projectId, eventChapterId])
 
@@ -216,7 +230,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
     const newEvent: ChapterChronologyEvent = {
       chapterId: eventChapterId,
-      chapterOrder: targetChap ? targetChap.order : 1,
+      chapterOrder: targetChap.chapterNumber,
       chapterTitle: targetChap ? targetChap.title : '未命名章节',
       timePoint: {
         calendarId: eventCalId,
@@ -232,7 +246,10 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
     // 过滤掉同章节原事件并追加
     const updated = [...events.filter((ev) => ev.chapterId !== eventChapterId), newEvent]
-    updated.sort((a, b) => a.chapterOrder - b.chapterOrder)
+    updated.sort(
+      (a, b) =>
+        (a.chapterOrder ?? Number.MAX_SAFE_INTEGER) - (b.chapterOrder ?? Number.MAX_SAFE_INTEGER),
+    )
     setEvents(updated)
     setEventSummary('')
     setEventSourceExcerpt('')
@@ -285,7 +302,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
   }
 
   return (
-    <div className="p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
+    <div className="plugin-workspace-page p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
       {/* 顶部标题栏 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800 gap-4">
         <div>
@@ -372,8 +389,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             />
           </div>
           <div>
-            <label className="block mb-1 text-slate-500">一年月数：</label>
+            <label htmlFor="new-calendar-months" className="block mb-1 text-slate-500">
+              一年月数：
+            </label>
             <input
+              id="new-calendar-months"
               type="number"
               min={1}
               value={newCalMonths}
@@ -382,8 +402,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             />
           </div>
           <div>
-            <label className="block mb-1 text-slate-500">每月天数：</label>
+            <label htmlFor="new-calendar-days" className="block mb-1 text-slate-500">
+              每月天数：
+            </label>
             <input
+              id="new-calendar-days"
               type="number"
               min={1}
               value={newCalDays}
@@ -393,6 +416,8 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
           </div>
           <div className="flex gap-2">
             <input
+              id="new-calendar-epoch-offset"
+              aria-label="新历法元年偏移（天）"
               type="number"
               value={newCalEpochOffset}
               onChange={(e) => setNewCalEpochOffset(Number(e.target.value))}
@@ -479,14 +504,21 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
                         onClick={() => void handleOpenChronologySource(event!)}
                         className="rounded border border-rose-300 dark:border-rose-800 px-2 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        打开第 {event!.chapterOrder} 章原文证据
+                        打开
+                        {event!.chapterOrder === null
+                          ? '章节位置未知'
+                          : `第 ${event!.chapterOrder} 章`}
+                        原文证据
                       </button>
                     ) : (
                       <span
                         key={event!.chapterId}
                         className="rounded bg-slate-100 dark:bg-slate-800 px-2 py-1 text-slate-500"
                       >
-                        第 {event!.chapterOrder} 章未登记可定位原文
+                        {event!.chapterOrder === null
+                          ? '章节位置未知'
+                          : `第 ${event!.chapterOrder} 章`}
+                        未登记可定位原文
                       </span>
                     )
                   })}
@@ -525,8 +557,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
           <div className="md:col-span-2 grid grid-cols-3 gap-1.5">
             <div>
-              <label className="block mb-1 text-slate-500">年：</label>
+              <label htmlFor="source-date-year" className="block mb-1 text-slate-500">
+                源日期年：
+              </label>
               <input
+                id="source-date-year"
                 type="number"
                 value={inputYear}
                 onChange={(e) => setInputYear(Number(e.target.value))}
@@ -534,8 +569,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               />
             </div>
             <div>
-              <label className="block mb-1 text-slate-500">月：</label>
+              <label htmlFor="source-date-month" className="block mb-1 text-slate-500">
+                源日期月：
+              </label>
               <input
+                id="source-date-month"
                 type="number"
                 min={1}
                 max={12}
@@ -545,8 +583,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               />
             </div>
             <div>
-              <label className="block mb-1 text-slate-500">日：</label>
+              <label htmlFor="source-date-day" className="block mb-1 text-slate-500">
+                源日期日：
+              </label>
               <input
+                id="source-date-day"
                 type="number"
                 min={1}
                 max={31}
@@ -617,7 +658,8 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             >
               {chapters.map((c) => (
                 <option key={c.id} value={c.id}>
-                  第 {c.order} 章：{c.title}
+                  {c.chapterNumber === null ? '章节位置未知' : `第 ${c.chapterNumber} 章`}：
+                  {c.title}
                 </option>
               ))}
             </Select>
@@ -656,8 +698,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
 
           <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <label className="block mb-1 text-slate-500">年：</label>
+              <label htmlFor="event-date-year" className="block mb-1 text-slate-500">
+                事件日期年：
+              </label>
               <input
+                id="event-date-year"
                 type="number"
                 value={eventYear}
                 onChange={(e) => setEventYear(Number(e.target.value))}
@@ -665,8 +710,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               />
             </div>
             <div>
-              <label className="block mb-1 text-slate-500">月：</label>
+              <label htmlFor="event-date-month" className="block mb-1 text-slate-500">
+                事件日期月：
+              </label>
               <input
+                id="event-date-month"
                 type="number"
                 min={1}
                 max={12}
@@ -676,8 +724,11 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
               />
             </div>
             <div>
-              <label className="block mb-1 text-slate-500">日：</label>
+              <label htmlFor="event-date-day" className="block mb-1 text-slate-500">
+                事件日期日：
+              </label>
               <input
+                id="event-date-day"
                 type="number"
                 min={1}
                 max={31}
@@ -756,7 +807,7 @@ export const MultiCalendarMasterView: FC<DesktopPluginViewProps> = ({ projectId 
             >
               <div className="flex items-center gap-3">
                 <span className="font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300">
-                  第 {ev.chapterOrder} 章
+                  {ev.chapterOrder === null ? '章节位置未知' : `第 ${ev.chapterOrder} 章`}
                 </span>
                 <span className="font-semibold text-slate-900 dark:text-white">
                   {ev.chapterTitle}

@@ -5,6 +5,7 @@ import { indexedDbProjectRepository } from '../adapters/indexedDbProjectReposito
 import { indexedDbTableRecordRepository } from '../adapters/indexedDbTableRecordRepository'
 import { indexedDbCardRecordRepository } from '../adapters/indexedDbCardRecordRepository'
 import { indexedDbDailyStatsRepository } from '../adapters/indexedDbDailyStatsRepository'
+import { readLastChapterId } from '../lib/resumePointer'
 import { clock } from '../adapters/clock'
 import { computeDashboardModel, type DashboardModel } from '../domain/dashboard'
 import { dailyStatsEvents } from '../ports/dailyStatsEvents'
@@ -17,8 +18,9 @@ export function useDashboardModel(
   projectId: string,
   queryPort: ProjectQueryPort = indexedDbProjectRepository,
   clockPort: Clock = clock,
-): { model: DashboardModel | null; reload: () => void } {
+): { model: DashboardModel | null; resumeChapterId: string | null; reload: () => void } {
   const [model, setModel] = useState<DashboardModel | null>(null)
+  const [resumeChapterId, setResumeChapterId] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const reload = useCallback(() => {
@@ -29,10 +31,12 @@ export function useDashboardModel(
 
   useEffect(() => {
     let alive = true
+    setResumeChapterId(null)
     Promise.all([
       queryPort.getProject(projectId),
       queryPort.getVolumesByProject(projectId),
       queryPort.getChaptersByProject(projectId),
+      readLastChapterId(projectId).catch(() => null),
       indexedDbTableRecordRepository.getRows(projectId, 'foreshadow').catch(() => []),
       indexedDbTableRecordRepository.getRows(projectId, 'ideas').catch(() => []),
       indexedDbTableRecordRepository.getRows(projectId, 'progress').catch(() => []),
@@ -55,6 +59,7 @@ export function useDashboardModel(
         project,
         volumes,
         chapters,
+        storedResumeChapterId,
         foreshadowRows,
         ideasRows,
         progressRows,
@@ -62,6 +67,10 @@ export function useDashboardModel(
         characterNames,
       ]) => {
         if (!alive) return
+        const resumeChapter = chapters.find(
+          (chapter) => chapter.projectId === projectId && chapter.id === storedResumeChapterId,
+        )
+        setResumeChapterId(resumeChapter?.id ?? null)
         setModel(
           computeDashboardModel(
             projectId,
@@ -83,5 +92,5 @@ export function useDashboardModel(
     }
   }, [projectId, queryPort, clockPort, refreshKey])
 
-  return { model, reload }
+  return { model, resumeChapterId, reload }
 }

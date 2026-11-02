@@ -12,6 +12,9 @@ export type CapabilitySurface =
   | 'canvas' // 占用中央画布
   | 'inspector' // 驻留右侧上下文审查栏
   | 'drawer' // 悬浮折叠抽屉
+  | 'bookshelf' // 在作品库提供操作入口
+  | 'dashboard' // 向写作面板贡献项目工作流
+  | 'task-context' // 为 AI 任务提供显式上下文选择器
   | 'command' // 仅通过全局命令呼出
 
 /** Plugins with permanent sidebar entries. Other enabled plugins stay available through commands and tools. */

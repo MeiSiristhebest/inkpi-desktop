@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { usePluginAiTask, type PluginAiTaskView } from './usePluginAiTask'
-import type { PluginWorkflowOutcome } from '../types/pluginHost'
+import type { PluginWorkflowOutcome, PluginWorkflowSource } from '../types/pluginHost'
 
 const box = vi.hoisted(() => ({ value: undefined as unknown }))
 
@@ -14,6 +14,7 @@ type OutcomeFn = (
   pluginId: string,
   input: unknown,
   metadata?: Record<string, unknown>,
+  source?: PluginWorkflowSource,
 ) => Promise<PluginWorkflowOutcome<string> | null>
 
 interface HostFixture {
@@ -255,7 +256,9 @@ describe('usePluginAiTask', () => {
       await result.current.run({ text: '正文' })
     })
 
-    expect(outcomeSpy()).toHaveBeenCalledWith('demo', { text: '正文' }, undefined)
+    expect(outcomeSpy()).toHaveBeenCalledWith('demo', { text: '正文' }, undefined, {
+      kind: 'workspace',
+    })
     expect(result.current.view).toEqual({
       kind: 'result',
       text: 'AI 结论',
@@ -263,6 +266,22 @@ describe('usePluginAiTask', () => {
       artifactId: undefined,
       provenance,
     })
+  })
+
+  it('forwards an explicit saved-chapter source to the host', async () => {
+    const { result } = renderHook(() => usePluginAiTask('demo'))
+    const source: PluginWorkflowSource = { kind: 'saved-chapter', documentId: 'chapter-selected' }
+
+    await act(async () => {
+      await result.current.run({ chapterId: 'chapter-selected' }, undefined, source)
+    })
+
+    expect(outcomeSpy()).toHaveBeenCalledWith(
+      'demo',
+      { chapterId: 'chapter-selected' },
+      undefined,
+      source,
+    )
   })
 
   it('projects markup in saved author records while preserving structural IDs', async () => {
@@ -330,7 +349,9 @@ describe('usePluginAiTask', () => {
     })
 
     expect(outcomeSpy()).toHaveBeenCalledTimes(2)
-    expect(outcomeSpy()).toHaveBeenLastCalledWith('demo', { text: '正文' }, undefined)
+    expect(outcomeSpy()).toHaveBeenLastCalledWith('demo', { text: '正文' }, undefined, {
+      kind: 'workspace',
+    })
   })
 
   it('还没有发过请求时重试是空操作', async () => {

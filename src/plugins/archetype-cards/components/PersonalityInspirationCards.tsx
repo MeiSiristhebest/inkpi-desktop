@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { BookOpen, Sparkles, Search } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Search, Sparkles } from 'lucide-react'
 
 interface PersonalityType {
   id: string
@@ -91,128 +91,118 @@ const PERSONALITY_DATA: PersonalityType[] = [
   },
 ]
 
-export const MaterialLibrary: React.FC = () => {
-  const [filterGender, setFilterGender] = useState<'all' | '女' | '男'>('all')
-  const [search, setSearch] = useState('')
+export function PersonalityInspirationCards() {
+  const [gender, setGender] = useState<'all' | '女' | '男'>('all')
+  const [query, setQuery] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-
-  const filtered = PERSONALITY_DATA.filter((p) => {
-    if (filterGender !== 'all' && p.gender !== filterGender) return false
-    if (search.trim()) {
-      const q = search.toLowerCase()
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase()
+    return PERSONALITY_DATA.filter((item) => {
+      if (gender !== 'all' && item.gender !== gender) return false
+      if (!normalized) return true
       return (
-        p.name.toLowerCase().includes(q) ||
-        p.tagline.toLowerCase().includes(q) ||
-        p.fit.some((f) => f.toLowerCase().includes(q))
+        item.name.toLocaleLowerCase().includes(normalized) ||
+        item.tagline.toLocaleLowerCase().includes(normalized) ||
+        item.fit.some((fit) => fit.toLocaleLowerCase().includes(normalized))
       )
-    }
-    return true
-  })
+    })
+  }, [gender, query])
 
   return (
-    <div className="flex-1 h-screen overflow-y-auto bg-[var(--ink-bg)] text-[var(--ink-text)] p-6 select-none">
-      <header className="mb-6">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold">角色性格与素材资料库</h1>
-          <BookOpen className="w-4 h-4 text-[var(--ink-accent)]" />
-        </div>
-        <p className="mt-1 text-xs text-[var(--ink-text-muted)]">
-          人物性格原型 · 核心魅力与处世哲学 · 设定灵感速查
-        </p>
-      </header>
-
-      {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 max-w-5xl">
-        <div className="flex gap-1.5">
-          {(['all', '女', '男'] as const).map((g) => (
+    <section className="space-y-4" aria-label="经典人物性格原型卡">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex gap-1.5" aria-label="按性别筛选">
+          {(['all', '女', '男'] as const).map((value) => (
             <button
-              key={g}
-              onClick={() => setFilterGender(g)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filterGender === g
+              key={value}
+              type="button"
+              aria-pressed={gender === value}
+              onClick={() => setGender(value)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                gender === value
                   ? 'bg-[var(--ink-accent)] text-white'
-                  : 'bg-[var(--ink-bg-card)] border border-[var(--ink-border)] text-[var(--ink-text-muted)] hover:text-[var(--ink-text)]'
+                  : 'border border-[var(--ink-border)] bg-[var(--ink-bg-card)] text-[var(--ink-text-muted)]'
               }`}
             >
-              {g === 'all' ? '全部人物' : `${g}性原型`}
+              {value === 'all' ? '全部人物' : `${value}性原型`}
             </button>
           ))}
         </div>
-
-        <div className="relative w-64">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-text-muted)] pointer-events-none" />
+        <label className="relative block w-64">
+          <span className="sr-only">搜索性格名称或适配定位</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--ink-text-muted)]" />
           <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            type="search"
+            aria-label="搜索性格名称或适配定位"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索性格名称 / 适配定位..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-[var(--ink-bg-card)] border border-[var(--ink-border)] text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"
+            className="w-full rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-card)] py-1.5 pl-8 pr-3 text-xs text-[var(--ink-text)] focus:outline-none focus:ring-1 focus:ring-[var(--ink-accent)]"
           />
-        </div>
+        </label>
       </div>
 
-      {/* Grid of Character Archetypes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-w-5xl">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((item) => {
-          const isExpanded = expandedId === item.id
+          const expanded = expandedId === item.id
           return (
-            <div
+            <article
               key={item.id}
-              className="rounded-xl bg-[var(--ink-bg-card)] border border-[var(--ink-border)] p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+              className="flex flex-col justify-between rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-card)] p-4 shadow-sm transition-all hover:shadow-md"
             >
               <div>
-                <div className="flex items-center justify-between pb-2 border-b border-[var(--ink-border)]/50">
+                <div className="flex items-center justify-between border-b border-[var(--ink-border)]/50 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-[var(--ink-text)]">{item.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--ink-bg-hover)] text-[var(--ink-text-muted)]">
+                    <h3 className="text-sm font-bold text-[var(--ink-text)]">{item.name}</h3>
+                    <span className="rounded bg-[var(--ink-bg-hover)] px-1.5 py-0.5 text-[10px] text-[var(--ink-text-muted)]">
                       {item.gender}
                     </span>
                   </div>
-                  <Sparkles className="w-3.5 h-3.5 text-[var(--ink-accent)]" />
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--ink-accent)]" />
                 </div>
-                <p className="text-xs text-[var(--ink-text-muted)] mt-2 leading-relaxed">
+                <p className="mt-2 text-xs leading-relaxed text-[var(--ink-text-muted)]">
                   {item.tagline}
                 </p>
-
-                {/* Tags */}
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {item.fit.map((f, fIdx) => (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {item.fit.map((fit) => (
                     <span
-                      key={fIdx}
-                      className="text-[10px] px-2 py-0.5 rounded-md bg-[var(--ink-bg)] border border-[var(--ink-border)] text-[var(--ink-accent)]"
+                      key={fit}
+                      className="rounded-md border border-[var(--ink-border)] bg-[var(--ink-bg)] px-2 py-0.5 text-[10px] text-[var(--ink-accent)]"
                     >
-                      {f}
+                      {fit}
                     </span>
                   ))}
                 </div>
-
-                {/* Details Accordion */}
-                {isExpanded && (
-                  <div className="mt-4 pt-3 border-t border-[var(--ink-border)]/50 space-y-2 text-xs">
-                    {item.dims.map((dim, dIdx) => (
-                      <div key={dIdx} className="space-y-0.5">
+                {expanded && (
+                  <div className="mt-4 space-y-2 border-t border-[var(--ink-border)]/50 pt-3 text-xs">
+                    {item.dims.map((dimension) => (
+                      <div key={dimension.label} className="space-y-0.5">
                         <span className="text-[10px] font-bold text-[var(--ink-text-muted)]">
-                          {dim.label}：
+                          {dimension.label}：
                         </span>
-                        <p className="text-xs text-[var(--ink-text)]">{dim.value}</p>
+                        <p className="text-xs text-[var(--ink-text)]">{dimension.value}</p>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
-              <div className="pt-3 mt-3 border-t border-[var(--ink-border)]/30 flex justify-end">
+              <div className="mt-3 flex justify-end border-t border-[var(--ink-border)]/30 pt-3">
                 <button
-                  onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                  className="text-xs text-[var(--ink-accent)] hover:underline font-medium"
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => setExpandedId(expanded ? null : item.id)}
+                  className="text-xs font-medium text-[var(--ink-accent)] hover:underline"
                 >
-                  {isExpanded ? '收起详情' : '展开多维人设解析 →'}
+                  {expanded ? '收起详情' : '展开多维人设解析 →'}
                 </button>
               </div>
-            </div>
+            </article>
           )
         })}
+        {filtered.length === 0 && (
+          <p className="text-xs text-[var(--ink-text-muted)]">没有符合条件的性格原型。</p>
+        )}
       </div>
-    </div>
+    </section>
   )
 }

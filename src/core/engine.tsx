@@ -24,7 +24,6 @@ import { CardView } from '../components/views/CardView'
 import { GuideView } from '../components/views/GuideView'
 import { InspireTools } from '../components/tools/InspireTools'
 import { CheckTools } from '../components/tools/CheckTools'
-import { MaterialLibrary } from '../components/tools/MaterialLibrary'
 import { useOptionalPluginRegistry, ALL_AVAILABLE_PLUGINS } from './pluginRegistry'
 import { registerDefaultCommands, setNavigationHandler } from './defaultCommands'
 import {
@@ -97,6 +96,7 @@ interface ViewDeps {
   activeTabId: string
   tabMeta?: TabDefinition
   onOpenView: (v: string) => void
+  onOpenChapter: (chapterId: string) => void
   onStats: (s: Stats) => void
   onOpenAssistant?: () => void
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
@@ -107,10 +107,11 @@ interface ViewDeps {
 type ViewFactory = (deps: ViewDeps) => ReactNode
 
 const VIEW_REGISTRY: Record<string, ViewFactory> = {
-  dashboard: ({ projectId, onOpenView, onStats, onOpenAssistant, onStartFocus }) => (
+  dashboard: ({ projectId, onOpenView, onOpenChapter, onStats, onOpenAssistant, onStartFocus }) => (
     <DashboardView
       projectId={projectId}
       onOpenView={onOpenView}
+      onOpenChapter={onOpenChapter}
       onStats={onStats}
       onOpenAssistant={onOpenAssistant}
       onStartFocus={onStartFocus}
@@ -120,7 +121,6 @@ const VIEW_REGISTRY: Record<string, ViewFactory> = {
   guide: ({ onOpenView }) => <GuideView onNavigate={(tId: string) => onOpenView(tId)} />,
   'inspire-tools': () => <InspireTools />,
   'check-tools': ({ projectId }) => <CheckTools projectId={projectId} />,
-  'material-library': () => <MaterialLibrary />,
 }
 
 const TYPE_VIEW_REGISTRY: Partial<Record<TabDefinition['type'], ViewFactory>> = {
@@ -171,6 +171,7 @@ export const Engine: FC<EngineProps> = ({
   const [focusMode, setFocusMode] = useState(false)
   const [isTypewriter, setIsTypewriter] = useState(false)
   const [stats, setStats] = useState<Stats>({ wordCount: 0 })
+  const [requestedChapterId, setRequestedChapterId] = useState<string | undefined>()
 
   const activeWritingCtx = useOptionalActiveWritingContext()
   const pluginHostCtx = useOptionalPluginHostContext()
@@ -342,7 +343,8 @@ export const Engine: FC<EngineProps> = ({
   }, [])
 
   const navigateToView = useCallback(
-    (nextTabId: string) => {
+    (nextTabId: string, chapterId?: string) => {
+      setRequestedChapterId(nextTabId === 'editor' ? chapterId : undefined)
       const leavesEditor = activeTabRef.current === 'editor' && nextTabId !== 'editor'
       editorDurabilityPendingRef.current = editorDurabilityHasPendingRef.current?.() ?? false
       if (!leavesEditor || !editorDurabilityPendingRef.current) {
@@ -361,6 +363,14 @@ export const Engine: FC<EngineProps> = ({
 
   navigateToViewRef.current = navigateToView
 
+  const openChapter = useCallback(
+    (chapterId: string) => navigateToView('editor', chapterId),
+    [navigateToView],
+  )
+  const handleRequestedChapterConsumed = useCallback((chapterId: string) => {
+    setRequestedChapterId((current) => (current === chapterId ? undefined : current))
+  }, [])
+
   const leaveWorkspace = useCallback(() => {
     const leavesEditor = activeTabRef.current === 'editor'
     editorDurabilityPendingRef.current = editorDurabilityHasPendingRef.current?.() ?? false
@@ -376,6 +386,8 @@ export const Engine: FC<EngineProps> = ({
 
   const editorProps: RichEditorProps = {
     projectId,
+    requestedChapterId,
+    onRequestedChapterConsumed: handleRequestedChapterConsumed,
     isTypewriter,
     onTypewriterChange: setIsTypewriter,
     focusMode,
@@ -405,10 +417,12 @@ export const Engine: FC<EngineProps> = ({
       activeTabId,
       tabMeta: activeTabMeta,
       onOpenView: navigateToView,
+      onOpenChapter: openChapter,
       onStats: setStats,
       onOpenAssistant: hasAssistant ? openAssistant : undefined,
       onAiTask,
       onStartFocus: () => {
+        setRequestedChapterId(undefined)
         setActiveTabId('editor')
         setFocusMode(true)
       },
@@ -422,7 +436,13 @@ export const Engine: FC<EngineProps> = ({
       const MainView = matchingPlugin.mainView
       return (
         <Suspense fallback={<PluginSuspenseFallback label={`${matchingPlugin.name} 加载中...`} />}>
-          <MainView projectId={projectId} onStats={setStats} />
+          <MainView
+            projectId={projectId}
+            onStats={setStats}
+            onOpenView={navigateToView}
+            onOpenChapter={openChapter}
+            onBackToLibrary={leaveWorkspace}
+          />
         </Suspense>
       )
     }

@@ -14,13 +14,17 @@ import {
   type AssistantRequestScope,
 } from '../../ai/context/requestScope'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
+import type { DesktopPreparedContextCoverage } from '../../types/aiContextCoverage'
 import type { StandardAiResult } from '../../types/aiResultLifecycle'
+import { DesktopPreparedContextSummary } from './DesktopPreparedContextSummary'
+import { PluginTaskContextSlot } from '../../core/pluginExtensionSlots'
 import type { DomainSyncConflict } from '../../domain/sync/domainSyncService'
 import { Tooltip } from '../../ui/primitives'
 
 interface AiMessage {
   role: 'user' | 'assistant'
   text: string
+  desktopPreparedContextCoverage?: DesktopPreparedContextCoverage
 }
 
 interface AiAssistantPanelProps {
@@ -28,11 +32,12 @@ interface AiAssistantPanelProps {
   input: string
   busy: boolean
   connected: boolean
+  projectId?: string
   domainSyncState?: 'synced' | 'syncing' | 'offline' | 'pending' | 'conflict'
   syncConflict?: DomainSyncConflict
   onRetrySync?: () => void
   onInputChange: (value: string) => void
-  onSend: () => void
+  onSend: (referenceSourceIds?: string[]) => void
   onClose: () => void
   /** 发送前披露：随指令带出的本地内容，由会话状态机投影，面板只负责如实展示（P3.15） */
   requestScope?: AssistantRequestScope
@@ -56,6 +61,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   input,
   busy,
   connected,
+  projectId,
   domainSyncState = 'offline',
   syncConflict,
   onRetrySync,
@@ -78,6 +84,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'activity'>(initialTab)
   const [showConflictModal, setShowConflictModal] = useState(false)
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>([])
 
   useEffect(() => {
     setActiveTab(initialTab)
@@ -86,6 +93,11 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
   const handleSwitchTab = (tab: 'chat' | 'activity') => {
     setActiveTab(tab)
     onTabChange?.(tab)
+  }
+
+  const handleSend = () => {
+    onSend(selectedReferenceIds)
+    setSelectedReferenceIds([])
   }
 
   return (
@@ -215,6 +227,14 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
                 }`}
               >
                 {m.text}
+                {m.desktopPreparedContextCoverage && (
+                  <div className="mt-2">
+                    <DesktopPreparedContextSummary
+                      coverage={m.desktopPreparedContextCoverage}
+                      testId={`chat-context-coverage-${i}`}
+                    />
+                  </div>
+                )}
               </div>
             ))}
 
@@ -227,6 +247,16 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
           </div>
 
           <div className="shrink-0 p-2.5 border-t border-[var(--ink-border)]">
+            {projectId && (
+              <div className="mb-2">
+                <PluginTaskContextSlot
+                  projectId={projectId}
+                  selectedSourceIds={selectedReferenceIds}
+                  onChange={setSelectedReferenceIds}
+                  testId="assistant-reference-picker"
+                />
+              </div>
+            )}
             {requestScope && (
               <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--ink-text-faint)]">
                 {formatAssistantRequestScope(requestScope)}
@@ -239,7 +269,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
                 onChange={(e) => onInputChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                    onSend()
+                    handleSend()
                   }
                 }}
                 placeholder={connected ? '向 InkPi 下达写作指令…' : '离线模式：无法调用 AI'}
@@ -247,7 +277,7 @@ export const AiAssistantPanel: FC<AiAssistantPanelProps> = ({
                 className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[12px] bg-[var(--ink-bg-elevated)] border border-[var(--ink-border)] focus:outline-none focus:border-[var(--ink-accent)] disabled:opacity-50"
               />
               <button
-                onClick={onSend}
+                onClick={handleSend}
                 disabled={!connected || busy || !input.trim()}
                 className="px-3 py-1.5 rounded-lg text-[12px] bg-[var(--ink-accent)] text-white hover:bg-[var(--ink-accent-hover)] disabled:opacity-40 transition-colors duration-150"
               >

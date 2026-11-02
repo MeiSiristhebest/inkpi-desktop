@@ -10,6 +10,8 @@ import { idGenerator } from '../adapters/idGenerator'
 import { clock } from '../adapters/clock'
 import { draftJournal } from './draftJournal'
 import { storyStateMaterializer } from './storyStateMaterializer'
+import { referenceLibraryService } from './referenceLibraryService'
+import type { ReferenceSourceRecord } from '../domain/references/referenceMaterials'
 import {
   WORKSPACE_ARCHIVE_SCHEMA_VERSION,
   type WorkspaceBackupArchive,
@@ -22,6 +24,11 @@ const domainChangeStore = new IndexedDbDomainChangeStore()
 
 export interface ImportWorkspaceOptions {
   mode?: 'copy' | 'restore'
+}
+
+export interface ExportWorkspaceBackupOptions {
+  /** External reference text is excluded unless the user explicitly opts in. */
+  includeLinkedReferenceText?: boolean
 }
 
 export interface ImportWorkspaceResult {
@@ -46,6 +53,30 @@ const asRecord = (value: unknown): UnknownRecord | undefined =>
     : undefined
 
 const isRecord = (value: unknown): value is UnknownRecord => asRecord(value) !== undefined
+
+function keepOnlyIncludedReferenceLinks(
+  archive: Partial<WorkspaceBackupArchive>,
+  includedSourceIds: ReadonlySet<string>,
+): Partial<WorkspaceBackupArchive> {
+  const domainData = archive.domainData
+  const settings = domainData?.settingsKV
+  if (!domainData || !Array.isArray(settings)) return archive
+
+  const settingsKV = settings.flatMap((record) => {
+    if (typeof record.key !== 'string' || !record.key.endsWith('::reference-library-source-ids')) {
+      return [record]
+    }
+    const value = Array.isArray(record.value)
+      ? record.value.filter(
+          (sourceId): sourceId is string =>
+            typeof sourceId === 'string' && includedSourceIds.has(sourceId),
+        )
+      : []
+    return value.length > 0 ? [{ ...record, value }] : []
+  })
+
+  return { ...archive, domainData: { ...domainData, settingsKV } }
+}
 
 const WORKSPACE_LOCAL_STORAGE_EXCLUDED_KEYS = new Set([
   'inkpi-settings',
@@ -298,6 +329,7 @@ export const PROJECT_DOMAIN_STORES: readonly StoreName[] = [
   'storyboardScenes',
   'aiArtifacts',
   'aiProposals',
+  'roleplaySessions',
 ]
 
 export type IdNamespace =
@@ -769,7 +801,11 @@ export class WorkspaceLifecycleService {
    * 包含项目元数据、卷章正文、所有 40+ 领域表数据（世界观、时间线、伏笔、地图、AI产物等），
    * 真实践行 INV-04：“叫完整备份就必须真的完整”。
    */
-  async exportWorkspaceBackup(workspaceId: string): Promise<WorkspaceBackupArchive | null> {
+  async exportWorkspaceBackup(
+    workspaceId: string,
+    options: ExportWorkspaceBackupOptions = {},
+  ): Promise<WorkspaceBackupArchive | null> {
+    const includeLinkedReferenceText = options.includeLinkedReferenceText === true
     // Normalize any legacy goal before opening the read-only snapshot. The core
     // tables and every portable domain table are then read in one transaction.
     await indexedDbWritingGoalStore.get(workspaceId)
@@ -778,6 +814,7 @@ export class WorkspaceLifecycleService {
       'volumes',
       'chapters',
       ...PROJECT_DOMAIN_STORES,
+      ...(includeLinkedReferenceText ? ['referenceSources' as const] : []),
     ]
     let snapshot: Partial<Record<StoreName, unknown[]>>
     try {
@@ -805,6 +842,25 @@ export class WorkspaceLifecycleService {
       workspaceId,
       chapters.map((chapter) => chapter.id),
     )
+    const referenceLinkKey = `${workspaceId}::reference-library-source-ids`
+    const settingsSnapshot = (snapshot.settingsKV as Record<string, unknown>[] | undefined) ?? []
+    const referenceLinkRecord = settingsSnapshot.find((record) => record.key === referenceLinkKey)
+    const linkedReferenceIds = new Set(
+      Array.isArray(referenceLinkRecord?.value)
+        ? referenceLinkRecord.value.filter((id): id is string => typeof id === 'string')
+        : [],
+    )
+    const availableReferenceSources = includeLinkedReferenceText
+      ? ((snapshot.referenceSources as ReferenceSourceRecord[] | undefined) ?? []).filter(
+          (source) => linkedReferenceIds.has(source.id),
+        )
+      : undefined
+    if (
+      includeLinkedReferenceText &&
+      availableReferenceSources!.length !== linkedReferenceIds.size
+    ) {
+      throw new Error('完整备份失败：无法读取全部已关联参考资料正文。')
+    }
 
     const domainData: Record<string, Record<string, unknown>[]> = {}
     let totalRecordsCount = 1 + volumes.length + chapters.length + localStorageData.length
@@ -818,9 +874,10 @@ export class WorkspaceLifecycleService {
           const record = r
           const key = typeof record.key === 'string' ? record.key : ''
           return (
-            record.projectId === workspaceId ||
-            record.workspaceId === workspaceId ||
-            isWorkspaceSettingsKey(key, workspaceId)
+            (includeLinkedReferenceText || key !== referenceLinkKey) &&
+            (record.projectId === workspaceId ||
+              record.workspaceId === workspaceId ||
+              isWorkspaceSettingsKey(key, workspaceId))
           )
         }
         if (storeName === 'aiArtifacts') {
@@ -854,7 +911,9 @@ export class WorkspaceLifecycleService {
       },
       domainStoresIncluded,
       localStorageKeysIncluded: localStorageData.map((entry) => entry.key),
-      totalRecordsCount,
+      referenceMaterialsIncluded: includeLinkedReferenceText,
+      referenceMaterialsCount: linkedReferenceIds.size,
+      totalRecordsCount: totalRecordsCount + (availableReferenceSources?.length ?? 0),
     }
 
     return {
@@ -864,6 +923,7 @@ export class WorkspaceLifecycleService {
       chapters,
       domainData,
       localStorageData,
+      ...(availableReferenceSources ? { referenceSources: availableReferenceSources } : {}),
     }
   }
 
@@ -888,7 +948,7 @@ export class WorkspaceLifecycleService {
     archiveRaw: unknown,
     options: ImportWorkspaceOptions = {},
   ): Promise<ImportWorkspaceResult> {
-    return this.internalImportWorkspace(archiveRaw, { ...options, mode: 'copy' })
+    return this.importWorkspaceWithReferences(archiveRaw, { ...options, mode: 'copy' })
   }
 
   /**
@@ -899,7 +959,51 @@ export class WorkspaceLifecycleService {
     archiveRaw: unknown,
     options: ImportWorkspaceOptions = {},
   ): Promise<ImportWorkspaceResult> {
-    return this.internalImportWorkspace(archiveRaw, { ...options, mode: 'restore' })
+    return this.importWorkspaceWithReferences(archiveRaw, { ...options, mode: 'restore' })
+  }
+
+  private async importWorkspaceWithReferences(
+    archiveRaw: unknown,
+    options: ImportWorkspaceOptions,
+  ): Promise<ImportWorkspaceResult> {
+    const archive = asRecord(archiveRaw)
+    const rawSources = archive?.referenceSources
+    if (rawSources !== undefined && !Array.isArray(rawSources)) {
+      return { ok: false, error: '备份中的参考资料格式无效。' }
+    }
+    const referenceSources = (rawSources ?? []) as ReferenceSourceRecord[]
+    const includedSourceIds = new Set(
+      (rawSources ?? []).flatMap((source) => {
+        const record = asRecord(source)
+        return typeof record?.id === 'string' ? [record.id] : []
+      }),
+    )
+    if (!archive) return this.internalImportWorkspace(archiveRaw, options)
+    const normalizedArchive = keepOnlyIncludedReferenceLinks(
+      archive as Partial<WorkspaceBackupArchive>,
+      includedSourceIds,
+    )
+    const result = await this.internalImportWorkspace(normalizedArchive, options)
+    if (!result.ok || !result.workspaceId || referenceSources.length === 0) return result
+
+    try {
+      await referenceLibraryService.importArchivedSources(referenceSources)
+      return result
+    } catch (error) {
+      let cleanupError: unknown
+      try {
+        await this.purgeWorkspace(result.workspaceId)
+      } catch (cause) {
+        cleanupError = cause
+      }
+      const detail = error instanceof Error ? error.message : String(error)
+      const cleanupDetail =
+        cleanupError instanceof Error ? ` 清理失败：${cleanupError.message}` : ''
+      return {
+        ok: false,
+        error: `导入参考资料失败${cleanupError ? '，作品数据可能仍需清理。' : '，已回滚导入作品。'} ${detail}${cleanupDetail}`,
+      }
+    }
   }
 
   private async internalImportWorkspace(

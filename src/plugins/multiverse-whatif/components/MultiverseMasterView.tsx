@@ -239,7 +239,7 @@ const MultiverseSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =
       },
     }))
   return (
-    <div className="p-6 space-y-4 h-full overflow-y-auto">
+    <div className="plugin-workspace-page p-6 space-y-4 h-full overflow-y-auto">
       <h2>平行宇宙因果沙盒推演器 (MultiverseWhatIf)</h2>
       <p>分歧前继承主线；分歧后只记录明确假设和作者给定事件。缺少的后续情节保持未知。</p>
       {!canon.length && <p>请先保存具有明确卷顺序的章节。</p>}
@@ -268,6 +268,7 @@ const MultiverseSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =
         onChange={(e) => setPremise(e.target.value)}
       />
       <button
+        data-variant="primary"
         disabled={!local || busy || !host?.aiAssistant?.isAvailable}
         onClick={() => void run()}
       >

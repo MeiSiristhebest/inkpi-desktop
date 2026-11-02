@@ -24,7 +24,18 @@ const chapter: ChapterRecord = {
 vi.mock('../../../adapters/indexedDbProjectRepository', () => ({
   indexedDbProjectRepository: {
     getChaptersByProject: vi.fn(async () => [
-      { id: 'c1', title: '合成片段', content: '她没有跪下，而是抵抗命令。', order: 0, revision: 1 },
+      {
+        id: 'c1',
+        projectId: 'p1',
+        volumeId: 'v1',
+        title: '合成片段',
+        content: '她没有跪下，而是抵抗命令。',
+        order: 0,
+        revision: 1,
+      },
+    ]),
+    getVolumesByProject: vi.fn(async () => [
+      { id: 'v1', projectId: 'p1', title: '第一卷', order: 0 },
     ]),
   },
 }))
@@ -100,13 +111,14 @@ describe('reader analysis through the real host', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })
 
-  it('validates a reader profile interpretation returned by an actual task', async () => {
+  it('validates a reader profile interpretation and preserves saved-chapter provenance', async () => {
+    const run = vi.fn(async (task: AiTask) => response(task))
     render(
       <DesktopPluginHostProvider
         projectId="p1"
         activeChapter={chapter}
         isAiConnected
-        onAiTask={async (task) => response(task)}
+        onAiTask={run}
       >
         <ReaderSimulatorMasterView projectId="p1" />
       </DesktopPluginHostProvider>,
@@ -117,6 +129,10 @@ describe('reader analysis through the real host', () => {
       expect(screen.getByLabelText('AI 任务结果')).toHaveTextContent(`「${text}」`),
     )
     expect(screen.getByLabelText('AI 任务结果')).toHaveTextContent('模型解释：')
+    expect(run.mock.calls[0]?.[0]).toMatchObject({
+      scope: { document: { id: 'c1', revision: 1 } },
+      metadata: { sourceKind: 'saved-chapter' },
+    })
   })
 
   it('rejects fabricated shadow-reader evidence and invalidates edits before retry', async () => {

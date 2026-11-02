@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event'
 import { RichEditor } from './RichEditor'
 import { db } from '../../db/indexedDB'
 import { loadSettings, saveSettings, SettingsProvider, useSettings } from '../../core/settings'
+import { lastActiveChapterKey } from '../../lib/resumePointer'
 import type { TaskResult, TaskStatusSnapshot } from '@inkpi/protocol'
 import type { ContinuityDiagnosticMarker } from '../../ai/results/continuityDiagnostics'
 import { continuityDiagnosticsStore } from '../../ai/results/continuityDiagnosticsStore'
@@ -249,6 +250,7 @@ beforeEach(async () => {
     'p-save-states',
     'p-autosave-off',
     'p-source-jump',
+    'p-requested-chapter',
   ]
   for (const pid of testProjectIds) {
     await db.put('projects', {
@@ -291,6 +293,77 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     expect(screen.queryByText(/Local IndexedDB/)).not.toBeInTheDocument()
     expect(screen.queryByText(/编码：UTF-8/)).not.toBeInTheDocument()
     expect(screen.getByText(/全书/)).toBeInTheDocument()
+  })
+
+  it('rejects a requested chapter outside the current project and preserves the resume pointer', async () => {
+    const projectId = 'p-requested-chapter'
+    const foreignProjectId = 'p-requested-chapter-foreign'
+    const volume: VolumeRecord = {
+      id: 'vol-requested-chapter',
+      projectId,
+      title: '本作品第一卷',
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const resumeChapter: ChapterRecord = {
+      id: 'chapter-requested-resume',
+      projectId,
+      volumeId: volume.id,
+      title: '本作品续写章节',
+      content: '<p>本作品内容</p>',
+      wordCount: 6,
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const foreignVolume: VolumeRecord = {
+      id: 'vol-requested-chapter-foreign',
+      projectId: foreignProjectId,
+      title: '其他作品第一卷',
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const foreignChapter: ChapterRecord = {
+      id: 'chapter-requested-foreign',
+      projectId: foreignProjectId,
+      volumeId: foreignVolume.id,
+      title: '不可跨作品打开',
+      content: '<p>其他作品内容</p>',
+      wordCount: 7,
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const resumeKey = lastActiveChapterKey(projectId)
+    const onRequestedChapterConsumed = vi.fn()
+
+    await db.put('volumes', volume)
+    await db.put('chapters', resumeChapter)
+    await db.put('volumes', foreignVolume)
+    await db.put('chapters', foreignChapter)
+    localStorage.setItem(resumeKey, resumeChapter.id)
+
+    try {
+      render(
+        <RichEditor
+          projectId={projectId}
+          requestedChapterId={foreignChapter.id}
+          onRequestedChapterConsumed={onRequestedChapterConsumed}
+        />,
+      )
+      expect(await screen.findByDisplayValue(resumeChapter.title)).toBeInTheDocument()
+      expect(onRequestedChapterConsumed).toHaveBeenCalledWith(foreignChapter.id)
+      expect(localStorage.getItem(resumeKey)).toBe(resumeChapter.id)
+    } finally {
+      cleanup()
+      localStorage.removeItem(resumeKey)
+      await db.delete('chapters', foreignChapter.id)
+      await db.delete('volumes', foreignVolume.id)
+      await db.delete('chapters', resumeChapter.id)
+      await db.delete('volumes', volume.id)
+    }
   })
 
   it('saves before switching chapters and selects a unique verified source excerpt', async () => {
@@ -562,11 +635,13 @@ describe('RichEditor — 合并后的统一富文本编辑器', () => {
     fireEvent.click(screen.getByText('AI 润色'))
     const chs = await db.getAll('chapters')
     const firstId = chs.find((c) => c.title === '第001章 寒潭惊变')?.id
-    expect(onAiTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'creative.rewrite',
-        input: expect.objectContaining({ documentId: firstId }),
-      }),
+    await waitFor(() =>
+      expect(onAiTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'creative.rewrite',
+          input: expect.objectContaining({ documentId: firstId }),
+        }),
+      ),
     )
     // 行内润色解耦：默认不暴力强开右侧助手抽屉
     expect(onOpenAssistant).not.toHaveBeenCalled()

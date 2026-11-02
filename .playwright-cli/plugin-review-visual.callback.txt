@@ -1,0 +1,128 @@
+async (page) => {
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  const ids = [
+    'living-codex',
+    'faction-matrix',
+    'reader-hook',
+    'narrative-linter',
+    'combat-sandbox',
+    'geography-map',
+    'gold-chapters-eval',
+    'memory-palace',
+    'scene-beats',
+    'volume-master',
+    'archetype-cards',
+    'author-ops',
+    'multi-calendar',
+    'reader-simulator',
+    'water-meter',
+    'reference-library',
+    'world-pack-library',
+    'roleplay-sandbox',
+    'storyboard-gen',
+    'multiverse-whatif',
+  ]
+  const pictures = new Set([
+    'faction-matrix',
+    'combat-sandbox',
+    'gold-chapters-eval',
+    'reader-hook',
+    'water-meter',
+    'multi-calendar',
+  ])
+  const rows = []
+  for (const width of [1440, 900]) {
+    await page.setViewportSize({ width, height: 900 })
+    for (const id of ids) {
+      const hasCanvas = await page.evaluate(async (id) => {
+        const { capabilityFor } = await import('/src/core/capabilityIndex.ts')
+        return capabilityFor(id)?.surfaces.includes('canvas')
+      }, id)
+      if (!hasCanvas) {
+        rows.push({ id, width, skipped: 'command is drawer-only, not a main-view navigation' })
+        continue
+      }
+      const oldCanvas = await page.locator('.project-engine-content > div').first().elementHandle()
+      await page.evaluate(async (id) => {
+        const { ALL_PLUGIN_DEFINITIONS } = await import('/src/core/pluginDefinitions.ts')
+        await ALL_PLUGIN_DEFINITIONS.find((item) => item.id === id).loadMainView()
+        const { commandRegistry } = await import('/src/core/commandRegistry.ts')
+        commandRegistry.get(`cmd-capability-${id}`).execute()
+      }, id)
+      await page.waitForFunction((old) => !old.isConnected, oldCanvas)
+      await page.waitForFunction(() => {
+        const canvas = document.querySelector('.project-engine-content > div')
+        return (
+          canvas &&
+          !canvas.textContent.includes('加载中') &&
+          canvas.querySelector('button,input,textarea,[role=combobox]')
+        )
+      })
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      )
+      const row = await page.evaluate((id) => {
+        const canvas = document.querySelector('.project-engine-content > div')
+        const controls = [...canvas.querySelectorAll('button,input,textarea,[role=combobox]')]
+        const visible = controls.filter((e) => {
+          const r = e.getBoundingClientRect()
+          return (
+            r.width > 0 &&
+            r.height > 0 &&
+            r.top >= 30 &&
+            r.top < innerHeight &&
+            getComputedStyle(e).visibility !== 'hidden'
+          )
+        })
+        const heading = canvas.querySelector('h1,h2')
+        const hs = heading ? getComputedStyle(heading) : null
+        const cs = canvas.firstElementChild ? getComputedStyle(canvas.firstElementChild) : null
+        const clipped = visible
+          .filter((e) => {
+            const r = e.getBoundingClientRect()
+            return r.right > innerWidth + 1 || r.left < 0
+          })
+          .map((e) => ({
+            name: (
+              e.getAttribute('aria-label') ||
+              e.textContent ||
+              e.getAttribute('placeholder') ||
+              e.tagName
+            )
+              .trim()
+              .slice(0, 50),
+            x: Math.round(e.getBoundingClientRect().x),
+            right: Math.round(e.getBoundingClientRect().right),
+          }))
+        return {
+          id,
+          width: innerWidth,
+          skin: document.documentElement.dataset.skin,
+          title: heading?.textContent,
+          headingSize: hs?.fontSize,
+          headingWeight: hs?.fontWeight,
+          rootBackground: cs?.backgroundColor,
+          rootFont: cs?.fontFamily,
+          tokenBackground: getComputedStyle(document.documentElement)
+            .getPropertyValue('--ink-bg')
+            .trim(),
+          undefinedCanvasToken: getComputedStyle(document.documentElement)
+            .getPropertyValue('--ink-bg-canvas')
+            .trim(),
+          unstyledControls: controls.filter((e) => !e.hasAttribute('class')).length,
+          controls: controls.length,
+          clipped,
+        }
+      }, id)
+      const canvasLocator = page.locator('.project-engine-content > div')
+      row.unnamedTextboxes = await canvasLocator.getByRole('textbox', { name: '', exact: true }).count()
+      row.unnamedSpinbuttons = await canvasLocator.getByRole('spinbutton', { name: '', exact: true }).count()
+      row.unnamedButtons = await canvasLocator.getByRole('button', { name: '', exact: true }).count()
+      rows.push(row)
+      if (pictures.has(id))
+        await page.screenshot({ path: `.playwright-cli/plugin-review-${id}-${width}-sepia.png` })
+    }
+  }
+  return { pageErrors, rows }
+}

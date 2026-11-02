@@ -11,9 +11,18 @@ import {
   updateProject,
   removeProjectFromLibrary,
   restoreProjectToLibrary,
+  loadProjectVolumes as loadProjectVolumesFromService,
 } from '../core/projectService'
+import { importManuscript as importManuscriptService } from '../services/manuscriptImportService'
+import type {
+  ManuscriptImportDestination,
+  ManuscriptImportProgress,
+  ManuscriptImportResult,
+} from '../services/manuscriptImportService'
+import type { ManuscriptImportPreview } from '../domain/manuscript/importParser'
 import type { NewProjectForm } from '../domain/project/projectDefaults'
-import type { ProjectRecord } from '../types'
+import type { ProjectRecord, VolumeRecord } from '../types'
+import type { ExportWorkspaceBackupOptions } from '../services/workspaceLifecycleService'
 
 /**
  * 项目书架编排（§7.3，从 App.tsx 组合根抽离）。
@@ -28,9 +37,15 @@ export interface ProjectLibrary {
   setActiveProjectId: (id: string | null) => void
   createProject: (form: NewProjectForm) => Promise<void>
   importProject: (file: File) => Promise<void>
+  loadProjectVolumes: (projectId: string) => Promise<VolumeRecord[]>
+  importManuscript: (
+    preview: ManuscriptImportPreview,
+    destination: ManuscriptImportDestination,
+    onProgress?: (progress: ManuscriptImportProgress) => void,
+  ) => Promise<ManuscriptImportResult>
   createDemo: () => Promise<void>
   /** 完整工作区备份（含设定/时间线/插件/AI 数据） */
-  exportProject: (id: string) => Promise<void>
+  exportProject: (id: string, options?: ExportWorkspaceBackupOptions) => Promise<void>
   exportError: string | null
   dismissExportError: () => void
   /** 纯正文导出，不含任何中间状态 */
@@ -73,22 +88,46 @@ export function useProjectLibrary(): ProjectLibrary {
     setActiveProjectId(result.project.id)
   }, [])
 
+  const handleImportManuscript = useCallback(
+    async (
+      preview: ManuscriptImportPreview,
+      destination: ManuscriptImportDestination,
+      onProgress?: (progress: ManuscriptImportProgress) => void,
+    ) => {
+      try {
+        const result = await importManuscriptService(preview, destination, onProgress, {
+          createProject,
+          deleteProject,
+        })
+        await refreshLibrary()
+        return result
+      } catch (error) {
+        await refreshLibrary().catch(() => undefined)
+        throw error
+      }
+    },
+    [refreshLibrary],
+  )
+
   const handleCreateDemo = useCallback(async () => {
     const project = await createDemoProject()
     setProjects((prev) => [project, ...prev])
     setActiveProjectId(project.id)
   }, [])
 
-  const handleExportProject = useCallback(async (id: string) => {
-    setExportError(null)
-    try {
-      await exportProject(id)
-    } catch (error) {
-      console.warn('[InkPi Desktop] Workspace backup failed:', error)
-      const message = error instanceof Error ? error.message : String(error)
-      setExportError(`完整备份失败，未生成备份文件。${message}`)
-    }
-  }, [])
+  const handleExportProject = useCallback(
+    async (id: string, options?: ExportWorkspaceBackupOptions) => {
+      setExportError(null)
+      try {
+        await exportProject(id, options)
+      } catch (error) {
+        console.warn('[InkPi Desktop] Workspace backup failed:', error)
+        const message = error instanceof Error ? error.message : String(error)
+        setExportError(`完整备份失败，未生成备份文件。${message}`)
+      }
+    },
+    [],
+  )
 
   const handleExportManuscript = useCallback(async (id: string) => {
     await exportManuscript(id)
@@ -133,6 +172,8 @@ export function useProjectLibrary(): ProjectLibrary {
     setActiveProjectId,
     createProject: handleCreateProject,
     importProject: handleImportProject,
+    loadProjectVolumes: loadProjectVolumesFromService,
+    importManuscript: handleImportManuscript,
     createDemo: handleCreateDemo,
     exportProject: handleExportProject,
     exportError,

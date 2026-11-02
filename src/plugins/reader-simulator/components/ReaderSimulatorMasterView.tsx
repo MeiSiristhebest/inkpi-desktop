@@ -1,4 +1,9 @@
 import { semanticTextFromContent } from '../../../domain/content'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
+import type { PluginWorkflowSource } from '../../../types/pluginHost'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import { ReaderSimulatorEngine } from '../engine/ReaderSimulatorEngine'
@@ -20,7 +25,7 @@ export const ReaderSimulatorMasterView: FC<DesktopPluginViewProps> = (props) => 
 )
 const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const [chapters, setChapters] = useState<any[]>([])
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -31,11 +36,14 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
     setLoading(true)
     setError(null)
     try {
-      const all = await indexedDbProjectRepository.getChaptersByProject(projectId)
-      all.sort((a, b) => a.order - b.order)
-      setChapters(all)
-      if (all.length > 0 && !selectedChapterId) {
-        setSelectedChapterId(all[0].id)
+      const [all, volumes] = await Promise.all([
+        indexedDbProjectRepository.getChaptersByProject(projectId),
+        indexedDbProjectRepository.getVolumesByProject(projectId),
+      ])
+      const positioned = projectChapterSequence(projectId, all, volumes)
+      setChapters(positioned)
+      if (positioned.length > 0 && !selectedChapterId) {
+        setSelectedChapterId(positioned[0].id)
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -72,11 +80,11 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
   ])
 
   const simulation: ChapterSimulationResult | null = useMemo(() => {
-    if (!currentChapter) return null
+    if (!currentChapter || currentChapter.chapterNumber === null) return null
     return ReaderSimulatorEngine.simulateChapter({
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
-      chapterOrder: currentChapter.order,
+      chapterOrder: currentChapter.chapterNumber,
       sourceRevision: currentChapter.revision,
       content:
         semanticTextFromContent(
@@ -89,7 +97,7 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
 
   // Generate hypothetical reader profiles from the supplied chapter text.
   const handleAiReaderSimulate = async () => {
-    if (!currentChapter) return
+    if (!currentChapter || currentChapter.chapterNumber === null) return
     const chapterText = semanticTextFromContent(
       currentChapter.id,
       currentChapter.content || '',
@@ -99,12 +107,16 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
     const analysisInput = ReaderSimulatorEngine.buildAnalysisInput({
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
-      chapterOrder: currentChapter.order,
+      chapterOrder: currentChapter.chapterNumber,
       sourceRevision: currentChapter.revision,
       content: chapterText,
     })
 
-    await aiTask.run(analysisInput)
+    const source: PluginWorkflowSource = {
+      kind: 'saved-chapter',
+      documentId: currentChapter.id,
+    }
+    await aiTask.run(analysisInput, undefined, source)
   }
 
   const handleSaveSimulation = async () => {
@@ -133,7 +145,7 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
   }
 
   return (
-    <div className="p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
+    <div className="plugin-workspace-page p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
       {/* 头部标题与控制区 */}
       <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
         <div>
@@ -155,7 +167,9 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
           )}
           {hostContext?.aiAssistant?.isAvailable && (
             <button
-              disabled={aiTask.isRunning}
+              disabled={
+                aiTask.isRunning || !currentChapter || currentChapter.chapterNumber === null
+              }
               onClick={handleAiReaderSimulate}
               className="px-3 py-1.5 text-xs font-medium bg-[var(--ink-accent)] text-white rounded-lg hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer"
             >
@@ -183,6 +197,9 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
       </div>
 
       {error && <p role="alert">{error}</p>}
+      {currentChapter?.chapterNumber === null && (
+        <p role="status">该章节尚未关联到有效分卷，无法提供可信的全书章节序号。</p>
+      )}
       {loading ? (
         <div className="text-center py-12 text-slate-400">正在读取章节...</div>
       ) : chapters.length === 0 ? (
@@ -204,7 +221,8 @@ const ReaderSimulatorWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId })
               >
                 {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
-                    第 {c.order} 章：{c.title}
+                    {c.chapterNumber === null ? '章节位置未知' : `第 ${c.chapterNumber} 章`}：
+                    {c.title}
                   </option>
                 ))}
               </Select>

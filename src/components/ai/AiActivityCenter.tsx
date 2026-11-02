@@ -11,6 +11,8 @@ import {
   FileText,
 } from 'lucide-react'
 import type { TaskRecoveryRecord } from '../../db/taskRecoveryStore'
+import { readDesktopPreparedContextCoverageForTask } from '../../types/aiContextCoverage'
+import { DesktopPreparedContextSummary } from './DesktopPreparedContextSummary'
 import type {
   AiResultFinding,
   AiResultLifecycleStatus,
@@ -179,6 +181,10 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
             const isInterrupted = status === 'interrupted' || status === 'failed'
             const isRunning = status === 'running' || status === 'queued'
             const isProcessing = processingId === taskId
+            const preparedContextCoverage = readDesktopPreparedContextCoverageForTask(
+              record.task.kind,
+              record.task.metadata?.desktopPreparedContextCoverage,
+            )
 
             return (
               <div
@@ -250,6 +256,13 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                     )}
                   </div>
                 </div>
+
+                {preparedContextCoverage && (
+                  <DesktopPreparedContextSummary
+                    coverage={preparedContextCoverage}
+                    testId={`activity-context-coverage-${taskId}`}
+                  />
+                )}
 
                 {/* 进度条 */}
                 {record.snapshot.progress !== undefined && (
@@ -453,6 +466,12 @@ export const AiActivityCenter: FC<AiActivityCenterProps> = ({
                         </div>
                       )}
                       {result.proposalId && <div>建议: {result.proposalId}</div>}
+                      {result.provenance.desktopPreparedContextCoverage && (
+                        <DesktopPreparedContextSummary
+                          coverage={result.provenance.desktopPreparedContextCoverage}
+                          testId={`result-context-coverage-${result.id}`}
+                        />
+                      )}
                     </div>
                   )}
                 </div>

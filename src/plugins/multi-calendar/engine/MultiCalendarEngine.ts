@@ -138,8 +138,16 @@ export class MultiCalendarEngine {
    */
   static validateChronology(events: ChapterChronologyEvent[]): ChronologyAuditResult {
     const mainlineEvents = events
-      .filter((event) => event.sequenceRole === 'mainline')
+      .filter(
+        (event): event is ChapterChronologyEvent & { chapterOrder: number } =>
+          event.sequenceRole === 'mainline' &&
+          typeof event.chapterOrder === 'number' &&
+          Number.isSafeInteger(event.chapterOrder),
+      )
       .sort((a, b) => a.chapterOrder - b.chapterOrder)
+    const unpositionedMainlineCount = events.filter(
+      (event) => event.sequenceRole === 'mainline' && !Number.isSafeInteger(event.chapterOrder),
+    ).length
     const excludedEventCount = events.length - mainlineEvents.length
 
     if (mainlineEvents.length < 2) {
@@ -152,8 +160,8 @@ export class MultiCalendarEngine {
         conflictPairs: [],
         diagnostic:
           mainlineEvents.length === 0
-            ? `有 ${events.length} 个时间节点，但没有作者标记为主线推进；无法判断时间线是否一致。`
-            : `只有 ${mainlineEvents.length} 个主线推进节点；至少需要两个节点才能检查顺序。`,
+            ? `有 ${events.length} 个时间节点，但没有可定位的主线推进节点；无法判断时间线是否一致。${unpositionedMainlineCount > 0 ? `另有 ${unpositionedMainlineCount} 个主线节点的全书章节位置未知。` : ''}`
+            : `只有 ${mainlineEvents.length} 个可定位的主线推进节点；至少需要两个节点才能检查顺序。${unpositionedMainlineCount > 0 ? `另有 ${unpositionedMainlineCount} 个主线节点因章节位置未知未参与检查。` : ''}`,
       }
     }
 
@@ -189,7 +197,7 @@ export class MultiCalendarEngine {
       conflictPairs,
       diagnostic: hasConflict
         ? `主线顺序与故事时间有 ${conflictPairs.length} 处不一致；请对照原文确认，非线性叙述不会自动判为错误。`
-        : `已比较 ${mainlineEvents.length} 个主线推进节点，未发现顺序冲突。${excludedEventCount > 0 ? `另有 ${excludedEventCount} 个非主线或顺序未确认的节点未参与检查。` : ''}`,
+        : `已比较 ${mainlineEvents.length} 个可定位的主线推进节点，未发现顺序冲突。${unpositionedMainlineCount > 0 ? `另有 ${unpositionedMainlineCount} 个主线节点因章节位置未知未参与检查。` : ''}${excludedEventCount - unpositionedMainlineCount > 0 ? `另有 ${excludedEventCount - unpositionedMainlineCount} 个非主线或顺序未确认的节点未参与检查。` : ''}`,
     }
   }
 }

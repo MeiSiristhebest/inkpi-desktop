@@ -22,6 +22,7 @@ import type {
   PluginAnalysisResult,
   PluginWorkflowOutcome,
   PluginWorkflowProvenance,
+  PluginWorkflowSource,
 } from '../types/pluginHost'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import { createPluginAnalysisTask, taskResultText } from '../ai'
@@ -34,6 +35,20 @@ import {
 } from './pluginDataRedaction'
 
 export const DesktopPluginHostContext = createContext<DesktopPluginHostContextValue | null>(null)
+
+function resolvePluginSourceChapter(
+  source: PluginWorkflowSource,
+  projectId: string,
+  activeChapter: ChapterRecord | null,
+  chapters: ChapterRecord[],
+): ChapterRecord | null | undefined {
+  if (source.kind === 'workspace' || source.kind === 'manual') return null
+  const documentId = source.documentId
+  if (!documentId) return null
+  return [activeChapter, ...chapters].find(
+    (chapter) => chapter?.id === documentId && chapter.projectId === projectId,
+  )
+}
 
 export interface DesktopPluginHostProviderProps {
   projectId: string
@@ -77,7 +92,6 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
     (localMutationChapter?.revision ?? 1) > (activeChapter?.revision ?? 1)
       ? localMutationChapter
       : activeChapter
-  const resolvedActiveChapterId = resolvedActiveChapter?.id
 
   useEffect(() => {
     if (activeChapter) {
@@ -125,21 +139,30 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,
+      source: PluginWorkflowSource = { kind: 'workspace' },
     ): Promise<PluginAnalysisResult | null> => {
       let taskId = `plugin-analysis-${pluginId}`
+      const sourceChapter = resolvePluginSourceChapter(
+        source,
+        projectId,
+        resolvedActiveChapter,
+        chapters,
+      )
       const baseProvenance = (): PluginWorkflowProvenance => ({
         pluginId,
         workspaceId: projectId,
         taskId,
         timestamp: clock.now(),
-        ...(resolvedActiveChapter
+        sourceKind: source.kind,
+        ...(sourceChapter
           ? {
-              documentId: resolvedActiveChapter.id,
-              documentRevision: resolvedActiveChapter.revision ?? 1,
+              documentId: sourceChapter.id,
+              documentRevision: sourceChapter.revision ?? 1,
             }
           : {}),
       })
       try {
+        if (sourceChapter === undefined) throw new Error('所选章节不属于当前作品或已不可用。')
         const safeInput = redactPluginValue(input)
         const safeMetadata = redactPluginRecord(metadata)
         const contextProvider = resolvePluginContextProvider(pluginId)
@@ -148,7 +171,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
               projectId,
               currentText:
                 typeof safeInput === 'string' ? safeInput : (JSON.stringify(safeInput) ?? ''),
-              activeChapterId: resolvedActiveChapterId,
+              activeChapterId: sourceChapter?.id,
             })
           : undefined
 
@@ -156,10 +179,10 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           pluginId,
           input: safeInput,
           workspaceId: projectId,
-          documentId: resolvedActiveChapterId,
-          documentRevision: resolvedActiveChapter?.revision,
+          documentId: sourceChapter?.id,
+          documentRevision: sourceChapter?.revision,
           context,
-          metadata: safeMetadata,
+          metadata: { ...safeMetadata, sourceKind: source.kind },
         })
         taskId = task.id
 
@@ -214,8 +237,16 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
       pluginId: string,
       input: unknown,
       metadata?: Record<string, unknown>,
+      source: PluginWorkflowSource = { kind: 'workspace' },
     ): Promise<string | null> => {
       try {
+        const sourceChapter = resolvePluginSourceChapter(
+          source,
+          projectId,
+          resolvedActiveChapter,
+          chapters,
+        )
+        if (sourceChapter === undefined) throw new Error('所选章节不属于当前作品或已不可用。')
         const safeInput = redactPluginValue(input)
         const safeMetadata = redactPluginRecord(metadata)
         const contextProvider = resolvePluginContextProvider(pluginId)
@@ -224,7 +255,7 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
               projectId,
               currentText:
                 typeof safeInput === 'string' ? safeInput : (JSON.stringify(safeInput) ?? ''),
-              activeChapterId: resolvedActiveChapterId,
+              activeChapterId: sourceChapter?.id,
             })
           : undefined
 
@@ -232,10 +263,10 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
           pluginId,
           input: safeInput,
           workspaceId: projectId,
-          documentId: resolvedActiveChapterId,
-          documentRevision: resolvedActiveChapter?.revision,
+          documentId: sourceChapter?.id,
+          documentRevision: sourceChapter?.revision,
           context,
-          metadata: safeMetadata,
+          metadata: { ...safeMetadata, sourceKind: source.kind },
         })
 
         const taskResult = await runTask(task)
@@ -322,8 +353,8 @@ export const DesktopPluginHostProvider: FC<DesktopPluginHostProviderProps> = ({
     onPluginWorkflow,
     isAiConnected,
     projectId,
+    chapters,
     resolvedActiveChapter,
-    resolvedActiveChapterId,
   ])
 
   const mutateActiveChapter = useCallback(

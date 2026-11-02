@@ -1,6 +1,7 @@
 import type { ProjectRecord, VolumeRecord, ChapterRecord } from '../types'
+import type { ReferenceSourceRecord } from '../domain/references/referenceMaterials'
 
-export const WORKSPACE_ARCHIVE_SCHEMA_VERSION = 2
+export const WORKSPACE_ARCHIVE_SCHEMA_VERSION = 3
 
 export interface WorkspaceManifest {
   schemaVersion: number
@@ -18,6 +19,9 @@ export interface WorkspaceManifest {
   domainStoresIncluded: string[]
   /** Workspace-scoped browser keys included without global secrets. */
   localStorageKeysIncluded?: string[]
+  /** Whether linked external reference texts are included in a workspace backup. */
+  referenceMaterialsIncluded?: boolean
+  referenceMaterialsCount?: number
   totalRecordsCount: number
 }
 
@@ -37,6 +41,8 @@ export interface WorkspaceBackupArchive {
   domainData: Record<string, Record<string, unknown>[]>
   /** Legacy/local browser state that is not represented in IndexedDB. */
   localStorageData?: WorkspaceLocalStorageEntry[]
+  /** Globally reusable local reference sources linked to this workspace, only when explicitly included. */
+  referenceSources?: ReferenceSourceRecord[]
 }
 
 export interface ManuscriptExportArchive {

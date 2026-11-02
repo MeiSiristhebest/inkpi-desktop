@@ -21,13 +21,14 @@ import type { StoryState } from '../domain/story'
 import {
   createAssistantTask,
   createContinueTask,
+  type AssistantTaskInput,
   createContinuityAuditTask,
   createDeepReasoningTask,
   createDistillationTask,
 } from '../ai/tasks/taskFactories'
 import { taskResultText } from '../ai/tasks/pluginTasks'
 import {
-  ASSISTANT_HISTORY_TURN_LIMIT,
+  projectAssistantConversationHistory,
   projectAssistantRequestScope,
   type AssistantRequestScope,
 } from '../ai/context/requestScope'
@@ -51,8 +52,13 @@ import { indexedDbProjectRepository } from '../adapters/indexedDbProjectReposito
 import { projectContent } from '../domain/content'
 import type { ChapterRecord } from '../types'
 import type { ActiveWritingContext } from '../core/activeWritingContext'
+import {
+  readDesktopPreparedContextCoverageForTask,
+  type DesktopPreparedContextCoverage,
+} from '../types/aiContextCoverage'
 import type { PluginWorkflowOutcome } from '../types/pluginHost'
 import { workspaceLifecycleService } from '../services/workspaceLifecycleService'
+import { referenceLibraryService } from '../services/referenceLibraryService'
 
 /**
  * AI 副驾驶会话状态机（§7.3，从 App.tsx 组合根抽离）。
@@ -68,6 +74,7 @@ const isTauriContext = (): boolean =>
 interface AiMessage {
   role: 'user' | 'assistant'
   text: string
+  desktopPreparedContextCoverage?: DesktopPreparedContextCoverage
 }
 
 const RECOVERY_STATUSES: readonly TaskStatus[] = [
@@ -149,7 +156,7 @@ export interface AiConversation {
     sourceRevision: number,
     signal?: AbortSignal,
   ) => Promise<string | null>
-  sendAiPrompt: (prompt: string, chapterId?: string) => void
+  sendAiPrompt: (prompt: string, chapterId?: string, referenceSourceIds?: string[]) => void
   runAiTask: (task: AiTask) => Promise<TaskResult | null>
   taskRecovery: TaskRecoveryRecord[]
   taskRecoveryLoading: boolean
@@ -717,11 +724,12 @@ export function useAiConversation(
   )
 
   const sendAiPrompt = useCallback(
-    async (prompt: string, chapterId?: string) => {
+    async (prompt: string, chapterId?: string, referenceSourceIds: string[] = []) => {
       const trimmed = prompt.trim()
       if (!trimmed || aiBusyRef.current) return
 
-      const newMessages = [...aiMessages, { role: 'user' as const, text: trimmed }]
+      const currentUserMessage = { role: 'user' as const, text: trimmed }
+      const newMessages = [...aiMessages, currentUserMessage]
       setAiMessages(newMessages)
       setAiInput('')
 
@@ -770,9 +778,18 @@ export function useAiConversation(
             : projectContent(targetChapterId, activeDocText, activeDocRevision)
 
         // P1-5: 构造滚动多轮历史 turns，轮数上限与面板的发送前披露共用同一个常量
-        const rollingHistory = newMessages.slice(-ASSISTANT_HISTORY_TURN_LIMIT)
+        const rollingHistory = projectAssistantConversationHistory(
+          aiMessages.map(({ role, text }) => ({ role, text })),
+          currentUserMessage,
+        )
 
-        const task = createAssistantTask({
+        const preparedReferenceMaterials = await referenceLibraryService.prepareForTask(
+          projectId || '',
+          referenceSourceIds,
+          `${trimmed}\n${document.text.slice(0, 4_000)}`,
+          3_200,
+        )
+        const taskInput: AssistantTaskInput = {
           taskId: idGenerator.generate('assistant'),
           workspaceId: projectId || '',
           workspaceRevision: activeWritingContext?.workspaceRevision ?? 1,
@@ -789,7 +806,29 @@ export function useAiConversation(
             workspaceId: projectId,
             documentRevision: activeDocRevision,
           },
-        })
+        }
+        if (preparedReferenceMaterials.disclosure.sourceCount > 0) {
+          taskInput.referenceMaterials = preparedReferenceMaterials
+        }
+        const task = createAssistantTask(taskInput)
+        const desktopPreparedContextCoverage = readDesktopPreparedContextCoverageForTask(
+          task.kind,
+          task.metadata?.desktopPreparedContextCoverage,
+        )
+        if (
+          desktopPreparedContextCoverage &&
+          mountedRef.current &&
+          promptRequestRef.current === promptRequestId &&
+          workspaceIdRef.current === projectId
+        ) {
+          setAiMessages((prev) =>
+            prev.map((message) =>
+              message === currentUserMessage
+                ? { ...message, desktopPreparedContextCoverage }
+                : message,
+            ),
+          )
+        }
         const result = await runTrackedTask(task)
         if (
           !mountedRef.current ||
@@ -1155,6 +1194,7 @@ export function useAiConversation(
         fields: taskInput.fields,
         storyState: taskInput.storyState,
         instruction: taskInput.instruction,
+        referenceMaterials: taskInput.referenceMaterials,
         metadata: taskInput.metadata,
       })
       return runTrackedConvenienceTask(

@@ -177,7 +177,7 @@ const AuthorOpsSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =>
     }
   }
   return (
-    <div className="p-6 space-y-4">
+    <div className="plugin-workspace-page p-6 space-y-4">
       <h2>连载运营台账与作者商业名片 (AuthorOps)</h2>
       <p>仅使用作者录入的数据。差分以百分点表示，不能从留存率推断读者退订原因。</p>
       <p>来源：作者登记的运营指标与相邻章序差分。</p>
@@ -285,10 +285,10 @@ const AuthorOpsSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =>
                 />
               ))}
             </div>
-            <button disabled={busy} onClick={() => void addLog()}>
+            <button data-variant="primary" disabled={busy} onClick={() => void addLog()}>
               追加今日数据
             </button>
-            <button disabled={busy} onClick={() => void persist(profile)}>
+            <button data-variant="primary" disabled={busy} onClick={() => void persist(profile)}>
               保存台账设置
             </button>
           </>
@@ -355,7 +355,11 @@ const AuthorOpsSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =>
               <option value="finished">已完结</option>
             </select>
             <button onClick={addWork}>添加登记作品</button>
-            <button disabled={busy || Boolean(cardError)} onClick={() => void persist(profile)}>
+            <button
+              data-variant="primary"
+              disabled={busy || Boolean(cardError)}
+              onClick={() => void persist(profile)}
+            >
               保存名片档案
             </button>
             {cardError ? (

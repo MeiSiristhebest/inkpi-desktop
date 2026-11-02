@@ -179,7 +179,7 @@ function FactionWorkspace({ projectId }: DesktopPluginViewProps) {
     setRationale(existing?.rippleRationale ?? '')
   }
   return (
-    <div className="p-6 space-y-4 h-full overflow-y-auto">
+    <div className="plugin-workspace-page p-6 space-y-4 h-full overflow-y-auto">
       <h2>作者势力关系与条件推演</h2>
       <p>
         关系空缺显示未知；声望数值不推导追杀、资源共享或结盟事实。事件结果仅按作者给定系数计算。
@@ -204,7 +204,7 @@ function FactionWorkspace({ projectId }: DesktopPluginViewProps) {
         type="number"
         placeholder="没有数值则留空"
       />
-      <button disabled={busy || !newName.trim()} onClick={create}>
+      <button data-variant="primary" disabled={busy || !newName.trim()} onClick={create}>
         保存并入库
       </button>
       {!factions.length && <p>设定库里尚无势力条目。</p>}
@@ -296,7 +296,11 @@ function FactionWorkspace({ projectId }: DesktopPluginViewProps) {
         onChange={(e) => setRationale(e.target.value)}
         placeholder="仅是作者假设；说明适用事件和方向"
       />
-      <button disabled={busy || !a || !b || a === b} onClick={saveRelationship}>
+      <button
+        data-variant="primary"
+        disabled={busy || !a || !b || a === b}
+        onClick={saveRelationship}
+      >
         保存作者关系
       </button>
       <h3>作者条件推演</h3>

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PluginWorkflowOutcome, PluginWorkflowProvenance } from '../types/pluginHost'
+import type {
+  PluginWorkflowOutcome,
+  PluginWorkflowProvenance,
+  PluginWorkflowSource,
+} from '../types/pluginHost'
 import { useOptionalPluginHostContext } from './pluginHostContext'
 import { projectSemanticTextFields } from '../domain/content'
 import {
@@ -45,7 +49,11 @@ export type PluginAiTaskView =
 export interface PluginAiTask {
   view: PluginAiTaskView
   isRunning: boolean
-  run: (input: unknown, metadata?: Record<string, unknown>) => Promise<void>
+  run: (
+    input: unknown,
+    metadata?: Record<string, unknown>,
+    source?: PluginWorkflowSource,
+  ) => Promise<void>
   retry: () => Promise<void>
 }
 
@@ -117,6 +125,7 @@ export function usePluginAiTask(pluginId: string, inputIdentity?: unknown): Plug
     input: unknown
     reviewInput: GroundedPluginInput | null
     metadata?: Record<string, unknown>
+    source: PluginWorkflowSource
   }
   const lastRequestRef = useRef<Request | null>(null)
 
@@ -144,7 +153,12 @@ export function usePluginAiTask(pluginId: string, inputIdentity?: unknown): Plug
       }
       setView({ kind: 'running' })
       try {
-        const outcome = await runPluginOutcome(pluginId, request.input, request.metadata)
+        const outcome = await runPluginOutcome(
+          pluginId,
+          request.input,
+          request.metadata,
+          request.source,
+        )
         if (token !== runTokenRef.current) return
         const next = projectOutcome(outcome, 'AI 任务没有返回结果')
         if (next.kind === 'result' && request.reviewInput) {
@@ -173,10 +187,14 @@ export function usePluginAiTask(pluginId: string, inputIdentity?: unknown): Plug
   )
 
   const run = useCallback(
-    (input: unknown, metadata?: Record<string, unknown>) => {
+    (
+      input: unknown,
+      metadata?: Record<string, unknown>,
+      source: PluginWorkflowSource = { kind: 'workspace' },
+    ) => {
       const projectedInput = projectSemanticTextFields(input)
       const reviewInput = buildGroundedPluginInput(pluginId, projectedInput)
-      return execute({ scope, input: reviewInput ?? projectedInput, reviewInput, metadata })
+      return execute({ scope, input: reviewInput ?? projectedInput, reviewInput, metadata, source })
     },
     [execute, pluginId, scope],
   )

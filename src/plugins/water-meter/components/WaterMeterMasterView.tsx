@@ -1,4 +1,9 @@
 import { semanticTextFromContent } from '../../../domain/content'
+import {
+  projectChapterSequence,
+  type PositionedChapter,
+} from '../../../domain/chapter/chapterSequence'
+import type { PluginWorkflowSource } from '../../../types/pluginHost'
 import { useState, useEffect, useMemo, type FC } from 'react'
 import type { DesktopPluginViewProps } from '../../../types/plugin'
 import type { WaterBloatItem } from '../types'
@@ -16,7 +21,7 @@ export const WaterMeterMasterView: FC<DesktopPluginViewProps> = (props) => (
 )
 const WaterMeterWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   const hostContext = useOptionalPluginHostContext()
-  const [chapters, setChapters] = useState<any[]>([])
+  const [chapters, setChapters] = useState<PositionedChapter[]>([])
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all')
   const [inputText, setInputText] = useState('')
   const report = useMemo(() => waterMeterEngine.auditText(inputText), [inputText])
@@ -25,8 +30,11 @@ const WaterMeterWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        const list = await indexedDbProjectRepository.getChaptersByProject(projectId)
-        list.sort((a, b) => a.order - b.order)
+        const [all, volumes] = await Promise.all([
+          indexedDbProjectRepository.getChaptersByProject(projectId),
+          indexedDbProjectRepository.getVolumesByProject(projectId),
+        ])
+        const list = projectChapterSequence(projectId, all, volumes)
         setChapters(list)
         if (list.length > 0) {
           const defaultChap = hostContext?.activeChapter
@@ -73,11 +81,19 @@ const WaterMeterWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId }) => {
     if (!inputText.trim()) return
     const chap = chapters.find((c) => c.id === selectedChapterId)
     const analysisInput = {
-      chapter: chap ? { id: chap.id, order: chap.order, title: chap.title } : undefined,
+      chapter: chap ? { id: chap.id, order: chap.chapterNumber, title: chap.title } : undefined,
       text: semanticTextFromContent(chap?.id ?? selectedChapterId, inputText, chap?.revision ?? 0),
     }
+    const source: PluginWorkflowSource =
+      selectedChapterId === 'all'
+        ? { kind: 'workspace' }
+        : chap
+          ? inputText === semanticTextFromContent(chap.id, chap.content || '', chap.revision)
+            ? { kind: 'saved-chapter', documentId: chap.id }
+            : { kind: 'edited-copy', documentId: chap.id }
+          : { kind: 'manual' }
 
-    await aiTask.run(analysisInput)
+    await aiTask.run(analysisInput, undefined, source)
   }
 
   const handleRemoveItem = (item: WaterBloatItem) => {
@@ -120,7 +136,8 @@ const WaterMeterWorkspaceView: FC<DesktopPluginViewProps> = ({ projectId }) => {
                 <option value="all">全书章节采样</option>
                 {chapters.map((c) => (
                   <option key={c.id} value={c.id}>
-                    第 {c.order} 章 · {c.title || '无题'}
+                    {c.chapterNumber === null ? '章节位置未知' : `第 ${c.chapterNumber} 章`} ·{' '}
+                    {c.title || '无题'}
                   </option>
                 ))}
               </Select>

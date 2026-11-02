@@ -11,8 +11,8 @@ import { capabilityFor } from './capabilityIndex'
 
 /**
  * The sidebar has a curated set of permanent routes; other plugin views remain canvas/command
- * destinations. Deriving these surfaces from the plugin definitions keeps the 44-plugin catalog
- * complete without treating every shipped view as a permanent navigation item.
+ * destinations. Deriving these surfaces from the plugin definitions keeps the first-party plugin
+ * catalog complete without treating every shipped view as a permanent navigation item.
  */
 
 const curatedIds = new Set(Object.keys(CAPABILITY_REGISTRY))
@@ -27,7 +27,7 @@ function pluginDirectories(): string[] {
 describe('capability coverage', () => {
   it('resolves a capability for every plugin directory on disk', () => {
     const directories = pluginDirectories()
-    expect(directories).toHaveLength(44)
+    expect(directories).toHaveLength(49)
     for (const id of directories) {
       expect(capabilityFor(id), id).toBeDefined()
     }
@@ -54,7 +54,16 @@ describe('capability coverage', () => {
       if (curatedIds.has(definition.id)) continue
       expect(surfaces, definition.id).toContain('canvas')
       expect(surfaces, definition.id).toContain('command')
-      expect(surfaces.includes('drawer')).toBe(Boolean(definition.drawer))
+      expect(surfaces.includes('drawer'), definition.id).toBe(Boolean(definition.drawer))
+      expect(surfaces.includes('bookshelf'), definition.id).toBe(
+        Boolean(definition.loadBookshelfActionView),
+      )
+      expect(surfaces.includes('dashboard'), definition.id).toBe(
+        Boolean(definition.loadDashboardExtensionView),
+      )
+      expect(surfaces.includes('task-context'), definition.id).toBe(
+        Boolean(definition.loadTaskContextView),
+      )
     }
   })
 
@@ -92,5 +101,22 @@ describe('capability coverage', () => {
     const sentinel = capabilityFor('consistency-sentinel')
     expect(sentinel?.surfaces).toEqual(['inspector', 'drawer', 'command'])
     expect(sentinel?.maturity).toBe('beta')
+  })
+
+  it('does not advertise unverified scores, counts, or pronunciation analysis', () => {
+    const descriptions = new Map(
+      ALL_PLUGIN_DEFINITIONS.map(({ id, description }) => [id, description]),
+    )
+    expect(descriptions.get('name-forge')).toContain('不评测真实读音或平仄')
+    expect(descriptions.get('faction-matrix')).toContain('不预测好感度或结盟变化')
+    expect(descriptions.get('reader-simulator')).toContain('4 个假设读者画像')
+    expect(descriptions.get('reader-simulator')).toContain('不测耐受度或真实读者反应')
+    expect(descriptions.get('combat-sandbox')).toContain('不计算胜率或自动判断胜负')
+    expect(descriptions.get('storyboard-gen')).toContain('至多 4 个镜头草案')
+    for (const description of descriptions.values()) {
+      expect(description).not.toMatch(
+        /CFG|越级胜率|好感度五段演化|5 类挑剔|阅读耐受度|9 宫格|九宫格/,
+      )
+    }
   })
 })

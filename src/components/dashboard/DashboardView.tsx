@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { spring, gesture } from '../../motion'
 import { useDashboardModel } from '../../hooks/useDashboardModel'
+import { PluginDashboardExtensionSlot } from '../../core/pluginExtensionSlots'
 import { indexedDbSettingsKVRepository } from '../../adapters/indexedDbSettingsKVRepository'
 import { clock } from '../../adapters/clock'
 import { DEFAULT_DAILY_GOAL, writingGoalService } from '../../services/writingGoalService'
@@ -23,6 +24,8 @@ interface DashboardViewProps {
   projectId: string
   /** 跳转到指定主视口或页签（editor / foreshadow / timeline 等） */
   onOpenView: (view: string) => void
+  /** 打开指定章节；编辑器会再次按当前作品校验章节归属 */
+  onOpenChapter: (chapterId: string) => void
   /** 向 Engine 上报统计，驱动右侧信息栏 */
   onStats?: (stats: { title?: string; wordCount: number; updatedAt?: number }) => void
   /** 打开 AI 助手 */
@@ -60,13 +63,19 @@ const fmtWords = (n: number): string => (n >= 10000 ? `${(n / 10000).toFixed(2)}
 export const DashboardView: FC<DashboardViewProps> = ({
   projectId,
   onOpenView,
+  onOpenChapter,
   onStats,
   onOpenAssistant: _onOpenAssistant,
   onStartFocus,
 }) => {
-  const { model } = useDashboardModel(projectId)
+  const { model, resumeChapterId } = useDashboardModel(projectId)
   const loading = model === null
   const data = model ?? EMPTY_MODEL
+  const resumeChapter = resumeChapterId
+    ? data.chapters.find(
+        (chapter) => chapter.projectId === projectId && chapter.id === resumeChapterId,
+      )
+    : undefined
 
   // 1. 目标与截止日设置持久化
   const [goalPlan, setGoalPlan] = useState<WritingGoalPlan>({
@@ -253,6 +262,19 @@ export const DashboardView: FC<DashboardViewProps> = ({
             实时汇总章节进度、创作产出与全书核心设定数据
           </p>
         </div>
+
+        <PluginDashboardExtensionSlot
+          projectId={projectId}
+          project={data.project ?? null}
+          volumes={data.volumes}
+          chapters={data.chapters}
+          loading={loading}
+          resumeChapter={resumeChapter}
+          unresolvedForeshadowsCount={data.unresolvedForeshadowsCount}
+          unusedIdeasCount={data.unusedIdeasCount}
+          onOpenView={onOpenView}
+          onOpenChapter={onOpenChapter}
+        />
 
         {/* 1. 核心指标通栏（对齐 SettingsView 的 Section 规范） */}
         <div className="rounded-xl border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] divide-y sm:divide-y-0 sm:divide-x divide-[var(--ink-border)] grid grid-cols-2 sm:grid-cols-5 shadow-2xs overflow-hidden">
@@ -845,13 +867,15 @@ export const DashboardView: FC<DashboardViewProps> = ({
                           style={{ width: 24 }}
                         >
                           <Tooltip content={`${ch.title}（点击直达正文）`}>
-                            <div
-                              className="whitespace-nowrap cursor-pointer hover:text-[var(--ink-accent)]"
+                            <button
+                              type="button"
+                              aria-label={`打开《${ch.title}》正文`}
+                              className="appearance-none whitespace-nowrap cursor-pointer border-0 bg-transparent p-0 text-[var(--ink-text-faint)] hover:text-[var(--ink-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ink-accent)]"
                               style={{ writingMode: 'vertical-rl' }}
-                              onClick={() => onOpenView('editor')}
+                              onClick={() => onOpenChapter(ch.id)}
                             >
                               {ch.title.length > 8 ? ch.title.slice(0, 8) + '…' : ch.title}
-                            </div>
+                            </button>
                           </Tooltip>
                         </th>
                       ))}
@@ -880,7 +904,8 @@ export const DashboardView: FC<DashboardViewProps> = ({
                               >
                                 <button
                                   type="button"
-                                  onClick={() => onOpenView('editor')}
+                                  aria-label={`在《${ch.title}》中查看${item.name}的出场位置`}
+                                  onClick={() => onOpenChapter(ch.id)}
                                   className={`w-5 h-5 rounded-[3px] flex items-center justify-center text-[9px] ${heatCls} hover:ring-1 hover:ring-[var(--ink-accent)] transition-all cursor-pointer`}
                                 >
                                   {count > 0 ? count : ''}

@@ -10,11 +10,12 @@ import type { CapabilityDescriptor } from './capabilityRegistry'
 import type { CapabilitySurface } from './capabilityRegistry'
 
 /**
- * The hand-written registry described only ten of the forty-four plugins, while both the sidebar and
- * the command palette gate on it — so thirty-four plugins had no entry point even once enabled.
+ * The hand-written registry described only a subset of plugins, while both the sidebar and the
+ * command palette gate on it — leaving unlisted plugins without an entry point even once enabled.
  * Everything that a plugin's own source can evidence is derived here instead of declared a second
  * time: a main view means the capability can be navigated to and owns the canvas, a drawer snippet
- * means it can be folded into the desk. Claims no source can evidence (`maturity`, the two mutation
+ * means it can be folded into the desk, and extension loaders record their host surfaces. Claims no
+ * source can evidence (`maturity`, the two mutation
  * flags) are deliberately left undeclared, because `maturity` renders as a stability badge.
  */
 function derivePluginCapability(definition: PluginStaticDefinition): CapabilityDescriptor {
@@ -22,6 +23,9 @@ function derivePluginCapability(definition: PluginStaticDefinition): CapabilityD
   if (isPrimaryNavigationPlugin(definition.id)) surfaces.push('navigation')
   surfaces.push('canvas')
   if (definition.drawer) surfaces.push('drawer')
+  if (definition.loadBookshelfActionView) surfaces.push('bookshelf')
+  if (definition.loadDashboardExtensionView) surfaces.push('dashboard')
+  if (definition.loadTaskContextView) surfaces.push('task-context')
   surfaces.push('command')
   return {
     id: definition.id,

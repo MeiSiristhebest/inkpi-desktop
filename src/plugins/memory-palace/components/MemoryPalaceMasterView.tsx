@@ -214,7 +214,7 @@ const MemoryPalaceSession: FC<DesktopPluginViewProps> = ({ projectId }) => {
   }
 
   return (
-    <div className="p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
+    <div className="plugin-workspace-page p-6 h-full flex flex-col space-y-4 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-y-auto">
       <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">

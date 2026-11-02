@@ -1,8 +1,10 @@
 import type { ChapterRecord } from '../../types'
 import { projectContent } from '../../domain/content'
+import type { PreparedReferenceMaterials } from '../../domain/references/referenceMaterials'
 import { buildDurableTaskId } from '../../types/durableTaskId'
 import { CREATIVE_ARTIFACT_TYPES } from '../artifacts'
 import { chapterMutationService } from '../../services/defaultChapterMutationService'
+import { createDistillationSourceFingerprint } from './distillationCheckpointStore'
 import type { ChapterMutationService } from '../../services/chapterMutationService'
 import type {
   DistillationWorkflowOptions,
@@ -22,6 +24,7 @@ export type ChapterDistillationRunner = (
 export interface GenerateChapterSynopsisInput {
   workspaceId: string
   chapter: ChapterRecord
+  referenceMaterials?: PreparedReferenceMaterials
   signal?: AbortSignal
 }
 
@@ -41,13 +44,19 @@ export type GenerateChapterSynopsisResult =
 export function chapterSynopsisDistillationInput(
   chapter: ChapterRecord,
   workspaceId: string,
+  referenceMaterials?: PreparedReferenceMaterials,
 ): ProjectDistillationInput {
   const document = projectContent(chapter.id, chapter.content || '', chapter.revision ?? 0)
-  return {
+  const referenceFingerprint = referenceMaterials?.excerpts.length
+    ? createDistillationSourceFingerprint([document], JSON.stringify(referenceMaterials.excerpts))
+    : undefined
+  const request: ProjectDistillationInput = {
     taskId: buildDurableTaskId({
       workspaceId,
       operation: 'chapter-synopsis',
-      sourceFingerprint: `r${document.revision}`,
+      sourceFingerprint: referenceFingerprint
+        ? `r${document.revision}:${referenceFingerprint}`
+        : `r${document.revision}`,
       instance: chapter.id,
     }),
     workspaceId,
@@ -57,6 +66,8 @@ export function chapterSynopsisDistillationInput(
     metadata: { artifactType: CREATIVE_ARTIFACT_TYPES.chapterSummary },
     instruction: '用 60-120 字概括本章已经发生的剧情与结尾状态，用于后续章节的记忆检索。',
   }
+  if (referenceMaterials) request.referenceMaterials = referenceMaterials
+  return request
 }
 
 export async function generateChapterSynopsis(
@@ -64,7 +75,7 @@ export async function generateChapterSynopsis(
   dependencies: GenerateChapterSynopsisDependencies,
 ): Promise<GenerateChapterSynopsisResult> {
   const { workspaceId, chapter } = input
-  const request = chapterSynopsisDistillationInput(chapter, workspaceId)
+  const request = chapterSynopsisDistillationInput(chapter, workspaceId, input.referenceMaterials)
   if (!request.documents[0]?.text.trim()) {
     return { success: false, conflict: false, error: '本章还没有正文，无法生成梗概' }
   }

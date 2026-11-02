@@ -33,6 +33,18 @@ describe('plugin instruction definitions', () => {
     expect(task.metadata).not.toHaveProperty('instruction')
   })
 
+  it('does not fabricate a document scope for workspace-level analysis', () => {
+    const task = createPluginAnalysisTask({
+      pluginId: 'multi-calendar',
+      workspaceId: 'workspace-1',
+      input: { chapterOne: '第一章', chapterTwo: '第二章' },
+    })
+
+    expect(task.scope).toEqual({ workspaceId: 'workspace-1', workspaceRevision: 1 })
+    expect(task.input).not.toHaveProperty('documentId')
+    expect(task.input.payload).not.toHaveProperty('sourceChapterId')
+  })
+
   it('projects HTML plugin input to canonical semantic text before task construction', () => {
     const task = createPluginAnalysisTask({
       pluginId: 'reader-hook',

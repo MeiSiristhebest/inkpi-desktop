@@ -1,6 +1,7 @@
 import type { TaskScope } from '../../types/taskScope'
 import type { AiArtifact } from '../artifacts/artifactStore'
 import { artifactWorkspaceId } from '../artifacts/artifactStore'
+import { readDesktopPreparedContextCoverageForTask } from '../../types/aiContextCoverage'
 import type { AiProposal, ProposalStatus } from '../proposals/proposalLedger'
 import type {
   AiResultFinding,
@@ -105,6 +106,10 @@ export function projectArtifactToStandardAiResult(
 
   const usage = asRecord(artifact.provenance.usage)
   const contextSources = artifact.provenance.contextSources
+  const desktopPreparedContextCoverage = readDesktopPreparedContextCoverageForTask(
+    artifact.kind,
+    artifact.metadata?.desktopPreparedContextCoverage,
+  )
   const result: StandardAiResult = {
     id: artifact.id,
     taskId: artifact.taskId,
@@ -130,6 +135,9 @@ export function projectArtifactToStandardAiResult(
     },
     createdAt: artifact.createdAt,
     updatedAt: Math.max(artifact.updatedAt, proposal?.updatedAt ?? 0),
+  }
+  if (desktopPreparedContextCoverage) {
+    result.provenance.desktopPreparedContextCoverage = desktopPreparedContextCoverage
   }
   const findings = findingsFromProposal(proposal)
   if (findings) result.findings = findings

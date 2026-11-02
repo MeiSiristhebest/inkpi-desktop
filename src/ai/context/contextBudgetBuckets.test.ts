@@ -9,6 +9,7 @@ describe('calculateContextBudgetBuckets (P1.7)', () => {
     expect(buckets.sceneTokens).toBe(1600) // 40%
     expect(buckets.canonicalStoryTokens).toBe(800) // 20%
     expect(buckets.retrievedMemoryTokens).toBe(600) // 15%
+    expect(buckets.externalReferenceTokens).toBe(0)
     expect(buckets.workingStateTokens).toBe(200) // 5%
 
     const sum =
@@ -16,9 +17,21 @@ describe('calculateContextBudgetBuckets (P1.7)', () => {
       buckets.sceneTokens +
       buckets.canonicalStoryTokens +
       buckets.retrievedMemoryTokens +
+      buckets.externalReferenceTokens +
       buckets.workingStateTokens
 
     expect(sum).toBe(4000)
+  })
+
+  it('reserves an external-reference bucket only when selected excerpts are present', () => {
+    const buckets = calculateContextBudgetBuckets(4000, true)
+
+    expect(buckets.instructionsTokens).toBe(800)
+    expect(buckets.sceneTokens).toBe(1400)
+    expect(buckets.canonicalStoryTokens).toBe(600)
+    expect(buckets.retrievedMemoryTokens).toBe(600)
+    expect(buckets.externalReferenceTokens).toBe(400)
+    expect(buckets.workingStateTokens).toBe(200)
   })
 
   it('guarantees minimum floor for low token budgets', () => {

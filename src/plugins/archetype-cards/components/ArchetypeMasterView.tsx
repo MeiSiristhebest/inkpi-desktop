@@ -10,6 +10,7 @@ import { clipboardWriter } from '../../../adapters/clipboardWriter'
 import { idGenerator } from '../../../adapters/idGenerator'
 import { clock } from '../../../adapters/clock'
 import { semanticTextFromContent } from '../../../domain/content'
+import { PersonalityInspirationCards } from './PersonalityInspirationCards'
 
 export const ArchetypeMasterView: FC<DesktopPluginViewProps> = (props) => (
   <ArchetypeSession key={props.projectId} {...props} />
@@ -92,12 +93,18 @@ const ArchetypeSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =>
     }
   }
   return (
-    <div className="p-6 space-y-4 h-full overflow-y-auto">
+    <div className="plugin-workspace-page p-6 space-y-4 h-full overflow-y-auto">
       <h2>人格原型素材库与叙事母题卡牌 (ArchetypeCards)</h2>
       <p>
         36 项人物创作素材、16 个可选 MBTI 标签、12 项叙事母题及 8
         项冲突题目。属于创作参考；标签不能证明人格、冲突程度或行为。
       </p>
+      <details className="rounded-lg border border-[var(--ink-border)] bg-[var(--ink-bg-panel)] p-3">
+        <summary className="cursor-pointer text-sm font-medium">经典人物性格原型（6 张）</summary>
+        <div className="mt-3">
+          <PersonalityInspirationCards />
+        </div>
+      </details>
       <select
         aria-label="角色原型分类"
         value={category}
@@ -115,7 +122,9 @@ const ArchetypeSession: FC<DesktopPluginViewProps> = ({ projectId, onStats }) =>
         本类预设 {presets.filter((c) => c.category === category).length} 项；已保存作者素材{' '}
         {materials.length} 项。
       </p>
-      <button onClick={draw}>随机抽取双卡对垒</button>
+      <button data-variant="primary" onClick={draw}>
+        随机抽取双卡对垒
+      </button>
       <select
         aria-label="选择已有作者素材"
         value=""

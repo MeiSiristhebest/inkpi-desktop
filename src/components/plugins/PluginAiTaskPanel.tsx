@@ -10,6 +10,13 @@ export interface PluginAiTaskPanelProps {
   onRetry?: () => void
 }
 
+const SOURCE_KIND_LABELS: Record<NonNullable<PluginWorkflowProvenance['sourceKind']>, string> = {
+  workspace: '工作区',
+  manual: '手动输入',
+  'saved-chapter': '已保存章节',
+  'edited-copy': '编辑副本',
+}
+
 /**
  * 插件视图的 AI 任务回执（§P1.12）。
  *
@@ -119,13 +126,15 @@ export const PluginAiTaskPanel: FC<PluginAiTaskPanelProps> = ({ view, onRetry })
       >
         <span>任务 {view.taskId}</span>
         {provenance.workspaceId && <span>作品 {provenance.workspaceId}</span>}
-        {provenance.documentId && (
+        {provenance.documentId ? (
           <span>
             来源 {provenance.documentId}
             {provenance.documentRevision === undefined
               ? ''
               : ` · 修订 ${provenance.documentRevision}`}
           </span>
+        ) : (
+          provenance.sourceKind && <span>来源 {SOURCE_KIND_LABELS[provenance.sourceKind]}</span>
         )}
         {(provenance.provider || provenance.model) && (
           <span>模型 {[provenance.provider, provenance.model].filter(Boolean).join(' / ')}</span>
@@ -142,7 +151,9 @@ export const PluginAiTaskPanel: FC<PluginAiTaskPanelProps> = ({ view, onRetry })
 function ProvenanceLine({ provenance }: { provenance: PluginWorkflowProvenance }) {
   const source = provenance.documentId
     ? `来源 ${provenance.documentId}${provenance.documentRevision === undefined ? '' : ` · 修订 ${provenance.documentRevision}`}`
-    : undefined
+    : provenance.sourceKind
+      ? `来源 ${SOURCE_KIND_LABELS[provenance.sourceKind]}`
+      : undefined
   const model = [provenance.provider, provenance.model].filter(Boolean).join(' / ')
   const details = [source, model ? `模型 ${model}` : undefined].filter(Boolean)
   return details.length > 0 ? (

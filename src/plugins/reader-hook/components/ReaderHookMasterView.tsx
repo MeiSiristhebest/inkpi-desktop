@@ -14,6 +14,7 @@ import {
 } from '../../../domain/chapter/chapterSequence'
 import { useOptionalPluginHostContext } from '../../../core/pluginHostContext'
 import { usePluginAiTask } from '../../../core/usePluginAiTask'
+import type { PluginWorkflowSource } from '../../../types/pluginHost'
 import { PluginAiTaskPanel } from '../../../components/plugins/PluginAiTaskPanel'
 import { EndingEvidence } from '../../../components/plugins/EndingEvidence'
 import { Select } from '../../../ui/primitives'
@@ -60,6 +61,15 @@ function ReaderHookWorkspace({ projectId }: DesktopPluginViewProps) {
     }
   }, [projectId])
   const chapter = chapters.find((c) => c.id === selected)
+  const sourceKind = chapter
+    ? text === semanticTextFromContent(chapter.id, chapter.content, chapter.revision)
+      ? 'saved-chapter'
+      : 'edited-copy'
+    : 'manual'
+  const workflowSource: PluginWorkflowSource =
+    chapter && sourceKind !== 'manual'
+      ? { kind: sourceKind, documentId: chapter.id }
+      : { kind: 'manual' }
   const action = async (operation: () => Promise<void>) => {
     setBusy(true)
     setError('')
@@ -84,6 +94,7 @@ function ReaderHookWorkspace({ projectId }: DesktopPluginViewProps) {
         hookType: kind,
         authorIntent: intent,
         sourceRevision: chapter?.revision,
+        sourceKind,
         observations: report.observations,
         coverage: report.coverage,
         createdAt: now,
@@ -94,7 +105,7 @@ function ReaderHookWorkspace({ projectId }: DesktopPluginViewProps) {
       setMessage('已保存当前章尾复核记录。')
     })
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-4 text-[var(--ink-text)]">
+    <div className="plugin-workspace-page h-full overflow-y-auto p-6 space-y-4 text-[var(--ink-text)]">
       <h2>章尾钩子复核工坊</h2>
       <p>检查未解问题、人物利害与下一章承接；示例是可选素材。正文初次载入所选保存章节。</p>
       {error && <p role="alert">{error}</p>}
@@ -153,27 +164,31 @@ function ReaderHookWorkspace({ projectId }: DesktopPluginViewProps) {
           onClick={() =>
             (() => {
               const nextChapter = chapters[chapters.findIndex((c) => c.id === selected) + 1]
-              return ai.run({
-                chapter: chapter
-                  ? {
-                      id: chapter.id,
-                      chapterNumber: chapter.chapterNumber,
-                      revision: chapter.revision,
-                    }
-                  : { source: 'manual' },
-                endingText: semanticTextFromContent(
-                  chapter?.id ?? 'manual-ending',
-                  text,
-                  chapter?.revision ?? 0,
-                ),
-                authorIntent: semanticTextFromContent('manual-intent', intent, 0),
-                authorSelectedKind: kind,
-                nextChapter: semanticTextFromContent(
-                  nextChapter?.id ?? 'next-chapter',
-                  nextChapter?.content ?? '',
-                  nextChapter?.revision ?? 0,
-                ),
-              })
+              return ai.run(
+                {
+                  chapter: chapter
+                    ? {
+                        id: chapter.id,
+                        chapterNumber: chapter.chapterNumber,
+                        revision: chapter.revision,
+                      }
+                    : { source: 'manual' },
+                  endingText: semanticTextFromContent(
+                    chapter?.id ?? 'manual-ending',
+                    text,
+                    chapter?.revision ?? 0,
+                  ),
+                  authorIntent: semanticTextFromContent('manual-intent', intent, 0),
+                  authorSelectedKind: kind,
+                  nextChapter: semanticTextFromContent(
+                    nextChapter?.id ?? 'next-chapter',
+                    nextChapter?.content ?? '',
+                    nextChapter?.revision ?? 0,
+                  ),
+                },
+                undefined,
+                workflowSource,
+              )
             })()
           }
         >
@@ -181,7 +196,7 @@ function ReaderHookWorkspace({ projectId }: DesktopPluginViewProps) {
         </button>
       )}
       <PluginAiTaskPanel view={ai.view} onRetry={ai.retry} />
-      <button disabled={busy || !text.trim()} onClick={save}>
+      <button data-variant="primary" disabled={busy || !text.trim()} onClick={save}>
         入库本章断章
       </button>
       <h3>已保存章尾记录 ({saved.length})</h3>
@@ -190,6 +205,16 @@ function ReaderHookWorkspace({ projectId }: DesktopPluginViewProps) {
           <p>
             {record.chapterNumber ? '第 ' + record.chapterNumber + ' 章' : '章节位置未知'} ·{' '}
             {record.hookType}
+          </p>
+          <p>
+            {record.sourceKind === 'edited-copy'
+              ? '编辑副本'
+              : record.sourceKind === 'manual'
+                ? '手动文本'
+                : '保存版本'}
+            {record.sourceRevision === undefined
+              ? ' · 来源修订未知'
+              : ` · 基准保存修订 ${record.sourceRevision}`}
           </p>
           {record.tensionScore !== undefined && (
             <p>旧公式分数 {record.tensionScore}，尚未验证文学质量或追读效果。</p>

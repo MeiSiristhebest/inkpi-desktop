@@ -125,6 +125,40 @@ export class DistillationReviewInbox {
     return ingested
   }
 
+  /** Adds an explicitly selected roleplay excerpt as a pending timeline-event proposal. */
+  public async ingestRoleplayEventCandidate(input: {
+    workspaceId: string
+    sessionId: string
+    messageId: string
+    name: string
+    summary: string
+  }): Promise<DistillationItem> {
+    const { workspaceId, sessionId, messageId, name, summary } = input
+    const cleanName = name.trim()
+    const cleanSummary = summary.trim()
+    if (!workspaceId.trim() || !sessionId.trim() || !messageId.trim()) {
+      throw new TypeError('Roleplay proposal source identifiers are required.')
+    }
+    if (!cleanName || !cleanSummary) {
+      throw new TypeError('Roleplay proposal title and summary are required.')
+    }
+    const item: DistillationItem = {
+      id: idGenerator.generate('distill-item'),
+      workspaceId,
+      taskId: `roleplay:${sessionId}:${messageId}`,
+      category: 'event',
+      name: cleanName,
+      summary: cleanSummary,
+      kind: 'roleplay-scene',
+      confidence: 1,
+      status: 'pending',
+      createdAt: clock.now(),
+    }
+    await distillationReviewStore.save(item)
+    this.memoryCache.set(item.id, item)
+    return { ...item }
+  }
+
   public async restoreFromStorage(workspaceId: string): Promise<void> {
     const items = await distillationReviewStore.list(workspaceId)
     for (const it of items) {

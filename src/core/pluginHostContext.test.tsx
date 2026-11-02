@@ -1,5 +1,5 @@
 import { render, waitFor } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiTask, TaskResult } from '@inkpi/protocol'
 import type { PluginWorkflowOutcome } from '../types/pluginHost'
@@ -83,10 +83,51 @@ function Probe({ onOutcome }: { onOutcome: (value: unknown) => void }) {
 }
 
 function AnalysisProbe({ onOutcome }: { onOutcome: (value: unknown) => void }) {
+  const host = usePluginHostContext()
+  const { aiAssistant } = host
+  const chapterRevision =
+    host.bookHierarchy.chapters.find((chapter) => chapter.id === 'chapter-1')?.revision ??
+    (host.activeChapter?.id === 'chapter-1' ? host.activeChapter.revision : undefined)
+  const lastRunKey = useRef<string | null>(null)
+
+  useEffect(() => {
+    const runKey = `chapter-1:${chapterRevision ?? 'unknown'}`
+    if (!aiAssistant || lastRunKey.current === runKey) return
+    lastRunKey.current = runKey
+    void aiAssistant
+      .runPluginOutcome?.('demo-plugin', '正文', undefined, {
+        kind: 'saved-chapter',
+        documentId: 'chapter-1',
+      })
+      .then(onOutcome)
+  }, [aiAssistant, chapterRevision, onOutcome])
+
+  return null
+}
+
+function WorkspaceAnalysisProbe({ onOutcome }: { onOutcome: (value: unknown) => void }) {
+  const { aiAssistant } = usePluginHostContext()
+  const hasRun = useRef(false)
+
+  useEffect(() => {
+    if (!aiAssistant || hasRun.current) return
+    hasRun.current = true
+    void aiAssistant.runPluginOutcome?.('demo-plugin', '正文').then(onOutcome)
+  }, [aiAssistant, onOutcome])
+
+  return null
+}
+
+function SelectedChapterAnalysisProbe({ onOutcome }: { onOutcome: (value: unknown) => void }) {
   const { aiAssistant } = usePluginHostContext()
 
   useEffect(() => {
-    void aiAssistant?.runPluginOutcome?.('demo-plugin', '正文').then(onOutcome)
+    void aiAssistant
+      ?.runPluginOutcome?.('demo-plugin', { chapterId: 'chapter-b' }, undefined, {
+        kind: 'saved-chapter',
+        documentId: 'chapter-b',
+      })
+      .then(onOutcome)
   }, [aiAssistant, onOutcome])
 
   return null
@@ -163,7 +204,7 @@ describe('Desktop plugin workflow outcomes', () => {
     expect(JSON.stringify(outcome.mock.calls[0][0])).not.toContain('output-secret')
   })
 
-  it('uses the latest active chapter revision for plugin analysis tasks', async () => {
+  it('uses the selected saved chapter revision for plugin analysis tasks', async () => {
     const activeChapter: ChapterRecord = {
       id: 'chapter-1',
       projectId: 'workspace-1',
@@ -208,11 +249,157 @@ describe('Desktop plugin workflow outcomes', () => {
     await waitFor(() => expect(onAiTask).toHaveBeenCalledTimes(2))
     expect(onAiTask.mock.calls[1]?.[0]).toMatchObject({
       scope: { document: { id: 'chapter-1', revision: 5 } },
+      metadata: { sourceKind: 'saved-chapter' },
     })
     await waitFor(() => expect(outcome).toHaveBeenCalledTimes(2))
     expect(outcome.mock.calls[1]?.[0]).toMatchObject({
-      provenance: { documentId: 'chapter-1', documentRevision: 5 },
+      provenance: {
+        sourceKind: 'saved-chapter',
+        documentId: 'chapter-1',
+        documentRevision: 5,
+      },
     })
+  })
+
+  it('uses a plugin-selected chapter instead of the unrelated active chapter', async () => {
+    const active: ChapterRecord = {
+      id: 'chapter-a',
+      projectId: 'workspace-1',
+      volumeId: 'volume-1',
+      title: 'A',
+      content: 'A正文',
+      wordCount: 3,
+      order: 1,
+      revision: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const selected: ChapterRecord = {
+      ...active,
+      id: 'chapter-b',
+      title: 'B',
+      content: 'B正文',
+      order: 2,
+      revision: 7,
+    }
+    const onAiTask = vi.fn(async (task: AiTask) => ({
+      taskId: task.id,
+      kind: task.kind,
+      status: 'completed' as const,
+      output: { format: 'text' as const, text: '审阅完成' },
+    }))
+    const outcome = vi.fn()
+    render(
+      <DesktopPluginHostProvider
+        projectId="workspace-1"
+        activeChapter={active}
+        chapters={[active, selected]}
+        isAiConnected
+        onAiTask={onAiTask}
+      >
+        <SelectedChapterAnalysisProbe onOutcome={outcome} />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(onAiTask).toHaveBeenCalledTimes(1))
+    expect(onAiTask.mock.calls[0]?.[0]).toMatchObject({
+      scope: { workspaceId: 'workspace-1', document: { id: 'chapter-b', revision: 7 } },
+      input: { documentId: 'chapter-b' },
+    })
+    await waitFor(() => expect(outcome).toHaveBeenCalledTimes(1))
+    expect(outcome.mock.calls[0]?.[0]).toMatchObject({
+      provenance: { documentId: 'chapter-b', documentRevision: 7, sourceKind: 'saved-chapter' },
+    })
+  })
+
+  it('rejects a selected chapter that belongs to another workspace', async () => {
+    const active: ChapterRecord = {
+      id: 'chapter-a',
+      projectId: 'workspace-1',
+      volumeId: 'volume-1',
+      title: 'A',
+      content: 'A正文',
+      wordCount: 3,
+      order: 1,
+      revision: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const foreign: ChapterRecord = {
+      ...active,
+      id: 'chapter-b',
+      projectId: 'workspace-2',
+      title: 'B',
+      revision: 7,
+    }
+    const onAiTask = vi.fn(async (task: AiTask) => ({
+      taskId: task.id,
+      kind: task.kind,
+      status: 'completed' as const,
+      output: { format: 'text' as const, text: '不应执行' },
+    }))
+    const outcome = vi.fn()
+    render(
+      <DesktopPluginHostProvider
+        projectId="workspace-1"
+        activeChapter={active}
+        chapters={[foreign]}
+        isAiConnected
+        onAiTask={onAiTask}
+      >
+        <SelectedChapterAnalysisProbe onOutcome={outcome} />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(outcome).toHaveBeenCalledTimes(1))
+    expect(onAiTask).not.toHaveBeenCalled()
+    expect(outcome.mock.calls[0]?.[0]).toMatchObject({
+      status: 'failed',
+      error: '所选章节不属于当前作品或已不可用。',
+      provenance: { sourceKind: 'saved-chapter' },
+    })
+    expect(outcome.mock.calls[0]?.[0].provenance).not.toHaveProperty('documentId')
+  })
+
+  it('does not fabricate a document for a workspace-level plugin task', async () => {
+    const active: ChapterRecord = {
+      id: 'chapter-a',
+      projectId: 'workspace-1',
+      volumeId: 'volume-1',
+      title: 'A',
+      content: 'A正文',
+      wordCount: 3,
+      order: 1,
+      revision: 2,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const onAiTask = vi.fn(async (task: AiTask) => ({
+      taskId: task.id,
+      kind: task.kind,
+      status: 'completed' as const,
+      output: { format: 'text' as const, text: '审阅完成' },
+    }))
+    const outcome = vi.fn()
+    render(
+      <DesktopPluginHostProvider
+        projectId="workspace-1"
+        activeChapter={active}
+        isAiConnected
+        onAiTask={onAiTask}
+      >
+        <WorkspaceAnalysisProbe onOutcome={outcome} />
+      </DesktopPluginHostProvider>,
+    )
+
+    await waitFor(() => expect(onAiTask).toHaveBeenCalledTimes(1))
+    expect(onAiTask.mock.calls[0]?.[0].scope).toEqual({
+      workspaceId: 'workspace-1',
+      workspaceRevision: 1,
+    })
+    await waitFor(() => expect(outcome).toHaveBeenCalledTimes(1))
+    expect(outcome.mock.calls[0]?.[0]).toMatchObject({ provenance: { sourceKind: 'workspace' } })
+    expect(outcome.mock.calls[0]?.[0].provenance).not.toHaveProperty('documentId')
   })
 
   it('redacts raw task input and output at the host boundary', async () => {
