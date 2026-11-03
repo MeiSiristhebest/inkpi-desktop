@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ModelConfig } from '../../core/settings'
 import { ProviderDetailView, type ProviderDetailViewProps } from './ProviderDetailView'
 
@@ -25,6 +26,20 @@ const modelConfig: ModelConfig = {
 }
 
 describe('ProviderDetailView provider catalog scope', () => {
+  it('keeps Codex OAuth out of API-key setup and shows the Azure Responses endpoint shape', async () => {
+    render(<ProviderDetailView initialConfig={modelConfig} onBack={vi.fn()} onSave={vi.fn()} />)
+
+    const providerSelect = screen.getByRole('combobox', { name: '服务提供商' })
+    await userEvent.click(providerSelect)
+    expect(screen.queryByRole('option', { name: 'OpenAI Codex' })).not.toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('option', { name: 'Azure OpenAI Responses' }))
+
+    expect(screen.getByLabelText('API Base URL 接口地址')).toHaveAttribute(
+      'placeholder',
+      'https://<resource>.openai.azure.com/openai/v1',
+    )
+  })
+
   it('exposes connection testing as a busy, disabled button', async () => {
     let resolveTest!: (value: ProviderTestResult) => void
     const onTest = vi.fn(

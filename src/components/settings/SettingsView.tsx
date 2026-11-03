@@ -40,15 +40,17 @@ import { WritingHabitsTab } from './WritingHabitsTab'
 import { ShortcutsTab } from './ShortcutsTab'
 import type {
   OpenAIChatGPTPlanModel,
+  OpenAICodexAccountSummary,
   RuntimeModelProviderProbeParams,
   RuntimeModelProviderProbeResult,
 } from '@inkpi/protocol'
-import type { ChatGPTPlanAssistant } from '../../ports/aiGateway'
+import type { ChatGPTPlanAssistant, OpenAICodexAssistant } from '../../ports/aiGateway'
 import {
   useSettings,
   PROVIDER_META,
   type AppSettings,
   type ModelConfig,
+  type ThinkingLevel,
   type ThemeMode,
   type FontKind,
   type ParagraphIndent,
@@ -62,6 +64,7 @@ import { modelSecretKey } from '../../core/modelSecrets'
 import { mergeProviderCatalog } from '../../core/providerModelCatalog'
 import { ProviderDetailView } from './ProviderDetailView'
 import { ChatGPTPlanSettings } from './ChatGPTPlanSettings'
+import { OpenAICodexSettings } from './OpenAICodexSettings'
 import {
   classifyProbeStatus,
   deriveAiReadiness,
@@ -379,6 +382,7 @@ interface SettingsViewProps {
     params: RuntimeModelProviderProbeParams,
   ) => Promise<RuntimeModelProviderProbeResult>
   chatgptPlan?: ChatGPTPlanAssistant
+  openAICodex?: OpenAICodexAssistant
 }
 
 export const SettingsView: FC<SettingsViewProps> = ({
@@ -386,6 +390,7 @@ export const SettingsView: FC<SettingsViewProps> = ({
   onClose,
   probeModelProvider,
   chatgptPlan,
+  openAICodex,
   runtimeState = 'unknown',
   onReconnect,
 }) => {
@@ -582,6 +587,7 @@ export const SettingsView: FC<SettingsViewProps> = ({
                 update={update}
                 probeModelProvider={probeModelProvider}
                 chatgptPlan={chatgptPlan}
+                openAICodex={openAICodex}
               />
             )}
             {tab === 'connection' && (
@@ -1118,7 +1124,8 @@ const AiTab: FC<{
   update: (p: Partial<AppSettings>) => void
   probeModelProvider?: SettingsViewProps['probeModelProvider']
   chatgptPlan?: ChatGPTPlanAssistant
-}> = ({ settings, update, probeModelProvider, chatgptPlan }) => {
+  openAICodex?: OpenAICodexAssistant
+}> = ({ settings, update, probeModelProvider, chatgptPlan, openAICodex }) => {
   // 当前已保存的所有供应商列表
   const savedList = useMemo<ModelConfig[]>(() => {
     if (settings.savedAiModels && settings.savedAiModels.length > 0) {
@@ -1212,7 +1219,7 @@ const AiTab: FC<{
 
   // 删除供应商
   const handleDeleteProvider = async (target: ModelConfig) => {
-    if (target.provider !== 'openai-chatgpt-plan') {
+    if (target.provider !== 'openai-chatgpt-plan' && target.provider !== 'openai-codex') {
       try {
         await secretStore.remove(modelSecretKey(target))
       } catch {
@@ -1247,6 +1254,7 @@ const AiTab: FC<{
     const targets = savedList.filter(
       (m) =>
         m.provider !== 'openai-chatgpt-plan' &&
+        m.provider !== 'openai-codex' &&
         m.enabled !== false &&
         (m.baseUrl || PROVIDER_META[m.provider]?.defaultBaseUrl),
     )
@@ -1325,6 +1333,19 @@ const AiTab: FC<{
     update({ savedAiModels: nextList, aiModel: nextActive })
   }
 
+  const handleCodexAccountStatusChange = (accountId: string, configured: boolean) => {
+    const nextList = savedList.map((model) =>
+      model.provider === 'openai-codex' && model.accountId === accountId
+        ? { ...model, credentialConfigured: configured }
+        : model,
+    )
+    const nextActive =
+      settings.aiModel?.provider === 'openai-codex' && settings.aiModel.accountId === accountId
+        ? { ...settings.aiModel, credentialConfigured: configured }
+        : settings.aiModel
+    update({ savedAiModels: nextList, aiModel: nextActive })
+  }
+
   const handleAddChatGPTModel = (model: OpenAIChatGPTPlanModel) => {
     const existing = savedList.find(
       (item) =>
@@ -1357,6 +1378,41 @@ const AiTab: FC<{
       (settings.aiModel?.provider === config.provider &&
         settings.aiModel.id === config.id &&
         !settings.aiModel.accountId)
+    update({
+      savedAiModels: nextList,
+      aiModel: settings.aiModel ? (isCurrentModel ? config : settings.aiModel) : config,
+    })
+  }
+
+  const handleAddCodexModel = (
+    account: OpenAICodexAccountSummary,
+    reasoningEffort: ThinkingLevel,
+  ) => {
+    const modelId = 'gpt-6.1-terra'
+    const existing = savedList.find(
+      (item) =>
+        item.provider === 'openai-codex' &&
+        item.id === modelId &&
+        item.accountId === account.accountId,
+    )
+    const config: ModelConfig = {
+      ...existing,
+      id: modelId,
+      name: 'GPT-6.1 Terra',
+      provider: 'openai-codex',
+      accountId: account.accountId,
+      baseUrl: PROVIDER_META['openai-codex'].defaultBaseUrl,
+      credentialConfigured: true,
+      enabled: existing?.enabled ?? true,
+      supportsThinking: true,
+      supportsMidConvoEffort: true,
+      thinkingLevel: reasoningEffort,
+      availableModelIds: Array.from(new Set([...(existing?.availableModelIds ?? []), modelId])),
+    }
+    const nextList = existing
+      ? savedList.map((item) => (isSameModelIdentity(item, config) ? config : item))
+      : [...savedList, config]
+    const isCurrentModel = isSameModelIdentity(settings.aiModel, config)
     update({
       savedAiModels: nextList,
       aiModel: settings.aiModel ? (isCurrentModel ? config : settings.aiModel) : config,
@@ -1518,6 +1574,11 @@ const AiTab: FC<{
         onAddModel={handleAddChatGPTModel}
         onAccountUsageStatusChange={handlePlanUsageStatusChange}
       />
+      <OpenAICodexSettings
+        assistant={openAICodex}
+        onAddModel={handleAddCodexModel}
+        onAccountCredentialStatusChange={handleCodexAccountStatusChange}
+      />
 
       {/* ── 模块 1：AI 服务列表（与图一 100% 对齐）── */}
       <section className="space-y-2.5">
@@ -1597,10 +1658,13 @@ const AiTab: FC<{
                       <span className="font-mono">{host || '默认端点'}</span>
                       <span className="mx-1.5">·</span>
                       <span>{modelCount} 个模型</span>
-                      {m.provider === 'openai-chatgpt-plan' && (
+                      {(m.provider === 'openai-chatgpt-plan' || m.provider === 'openai-codex') && (
                         <>
                           <span className="mx-1.5">·</span>
-                          <span>账号 {m.accountId ?? '未绑定'}</span>
+                          <span>
+                            {m.provider === 'openai-codex' ? 'Codex 账号' : '账号'}{' '}
+                            {m.accountId ?? '未绑定'}
+                          </span>
                         </>
                       )}
                     </div>
@@ -1617,7 +1681,7 @@ const AiTab: FC<{
                         设为默认
                       </button>
                     )}
-                    {m.provider !== 'openai-chatgpt-plan' && (
+                    {m.provider !== 'openai-chatgpt-plan' && m.provider !== 'openai-codex' && (
                       <Tooltip content="编辑此服务">
                         <button
                           type="button"
@@ -1628,7 +1692,7 @@ const AiTab: FC<{
                         </button>
                       </Tooltip>
                     )}
-                    {m.provider !== 'openai-chatgpt-plan' && (
+                    {m.provider !== 'openai-chatgpt-plan' && m.provider !== 'openai-codex' && (
                       <Tooltip content="测试连通性">
                         <button
                           type="button"
@@ -1698,10 +1762,14 @@ function isSameModelIdentity(
   right: Pick<ModelConfig, 'id' | 'provider' | 'accountId'> | null | undefined,
 ): boolean {
   if (!left || !right || left.id !== right.id || left.provider !== right.provider) return false
-  return left.provider !== 'openai-chatgpt-plan' || left.accountId === right.accountId
+  return (
+    (left.provider !== 'openai-chatgpt-plan' && left.provider !== 'openai-codex') ||
+    left.accountId === right.accountId
+  )
 }
 
 function modelOwnerLabel(model: ModelConfig): string {
+  if (model.provider === 'openai-codex') return ` · Codex 账号 ${model.accountId ?? '未绑定'}`
   return model.provider === 'openai-chatgpt-plan' ? ` · 账号 ${model.accountId ?? '未绑定'}` : ''
 }
 

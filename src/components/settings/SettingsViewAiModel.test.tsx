@@ -4,6 +4,8 @@ import { SettingsView } from './SettingsView'
 import { SettingsProvider } from '../../core/settings'
 import { ThemeController } from '../../core/ThemeController'
 import { db } from '../../db/indexedDB'
+import type { OpenAICodexAccountSummary } from '@inkpi/protocol'
+import type { OpenAICodexAssistant } from '../../ports/aiGateway'
 
 const defaultProbe = vi.fn(async () => ({
   status: 200,
@@ -23,10 +25,29 @@ const defaultProbe = vi.fn(async () => ({
   ],
 }))
 
+const codexAccountA: OpenAICodexAccountSummary = {
+  accountId: 'codex-account-a',
+  email: 'codex-a@example.test',
+  connected: true,
+  reauthRequired: false,
+}
+
+const createCodexAssistant = (): OpenAICodexAssistant => ({
+  getStatus: vi.fn(async () => ({ available: true, accounts: [codexAccountA] })),
+  startSignIn: vi.fn(async () => ({
+    attemptId: 'codex-attempt',
+    authorizationUrl: 'https://auth.openai.com/authorize',
+  })),
+  signInStatus: vi.fn(async () => ({ status: 'pending' as const })),
+  disconnect: vi.fn(async ({ accountId }) => ({ accountId, remoteRevocationConfirmed: true })),
+  openAuthorizationUrl: vi.fn(async () => undefined),
+})
+
 const renderSettings = (props: {
   open: boolean
   onClose: () => void
   probeModelProvider?: typeof defaultProbe
+  openAICodex?: OpenAICodexAssistant
 }) =>
   render(
     <SettingsProvider>
@@ -35,6 +56,7 @@ const renderSettings = (props: {
         open={props.open}
         onClose={props.onClose}
         probeModelProvider={props.probeModelProvider ?? defaultProbe}
+        openAICodex={props.openAICodex}
       />
     </SettingsProvider>,
   )
@@ -69,6 +91,71 @@ beforeEach(async () => {
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-theme')
+})
+
+describe('AiTab Codex 路由', () => {
+  it('按 Codex 账号隔离 GPT-6.1 Terra 路由并保留其他账号的同模型配置', async () => {
+    const planModel = {
+      id: 'deepseek-chat',
+      name: 'DS',
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+    }
+    const otherCodexAccount = {
+      id: 'gpt-6.1-terra',
+      name: 'GPT-6.1 Terra',
+      provider: 'openai-codex',
+      accountId: 'codex-account-b',
+      baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
+      credentialConfigured: true,
+      enabled: true,
+      availableModelIds: ['gpt-6.1-terra'],
+      supportsThinking: true,
+      supportsMidConvoEffort: true,
+      thinkingLevel: 'low',
+    }
+    localStorage.setItem(
+      'inkpi-settings',
+      JSON.stringify({ aiModel: planModel, savedAiModels: [planModel, otherCodexAccount] }),
+    )
+
+    renderSettings({
+      open: true,
+      onClose: vi.fn(),
+      openAICodex: createCodexAssistant(),
+    })
+    fireEvent.click(screen.getByText('自定义 AI 模型'))
+
+    await screen.findByText('GPT-6.1 Terra · Codex 路由')
+    fireEvent.click(screen.getByRole('button', { name: '添加或更新此账号的 GPT-6.1 Terra 路由' }))
+
+    await waitFor(() => {
+      const settings = readStored()
+      const codexModels = settings.savedAiModels.filter(
+        (model: { provider: string }) => model.provider === 'openai-codex',
+      )
+      expect(codexModels).toHaveLength(2)
+      expect(
+        codexModels.find((model: { accountId: string }) => model.accountId === 'codex-account-a'),
+      ).toMatchObject({
+        id: 'gpt-6.1-terra',
+        provider: 'openai-codex',
+        supportsThinking: true,
+        supportsMidConvoEffort: true,
+        thinkingLevel: 'medium',
+      })
+      expect(settings.aiModel?.id).toBe('deepseek-chat')
+    })
+
+    const settings = readStored()
+    const codexRoute = settings.savedAiModels.find(
+      (model: { provider: string; accountId: string }) =>
+        model.provider === 'openai-codex' && model.accountId === 'codex-account-a',
+    )
+    expect(codexRoute).not.toHaveProperty('contextWindow')
+    expect(codexRoute).not.toHaveProperty('credentialConfigured')
+    expect(codexRoute).not.toHaveProperty('apiKey')
+  })
 })
 
 describe('AiTab 默认项卡片', () => {

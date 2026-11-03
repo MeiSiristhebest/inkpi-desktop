@@ -154,6 +154,14 @@ export const createDaemonAiAssistant = (client: RpcClient): AiAssistant => {
         invoke('open_chatgpt_plan_authorization_url', { url }).then(() => undefined),
       openUsageSettings: () => invoke('open_chatgpt_plan_usage_settings').then(() => undefined),
     },
+    openAICodex: {
+      getStatus: () => client.request('model.openai-codex.status'),
+      startSignIn: (params) => client.request('model.openai-codex.sign-in', params),
+      signInStatus: (params) => client.request('model.openai-codex.sign-in-status', params),
+      disconnect: (params) => client.request('model.openai-codex.disconnect', params),
+      openAuthorizationUrl: (url) =>
+        invoke('open_chatgpt_plan_authorization_url', { url }).then(() => undefined),
+    },
     runTask,
 
     runPluginTool: async (

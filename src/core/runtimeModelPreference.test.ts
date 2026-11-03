@@ -64,6 +64,61 @@ describe('runtimeModelPreference — 用户选定模型 → Runtime modelRoute �
     })
   })
 
+  it('isolates Codex account routes and forwards context plus per-request reasoning controls', () => {
+    const firstAccount: ModelConfig = {
+      id: 'gpt-6.1-terra',
+      name: 'GPT-6.1 Terra',
+      provider: 'openai-codex',
+      accountId: 'codex-account-a',
+      baseUrl: 'https://chatgpt.com/backend-api',
+      credentialConfigured: true,
+      contextWindow: 500_000,
+      supportsThinking: true,
+      supportsMidConvoEffort: true,
+      thinkingLevel: 'high',
+    }
+    const secondAccount: ModelConfig = { ...firstAccount, accountId: 'codex-account-b' }
+
+    setRuntimeModelRoutes([firstAccount, secondAccount], secondAccount)
+    setRuntimeModelPreference(secondAccount)
+
+    expect(getRuntimeModelRoutes()).toMatchObject([
+      {
+        id: 'desktop:openai-codex:gpt-6.1-terra:account:codex-account-a',
+        model: {
+          id: 'gpt-6.1-terra',
+          provider: 'openai-codex',
+          credentialRef: 'inkpi.model.openai-codex.account.codex-account-a',
+          reasoningEffort: 'high',
+          supportsMidConvoEffort: true,
+        },
+        capabilities: { contextTokens: 500_000, maxContextTokens: 500_000, reasoning: true },
+        priority: 0,
+      },
+      {
+        id: 'desktop:openai-codex:gpt-6.1-terra:account:codex-account-b',
+        model: {
+          credentialRef: 'inkpi.model.openai-codex.account.codex-account-b',
+        },
+        priority: 100,
+      },
+    ])
+    expect(getRuntimeModelPreference()).toEqual({
+      providerId: 'openai-codex',
+      modelId: 'gpt-6.1-terra',
+      routeId: 'desktop:openai-codex:gpt-6.1-terra:account:codex-account-b',
+      required: true,
+    })
+
+    setRuntimeModelRoutes(
+      [{ ...firstAccount, credentialConfigured: false }, secondAccount],
+      secondAccount,
+    )
+    expect(getRuntimeModelRoutes().map((route) => route.id)).toEqual([
+      'desktop:openai-codex:gpt-6.1-terra:account:codex-account-b',
+    ])
+  })
+
   it('null / 缺字段时清除偏好（回退 Runtime 默认路由）', () => {
     setRuntimeModelPreference(null)
     expect(getRuntimeModelPreference()).toBeUndefined()

@@ -12,6 +12,13 @@ import type {
   OpenAIChatGPTPlanSignInStart,
   OpenAIChatGPTPlanSignInStatus,
   OpenAIChatGPTPlanSignInStatusParams,
+  OpenAICodexConnection,
+  OpenAICodexDisconnectParams,
+  OpenAICodexDisconnectResult,
+  OpenAICodexSignInParams,
+  OpenAICodexSignInStart,
+  OpenAICodexSignInStatus,
+  OpenAICodexSignInStatusParams,
   RuntimeModelProviderProbeParams,
   RuntimeModelProviderProbeResult,
   TaskExecutionSnapshot,
@@ -65,11 +72,21 @@ export interface ChatGPTPlanAssistant {
   openUsageSettings(): Promise<void>
 }
 
+/** Account controls for the Codex OAuth route; never shares Plan-consent state. */
+export interface OpenAICodexAssistant {
+  getStatus(): Promise<OpenAICodexConnection>
+  startSignIn(params: OpenAICodexSignInParams): Promise<OpenAICodexSignInStart>
+  signInStatus(params: OpenAICodexSignInStatusParams): Promise<OpenAICodexSignInStatus>
+  disconnect(params: OpenAICodexDisconnectParams): Promise<OpenAICodexDisconnectResult>
+  openAuthorizationUrl(url: string): Promise<void>
+}
+
 /**
  * 语义化 AI 助手端口。所有创作请求都通过通用 task.submit 进入 Runtime。
  */
 export interface AiAssistant {
   chatgptPlan?: ChatGPTPlanAssistant
+  openAICodex?: OpenAICodexAssistant
   runTask(
     task: AiTask,
     options?: {

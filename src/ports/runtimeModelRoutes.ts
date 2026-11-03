@@ -6,6 +6,7 @@
  */
 export type RuntimeOutputFormat = 'text' | 'structured' | 'patch'
 export type RuntimeModelNetworkCapability = 'offline' | 'optional' | 'required'
+export type RuntimeModelReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export interface RuntimeModelRegistrationConfig {
   id: string
@@ -18,6 +19,7 @@ export interface RuntimeModelRegistrationConfig {
   maxTokens?: number
   thinkingBudget?: number
   supportsThinking?: boolean
+  reasoningEffort?: RuntimeModelReasoningEffort
   supportsMidConvoEffort?: boolean
   supportsPromptCache?: boolean
   presencePenalty?: number
@@ -78,6 +80,7 @@ export interface RuntimeModelSummary {
   maxTokens?: number
   thinkingBudget?: number
   supportsThinking?: boolean
+  reasoningEffort?: RuntimeModelReasoningEffort
   supportsMidConvoEffort?: boolean
   supportsPromptCache?: boolean
   presencePenalty?: number

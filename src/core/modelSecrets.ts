@@ -2,11 +2,12 @@ import { secretStore } from '../adapters/secretStore'
 import type { AppSettings, ModelConfig } from './settings'
 
 export function modelSecretKey(model: Pick<ModelConfig, 'provider' | 'id' | 'accountId'>): string {
-  if (model.provider === 'openai-chatgpt-plan') {
+  if (model.provider === 'openai-chatgpt-plan' || model.provider === 'openai-codex') {
     const accountId = model.accountId?.trim()
+    const accountNamespace = model.provider
     return accountId
-      ? `inkpi.model.openai-chatgpt-plan.account.${encodeURIComponent(accountId)}`
-      : 'inkpi.model.openai-chatgpt-plan.account'
+      ? `inkpi.model.${accountNamespace}.account.${encodeURIComponent(accountId)}`
+      : `inkpi.model.${accountNamespace}.account`
   }
   return `inkpi.model.${encodeURIComponent(model.provider)}.${encodeURIComponent(model.id)}`
 }
@@ -28,7 +29,11 @@ export async function persistModelSecrets(settings: AppSettings): Promise<void> 
   await Promise.all(
     models.map(async (model) => {
       const key = modelSecretKey(model)
-      if (model.provider !== 'openai-chatgpt-plan' && model.apiKey?.trim()) {
+      if (
+        model.provider !== 'openai-chatgpt-plan' &&
+        model.provider !== 'openai-codex' &&
+        model.apiKey?.trim()
+      ) {
         await secretStore.set(key, model.apiKey.trim())
       }
       return undefined

@@ -189,6 +189,7 @@ export interface AiConversation {
     params: RuntimeModelProviderProbeParams,
   ) => Promise<RuntimeModelProviderProbeResult>
   chatgptPlan?: AiAssistant['chatgptPlan']
+  openAICodex?: AiAssistant['openAICodex']
   domainSyncState: DomainSyncState
   syncConflict?: DomainSyncConflict
   /** 发送前披露：本次请求会随指令带出的本地内容（P3.15） */
@@ -1294,6 +1295,7 @@ export function useAiConversation(
     listArtifacts,
     probeModelProvider,
     chatgptPlan: isConnected && isTauriContext() ? clientRef.current?.chatgptPlan : undefined,
+    openAICodex: isConnected && isTauriContext() ? clientRef.current?.openAICodex : undefined,
     domainSyncState,
     syncConflict,
     requestScope,

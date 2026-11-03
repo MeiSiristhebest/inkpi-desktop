@@ -87,7 +87,7 @@ export function modelConfigToRoute(
   const priority = basePriority + priorityOffset
 
   return {
-    id: `${config.provider}::${config.id}`,
+    id: modelRouteIdentity(config),
     capabilities,
     online: config.provider !== 'ollama',
     priority,
@@ -101,6 +101,10 @@ export function modelConfigToRoute(
       alias: config.alias,
       baseUrl: config.baseUrl,
       thinkingLevel: config.thinkingLevel,
+      supportsMidConvoEffort: config.supportsMidConvoEffort,
+      ...(isOpenAiAccountProvider(config.provider) && config.accountId
+        ? { accountId: config.accountId }
+        : {}),
       isDefault,
     },
   }
@@ -117,14 +121,14 @@ export function buildRoutesFromModelConfigs(
   if (activeModel && activeModel.enabled !== false) {
     const defaultRoute = modelConfigToRoute(activeModel, true, 20)
     routes.push(defaultRoute)
-    seenKeys.add(`${activeModel.provider}::${activeModel.id}`)
+    seenKeys.add(modelRouteIdentity(activeModel))
   }
 
   // 2. 遍历其它已保存且启用的模型
   let offset = 0
   for (const model of savedModels) {
     if (model.enabled === false) continue
-    const key = `${model.provider}::${model.id}`
+    const key = modelRouteIdentity(model)
     if (seenKeys.has(key)) continue
     seenKeys.add(key)
     routes.push(modelConfigToRoute(model, false, -offset))
@@ -132,4 +136,14 @@ export function buildRoutesFromModelConfigs(
   }
 
   return routes
+}
+
+function modelRouteIdentity(config: Pick<ModelConfig, 'provider' | 'id' | 'accountId'>): string {
+  const base = `${config.provider}::${config.id}`
+  if (!isOpenAiAccountProvider(config.provider) || !config.accountId?.trim()) return base
+  return `${base}:account:${encodeURIComponent(config.accountId.trim())}`
+}
+
+function isOpenAiAccountProvider(provider: ModelConfig['provider']): boolean {
+  return provider === 'openai-chatgpt-plan' || provider === 'openai-codex'
 }

@@ -155,11 +155,11 @@ fn resolve_request(line: &str, expected_token: &str) -> CredentialResponse {
             Err(_) => error_response("credential store unavailable"),
         },
         "set" => {
-            match is_chatgpt_plan_credential_ref(&request.credential_ref) {
+            match is_openai_account_credential_ref(&request.credential_ref) {
                 true => {}
                 false => {
                     return error_response(
-                        "credential writes are limited to ChatGPT plan references",
+                        "credential writes are limited to approved OpenAI account references",
                     )
                 }
             }
@@ -178,11 +178,11 @@ fn resolve_request(line: &str, expected_token: &str) -> CredentialResponse {
             }
         }
         "remove" => {
-            match is_chatgpt_plan_credential_ref(&request.credential_ref) {
+            match is_openai_account_credential_ref(&request.credential_ref) {
                 true => {}
                 false => {
                     return error_response(
-                        "credential writes are limited to ChatGPT plan references",
+                        "credential writes are limited to approved OpenAI account references",
                     )
                 }
             }
@@ -350,20 +350,24 @@ fn is_model_credential_ref(credential_ref: &str) -> bool {
         && !credential_ref.chars().any(char::is_control)
 }
 
-fn is_chatgpt_plan_credential_ref(credential_ref: &str) -> bool {
-    if matches!(
-        credential_ref,
-        "inkpi.model.openai-chatgpt-plan.account"
-            | "inkpi.model.openai-chatgpt-plan.accounts"
-            | "inkpi.model.openai-chatgpt-plan.host"
-            | "inkpi.model.openai-chatgpt-plan.pending"
-            | "inkpi.model.openai-chatgpt-plan.enabled"
-    ) {
+fn is_openai_account_credential_ref(credential_ref: &str) -> bool {
+    is_openai_account_credential_ref_for_namespace(credential_ref, "openai-chatgpt-plan")
+        || is_openai_account_credential_ref_for_namespace(credential_ref, "openai-codex")
+}
+
+fn is_openai_account_credential_ref_for_namespace(credential_ref: &str, namespace: &str) -> bool {
+    let prefix = format!("inkpi.model.{namespace}.");
+    let Some(reference) = credential_ref.strip_prefix(&prefix) else {
+        return false;
+    };
+
+    if matches!(reference, "account" | "accounts" | "host")
+        || (namespace == "openai-chatgpt-plan" && matches!(reference, "pending" | "enabled"))
+    {
         return true;
     }
 
-    let Some(account_id) = credential_ref.strip_prefix("inkpi.model.openai-chatgpt-plan.account.")
-    else {
+    let Some(account_id) = reference.strip_prefix("account.") else {
         return false;
     };
     account_id.len() == 32 && account_id.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -400,9 +404,9 @@ fn constant_time_eq(left: &str, right: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        constant_time_eq, format_chunk_manifest, is_chatgpt_plan_credential_ref,
-        is_model_credential_ref, parse_chunk_manifest, resolve_request, split_utf8, ChunkManifest,
-        MAX_CREDENTIAL_CHUNK_BYTES,
+        constant_time_eq, format_chunk_manifest, is_model_credential_ref,
+        is_openai_account_credential_ref, parse_chunk_manifest, resolve_request, split_utf8,
+        ChunkManifest, MAX_CREDENTIAL_CHUNK_BYTES,
     };
 
     #[test]
@@ -445,29 +449,54 @@ mod tests {
     }
 
     #[test]
-    fn runtime_writes_are_limited_to_chatgpt_plan_references() {
-        assert!(is_chatgpt_plan_credential_ref(
+    fn runtime_writes_are_limited_to_approved_openai_account_references() {
+        assert!(is_openai_account_credential_ref(
             "inkpi.model.openai-chatgpt-plan.account"
         ));
-        assert!(is_chatgpt_plan_credential_ref(
+        assert!(is_openai_account_credential_ref(
             "inkpi.model.openai-chatgpt-plan.account.0123456789abcdef0123456789abcdef"
         ));
-        assert!(is_chatgpt_plan_credential_ref(
+        assert!(is_openai_account_credential_ref(
             "inkpi.model.openai-chatgpt-plan.accounts"
         ));
-        assert!(!is_chatgpt_plan_credential_ref(
+        assert!(!is_openai_account_credential_ref(
             "inkpi.model.openai-chatgpt-plan.account.not-an-id"
         ));
-        assert!(is_chatgpt_plan_credential_ref(
+        assert!(is_openai_account_credential_ref(
             "inkpi.model.openai-chatgpt-plan.enabled"
         ));
-        assert!(is_chatgpt_plan_credential_ref(
+        assert!(is_openai_account_credential_ref(
             "inkpi.model.openai-chatgpt-plan.host"
         ));
-        assert!(is_chatgpt_plan_credential_ref(
+        assert!(is_openai_account_credential_ref(
             "inkpi.model.openai-chatgpt-plan.pending"
         ));
-        assert!(!is_chatgpt_plan_credential_ref("inkpi.model.openai.gpt-4o"));
+
+        assert!(is_openai_account_credential_ref(
+            "inkpi.model.openai-codex.account"
+        ));
+        assert!(is_openai_account_credential_ref(
+            "inkpi.model.openai-codex.account.abcdef0123456789abcdef0123456789"
+        ));
+        assert!(is_openai_account_credential_ref(
+            "inkpi.model.openai-codex.accounts"
+        ));
+        assert!(is_openai_account_credential_ref(
+            "inkpi.model.openai-codex.host"
+        ));
+        assert!(!is_openai_account_credential_ref(
+            "inkpi.model.openai-codex.account.invalid"
+        ));
+        assert!(!is_openai_account_credential_ref(
+            "inkpi.model.openai-codex.pending"
+        ));
+        assert!(!is_openai_account_credential_ref(
+            "inkpi.model.openai-codex.enabled"
+        ));
+        assert!(!is_openai_account_credential_ref(
+            "inkpi.model.openai.gpt-4o"
+        ));
+
         let response = resolve_request(
             r#"{"token":"expected-token","operation":"set","credential_ref":"inkpi.model.openai.gpt-4o","value":"replacement"}"#,
             "expected-token",
@@ -475,7 +504,7 @@ mod tests {
         assert!(!response.success);
         assert_eq!(
             response.error,
-            Some("credential writes are limited to ChatGPT plan references")
+            Some("credential writes are limited to approved OpenAI account references")
         );
     }
 

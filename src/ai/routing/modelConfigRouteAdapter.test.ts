@@ -68,6 +68,32 @@ describe('modelConfigRouteAdapter', () => {
     expect(reasoningDecision.route.id).toBe('deepseek::deepseek-reasoner')
   })
 
+  it('keeps identical Codex models on separate account route identities', () => {
+    const firstAccount: ModelConfig = {
+      id: 'gpt-6.1-terra',
+      name: 'GPT-6.1 Terra',
+      provider: 'openai-codex',
+      accountId: 'codex-a',
+      supportsThinking: true,
+      supportsMidConvoEffort: true,
+      thinkingLevel: 'high',
+      contextWindow: 500_000,
+    }
+    const secondAccount: ModelConfig = { ...firstAccount, accountId: 'codex-b' }
+
+    const routes = buildRoutesFromModelConfigs([firstAccount, secondAccount], secondAccount)
+
+    expect(routes.map((route) => route.id)).toEqual([
+      'openai-codex::gpt-6.1-terra:account:codex-b',
+      'openai-codex::gpt-6.1-terra:account:codex-a',
+    ])
+    expect(routes[0]).toMatchObject({
+      modelCapabilities: { maxContextTokens: 500_000, reasoning: true },
+      metadata: { accountId: 'codex-b', thinkingLevel: 'high', supportsMidConvoEffort: true },
+    })
+    expect(JSON.stringify(routes)).not.toContain('apiKey')
+  })
+
   it('skips disabled models in route building', () => {
     const disabledModel: ModelConfig = {
       id: 'disabled-model',

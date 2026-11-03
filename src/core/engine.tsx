@@ -45,7 +45,7 @@ import {
 import { useOptionalActiveWritingContext } from './activeWritingContext'
 import { useOptionalPluginHostContext } from './pluginHostContext'
 import { Tooltip } from '../ui/primitives'
-import type { ChatGPTPlanAssistant } from '../ports/aiGateway'
+import type { ChatGPTPlanAssistant, OpenAICodexAssistant } from '../ports/aiGateway'
 
 interface EngineProps {
   projectId: string
@@ -74,6 +74,7 @@ interface EngineProps {
     params: RuntimeModelProviderProbeParams,
   ) => Promise<RuntimeModelProviderProbeResult>
   chatgptPlan?: ChatGPTPlanAssistant
+  openAICodex?: OpenAICodexAssistant
   onAiTask?: (task: AiTask) => Promise<TaskResult | null>
   /** 返回书架/工作台入口（提供时顶栏显示返回按钮） */
   onHome?: () => void | Promise<void>
@@ -148,6 +149,7 @@ export const Engine: FC<EngineProps> = ({
   onRequestGhost,
   onProbeModelProvider,
   chatgptPlan,
+  openAICodex,
   onAiTask,
   onHome,
 }) => {
@@ -655,6 +657,7 @@ export const Engine: FC<EngineProps> = ({
         onClose={() => setSettingsOpen(false)}
         probeModelProvider={onProbeModelProvider}
         chatgptPlan={chatgptPlan}
+        openAICodex={openAICodex}
         runtimeState={deriveRuntimeReadiness({ isConnected, isReconnecting })}
         onReconnect={onReconnect}
       />

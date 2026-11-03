@@ -89,6 +89,7 @@ const ProjectEngine: FC<{
   ) => Promise<string | null>
   probeModelProvider: import('./hooks/useAiConversation').AiConversation['probeModelProvider']
   chatgptPlan: import('./hooks/useAiConversation').AiConversation['chatgptPlan']
+  openAICodex: import('./hooks/useAiConversation').AiConversation['openAICodex']
   onAiTask: (
     task: import('@inkpi/protocol').AiTask,
   ) => Promise<import('@inkpi/protocol').TaskResult | null>
@@ -128,6 +129,7 @@ const ProjectEngine: FC<{
       onRequestGhost={props.onRequestGhost}
       onProbeModelProvider={props.probeModelProvider}
       chatgptPlan={props.chatgptPlan}
+      openAICodex={props.openAICodex}
       onAiTask={props.onAiTask}
       onHome={props.onHome}
       renderInspector={(state, onClose) => {
@@ -282,6 +284,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
     listArtifacts,
     probeModelProvider,
     chatgptPlan,
+    openAICodex,
     requestScope,
   } = ai
 
@@ -381,6 +384,7 @@ const AppShellContent: FC<{ settings: AppSettings; library: ProjectLibrary }> = 
                   onRequestGhost={requestGhost}
                   probeModelProvider={probeModelProvider}
                   chatgptPlan={chatgptPlan}
+                  openAICodex={openAICodex}
                   onAiTask={runAiTask}
                   onHome={() => setActiveProjectId(null)}
                   aiMessages={aiMessages}

@@ -113,6 +113,32 @@ describe('ChatGPT plan account RPCs', () => {
   })
 })
 
+describe('OpenAI Codex account RPCs', () => {
+  it('uses Codex-only RPC methods and keeps account ownership on sign-in and disconnect', async () => {
+    const calls: Array<{ method: string; params: unknown }> = []
+    const client: RpcClient = {
+      request: async <T>(method: string, params?: unknown): Promise<T> => {
+        calls.push({ method, params })
+        return {} as T
+      },
+      close: vi.fn(async () => undefined),
+    }
+    const assistant = createDaemonAiAssistant(client)
+
+    await assistant.openAICodex?.getStatus()
+    await assistant.openAICodex?.startSignIn({ accountId: 'codex-account-b' })
+    await assistant.openAICodex?.signInStatus({ attemptId: 'attempt-b' })
+    await assistant.openAICodex?.disconnect({ accountId: 'codex-account-b' })
+
+    expect(calls).toEqual([
+      { method: 'model.openai-codex.status', params: undefined },
+      { method: 'model.openai-codex.sign-in', params: { accountId: 'codex-account-b' } },
+      { method: 'model.openai-codex.sign-in-status', params: { attemptId: 'attempt-b' } },
+      { method: 'model.openai-codex.disconnect', params: { accountId: 'codex-account-b' } },
+    ])
+  })
+})
+
 describe('createDaemonAiAssistant instruction registration', () => {
   afterEach(() => {
     setRuntimeModelRoutes([], null)

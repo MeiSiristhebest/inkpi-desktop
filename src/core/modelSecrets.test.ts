@@ -82,6 +82,41 @@ describe('model SecretStore boundary', () => {
     expect(hasSpy).toHaveBeenCalledWith(secondRef)
   })
 
+  it('keeps Codex OAuth account references separate and never persists OAuth tokens as API keys', async () => {
+    const firstAccount = {
+      id: 'gpt-6.1-terra',
+      name: 'GPT-6.1 Terra',
+      provider: 'openai-codex' as const,
+      accountId: 'codex-account-a',
+      apiKey: 'must-not-be-persisted',
+    }
+    const secondAccount = { ...firstAccount, accountId: 'codex-account-b' }
+    const firstRef = modelSecretKey(firstAccount)
+    const secondRef = modelSecretKey(secondAccount)
+    const hasSpy = vi.spyOn(secretStore, 'has').mockResolvedValue(false)
+    const setSpy = vi.spyOn(secretStore, 'set').mockResolvedValue(undefined)
+
+    expect(firstRef).toBe('inkpi.model.openai-codex.account.codex-account-a')
+    expect(secondRef).toBe('inkpi.model.openai-codex.account.codex-account-b')
+    expect(firstRef).not.toBe(secondRef)
+    expect(firstRef).not.toBe(modelSecretKey({ ...firstAccount, provider: 'openai-chatgpt-plan' }))
+
+    await persistModelSecrets({
+      ...settings,
+      aiModel: firstAccount,
+      savedAiModels: [secondAccount],
+    })
+    await hydrateModelCredentialStatus({
+      ...settings,
+      aiModel: null,
+      savedAiModels: [firstAccount, secondAccount],
+    })
+
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(hasSpy).toHaveBeenCalledWith(firstRef)
+    expect(hasSpy).toHaveBeenCalledWith(secondRef)
+  })
+
   it('does not remove a stored credential when a redacted settings snapshot is saved', async () => {
     const key = modelSecretKey(settings.aiModel!)
     await secretStore.set(key, 'existing-secret')

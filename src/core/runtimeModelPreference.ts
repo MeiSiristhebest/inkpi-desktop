@@ -32,7 +32,7 @@ export function setRuntimeModelPreference(model: ModelConfig | null | undefined)
   current = {
     providerId: model.provider,
     modelId: model.id,
-    ...(model.provider === 'openai-chatgpt-plan'
+    ...(isOpenAiAccountProvider(model.provider)
       ? { routeId: runtimeModelRouteId(model), required: true }
       : {}),
   }
@@ -55,8 +55,9 @@ export function setRuntimeModelRoutes(
   const byKey = new Map<string, ModelConfig>()
   for (const model of [...(models ?? []), ...(activeModel ? [activeModel] : [])]) {
     if (!model.id.trim() || !model.provider || model.enabled === false) continue
-    if (model.provider === 'openai-chatgpt-plan' && !model.accountId?.trim()) continue
-    const accountId = model.provider === 'openai-chatgpt-plan' ? model.accountId : ''
+    if (isOpenAiAccountProvider(model.provider) && !model.accountId?.trim()) continue
+    if (model.provider === 'openai-codex' && model.credentialConfigured !== true) continue
+    const accountId = isOpenAiAccountProvider(model.provider) ? model.accountId : ''
     byKey.set(`${model.provider}\u0000${model.id}\u0000${accountId ?? ''}`, model)
   }
 
@@ -79,7 +80,7 @@ function createRuntimeModelRoute(
   const isActive =
     activeModel?.id === model.id &&
     activeModel.provider === model.provider &&
-    (model.provider !== 'openai-chatgpt-plan' || activeModel.accountId === model.accountId)
+    (!isOpenAiAccountProvider(model.provider) || activeModel.accountId === model.accountId)
   const contextTokens = positiveNumber(model.contextWindow)
   const maxOutputTokens = positiveNumber(model.maxTokens)
   const baseUrl = model.baseUrl?.trim() || undefined
@@ -103,6 +104,10 @@ function createRuntimeModelRoute(
     ...(finiteNumber(model.thinkingBudget) ? { thinkingBudget: model.thinkingBudget } : {}),
     ...(typeof model.supportsThinking === 'boolean'
       ? { supportsThinking: model.supportsThinking }
+      : {}),
+    ...(model.thinkingLevel ? { reasoningEffort: model.thinkingLevel } : {}),
+    ...(typeof model.supportsMidConvoEffort === 'boolean'
+      ? { supportsMidConvoEffort: model.supportsMidConvoEffort }
       : {}),
     ...(typeof model.supportsPromptCache === 'boolean'
       ? { supportsPromptCache: model.supportsPromptCache }
@@ -135,8 +140,12 @@ function createRuntimeModelRoute(
 
 function runtimeModelRouteId(model: Pick<ModelConfig, 'id' | 'provider' | 'accountId'>): string {
   const base = `desktop:${encodeURIComponent(model.provider)}:${encodeURIComponent(model.id.trim())}`
-  if (model.provider !== 'openai-chatgpt-plan' || !model.accountId?.trim()) return base
+  if (!isOpenAiAccountProvider(model.provider) || !model.accountId?.trim()) return base
   return `${base}:account:${encodeURIComponent(model.accountId.trim())}`
+}
+
+function isOpenAiAccountProvider(provider: ModelConfig['provider']): boolean {
+  return provider === 'openai-chatgpt-plan' || provider === 'openai-codex'
 }
 
 function positiveNumber(value: number | undefined): number | undefined {

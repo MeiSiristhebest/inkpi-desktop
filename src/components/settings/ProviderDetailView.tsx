@@ -491,7 +491,7 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
             className="w-full"
           >
             {Object.entries(PROVIDER_META)
-              .filter(([key]) => key !== 'openai-chatgpt-plan')
+              .filter(([key]) => key !== 'openai-chatgpt-plan' && key !== 'openai-codex')
               .map(([key, meta]) => (
                 <option key={key} value={key}>
                   {meta.label}
@@ -523,7 +523,11 @@ export const ProviderDetailView: FC<ProviderDetailViewProps> = ({
               id={`${uid}-base-url`}
               type="text"
               value={baseUrl}
-              placeholder="https://api.example.com/v1"
+              placeholder={
+                service === 'azure-openai-responses'
+                  ? 'https://<resource>.openai.azure.com/openai/v1'
+                  : 'https://api.example.com/v1'
+              }
               onChange={(e) => {
                 if (e.target.value !== baseUrl) invalidateFetchedCatalog()
                 setBaseUrl(e.target.value)

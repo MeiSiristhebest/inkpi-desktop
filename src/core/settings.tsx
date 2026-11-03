@@ -57,6 +57,9 @@ export type ThemeSkin =
  */
 export type ProviderType =
   | 'openai-chatgpt-plan'
+  | 'openai-responses'
+  | 'azure-openai-responses'
+  | 'openai-codex'
   | 'openai'
   | 'deepseek'
   | 'claude'
@@ -87,8 +90,8 @@ export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
  * 完全对齐 @inkpi/ai 的 ModelConfig —— Daemon Runtime 接收的全部模型配置字段。
  * 自定义 AI 界面把这些字段全盘暴露给用户配置。
  * 桌面端 UI 管理字段包括 enabled、contextWindow、availableModelIds、
- * availableModelCatalog、catalogFetchedAt 与 thinkingLevel。路由适配器不会发送这些字段，
- * 它们只用于设置界面的启用状态、模型目录和思考等级档位。
+ * availableModelCatalog、catalogFetchedAt 与 thinkingLevel。路由适配器会把思考档位映射成
+ * Runtime reasoningEffort；其余字段只用于设置界面的启用状态和模型目录。
  */
 export interface ModelConfig {
   id: string
@@ -107,6 +110,7 @@ export interface ModelConfig {
   frequencyPenalty?: number
   thinkingBudget?: number
   supportsThinking?: boolean
+  supportsMidConvoEffort?: boolean
   supportsPromptCache?: boolean
   /** 是否启用该供应商配置；禁用后不可被设为默认模型（缺省视为启用） */
   enabled?: boolean
@@ -187,6 +191,22 @@ export const PROVIDER_META: Record<
   'openai-chatgpt-plan': {
     label: 'ChatGPT 计划用量',
     defaultBaseUrl: 'https://api.openai.com/v1',
+    streamKind: 'openai',
+  },
+  'openai-responses': {
+    label: 'OpenAI Responses',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    apiKeyEnv: 'OPENAI_API_KEY',
+    streamKind: 'openai',
+  },
+  'azure-openai-responses': {
+    label: 'Azure OpenAI Responses',
+    apiKeyEnv: 'AZURE_OPENAI_API_KEY',
+    streamKind: 'openai',
+  },
+  'openai-codex': {
+    label: 'OpenAI Codex',
+    defaultBaseUrl: 'https://chatgpt.com/backend-api',
     streamKind: 'openai',
   },
   deepseek: {
